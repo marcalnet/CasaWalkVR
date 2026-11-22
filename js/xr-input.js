@@ -18,11 +18,33 @@
 // gamepad looks like a controller's (the pinch on button 0). Such sources are
 // not controllers here: their buttons are never read, they get no laser or
 // body, and handsOnly() tells the UI to ask for the controllers.
+//
+// Touch (milestone C0 groundwork, read by nothing yet): every entry also has
+// c.touch, the same for a hand and a controller, so the touch menus and the
+// tools of C0 can treat them alike:
+//   kind     'hand', 'controller' or null (nothing connected)
+//   tracked  false while the headset has lost the hand (or nothing is there)
+//   tip      the poke point in world space: the index fingertip, or a point
+//            just in front of a controller (TIP_OFFSET in its grip space)
+//   radius   how big the poke point is (the fingertip joint's radius)
+//   select   { value 0..1, held, down, up, lost }: a pinch for a hand (thumb
+//            and index tips together), the trigger for a controller. A pinch
+//            starts below PINCH_ON and ends above PINCH_OFF, so a shaky pinch
+//            never flickers. down/up are this frame's edges; when tracking is
+//            lost mid-pinch, held ends with no up and lost = true (until the
+//            next pinch starts): a hand that vanishes never clicks.
+// joint(c, name, out) gives any hand joint's world position (WebXR joint
+// names, such as 'wrist' or 'index-finger-tip').
 
 import * as THREE from 'three';
 
 const DEADZONE = 0.2;
 const RAY_LENGTH = 5;
+export const PINCH_ON = 0.015; // metres between thumb and index tips: a pinch starts
+export const PINCH_OFF = 0.03; // and ends (more than PINCH_ON: hysteresis)
+const PINCH_OPEN = 0.07; // select.value is 0 from here, 1 at PINCH_ON
+const TIP_OFFSET = new THREE.Vector3(0, -0.01, -0.045); // a controller's poke point, in its grip space
+const TIP_RADIUS = 0.01; // a controller's poke point size
 
 export class XRInput {
 	constructor(renderer, rig) {
@@ -36,7 +58,8 @@ export class XRInput {
 		for (let i = 0; i < 2; i++) {
 			const ray = renderer.xr.getController(i); // target-ray space
 			const grip = renderer.xr.getControllerGrip(i); // where the hand holds it
-			rig.add(ray, grip);
+			const hand = renderer.xr.getHand(i); // hand joints (three.js fills hand.joints while a hand is tracked)
+			rig.add(ray, grip, hand);
 
 			const line = new THREE.Line(rayGeo, new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.85 }));
 			line.scale.z = RAY_LENGTH;
@@ -48,7 +71,7 @@ export class XRInput {
 			const body = new THREE.Mesh(bodyGeo, bodyMat);
 			grip.add(body);
 
-			const c = { index: i, ray, grip, line, dot, body, source: null, handedness: null, isController: false, isHand: false, state: emptyState(), claim: { trigger: null, grip: null, a: null, b: null, stickPress: null } };
+			const c = { index: i, ray, grip, hand, line, dot, body, touch: emptyTouch(), source: null, handedness: null, isController: false, isHand: false, state: emptyState(), claim: { trigger: null, grip: null, a: null, b: null, stickPress: null } };
 			ray.addEventListener('connected', (e) => {
 				c.source = e.data;
 				c.handedness = e.data.handedness;
@@ -57,6 +80,7 @@ export class XRInput {
 				line.visible = c.isController;
 				body.visible = c.isController;
 				c.state = emptyState();
+				c.touch = emptyTouch();
 				if (c.isController) this.hands[c.handedness] = c;
 			});
 			ray.addEventListener('disconnected', () => {
@@ -64,6 +88,7 @@ export class XRInput {
 				c.source = null;
 				c.isController = c.isHand = false;
 				c.state = emptyState();
+				c.touch = emptyTouch(c.touch.select.held); // a hand that goes away mid-pinch never clicks
 				line.visible = false;
 				dot.visible = false;
 			});
@@ -96,7 +121,58 @@ export class XRInput {
 			c.state = s;
 			const k = c.claim;
 			k.trigger = k.grip = k.a = k.b = k.stickPress = null;
+			this.updateTouch(c);
 		}
+	}
+
+	/** The touch state (poke point and select) of one entry; see the top of this file. */
+	updateTouch(c) {
+		const t = c.touch, sel = t.select, was = sel.held;
+		sel.down = sel.up = false;
+		t.kind = c.isHand ? 'hand' : c.isController ? 'controller' : null;
+		let held = false;
+		if (c.isHand) {
+			const tip = c.hand.joints['index-finger-tip'], thumb = c.hand.joints['thumb-tip'];
+			t.tracked = !!(c.hand.visible && tip?.visible && thumb?.visible);
+			if (t.tracked) {
+				c.hand.updateMatrixWorld(true);
+				t.tip.setFromMatrixPosition(tip.matrixWorld);
+				_v.setFromMatrixPosition(thumb.matrixWorld);
+				const d = t.tip.distanceTo(_v) / c.hand.matrixWorld.getMaxScaleOnAxis(); // in real metres, whatever the rig's scale
+				t.radius = tip.jointRadius ?? TIP_RADIUS;
+				sel.value = pinchValue(d);
+				held = nextPinch(was, d);
+			}
+		} else if (c.isController) {
+			t.tracked = c.grip.visible !== false;
+			c.grip.updateMatrixWorld(true);
+			t.tip.copy(TIP_OFFSET).applyMatrix4(c.grip.matrixWorld);
+			t.radius = TIP_RADIUS;
+			sel.value = c.source?.gamepad?.buttons[0]?.value ?? (c.state.trigger ? 1 : 0);
+			held = c.state.trigger;
+		} else t.tracked = false;
+		if (!t.tracked) {
+			// Lost: a pinch in progress ends without a click.
+			if (was) sel.lost = true;
+			sel.held = false;
+			sel.value = 0;
+			return;
+		}
+		sel.held = held;
+		sel.down = held && !was;
+		sel.up = !held && was;
+		if (sel.down) sel.lost = false;
+	}
+
+	/** Entries with a tracked poke point (hands and controllers alike). */
+	touches() { return this.controllers.filter((c) => c.touch.tracked); }
+
+	/** World position of a hand joint (WebXR name), or null if not tracked. */
+	joint(c, name, out = new THREE.Vector3()) {
+		const j = c.isHand ? c.hand.joints[name] : null;
+		if (!j?.visible || !c.hand.visible) return null;
+		c.hand.updateMatrixWorld(true);
+		return out.setFromMatrixPosition(j.matrixWorld);
 	}
 
 	/** Active controllers (connected, with a gamepad). */
@@ -158,6 +234,22 @@ export function isHandSource(source) {
 	if (source.targetRayMode && source.targetRayMode !== 'tracked-pointer') return true;
 	const gp = source.gamepad;
 	return !gp || (gp.axes?.length ?? 0) === 0;
+}
+
+/** Pinch with hysteresis: held from PINCH_ON, until the tips are more than PINCH_OFF apart. */
+export function nextPinch(held, distance) {
+	return held ? distance <= PINCH_OFF : distance <= PINCH_ON;
+}
+
+/** How closed a pinch is, 0 (open, PINCH_OPEN apart or more) to 1 (PINCH_ON). */
+export function pinchValue(distance) {
+	return THREE.MathUtils.clamp((PINCH_OPEN - distance) / (PINCH_OPEN - PINCH_ON), 0, 1);
+}
+
+const _v = new THREE.Vector3();
+
+function emptyTouch(lost = false) {
+	return { kind: null, tracked: false, tip: new THREE.Vector3(), radius: TIP_RADIUS, select: { value: 0, held: false, down: false, up: false, lost } };
 }
 
 function emptyState() {

@@ -52,12 +52,6 @@ await page.addInitScript((name) => {
 	d.stereoEnabled = false; // one view, so screenshots are easy to read
 	d.installRuntime({ forceInstall: true });
 	window.__device = d;
-	// The Quest Browser reports bare hands (a pinch is a select) even though
-	// the app never asks for hand tracking; the emulator only shows hands to
-	// a session that asked. So the test asks for it, as an optional feature,
-	// on the app's behalf (milestone C0.1's bare-hands check).
-	const request = navigator.xr.requestSession.bind(navigator.xr);
-	navigator.xr.requestSession = (mode, init = {}) => request(mode, { ...init, optionalFeatures: [...(init.optionalFeatures || []), 'hand-tracking'] });
 }, DEVICE);
 
 let step = 0;
@@ -474,7 +468,7 @@ await restRight(); await restLeft(); await frames(5);
 await click('right', 'b-button');
 
 // Bare hands (milestone C0.1): the Quest turns a pinch into a select of a
-// hand source. Put the controllers down, aim the right hand at the model and
+// hand source (the app asks for hand tracking, so it has the joints too). Put the controllers down, aim the right hand at the model and
 // pinch: nothing may happen (no step inside, no menu), and the note asks for
 // the controllers. Then pick them up again: the note goes, all as before.
 {
@@ -506,8 +500,42 @@ await click('right', 'b-button');
 	check('bare hands: a pinch reaches the app as a select', h.selects >= 2, JSON.stringify(h));
 	check('bare hands: pinches do nothing (no step inside, no menu, no laser)', before && h.mode === 'dollhouse' && !h.menu && h.active === 0 && h.hands === 2 && !h.lasers && !h.bodies && !h.marker, JSON.stringify(h));
 	check('bare hands: "Pick up your controllers" in front of you', h.note && await page.evaluate(() => /controllers/.test(window.__casawalk.xr.ui.handsNote.title)));
+	// Touch groundwork (C0): the hands' poke points and pinches are read (nothing uses them yet).
+	const touch = () => page.evaluate(() => window.__casawalk.xr.input.controllers.map((c) => ({ side: c.handedness, kind: c.touch.kind, tracked: c.touch.tracked,
+		tip: c.touch.tip.toArray(), radius: c.touch.radius, held: c.touch.select.held, value: c.touch.select.value, lost: c.touch.select.lost,
+		index: c.isHand ? window.__casawalk.xr.input.joint(c, 'index-finger-tip')?.toArray() : null })));
+	const right = (list) => list.find((t) => t.side === 'right');
+	const t0 = await touch();
+	check('touch: both hands are tracked, with a poke point at the index tip', t0.every((t) => t.kind === 'hand' && t.tracked && t.index && Math.hypot(...t.tip.map((v, i) => v - t.index[i])) < 1e-6 && t.radius > 0 && t.radius < 0.03), JSON.stringify(t0.map((t) => [t.kind, t.tracked, t.radius])));
+	await page.evaluate(() => { window.__device.hands.right.position.x += 0.1; }); await frames(6);
+	const moved = Math.hypot(...right(await touch()).tip.map((v, i) => v - right(t0).tip[i]));
+	check('touch: the poke point follows the hand', Math.abs(moved - 0.1) < 0.005, `${moved.toFixed(4)} m`);
+	await page.evaluate(() => window.__device.hands.right.updatePinchValue(1));
+	const pinched = await page.waitForFunction(() => window.__casawalk.xr.input.hands && window.__casawalk.xr.input.controllers.find((c) => c.handedness === 'right')?.touch.select.held, null, { timeout: 2000, polling: 'raf' }).then(() => true).catch(() => false);
+	const tp = right(await touch());
+	await page.evaluate(() => window.__device.hands.right.updatePinchValue(0));
+	const opened = await page.waitForFunction(() => !window.__casawalk.xr.input.controllers.find((c) => c.handedness === 'right')?.touch.select.held, null, { timeout: 2000, polling: 'raf' }).then(() => true).catch(() => false);
+	check('touch: a pinch is detected, and let go', pinched && opened && tp.value === 1 && !tp.lost, JSON.stringify({ pinched, opened, value: tp.value }));
+	// Tracking lost mid-pinch: the pinch ends without a click, nothing breaks.
+	await page.evaluate(() => window.__device.hands.right.updatePinchValue(1)); await frames(6);
+	await page.evaluate(() => { window.__device.hands.right.connected = false; }); await frames(8);
+	const tl = right(await touch()), lostState = await state();
+	check('touch: losing a hand mid-pinch ends it safely (no click, nothing moves)', !tl.tracked && !tl.held && tl.lost && lostState.mode === 'dollhouse' && !lostState.menu, JSON.stringify({ tracked: tl.tracked, held: tl.held, lost: tl.lost, mode: lostState.mode }));
+	await page.evaluate(() => { window.__device.hands.right.updatePinchValue(0); window.__device.hands.right.connected = true; }); await frames(8);
+	const back2 = right(await touch());
+	check('touch: the hand comes back, tracked and not pinching', back2.kind === 'hand' && back2.tracked && !back2.held, JSON.stringify(back2));
 	await page.evaluate(() => { window.__device.primaryInputMode = 'controller'; });
 	await waitXR(); await frames(8);
+	{
+		// A controller has a poke point too, just in front of it, and the trigger is its select.
+		const c0 = await touch();
+		await button('right', 'trigger', 1); await frames(4); await appSees('right', 'trigger', true);
+		const c1 = right(await touch());
+		await button('right', 'trigger', 0); await frames(4); await appSees('right', 'trigger', false);
+		const grips = await page.evaluate(() => window.__casawalk.xr.input.controllers.map((c) => { c.grip.updateMatrixWorld(true); return new (c.grip.position.constructor)().setFromMatrixPosition(c.grip.matrixWorld).toArray(); }));
+		const near = c0.every((t, i) => { const d = Math.hypot(...t.tip.map((v, k) => v - grips[i][k])); return d > 0.03 && d < 0.06; });
+		check('touch: controllers have a poke point in front, and the trigger selects', c0.every((t) => t.kind === 'controller' && t.tracked) && near && c1.held && c1.value === 1, JSON.stringify({ kinds: c0.map((t) => t.kind), near, held: c1.held }));
+	}
 	const back = await page.evaluate(() => { const x = window.__casawalk.xr; return { note: x.ui.handsNote.mesh.visible, active: x.input.active().length, lasers: x.input.active().every((c) => c.line.visible && c.body.visible) }; });
 	check('controllers again: the note goes, lasers back', !back.note && back.active === 2 && back.lasers, JSON.stringify(back));
 	await restRight(); await restLeft(); await frames(5);

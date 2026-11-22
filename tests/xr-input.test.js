@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { isHandSource } from '../js/xr-input.js';
+import { isHandSource, nextPinch, pinchValue, PINCH_ON, PINCH_OFF } from '../js/xr-input.js';
 
 // Milestone C0.1: bare hands are not controllers, so a pinch (which the Quest
 // reports as a select, with a controller-like gamepad) never acts as a trigger.
@@ -16,4 +16,19 @@ test('hands, gaze and transient pinches are told apart from controllers', () => 
 	assert.equal(isHandSource({ targetRayMode: 'transient-pointer', profiles: [], gamepad: null }), true); // Vision Pro gaze-and-pinch
 	assert.equal(isHandSource({ targetRayMode: 'gaze', profiles: [] }), true);
 	assert.equal(isHandSource(null), false);
+});
+
+// Milestone C0 groundwork: a pinch starts when the tips nearly meet and ends
+// only once they are clearly apart, so a shaky pinch never clicks twice.
+test('pinch: hysteresis between starting and ending', () => {
+	assert.ok(PINCH_ON < PINCH_OFF);
+	let held = false;
+	const seq = [0.06, 0.03, 0.02, 0.014, 0.02, 0.029, 0.025, 0.031, 0.02, 0.016, 0.012];
+	const out = seq.map((d) => (held = nextPinch(held, d)));
+	assert.deepEqual(out, [false, false, false, true, true, true, true, false, false, false, true]);
+	assert.equal(pinchValue(0.2), 0);
+	assert.equal(pinchValue(PINCH_ON), 1);
+	assert.equal(pinchValue(0.005), 1);
+	const mid = pinchValue(0.04);
+	assert.ok(mid > 0 && mid < 1);
 });

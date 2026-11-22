@@ -170,7 +170,8 @@ export class XRExperience {
 		if (!this.model || this.session || this.starting) return;
 		this.starting = true;
 		this.sound.unlock(); // (still inside the Enter VR click: browsers allow sound only after one)
-		const init = { requiredFeatures: ['local-floor'], optionalFeatures: ['bounded-floor'] };
+		// hand-tracking: hand joints for touch (milestone C0); bare hands still do nothing until the touch menus exist (C0.1).
+		const init = { requiredFeatures: ['local-floor'], optionalFeatures: ['bounded-floor', 'hand-tracking'] };
 		let session;
 		try {
 			try {

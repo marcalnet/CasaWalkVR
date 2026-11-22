@@ -28,7 +28,7 @@ async function setup() {
 	camera.position.set(0, 1.6, 0);
 	camera.updateMatrixWorld(true);
 	let ended = 0;
-	const renderer = { xr: { getController: () => new THREE.Group(), getControllerGrip: () => new THREE.Group() } };
+	const renderer = { xr: { getController: () => new THREE.Group(), getControllerGrip: () => new THREE.Group(), getHand: () => Object.assign(new THREE.Group(), { joints: {} }) } };
 	const x = new XRExperience({ renderer, scene, camera, rig, anchor, centerer, onEnd: () => ended++ });
 	const b = built.bounds;
 	centerer.position.set(-(b.min.x + b.max.x) / 2, -b.min.y, -(b.min.z + b.max.z) / 2);
