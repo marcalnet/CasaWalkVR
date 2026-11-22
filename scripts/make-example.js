@@ -191,7 +191,7 @@ room('Study', F, 'FFCDB79E', [[480, 0], [W, 0], [W, 400], [700, 400], [700, D], 
 
 const home = [
 	"<?xml version='1.0'?>",
-	"<home version='7200' name='Example home' camera='observerCamera' wallHeight='250'>",
+	"<home version='7200' name='Example home' camera='observerCamera' selectedLevel='level-ground' wallHeight='250'>", // (selectedLevel: without it Sweet Home 3D shows no level tabs and an empty plan)
 	"  <environment groundColor='FF8FA37E' skyColor='FFCCE4FC' lightColor='FFD0D0D0' ceillingLightColor='FFD0D0D0'/>",
 	// North is up the plan; latitude of Paris (radians), so the sun behaves like a European home.
 	"  <compass x='-150' y='60' diameter='100' northDirection='0.0' longitude='0.0407' latitude='0.8529' timeZone='Europe/Paris'/>",
