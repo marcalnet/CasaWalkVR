@@ -22,9 +22,9 @@ import { BOARD } from './theme.js';
 
 const BOARD_PX_PER_M = 1450; // canvas pixels per metre: a row of 80 px is 5.5 cm
 const TIME_LABELS = { morning: 'Morning', noon: 'Noon', sunset: 'Sunset', night: 'Night' };
-const TURNS = SETTINGS.turn.options; // snap turn, degrees
 const HEIGHTS = SETTINGS.height.options; // person height, metres (0 = your own)
-export const SEE_THROUGH = [0, 0.25, 0.5, 0.75, 1]; // the See-through options (a slider doesn't suit a fingertip)
+// See-through is one switch: on is 75% (the user's Quest 2 test: the only level that reads well; 100% is too thin).
+export const SEE_THROUGH_ON = 0.75;
 
 const sw = (id, label) => ({ type: 'switch', id, label, value: false });
 
@@ -35,19 +35,18 @@ const CELLS = {
 	depth: sw('depth', 'Depth shading'),
 	ceilings: sw('ceilings', 'Ceilings'),
 	solid: sw('solid', 'Solid walls'),
-	seethrough: { type: 'choice', id: 'seethrough', label: 'See-through', options: SEE_THROUGH.map((v) => ({ value: v, label: v ? `${Math.round(v * 100)}${v === 1 ? '%' : ''}` : 'Off' })), value: 0 },
+	seethrough: sw('seethrough', 'See-through'),
 	levels: { type: 'choice', stepper: true, id: 'levels', label: 'Levels', options: [], disabled: true, note: 'One level' },
 	view: sw('view', 'Passthrough'), // on: the room around you; off: the VR world
 	toolFan: { type: 'choice', id: 'toolFan', label: 'Tool fan', options: [{ value: 'left', label: 'Left hand' }, { value: 'right', label: 'Right hand' }], value: 'left' },
 	sound: { type: 'choice', id: 'sound', label: 'Sound', options: [{ value: 'off', label: 'Off' }, { value: 'effects', label: 'Effects' }], value: 'effects' },
-	turn: { type: 'choice', id: 'turn', label: 'Turn', options: TURNS.map((t) => ({ value: t, label: `${t}°` })), value: 30 },
 	height: { type: 'choice', id: 'height', label: 'Height', options: HEIGHTS.map((h) => ({ value: h, label: h ? `${h.toFixed(1)} m` : 'Yours' })), value: 0 },
 };
 
 /** The board's tabs (the same at both layers), each with rows of cell ids. Camera lens joins General in milestone D. */
 export const TABS = [
 	{ id: 'view', label: 'View', rows: [['light'], ['shadows', 'depth'], ['ceilings', 'view'], ['seethrough'], ['levels']] },
-	{ id: 'walk', label: 'Walk', rows: [['turn'], ['height'], ['solid']] },
+	{ id: 'walk', label: 'Walk', rows: [['height'], ['solid']] }, // (Turn left the board: 30° stays, the user's call)
 	{ id: 'general', label: 'General', rows: [['toolFan'], ['sound']] },
 ];
 
@@ -135,7 +134,7 @@ export function buildMenus(rig) {
 		paper.src = BOARD.image;
 	}
 	const help = { dollhouse: cards.dollhouse, walk: cards.walk, hands: new WelcomeCard('Help: bare hands', handsHelp(), { width: 0.5 }) };
-	for (const c of Object.values(help)) { c.mesh.visible = false; c.mesh.material.depthTest = false; rig.add(c.mesh); }
+	for (const c of Object.values(help)) { c.mesh.visible = false; c.mesh.material.depthTest = false; } // (they live in the wrist menu: js/xr.js)
 	return { menus, help };
 }
 
@@ -146,8 +145,7 @@ export function updateLabels(xr) {
 	for (const p of Object.values(xr.menus)) {
 		p.set('ceilings', { value: ceilings });
 		p.set('view', view);
-		// (A see-through stored between two options, from before the options, shows the nearest.)
-		p.set('seethrough', { value: SEE_THROUGH.reduce((a, b) => (Math.abs(b - xr.seeThroughAmount) < Math.abs(a - xr.seeThroughAmount) ? b : a)) });
+		p.set('seethrough', { value: xr.seeThroughAmount > 0 });
 		p.set('toolFan', { value: xr.toolFan });
 		if (xr.lighting) {
 			p.set('light', { value: xr.lighting.time });
@@ -160,7 +158,6 @@ export function updateLabels(xr) {
 		p.set('sound', { value: xr.soundLevel === 'off' ? 'off' : 'effects' });
 	}
 	const walk = xr.menus.walk, doll = xr.menus.dollhouse;
-	walk.set('turn', { value: xr.snapAngle });
 	walk.set('height', { value: xr.personHeight });
 	const walls = (xr.model?.layers.walls?.children.length ?? 0) > 0;
 	walk.set('solid', walls ? { disabled: false, value: xr.solid } : { disabled: true, note: 'No walls', value: false });
@@ -223,11 +220,6 @@ export function menuAction(xr, target) {
 			updateLabels(xr);
 			break;
 		}
-		case 'turn':
-			xr.snapAngle = TURNS.includes(value) ? value : TURNS[(TURNS.indexOf(xr.snapAngle) + 1) % TURNS.length];
-			writeSetting('turn', xr.snapAngle);
-			updateLabels(xr);
-			break;
 		case 'height':
 			xr.personHeight = HEIGHTS.includes(value) ? value : HEIGHTS[(HEIGHTS.indexOf(xr.personHeight) + 1) % HEIGHTS.length];
 			writeSetting('height', xr.personHeight);
@@ -265,8 +257,9 @@ export function menuAction(xr, target) {
 			updateLabels(xr);
 			break;
 		case 'seethrough': {
-			// Steps of 5%, so the end of the track is exactly 0 or 100%.
-			const v = Math.round(THREE.MathUtils.clamp(value ?? 0, 0, 1) * 20) / 20;
+			// A switch: on is 75%. (A number, from a test or an old setting: any amount above 0 is on.)
+			const on = typeof value === 'number' ? value > 0 : typeof value === 'boolean' ? value : !(xr.seeThroughAmount > 0);
+			const v = on ? SEE_THROUGH_ON : 0;
 			if (v === xr.seeThroughAmount) break;
 			xr.seeThroughAmount = v;
 			writeSetting('seeThrough', v);

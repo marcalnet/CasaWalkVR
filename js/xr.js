@@ -48,7 +48,7 @@ import { buildShowroom, buildStage, fitPlinth, placePlate, buildWalkSky, recolou
 import { ScalePlate, Label } from './panel.js';
 import { roomAt } from './rooms.js';
 import { targetSets, findFloor } from './xr-targets.js';
-import { buildMenus, updateLabels, menuAction } from './xr-menus.js';
+import { buildMenus, updateLabels, menuAction, SEE_THROUGH_ON } from './xr-menus.js';
 import { XRUI } from './xr-ui.js';
 import { Dollhouse } from './xr-dollhouse.js';
 import { Walk } from './xr-walk.js';
@@ -81,12 +81,12 @@ export class XRExperience {
 		this.view = readSetting('view'); // what is shown (AR sessions only)
 		this.mode = null; // 'dollhouse' | 'walk': which of this.modes runs
 		this.lift = 0; // the rig's height above the floor the user stands on
-		this.snapAngle = readSetting('turn');
+		this.snapAngle = 30; // snap turn, degrees (fixed: the Turn setting left the board, the user's call)
 		this.personHeight = readSetting('height');
 		// Walking: walls stop you (off by default). Furniture never does.
 		this.solid = readSetting('solid');
 		// See-through walls and furniture (headset only): 0 = as modelled, 1 = glass house.
-		this.seeThroughAmount = readSetting('seeThrough');
+		this.seeThroughAmount = readSetting('seeThrough') > 0 ? SEE_THROUGH_ON : 0; // (a switch: an older stored amount counts as on)
 		this.seeThrough = new SeeThrough();
 		this.soundLevel = readSetting('sound'); // off | effects | all (effects and ambience)
 		this.toolFan = readSetting('toolFan'); // the hand that holds the tool fan; the wrist menu is on the other
@@ -125,6 +125,7 @@ export class XRExperience {
 		this.hideFromPhotos(this.curtain, this.arrival.mesh);
 		this.modes = { dollhouse: new Dollhouse(this), walk: new Walk(this) };
 		this.ui = new XRUI(this);
+		for (const c of Object.values(this.help)) this.ui.wrist.cross.add(c.mesh); // (Help opens beside the wrist menu, on its right)
 		this.tools = new ToolSystem(this);
 		this.tweens = new Tweens();
 		this.haptics = new Haptics();
@@ -145,6 +146,7 @@ export class XRExperience {
 		this.plinthSize = { W, D };
 		this.plinthDistance = distance; // from where you stand to the plinth's centre
 		placePlate(this.plate.mesh, this.pedestal, W, D);
+		this.modes?.dollhouse.placeDoors(); // (the doors on the plinth's front edge)
 	}
 
 	// -----------------------------------------------------------------------
@@ -534,6 +536,7 @@ export class XRExperience {
 		if (!this.session || !this.model) return;
 		this.frameDt = dt;
 		this.input.update(); // (also clears every controller's claims)
+		for (const v of this.handViews) v.near = false; // (a key or the board near a fingertip lights it up again this frame)
 		this.ui.showHandsNote(); // bare hands: "Pick up your controllers" (their pinches are never read)
 		this.tools.claim(); // a held tool's buttons are its own, before the menu and the mode
 		if (this.pendingRecentre && this.mode === 'dollhouse') {

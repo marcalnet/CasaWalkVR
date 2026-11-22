@@ -23,10 +23,11 @@ index.html        2D UI and import map
 config.js         Dropbox app key, Google API key, defaults
 js/main.js        2D page, renderer, loading, Enter VR/AR buttons
 js/xr.js          XR session: the parts below, the frame order, setMode, layers (goLayer: dive, surface), photo capture, shared state
-js/xr-dollhouse.js  scale model mode ("dollhouse" in code): plinth, rotate/zoom/grab, scale plate and zoom settling, where stepping inside lands
+js/xr-dollhouse.js  scale model mode ("dollhouse" in code): plinth, rotate/zoom/grab, scale plate and zoom settling, the doors on the plinth, where stepping inside lands
 js/xr-walk.js     walk mode: locomotion, teleport and fade, snap turn, grip pull, floor following, solid walls
 js/xr-ui.js       the settings board and help (opening, closing, touch and lasers, trigger claims), welcome card, notes
 js/wrist-menu.js  the wrist menu: orb on one wrist, four keys in a cross laid out as seen (Settings, Help, ← Back, Walk in →)
+js/keys.js        keys pressed by touch or laser (wrist menu, the doors on the plinth)
 js/xr-menus.js    the boards as data (cells by id; tabs as rows of ids), help cards, labels, what a key or cell does
 js/xr-scene.js    scenery builders: gallery room, plinth, skies, markers
 js/xr-targets.js  what lasers, the teleport arc and the feet may hit (pure, Node-testable)

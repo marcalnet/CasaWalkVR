@@ -62,8 +62,8 @@ test('the settings boards: the same tabs at both layers, a Close key, every targ
 	for (const p of Object.values(x.menus)) {
 		assert.deepEqual(p.tabs.map((t) => t.label), ['View', 'Walk', 'General']);
 		assert.deepEqual(shape(p.tabs[0].rows), ['light:choice:Time of day:Morning:Noon:Sunset:Night', 'shadows:switch:Shadows | depth:switch:Depth shading',
-			'ceilings:switch:Ceilings | view:switch:Passthrough', 'seethrough:choice:See-through:Off:25:50:75:100%', `levels:choice:Levels${p === x.menus.dollhouse ? ':All levels (2):Up to Ground floor' : ''}`]);
-		assert.deepEqual(shape(p.tabs[1].rows), ['turn:choice:Turn:15°:30°:45°', 'height:choice:Height:Yours:1.4 m:1.7 m:2.0 m', 'solid:switch:Solid walls']);
+			'ceilings:switch:Ceilings | view:switch:Passthrough', 'seethrough:switch:See-through', `levels:choice:Levels${p === x.menus.dollhouse ? ':All levels (2):Up to Ground floor' : ''}`]);
+		assert.deepEqual(shape(p.tabs[1].rows), ['height:choice:Height:Yours:1.4 m:1.7 m:2.0 m', 'solid:switch:Solid walls']);
 		assert.deepEqual(shape(p.tabs[2].rows), ['toolFan:choice:Tool fan:Left hand:Right hand', 'sound:choice:Sound:Off:Effects']);
 		assert.equal(p.actions.length, 0, 'no actions on the board: the doors are on the wrist');
 		assert.ok(p.rects().some((r) => r.id === 'close'), 'a Close key');
@@ -129,9 +129,13 @@ test('Sound: off and on, remembered', async () => {
 test('settings keep the board open; the doors move one layer at a time', async () => {
 	const { x, ended, go } = await setup();
 	const stays = (id, value) => { x.ui.openMenu(); x.menuAction(value === undefined ? id : { id, value }); return x.menu !== null; };
-	for (const [id, v] of [['light', 'noon'], ['shadows'], ['depth'], ['ceilings'], ['ceilings'], ['seethrough', 0.5], ['seethrough', 0], ['levels', 0], ['levels', 1], ['view', 'ar'], ['sound', 'effects']]) {
+	for (const [id, v] of [['light', 'noon'], ['shadows'], ['depth'], ['ceilings'], ['ceilings'], ['seethrough'], ['seethrough'], ['levels', 0], ['levels', 1], ['view', 'ar'], ['sound', 'effects']]) {
 		assert.equal(stays(id, v), true, id);
 	}
+	assert.equal(x.seeThroughAmount, 0);
+	x.menuAction('seethrough');
+	assert.equal(x.seeThroughAmount, 0.75, 'See-through is one switch: on is 75%');
+	x.menuAction('seethrough');
 	assert.equal(x.seeThroughAmount, 0);
 	x.menuAction('close');
 	assert.equal(x.menu, null, 'the Close key closes the board');
@@ -139,7 +143,7 @@ test('settings keep the board open; the doors move one layer at a time', async (
 	x.ui.openMenu();
 	go('in');
 	assert.ok(x.mode === 'walk' && x.menu === null && !x.layerFx);
-	for (const [id, v] of [['turn', 45], ['turn', 30], ['height', 1.7], ['height', 0], ['solid'], ['solid']]) assert.equal(stays(id, v), true, id);
+	for (const [id, v] of [['height', 1.7], ['height', 0], ['solid'], ['solid']]) assert.equal(stays(id, v), true, id);
 	x.ui.closeMenu();
 	go('in');
 	assert.equal(x.mode, 'walk', 'In does nothing inside: you are as deep as it goes');
@@ -256,4 +260,35 @@ test('mirrored: a tool in the left hand has Y as its second button', async () =>
 	assert.equal(hands.left.claim.b, 'tool');
 	press('right', 'a'); frame(); press('right', 'a', false); frame();
 	assert.ok(x.ui.wrist.open && x.ui.wrist.pinned, 'A opens the wrist menu, pinned');
+});
+
+test('the doors on the plinth: ← Back on the left, Walk in → on the right; Walk in goes inside', async () => {
+	const { x, go, frame, settle } = await setup();
+	const d = x.modes.dollhouse.doors;
+	const back = d.keys.get('back'), inn = d.keys.get('in');
+	assert.deepEqual([back.spec.id, back.spec.look, inn.spec.id, inn.spec.look], ['back', 'outline', 'in', 'filled']);
+	x.stage.updateMatrixWorld(true);
+	const at = (k) => k.group.getWorldPosition(new THREE.Vector3());
+	assert.ok(at(back).x < at(inn).x, 'Back on the left of Walk in');
+	assert.ok(Math.min(inn.w, inn.h) >= 0.07, 'big enough to touch');
+	// The laser presses it like any key: Walk in goes inside, as the wrist menu's does.
+	assert.equal(d.press(inn, null).id, 'in');
+	go('in');
+	assert.equal(x.mode, 'walk');
+	assert.ok(!x.stage.visible, 'inside, the plinth and its doors are gone');
+	frame(); settle();
+});
+
+test('the wrist menu: Help opens beside it, and the menu stays', async () => {
+	const { x, frame } = await setup();
+	frame();
+	x.ui.wrist.show({ pinned: true });
+	x.menuAction('help');
+	assert.ok(x.ui.wrist.open, 'the menu stays open');
+	assert.ok(x.ui.help && x.ui.help.mesh.parent === x.ui.wrist.cross && x.ui.help.mesh.position.x > 0.15, 'on its right, in its plane');
+	x.menuAction('help');
+	assert.ok(!x.ui.help && x.ui.wrist.open, 'Help again: the card goes, the menu stays');
+	x.menuAction('help');
+	x.ui.wrist.close();
+	assert.equal(x.ui.help, null, 'closing the menu takes Help with it');
 });

@@ -20,7 +20,7 @@ export const SETTINGS = {
 	depth: { key: 'casawalk.depth', flag: true, fallback: false },
 	// Headset
 	view: { key: 'casawalk.view', options: ['vr', 'ar'], fallback: 'vr' }, // VR or passthrough, in an AR session
-	turn: { key: 'casawalk.snapAngle', options: [15, 30, 45], fallback: 30 }, // snap turn, degrees
+	// (Turn and its 'casawalk.snapAngle' setting left the board in Nov 2026: snap turns are 30°. A stored value is simply never read.)
 	height: { key: 'casawalk.height', options: [0, 1.4, 1.7, 2.0], fallback: 0 }, // person height, metres (0 = your own)
 	// (The scale figure and its 'casawalk.figure' switch were removed in Nov 2026:
 	// the landing markers show a person's size. A stored value is simply never read.)

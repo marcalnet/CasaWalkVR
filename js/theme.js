@@ -82,11 +82,11 @@ export const DOOR = { fill: '#2f5fd0', outline: '#2f5fd0', text: '#ffffff', soft
  * white ones, 128 px each: Settings, Help, In, Back); words are drawn by code.
  */
 export const WRIST = {
-	icons: 'assets/ui/wrist-keys.png',
+	icons: 'assets/ui/wrist-keys.png', // (also the plinth's doors: js/keys.js)
 	iconSize: 128, // pixels per icon in the atlas
 	iconOrder: ['settings', 'help', 'in', 'back'],
-	key: 0.045, // key face, metres (square)
-	spacing: 0.055, // from the orb's centre to each key's centre
+	key: 0.09, // key face, metres (square): about double the first draft (the user's Quest 2 test)
+	spacing: 0.105, // from the cross's centre to each key's centre (keys 1.5 cm apart)
 	raise: 0.006, // a key's face above its base
 	face: '#ffffff', edge: '#d3d9df', text: COLOURS.text, flat: COLOURS.off, flatText: COLOURS.offText,
 	labelFont: '"Kalam", "Bradley Hand", cursive', // hand-lettered labels (vendor/kalam)

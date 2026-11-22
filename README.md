@@ -82,14 +82,15 @@ Supported files:
 
 Press **Enter VR →** once a model is open: it starts at the scale model. The app has three layers, one inside the other: the page, the scale model, and inside the home. Going one layer in is always on the right (**Walk in →**, blue); going one layer back is always on the left (**← Back**). Nothing skips a layer: from inside, ← Back twice leaves VR, and so does the Quest's Meta button, from anywhere.
 
-**Wrist menu:** a glowing orb sits on your right wrist. Touch it with your left hand (a fingertip, or the left controller), point at it and pull the trigger, or press **A**: four keys spring out around it, as you see them: **Settings** above, **Help** below, **← Back** on the left, **Walk in →** on the right (inside the home, a flat "Inside" plate there shows the room you're in). Press a key with a fingertip, like a real key (push in to click; come back out before the next press), with a controller's tip, or point and pull the trigger. **B** / **Y** closes it. When you enter VR, a welcome card above the home says how, until you first open it. If you hold the tool fan in your right hand (General tab), the menu moves to your left wrist and X opens it.
+**Wrist menu:** a glowing orb sits on your right wrist. Touch it with your left hand (a fingertip, or the left controller), point at it and pull the trigger, or press **A**: four big keys spring out in front of your wrist, as you see them: **Settings** above, **Help** below, **← Back** on the left, **Walk in →** on the right (inside the home, a flat "Inside" plate there shows the room you're in). Press a key with a fingertip, like a real key (push in to click; come back out before the next press), with a controller's tip, or point and pull the trigger. **B** / **Y** closes it. When you enter VR, a welcome card above the home says how, until you first open it. If you hold the tool fan in your right hand (General tab), the menu moves to your left wrist and X opens it.
 
-**Settings** opens a board within reach: to your left at the scale model, straight ahead inside. Tabs **View**, **Walk** and **General**, the same at both layers, and a **×** key to close it (B / Y too). Settings are **switches** for what is on or off (Shadows, Depth shading, Ceilings, Passthrough, Solid walls), a row of **options** with the current one in blue (Time of day, See-through, Turn, Height, Tool fan, Sound) and a **‹ ›** stepper for Levels (homes can have many). A setting that belongs to the scale model is greyed out inside. Settings, and the tab you last used, are remembered. A controller's grip on the bar on top moves the board. **Help** shows what each control does.
+**Help** opens a card beside the menu, on its right, and the menu stays. **Settings** opens a board within reach: a little to your left at the scale model, straight ahead inside. Tabs **View**, **Walk** and **General**, the same at both layers, and a **×** key to close it (B / Y too). Settings are **switches** for what is on or off (Shadows, Depth shading, Ceilings, Passthrough, See-through, Solid walls), a row of **options** with the current one in blue (Time of day, Height, Tool fan, Sound) and a **‹ ›** stepper for Levels (homes can have many). A setting that belongs to the scale model is greyed out inside. Settings, and the tab you last used, are remembered. A controller's grip on the bar on top moves the board.
 
 **Bare hands** (being built, milestone C0): put the controllers down and your hands appear. The wrist menu and the board work by touch. Pinching does nothing, on purpose. Moving with bare hands (holding the model, stepping inside, teleporting) comes next; until then, use Walk in → and ← Back, or the controllers.
 
 **Scale model**
 - The home stands on a low museum plinth in a gallery room, 60 cm in front of you. You look down at it as a 2 m tall person would, whether you sit or stand, so it's easy to look into the rooms. If you change position, the Quest's own recentre (hold the Meta button) brings the plinth in front of you and measures your height again. **Passthrough** (View tab) swaps the gallery for your own room; the model stays exactly where it is.
+- **Walk in →** and **← Back** (leave VR) are also on the plinth's front edge, by the scale plate: press them with a fingertip, a controller's tip, or point and pull the trigger.
 - **Thumbstick** left/right turns it; up/down zooms it (½× to 4×). A brass plate on the plinth shows its true scale (e.g. 1:42); let go of a zoom near a standard scale (1:10, 1:20, 1:25, 1:50, 1:100…) and it settles on it with a light tick.
 - Point the **laser** at a room: an orange marker hops to the room's clear middle, with the room's name above it and a small arrow for the way you'll face. **Trigger** takes you there at real size. (Pointing at the garden, you land where you point, clear of the walls, facing the house. OBJ and GLB files have no rooms: you land where you point.)
 - **Grip** and move your hand to lift it or move it; it never sinks into the plinth.
@@ -99,16 +100,16 @@ Press **Enter VR →** once a model is open: it starts at the scale model. The a
 - **Left stick** walks where you look. In a one-level home you stay on the floor and walk through furniture; in a home with several levels you can step onto anything, so stairs work.
 - **Solid walls** (menu, off by default): walls stop you, whether you use the stick, pull yourself along or walk for real in your room, and you slide along them. Only walls: furniture, doors and windows stay walk-through, so doorways and stairs work. (OBJ and GLB files have no separate walls, so the switch is greyed out for them.)
 - **Hold a grip** (the button on the side of the handle) and move your hand to pull yourself along, as if grabbing the room.
-- **Right stick** left/right turns in steps (15°, 30° or 45°, set in the menu).
+- **Right stick** left/right turns in steps of 30°.
 - **Right stick forward**, or **hold a trigger**, and aim: a blue ring shows where you'll land (red on a wall). The arc stays low enough to pass through doorways. Let go to teleport there.
 - **B** or **Y**, or **← Back** on the wrist menu, goes back to the scale model.
-- Settings: the same tabs (Walk tab: **Turn**, **Height** (yours, 1.4, 1.7 or 2.0 m), **Solid walls**).
+- Settings: the same tabs (Walk tab: **Height** (yours, 1.4, 1.7 or 2.0 m), **Solid walls**).
 
 **Photo:** not in the menu for now. The street camera (a later update) brings photos back. Photos you took earlier stay on the page, under the model: **Save all to Downloads** (or one by one) puts them in the Quest's **Files** app, in **Downloads**. (Nothing is ever downloaded during VR: the Quest Browser asks for permission at the first download, and its question would end the VR session.)
 
 **Sound** (General tab): Off or Effects (a light tick when the zoom settles on a scale; the hand-held tools will add more).
 
-**See-through** (headset only, View tab): Off, 25, 50, 75 or 100%, fading walls and furniture up to a glass house where only 15% of them is left, so you can see into every room at once. Floors and ceilings stay as they are. Faded walls and furniture cast no shadows, like glass. The 2D page always shows the home as modelled.
+**See-through** (headset only, View tab): a switch that turns walls and furniture into glass (about a third of them left), so you can see into every room at once; the wall in front of you fades evenly. Floors and ceilings stay as they are. Faded walls and furniture cast no shadows, like glass. The 2D page always shows the home as modelled.
 
 **Light and shadows:** the sun comes from the right direction for your home, using the compass in the Sweet Home 3D file. Shadows are off by default; when on, they are computed once (not every frame), so walking stays smooth. With ceilings on, sunlight only enters through the windows; turn ceilings off to let it in from above. At sunset and at night the home's lamps glow. The same settings are in the card at the top right of the 2D page; the light starts as morning.
 
@@ -215,6 +216,7 @@ js/xr-dollhouse.js  the scale model on its plinth: turn, zoom, move, scale plate
 js/xr-walk.js     walking at 1:1: stick, teleport, snap turn, grip pull, floors and solid walls
 js/xr-ui.js       the settings board, help, welcome card and notes; touch and lasers on the board
 js/wrist-menu.js  the wrist menu: the orb and four keys (Settings, Help, ← Back, Walk in →)
+js/keys.js        keys pressed by touch or laser (wrist menu, the doors on the plinth)
 js/xr-menus.js    what the board and keys say and do (cells defined once, rows of ids)
 js/xr-scene.js    gallery room, plinth, skies, markers
 js/xr-targets.js  what the lasers, the teleport arc and your feet can hit (no DOM)

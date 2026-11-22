@@ -30,9 +30,11 @@ import { PLINTH_REST } from './xr-scene.js';
 import { WristMenu } from './wrist-menu.js';
 import { handsHelp } from './xr-menus.js';
 
-// The board (and the help card) within reach: 50 cm in front, 25 cm below the
-// eyes, tilted back 20° like a lectern; at the scale model 45° to the left.
-const BOARD_NEAR = 0.5, BOARD_DROP = 0.25, BOARD_TILT = THREE.MathUtils.degToRad(20), BOARD_SIDE = THREE.MathUtils.degToRad(45);
+// The board within reach: 40 cm in front, 30 cm below the eyes, tilted back
+// 25° like a lectern; at the scale model 30° to the left.
+// (Closer and less to the side than the first draft: the user had to use the laser to reach it.)
+const BOARD_NEAR = 0.4, BOARD_DROP = 0.3, BOARD_TILT = THREE.MathUtils.degToRad(25), BOARD_SIDE = THREE.MathUtils.degToRad(30);
+const HELP_WIDTH = 0.32; // the help card beside the wrist menu, metres
 // The note after a photo. Photos are kept in the app and saved from the page
 // after VR (a download in VR would end the session).
 const PHOTO_TEXT = {
@@ -55,6 +57,7 @@ export class XRUI {
 		this.drag = null; // a slider being dragged: { c, id }
 		this.boardDrag = null; // a controller holding the board's handle: { c, offset }
 		this.wrist = new WristMenu(xr);
+		this.wrist.onClose = () => this.hideHelp(); // (Help lives beside the wrist menu)
 		this.touches = []; // per input entry: its touch on the open board (js/touch.js)
 		this.buildWelcome();
 		this.buildPhotoFeedback();
@@ -201,6 +204,10 @@ export class XRUI {
 		this.menu = null;
 		this.boardDrag = null;
 		this.drag = null;
+	}
+
+	/** Hides the help card beside the wrist menu. */
+	hideHelp() {
 		if (this.help) this.help.mesh.visible = false;
 		this.help = null;
 	}
@@ -218,13 +225,17 @@ export class XRUI {
 
 	/** Help: what each control does here, for controllers, or for bare hands when no controller is held. */
 	toggleHelp() {
-		if (this.help) { this.closeMenu(); return; }
+		if (this.help) { this.hideHelp(); this.feel(null, 'close'); return; }
 		this.closeMenu();
 		const xr = this.xr;
 		const card = xr.input.active().length ? xr.help[xr.mode] : xr.help.hands;
-		if (!card) return;
+		if (!card || !this.wrist.open) return;
 		if (card === xr.help.hands) { card.lines = handsHelp(this.wrist.side); card.draw(); }
-		this.placeNear(card.mesh);
+		// Beside the wrist menu, on its right (menu left, help right), in its plane; the menu stays open.
+		const w = card.mesh.geometry.parameters.width;
+		card.mesh.scale.setScalar(HELP_WIDTH / w);
+		card.mesh.position.copy(this.wrist.besideRight(HELP_WIDTH));
+		card.mesh.rotation.set(0, 0, 0);
 		card.mesh.visible = true;
 		this.help = card;
 		this.feel(null, 'open');
@@ -402,7 +413,7 @@ export class XRUI {
 		const wearer = this.wrist.wearer;
 		for (const c of this.xr.input.active()) {
 			if (c.state.down.a && !c.claim.a && c === wearer) { this.wrist.toggle({ pinned: true }); if (this.wrist.open) this.setWelcome(false); return true; }
-			if (c.state.down.b && !c.claim.b && this.anyOpen) { this.closeMenu(); this.wrist.close(true); return true; }
+			if (c.state.down.b && !c.claim.b && this.anyOpen) { this.closeMenu(); this.hideHelp(); this.wrist.close(true); return true; }
 		}
 		return false;
 	}

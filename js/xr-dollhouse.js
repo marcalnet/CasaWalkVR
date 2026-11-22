@@ -15,7 +15,8 @@
 import * as THREE from 'three';
 import { UP, DOWN } from './xr-targets.js';
 import { yawOf } from './xr-input.js';
-import { PLINTH_REST, EYE_BELOW_TOP, buildMarkers } from './xr-scene.js';
+import { PLINTH_REST, PLINTH_HEIGHT, EYE_BELOW_TOP, buildMarkers } from './xr-scene.js';
+import { KeyPad } from './keys.js';
 import { roomAt, roomLanding, alongAxis, clearOfWalls, headingOf } from './rooms.js';
 import { Label } from './panel.js';
 import { ease } from './tween.js';
@@ -37,6 +38,7 @@ export function nearestScale(ratio) {
 }
 const ROTATE_SPEED = 1.6; // rad/s at full stick
 const ZOOM_SPEED = 1.2; // e-folds/s at full stick
+const DOOR_SIZE = [0.24, 0.11]; // the doors on the plinth, metres: big, seen from where you stand
 const MARKER_HEIGHT = 1.7; // metres at the model's scale (the "stand here" figure)
 // A landing spot must be free of furniture from this height above the floor
 // (rugs and thresholds don't count) up to head height, around a body's width.
@@ -57,8 +59,35 @@ export class Dollhouse {
 		this.labels = this.markers.map(() => new Label());
 		for (const l of this.labels) xr.scene.add(l.mesh);
 		xr.hideFromPhotos(...this.markers, ...this.labels.map((l) => l.mesh));
+		// The doors on the plinth (the user's Quest 2 test): always there, without
+		// opening the orb. ← Back (leave VR) on the left, Walk in → beside it on
+		// the right, on the plinth's front edge by the scale plate, tilted up
+		// towards you. Pressed by touch, a controller's tip or its laser.
+		this.doors = new KeyPad(xr, 'plinth-door');
+		this.doorGroup = new THREE.Group();
+		this.doorGroup.name = 'plinth-doors';
+		for (const slot of ['back', 'in']) this.doorGroup.add(this.doors.add(slot, DOOR_SIZE[0], DOOR_SIZE[1]).group);
+		this.doors.setSpec('back', { id: 'back', look: 'outline', icon: 'back', label: '\u2190 Back', caption: 'Leave VR' });
+		this.doors.setSpec('in', { id: 'in', look: 'filled', icon: 'in', label: 'Walk in \u2192', caption: 'Inside the home' });
+		xr.stage.add(this.doorGroup);
+		xr.hideFromPhotos(this.doorGroup);
+		this.placeDoors();
 		this.clearRay = new THREE.Raycaster();
 		this.clearRay.firstHitOnly = true;
+	}
+
+	/**
+	 * The doors on the plinth's front edge, tilted up 35° like the scale plate
+	 * (on its right): Walk in → in the middle of the edge, ← Back to its left.
+	 * Called again whenever the plinth is resized.
+	 */
+	placeDoors() {
+		const xr = this.xr, { D } = xr.plinthSize, tilt = THREE.MathUtils.degToRad(35), [w, h] = DOOR_SIZE;
+		const y = PLINTH_HEIGHT + Math.sin(tilt) * h / 2 + 0.004, z = -xr.plinthDistance + D / 2 - 0.065;
+		this.doors.keys.get('in').group.position.set(0, 0, 0);
+		this.doors.keys.get('back').group.position.set(-(w + 0.03), 0, 0);
+		this.doorGroup.position.set(0, y, z);
+		this.doorGroup.rotation.set(-(Math.PI / 2 - tilt), 0, 0);
 	}
 
 	/** A new model: the markers go into model space (they turn and zoom with it). */
@@ -97,6 +126,7 @@ export class Dollhouse {
 	/** Leaving the dollhouse (for walking, or the session ended). */
 	exit() {
 		this.grab = null;
+		this.doors.reset();
 		for (const m of this.markers) m.visible = false;
 		for (const l of this.labels) l.mesh.visible = false;
 		this.xr.stage.visible = false;
@@ -199,7 +229,10 @@ export class Dollhouse {
 		const xr = this.xr, ui = xr.ui, input = xr.input;
 		ui.faceWelcome();
 		if (ui.buttons()) return;
-		const { action } = ui.point();
+		const point = ui.point();
+		// The doors on the plinth (not while a menu is open in front of them).
+		const door = this.doors.update(dt, { active: !xr.menu });
+		const action = point.action ?? door.action;
 		const { pointable } = xr.targets();
 		let jumpTo = null;
 		const spots = [];

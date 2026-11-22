@@ -653,13 +653,7 @@ function updateXRButtons() {
 			setStatus(`Could not start VR: ${e.message}`, true);
 		}
 	});
-	// The three layers, the first lit: page → scale model → inside.
-	const layers = document.createElement('span');
-	layers.className = 'layers';
-	const here = document.createElement('b');
-	here.textContent = 'page';
-	layers.append(here, ' \u2192 scale model \u2192 inside');
-	box.append(b, layers);
+	box.append(b);
 	if (!ON_HEADSET) { box.append(...send()); renderSendNote(); } // e.g. a PC with a headset attached: both ways in
 }
 
