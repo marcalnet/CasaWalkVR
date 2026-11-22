@@ -22,7 +22,8 @@ export const SETTINGS = {
 	view: { key: 'casawalk.view', options: ['vr', 'ar'], fallback: 'vr' }, // VR or passthrough, in an AR session
 	turn: { key: 'casawalk.snapAngle', options: [15, 30, 45], fallback: 30 }, // snap turn, degrees
 	height: { key: 'casawalk.height', options: [0, 1.4, 1.7, 2.0], fallback: 0 }, // person height, metres (0 = your own)
-	figure: { key: 'casawalk.figure', flag: true, fallback: true }, // scale figure beside the dollhouse
+	// (The scale figure and its 'casawalk.figure' switch were removed in Nov 2026:
+	// the landing markers show a person's size. A stored value is simply never read.)
 	solid: { key: 'casawalk.solidWalls', flag: true, fallback: false }, // walls stop you while walking
 	seeThrough: { key: 'casawalk.seeThrough', range: true, fallback: 0 }, // 0 = as modelled, 1 = glass house
 	sound: { key: 'casawalk.sound', options: ['off', 'effects', 'all'], fallback: 'all' }, // all: effects and the ambience (milestone H)

@@ -10,8 +10,12 @@ test('the storage keys never change', () => {
 	const keys = Object.fromEntries(Object.entries(SETTINGS).map(([name, s]) => [name, s.key]));
 	assert.deepEqual(keys, {
 		light: 'casawalk.light', shadows: 'casawalk.shadows', depth: 'casawalk.depth', view: 'casawalk.view', turn: 'casawalk.snapAngle',
-		height: 'casawalk.height', figure: 'casawalk.figure', solid: 'casawalk.solidWalls', seeThrough: 'casawalk.seeThrough', sound: 'casawalk.sound',
+		height: 'casawalk.height', solid: 'casawalk.solidWalls', seeThrough: 'casawalk.seeThrough', sound: 'casawalk.sound',
 	});
+});
+
+test('the removed scale figure\'s stored switch is ignored', () => {
+	assert.equal(SETTINGS.figure, undefined); // 'casawalk.figure' may still be stored: nothing reads it
 });
 
 test('stored strings mean what they always meant', () => {
@@ -24,8 +28,6 @@ test('stored strings mean what they always meant', () => {
 		[S.view, null, 'vr'], [S.view, 'ar', 'ar'], [S.view, 'vr', 'vr'], [S.view, 'AR', 'vr'],
 		[S.turn, null, 30], [S.turn, '15', 15], [S.turn, '45', 45], [S.turn, '20', 30], [S.turn, 'x', 30],
 		[S.height, null, 0], [S.height, '1.4', 1.4], [S.height, '1.7', 1.7], [S.height, '2', 2], [S.height, '1.8', 0],
-		// The figure was on unless switched off ('0'), so anything else is on.
-		[S.figure, null, true], [S.figure, '0', false], [S.figure, '1', true], [S.figure, 'junk', true],
 		[S.solid, null, false], [S.solid, '1', true], [S.solid, '0', false],
 		[S.seeThrough, null, 0], [S.seeThrough, '0.35', 0.35], [S.seeThrough, '1', 1], [S.seeThrough, '0', 0],
 		[S.seeThrough, '1.5', 0], [S.seeThrough, '-0.2', 0], [S.seeThrough, 'NaN', 0], [S.seeThrough, '', 0],
@@ -37,7 +39,7 @@ test('stored strings mean what they always meant', () => {
 
 test('values are stored as they always were, and read back the same', () => {
 	assert.equal(encode(SETTINGS.shadows, true), '1');
-	assert.equal(encode(SETTINGS.figure, false), '0');
+	assert.equal(encode(SETTINGS.solid, false), '0');
 	assert.equal(encode(SETTINGS.turn, 45), '45');
 	assert.equal(encode(SETTINGS.height, 2.0), '2');
 	assert.equal(encode(SETTINGS.seeThrough, 0.35), '0.35');
@@ -59,8 +61,8 @@ test('reading and writing use localStorage, and never throw without it', () => {
 		assert.equal(readSetting('turn'), 15);
 		// Private mode: storage throws; the defaults are used.
 		Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: { getItem() { throw new Error('denied'); }, setItem() { throw new Error('denied'); } } });
-		assert.equal(readSetting('figure'), true);
-		assert.doesNotThrow(() => writeSetting('figure', false));
+		assert.equal(readSetting('solid'), false);
+		assert.doesNotThrow(() => writeSetting('solid', true));
 	} finally {
 		if (had) Object.defineProperty(globalThis, 'localStorage', had);
 		else delete globalThis.localStorage;

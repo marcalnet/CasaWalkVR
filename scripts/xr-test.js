@@ -100,8 +100,7 @@ const state = () => page.evaluate(() => {
 		hover: x.menu?.hover ?? null, anchorScale: x.anchor.scale.x, orbs: x.ui.orbs.filter((o) => o.holder).length,
 		orbGlow: Math.max(...x.ui.orbs.map((o) => o.glow)), snap: x.snapAngle, height: x.personHeight,
 		arc: x.modes.walk.arc.dots.visible, ring: x.modes.walk.arc.ring.visible ? x.modes.walk.arc.ring.position.toArray() : null, valid: x.modes.walk.tele?.result?.valid ?? null,
-		stage: [...x.stage.position.toArray(), x.stage.rotation.y],
-		figure: x.figure.visible, figureHeight: x.figure.visible ? new (x.rig.position.constructor)().setFromMatrixScale(x.figure.matrixWorld).y * 1.75 : 0 };
+		stage: [...x.stage.position.toArray(), x.stage.rotation.y] };
 });
 /**
  * World position of a target on the open menu: a button or switch (id), a
@@ -158,7 +157,7 @@ const leftovers = () => page.evaluate(() => {
 	want('arc', !x.modes.walk.arc.dots.visible && !x.modes.walk.arc.ring.visible);
 	want('orbs', x.ui.orbs.every((o) => !o.group.parent && !o.holder));
 	want('controllers', x.input.controllers.every((c) => !c.ray.visible && !c.grip.visible));
-	want('rooms', !x.showroom.visible && !x.stage.visible && !x.walkSky.visible && !x.figure.visible && x.modes.dollhouse.markers.every((m) => !m.visible));
+	want('rooms', !x.showroom.visible && !x.stage.visible && !x.walkSky.visible && x.modes.dollhouse.markers.every((m) => !m.visible));
 	want('rig', x.rig.position.lengthSq() === 0 && x.rig.rotation.y === 0 && x.lift === 0);
 	want('anchor', x.anchor.position.lengthSq() === 0 && x.anchor.rotation.y === 0 && x.anchor.scale.x === 1);
 	want('ground', x.model.layers.ground.visible);
@@ -207,11 +206,11 @@ const FINGERPRINT = async () => {
 	S.scene.traverseVisible((o) => { if ((o.isMesh || o.isLine || o.isPoints) && o.material?.visible !== false) census[where(o)] = (census[where(o)] ?? 0) + 1; });
 	const menu = (p) => ({ title: p.title, size: [p.size.w, p.size.h], shown: p.mesh.visible, list: p.open, card: p.card.mesh.parent === p.mesh,
 		rows: p.rows.map((row) => row.map((c) => [c.id, c.type, c.label, c.value ?? null, !!c.disabled, c.note ?? null, !!c.primary, (c.options ?? []).map((o) => `${o.value}=${o.label}`).join(',')].join('|'))) });
-	const KEYS = ['casawalk.snapAngle', 'casawalk.height', 'casawalk.view', 'casawalk.figure', 'casawalk.solidWalls', 'casawalk.seeThrough', 'casawalk.light', 'casawalk.shadows', 'casawalk.depth'];
+	const KEYS = ['casawalk.snapAngle', 'casawalk.height', 'casawalk.view', 'casawalk.solidWalls', 'casawalk.seeThrough', 'casawalk.light', 'casawalk.shadows', 'casawalk.depth'];
 	return {
 		mode: x.mode, session: x.sessionMode, view: x.view, menu: x.menu?.title ?? null, welcome: [vis(x.ui.welcome.mesh), x.ui.welcomeOn],
 		busy: [!!x.modes.dollhouse.grab, !!x.modes.walk.tele, !!x.modes.walk.fade, !!x.ui.drag, !!x.pendingRecentre, !!x.photoPending],
-		shown: { ...Object.fromEntries(['showroom', 'stage', 'gallery', 'pedestal', 'walkSky', 'figure'].map((k) => [k, vis(x[k])])), fadeMesh: vis(x.modes.walk.fadeMesh), flash: vis(x.ui.flash) },
+		shown: { ...Object.fromEntries(['showroom', 'stage', 'gallery', 'pedestal', 'walkSky'].map((k) => [k, vis(x[k])])), fadeMesh: vis(x.modes.walk.fadeMesh), flash: vis(x.ui.flash) },
 		layers: Object.fromEntries(Object.entries(x.model.layers).map(([k, g]) => [k, [g.visible, g.children.filter(vis).length]])), maxStorey: x.maxStorey,
 		markers: x.modes.dollhouse.markers.map(vis), arc: [vis(x.modes.walk.arc.dots), vis(x.modes.walk.arc.ring)], note: vis(x.ui.photoNote.mesh),
 		rig: [...v3(x.rig.position), n(x.rig.rotation.y), n(x.lift), n(x.modes.dollhouse.dollLift)], stage: [...v3(x.stage.position), n(x.stage.rotation.y)],
@@ -220,7 +219,7 @@ const FINGERPRINT = async () => {
 		clip: [x.camera.near, x.camera.far], background: S.scene.background?.getHex?.() ?? S.scene.background,
 		hands: x.input.controllers.map((c) => [c.handedness, vis(c.ray), vis(c.grip), vis(c.line), vis(c.dot), x.ui.orbs.findIndex((o) => o.group.parent === c.grip)]),
 		menus: { dollhouse: menu(x.menus.dollhouse), walk: menu(x.menus.walk) },
-		settings: [x.snapAngle, x.personHeight, x.figureOn, x.solid, x.seeThroughAmount, S.lighting.time, S.lighting.shadows, S.depth.enabled],
+		settings: [x.snapAngle, x.personHeight, x.solid, x.seeThroughAmount, S.lighting.time, S.lighting.shadows, S.depth.enabled],
 		draw: [r.info.render.calls, r.info.render.triangles, r.info.memory.geometries, r.info.memory.textures],
 		census, children: [S.scene.children.length, x.rig.children.length, x.stage.children.length, x.centerer.children.length],
 		storage: Object.fromEntries(KEYS.map((k) => [k, localStorage.getItem(k)])),
@@ -292,7 +291,7 @@ check('an orb on each wrist', s.orbs === 2);
 		const top = Math.max(...x.pedestal.children.filter((m) => m !== x.plate.mesh).map((m) => m.getWorldPosition(new V()).y + m.geometry.parameters.height / 2)); return { gap: floor - top, near: x.camera.near, far: x.camera.far }; });
 	check('the model\'s floor is clear of the plinth top (no flicker)', gap.gap > 0.003 && gap.gap < 0.006 && gap.near === 0.05 && gap.far === 300, JSON.stringify(gap));
 }
-check('scale figure stands by the dollhouse at the model\'s scale', s.figure && Math.abs(s.figureHeight - 1.75 * s.anchorScale) < 1e-3, `figure ${s.figureHeight.toFixed(3)} m, scale ${s.anchorScale.toFixed(3)}`);
+check('no scale figure by the scale model (the landing markers show a person\'s size)', await page.evaluate(() => !window.__casawalk.xr.scene.getObjectByName('scale-figure') && !window.__casawalk.xr.menus.dollhouse.get('figure')));
 {
 	// A welcome card above the model says how to open the menu (it no longer opens by itself).
 	const w = await page.evaluate(() => {
@@ -333,7 +332,7 @@ check('scale figure stands by the dollhouse at the model\'s scale', s.figure && 
 	});
 	const want = { shadows: 'switch', depth: 'switch', ceilings: 'switch', light: 'choice', view: 'switch', seethrough: 'slider', sound: 'choice', exit: 'button' };
 	const ok = Object.entries(want).every(([id, t]) => kinds.doll[id] === t && kinds.walk[id] === t)
-		&& kinds.doll.figure === 'switch' && kinds.doll.levels === 'dropdown' && kinds.doll.photo === 'button' && kinds.walk.photo === 'button' && kinds.walk.solid === 'switch' && kinds.walk.turn === 'choice' && kinds.walk.height === 'choice';
+		&& kinds.doll.levels === 'dropdown' && kinds.doll.photo === 'button' && kinds.walk.photo === 'button' && kinds.walk.solid === 'switch' && kinds.walk.turn === 'choice' && kinds.walk.height === 'choice';
 	check('menus use switches, choices, a slider and buttons, and fit in view', ok && Math.max(...kinds.heights) < 0.7, JSON.stringify({ heights: kinds.heights, width: kinds.width }));
 }
 await shot('dollhouse-menu');
@@ -771,7 +770,7 @@ await shot('reentered');
 await page.evaluate(() => window.__casawalk.xr.end());
 await frames(5);
 
-// The example home (two storeys, lamps): level picker, lamps at night, figure.
+// The example home (two storeys, lamps): level picker, lamps at night.
 await page.click('#open-example');
 await page.waitForFunction(() => /Loaded example-home/.test(document.getElementById('status').textContent), null, { timeout: 20000 });
 await page.evaluate(() => window.__device.position.set(0, 1.6, 0));
@@ -886,12 +885,6 @@ check('Levels: All shows every storey again', lv.hidden.length === 0 && lv.level
 		JSON.stringify({ kept: kept.length, downloaded, name: kept[0]?.name, ...fx }));
 	await click('right', 'a-button');
 }
-await clickMenu('figure');
-await frames(3);
-check('Figure can be switched off', !(await state()).figure);
-await clickMenu('figure');
-await frames(3);
-check('and on again', (await state()).figure);
 // Depth shading: switched on from the menu, prepared in the background, headset only.
 const depth = () => page.evaluate(() => { const d = window.__casawalk.depth, x = window.__casawalk.xr; return { on: d.enabled, state: d.state, uniform: d.uniform.value, label: x.menus.dollhouse.get('depth').label, switched: x.menus.dollhouse.get('depth').value }; });
 check('Depth starts off', (await depth()).switched === false && (await depth()).uniform === 0);
@@ -906,7 +899,7 @@ await clickMenu('walk');
 await frames(15);
 lv = await storeys();
 s = await state();
-check('walking shows every storey and hides the figure', s.mode === 'walk' && lv.hidden.length === 0 && !s.figure, JSON.stringify({ mode: s.mode, hidden: lv.hidden, figure: s.figure }));
+check('walking shows every storey', s.mode === 'walk' && lv.hidden.length === 0, JSON.stringify({ mode: s.mode, hidden: lv.hidden }));
 await fingerprint('example-walk');
 {
 	// Several levels: furniture stops the arc (stairs can be stood on), but doors and windows don't.

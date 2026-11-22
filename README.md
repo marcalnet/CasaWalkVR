@@ -84,15 +84,14 @@ Press **Enter VR** once a model is open. In the headset, the menu switches betwe
 
 **Menu:** touch one wrist with the other hand (a glowing orb sits on each wrist), point at an orb and pull the trigger, or press **A** or **X**: the menu opens with a drawing of the controllers and what each button does. At the scale model it opens to your left, clear of the model; while walking, in front of you. **B** / **Y** or a click elsewhere closes it. When you enter VR, a welcome card above the home says how, until you first open the menu.
 
-The menu has three tabs, **View**, **Walk** and **Sound**, the same in both menus, with the actions (Walk in or Back to the scale model, Recentre, Photo, Exit VR) below them on every tab. Settings are **switches** for what is on or off (Shadows, Depth shading, Ceilings, Figure, Passthrough, Solid walls), a row of **options** with the current one in blue where there are a few to choose from (Time of day, Turn, Height, Sound: one click, nothing to open), a **dropdown** for Levels (homes can have many) and a **slider** for See-through (pull the trigger on it and drag). A setting that belongs to the scale model is greyed out while walking. Settings, and the tab you last used, are remembered.
+The menu has three tabs, **View**, **Walk** and **Sound**, the same in both menus, with the actions (Walk in or Back to the scale model, Recentre, Photo, Exit VR) below them on every tab. Settings are **switches** for what is on or off (Shadows, Depth shading, Ceilings, Passthrough, Solid walls), a row of **options** with the current one in blue where there are a few to choose from (Time of day, Turn, Height, Sound: one click, nothing to open), a **dropdown** for Levels (homes can have many) and a **slider** for See-through (pull the trigger on it and drag). A setting that belongs to the scale model is greyed out while walking. Settings, and the tab you last used, are remembered.
 
 **Scale model**
 - The home stands on a low museum plinth in a gallery room, 60 cm in front of you. You look down at it as a 2 m tall person would, whether you sit or stand, so it's easy to look into the rooms. If you change position, **Recentre** measures your height again. **Passthrough** (View tab) swaps the gallery for your own room; the model stays exactly where it is.
 - **Thumbstick** left/right turns it; up/down zooms it (½× to 4×). A brass plate on the plinth shows its true scale (e.g. 1:42); let go of a zoom near a standard scale (1:10, 1:20, 1:25, 1:50, 1:100…) and it settles on it with a light tick.
 - Point the **laser** at a room: an orange marker hops to the room's clear middle, with the room's name above it and a small arrow for the way you'll face. **Trigger** takes you there at real size. (Pointing at the garden, you land where you point, clear of the walls, facing the house. OBJ and GLB files have no rooms: you land where you point.)
 - **Grip** and move your hand to lift it or move it; it never sinks into the plinth.
-- A small grey **scale figure** (1.75 m at the model's scale) stands by the home's front corner, like the little people in architects' models, so you can judge its size.
-- Menu: **Walk in** (at Sweet Home 3D's virtual visitor position), **Recentre**, **Photo**, **Exit VR**; View tab: **Time of day** (morning, noon, sunset, night), **Shadows**, **Depth shading**, **Ceilings**, **Figure**, **See-through**, **Levels** (in a home with several storeys: all of them, or up to a level, by its Sweet Home 3D name, with the ceilings off the top one shown), **Passthrough**.
+- Menu: **Walk in** (at Sweet Home 3D's virtual visitor position), **Recentre**, **Photo**, **Exit VR**; View tab: **Time of day** (morning, noon, sunset, night), **Shadows**, **Depth shading**, **Ceilings**, **Passthrough**, **See-through**, **Levels** (in a home with several storeys: all of them, or up to a level, by its Sweet Home 3D name, with the ceilings off the top one shown).
 
 **Walking, at 1:1**
 - **Left stick** walks where you look. In a one-level home you stay on the floor and walk through furniture; in a home with several levels you can step onto anything, so stairs work.
@@ -213,7 +212,7 @@ js/xr-dollhouse.js  the scale model on its plinth: turn, zoom, move, scale plate
 js/xr-walk.js     walking at 1:1: stick, teleport, snap turn, grip pull, floors and solid walls
 js/xr-ui.js       wrist orbs, opening and pointing at the menu, welcome card, photo note
 js/xr-menus.js    what the headset menus say and do (cells defined once, rows of ids)
-js/xr-scene.js    gallery room, plinth, skies, markers, scale figure
+js/xr-scene.js    gallery room, plinth, skies, markers
 js/xr-targets.js  what the lasers, the teleport arc and your feet can hit (no DOM)
 js/xr-tools.js    the hand-held tool system (the tools arrive later)
 js/xr-input.js    controllers, lasers, buttons, thumbsticks, teleport arc

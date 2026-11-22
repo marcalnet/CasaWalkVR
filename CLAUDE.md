@@ -27,7 +27,7 @@ js/xr-dollhouse.js  scale model mode ("dollhouse" in code): plinth, rotate/zoom/
 js/xr-walk.js     walk mode: locomotion, teleport and fade, snap turn, grip pull, floor following, solid walls
 js/xr-ui.js       wrist orbs, opening/closing/pointing at the menu (trigger claims), welcome card, photo note
 js/xr-menus.js    the menus as data (cells by id; tabs and actions as rows of ids), controls cards, labels, what a click does
-js/xr-scene.js    scenery builders: gallery room, plinth, skies, markers, scale figure
+js/xr-scene.js    scenery builders: gallery room, plinth, skies, markers
 js/xr-targets.js  what lasers, the teleport arc and the feet may hit (pure, Node-testable)
 js/xr-tools.js    hand-held tool system: claims, routing, annotations in model space (tools from milestone C)
 js/settings.js    every remembered setting: key, default, meaning (page and headset)

@@ -15,7 +15,7 @@
 import * as THREE from 'three';
 import { UP, DOWN } from './xr-targets.js';
 import { yawOf } from './xr-input.js';
-import { PLINTH_REST, EYE_BELOW_TOP, FIGURE_GAP, buildMarkers } from './xr-scene.js';
+import { PLINTH_REST, EYE_BELOW_TOP, buildMarkers } from './xr-scene.js';
 import { roomAt, roomLanding, alongAxis, clearOfWalls, headingOf } from './rooms.js';
 import { Label } from './panel.js';
 import { ease } from './tween.js';
@@ -61,15 +61,9 @@ export class Dollhouse {
 		this.clearRay.firstHitOnly = true;
 	}
 
-	/** A new model: the markers and the scale figure go into model space (they turn and zoom with it). */
-	setModel(model) {
-		const xr = this.xr;
-		xr.centerer.add(...this.markers, xr.figure);
-		// The scale figure stands on the ground just in front of the home's
-		// left corner, at the model's scale.
-		const b = model.bounds;
-		xr.figure.position.set(b.min.x + 0.6, b.min.y, b.max.z + FIGURE_GAP);
-		xr.figure.visible = false;
+	/** A new model: the markers go into model space (they turn and zoom with it). */
+	setModel() {
+		this.xr.centerer.add(...this.markers);
 	}
 
 	/** A new session: the model back in the middle, and the view lift for the first frames. */

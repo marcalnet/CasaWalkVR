@@ -59,7 +59,7 @@ test('the menus: the same tabs in both modes, the actions under them', async () 
 	for (const p of Object.values(x.menus)) {
 		assert.deepEqual(p.tabs.map((t) => t.label), ['View', 'Walk', 'Sound']);
 		assert.deepEqual(shape(p.tabs[0].rows), ['light:choice:Time of day:Morning:Noon:Sunset:Night', 'shadows:switch:Shadows | depth:switch:Depth shading',
-			'ceilings:switch:Ceilings | figure:switch:Figure', 'seethrough:slider:See-through', `levels:dropdown:Levels${p === x.menus.dollhouse ? ':All levels (2):Up to Ground floor' : ''}`, 'view:switch:Passthrough']);
+			'ceilings:switch:Ceilings | view:switch:Passthrough', 'seethrough:slider:See-through', `levels:dropdown:Levels${p === x.menus.dollhouse ? ':All levels (2):Up to Ground floor' : ''}`]);
 		assert.deepEqual(shape(p.tabs[1].rows), ['turn:choice:Turn:15°:30°:45°', 'height:choice:Height:Yours:1.4 m:1.7 m:2.0 m', 'solid:switch:Solid walls']);
 		assert.deepEqual(shape(p.tabs[2].rows), ['sound:choice:Sound:Off:Effects']);
 	}
@@ -69,7 +69,9 @@ test('the menus: the same tabs in both modes, the actions under them', async () 
 	assert.equal(x.menus.dollhouse.title, 'Scale model');
 	assert.equal(x.menus.walk.title, 'Walking');
 	// Scale-model settings are greyed out while walking; the menus are the same size whatever the tab.
-	assert.ok(x.menus.walk.get('levels').disabled && x.menus.walk.get('figure').disabled && /scale model/i.test(x.menus.walk.get('figure').note));
+	assert.ok(x.menus.walk.get('levels').disabled && /scale model/i.test(x.menus.walk.get('levels').note));
+	// The scale figure and its switch are gone (the landing markers show a person's size).
+	assert.ok(Object.values(x.menus).every((p) => !p.get('figure')) && !('figure' in x) && !('figureOn' in x));
 	const h = x.menus.dollhouse.size.h;
 	x.menus.dollhouse.setTab('sound');
 	assert.equal(x.menus.dollhouse.size.h, h);
@@ -101,7 +103,7 @@ test('Sound: off and on, remembered', async () => {
 test('the menu closes on Walk in, Recentre, Photo, Back and Exit only', async () => {
 	const { x, ended } = await setup();
 	const closes = (id, value) => { x.ui.openMenu(); x.menuAction(value === undefined ? id : { id, value }); return x.menu === null; };
-	for (const [id, v] of [['light', 'noon'], ['shadows'], ['depth'], ['ceilings'], ['ceilings'], ['figure'], ['figure'], ['seethrough', 0.5], ['seethrough', 0], ['levels', 0], ['levels', 1], ['view', 'ar']]) {
+	for (const [id, v] of [['light', 'noon'], ['shadows'], ['depth'], ['ceilings'], ['ceilings'], ['seethrough', 0.5], ['seethrough', 0], ['levels', 0], ['levels', 1], ['view', 'ar']]) {
 		assert.equal(closes(id, v), false, id);
 	}
 	assert.equal(closes('recentre'), true);
@@ -137,7 +139,7 @@ test('leaving VR in the middle of a walk leaves nothing behind', async () => {
 	x.tools.annotations.add(new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshBasicMaterial()));
 	x.end();
 	assert.deepEqual([x.mode, x.menu, walk.tele, walk.fade, x.ui.drag, x.modes.dollhouse.grab, x.ui.welcomeOn, x.pendingRecentre, x.photoPending], [null, null, null, null, null, null, false, false, false]);
-	const shown = [walk.arc.dots, walk.arc.ring, walk.fadeMesh, x.ui.flash, x.ui.photoNote.mesh, x.walkSky, x.showroom, x.stage, x.figure, x.ui.welcome.mesh, ...x.modes.dollhouse.markers, ...Object.values(x.menus).map((p) => p.mesh)].filter((o) => o.visible);
+	const shown = [walk.arc.dots, walk.arc.ring, walk.fadeMesh, x.ui.flash, x.ui.photoNote.mesh, x.walkSky, x.showroom, x.stage, x.ui.welcome.mesh, ...x.modes.dollhouse.markers, ...Object.values(x.menus).map((p) => p.mesh)].filter((o) => o.visible);
 	assert.deepEqual(shown.map((o) => o.name || o.type), []);
 	assert.ok(x.ui.orbs.every((o) => !o.group.parent && !o.holder));
 	assert.equal(x.rig.position.length() + x.anchor.position.length() + x.lift, 0);

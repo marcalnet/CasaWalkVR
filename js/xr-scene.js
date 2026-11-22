@@ -1,6 +1,6 @@
 // Scenery for the headset (SPEC.md, "Experience and controls"): the gallery
-// room and its sky, the museum plinth, the walk-mode sky, the "stand here"
-// markers and the scale figure. Builders only: they make three.js objects and
+// room and its sky, the museum plinth, the walk-mode sky and the "stand here"
+// markers. Builders only: they make three.js objects and
 // keep no state; js/xr.js and the modes own what they build.
 
 import * as THREE from 'three';
@@ -16,8 +16,6 @@ const PLINTH_MARGIN = 0.2; // table left around the model (it is ~1.2 m across)
 // you can't walk around in the gallery, and 30 cm put the model too close).
 const PLINTH_FRONT_GAP = 0.6;
 export const EYE_BELOW_TOP = 0.11; // eyes are about this far below the top of the head
-export const FIGURE_HEIGHT = 1.75; // the scale figure beside the dollhouse, metres at the model's scale
-export const FIGURE_GAP = 0.45; // how far in front of the home it stands, metres at the model's scale
 
 /**
  * Outside the gallery: a soft gradient sky and a pale ground, seen through
@@ -249,34 +247,6 @@ function buildGallery() {
 	canvas(1.3, 1.9, 3, -W / 2 + 0.03, 2.0, 0, Math.PI / 2);
 	canvas(1.3, 1.9, 4, W / 2 - 0.03, 2.0, 0, -Math.PI / 2);
 	return g;
-}
-
-/**
- * Scale figure: a plain standing mannequin, 1.75 m tall, like the little
- * people in architects' models. One merged mesh, so one draw call.
- */
-export function buildFigure() {
-	const H = FIGURE_HEIGHT / 1.735; // the parts below add up to 1.735
-	const parts = [];
-	const add = (geo, x, y, z, rz = 0, sz = 1) => parts.push(geo.scale(1, 1, sz).rotateZ(rz).translate(x, y, z));
-	add(new THREE.SphereGeometry(0.105, 16, 12), 0, 1.63, 0); // head
-	add(new THREE.CylinderGeometry(0.045, 0.05, 0.1, 10), 0, 1.5, 0); // neck
-	add(new THREE.CylinderGeometry(0.19, 0.145, 0.52, 14), 0, 1.2, 0, 0, 0.6); // torso
-	add(new THREE.CylinderGeometry(0.15, 0.16, 0.18, 14), 0, 0.87, 0, 0, 0.65); // hips
-	for (const s of [-1, 1]) {
-		add(new THREE.SphereGeometry(0.062, 10, 8), s * 0.2, 1.42, 0); // shoulder
-		add(new THREE.CylinderGeometry(0.048, 0.034, 0.62, 10), s * 0.235, 1.12, 0, s * 0.07); // arm
-		add(new THREE.CylinderGeometry(0.078, 0.05, 0.8, 10), s * 0.085, 0.4, 0); // leg
-		add(new THREE.BoxGeometry(0.09, 0.06, 0.24), s * 0.085, 0.03, 0.045); // foot
-	}
-	const geo = mergeGeometries(parts.map((g) => g.toNonIndexed()));
-	for (const g of parts) g.dispose();
-	geo.scale(H, H, H);
-	const mesh = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ color: 0x5b6672 }));
-	mesh.name = 'scale-figure';
-	mesh.castShadow = mesh.receiveShadow = true;
-	mesh.visible = false;
-	return mesh;
 }
 
 /** Dark oak planks, drawn once on a canvas (2 m tile, 25 cm planks). */

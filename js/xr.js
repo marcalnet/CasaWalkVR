@@ -7,7 +7,7 @@
 //   menus      what they say and do: js/xr-menus.js; orbs, opening, closing,
 //              pointing, the welcome card and the photo note: js/xr-ui.js
 //   tools      hand-held tools (milestones C-F): js/xr-tools.js
-//   scenery    gallery, plinth, skies, markers, figure: js/xr-scene.js
+//   scenery    gallery, plinth, skies, markers: js/xr-scene.js
 //   rules      what lasers, the arc and the feet may hit: js/xr-targets.js
 //   feel       tweens, vibration and sound for feedback: js/tween.js,
 //              js/haptics.js, js/sound.js
@@ -28,10 +28,10 @@
 //
 // The parts (modes, ui, menus, tools) are given this XRExperience. They may
 // use its scene objects (renderer scene camera rig anchor centerer stage
-// showroom gallery pedestal walkSky figure), input and raycaster, shared state
+// showroom gallery pedestal walkSky), input and raycaster, shared state
 // (session sessionMode model mode menu menus view vrView lift maxStorey
 // baseScale plinthSize plinthDistance and the settings snapAngle personHeight
-// figureOn solid seeThroughAmount), its services (lighting depth seeThrough ui
+// solid seeThroughAmount), its services (lighting depth seeThrough ui
 // modes tools tweens haptics sound) and its methods. Each part owns what it
 // creates and reads shared values when it needs them, never keeping copies.
 
@@ -40,7 +40,7 @@ import { XRInput } from './xr-input.js';
 import { SeeThrough, SEE_THROUGH_MAX } from './walls.js';
 import { takePhoto, photoName, saveFile, withHidden } from './photo.js';
 import { readSetting } from './settings.js';
-import { buildShowroom, buildStage, fitPlinth, placePlate, buildWalkSky, buildFigure, recolourSphere } from './xr-scene.js';
+import { buildShowroom, buildStage, fitPlinth, placePlate, buildWalkSky, recolourSphere } from './xr-scene.js';
 import { ScalePlate } from './panel.js';
 import { targetSets, findFloor } from './xr-targets.js';
 import { buildMenus, updateLabels, menuAction } from './xr-menus.js';
@@ -78,7 +78,6 @@ export class XRExperience {
 		this.lift = 0; // the rig's height above the floor the user stands on
 		this.snapAngle = readSetting('turn');
 		this.personHeight = readSetting('height');
-		this.figureOn = readSetting('figure'); // scale figure beside the dollhouse
 		// Walking: walls stop you (off by default). Furniture never does.
 		this.solid = readSetting('solid');
 		// See-through walls and furniture (headset only): 0 = as modelled, 1 = glass house.
@@ -101,7 +100,6 @@ export class XRExperience {
 		this.plate = new ScalePlate(); // the model's true scale, on the plinth (SPEC.md B2)
 		this.setPlinth(1.2, 0.9);
 		this.walkSky = buildWalkSky(camera);
-		this.figure = buildFigure();
 		this.menus = buildMenus(rig);
 		this.hideFromPhotos(...Object.values(this.menus).map((p) => p.mesh));
 		this.modes = { dollhouse: new Dollhouse(this), walk: new Walk(this) };
@@ -137,7 +135,7 @@ export class XRExperience {
 		this.model = model;
 		this._targets = null; // mesh sets for raycasts, rebuilt on demand
 		this.maxStorey = null;
-		this.modes.dollhouse.setModel(model); // markers and scale figure
+		this.modes.dollhouse.setModel(model); // the landing markers
 		const size = model.bounds.getSize(new THREE.Vector3());
 		this.baseScale = DOLLHOUSE_SIZE / Math.max(size.x, size.z, 0.01);
 		this.setPlinth(size.x * this.baseScale, size.z * this.baseScale);
@@ -239,7 +237,6 @@ export class XRExperience {
 		this.input.setVisible(false);
 		this.showroom.visible = false;
 		this.stage.visible = false;
-		this.figure.visible = false;
 		this.applyStoreys(); // the 2D page shows every storey
 		this.rig.position.set(0, 0, 0);
 		this.rig.rotation.set(0, 0, 0);
@@ -278,7 +275,6 @@ export class XRExperience {
 	/** Shows the VR world or the passthrough for the current mode. */
 	applyView() {
 		const vr = this.vrView;
-		this.figure.visible = this.figureOn && this.mode === 'dollhouse';
 		if (this.mode === 'dollhouse') {
 			this.showroom.visible = vr;
 			this.gallery.visible = vr;

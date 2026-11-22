@@ -35,7 +35,6 @@ const CELLS = {
 	shadows: sw('shadows', 'Shadows'),
 	depth: sw('depth', 'Depth shading'),
 	ceilings: sw('ceilings', 'Ceilings'),
-	figure: sw('figure', 'Figure'),
 	solid: sw('solid', 'Solid walls'),
 	seethrough: { type: 'slider', id: 'seethrough', label: 'See-through', value: 0, format: (v) => (v > 0 ? `${Math.round(v * 100)}%` : 'Off') },
 	levels: { type: 'dropdown', id: 'levels', label: 'Levels', options: [], disabled: true, note: 'One level' },
@@ -49,7 +48,7 @@ const CELLS = {
 
 /** The tabs (the same in both menus), each with rows of cell ids. A Tools tab joins with the tools (milestone C). */
 export const TABS = [
-	{ id: 'view', label: 'View', rows: [['light'], ['shadows', 'depth'], ['ceilings', 'figure'], ['seethrough'], ['levels'], ['view']] },
+	{ id: 'view', label: 'View', rows: [['light'], ['shadows', 'depth'], ['ceilings', 'view'], ['seethrough'], ['levels']] },
 	{ id: 'walk', label: 'Walk', rows: [['turn'], ['height'], ['solid']] },
 	{ id: 'sound', label: 'Sound', rows: [['sound']] },
 ];
@@ -156,15 +155,13 @@ export function updateLabels(xr) {
 	const storeys = xr.model?.storeys ?? 1;
 	const names = xr.model?.storeyNames ?? [];
 	const upTo = (i) => `Up to ${names[i] || `level ${i + 1}`}`;
-	// (Levels and the figure belong to the scale model: greyed out while walking.)
+	// (Levels belong to the scale model: greyed out while walking.)
 	walk.set('levels', { disabled: true, note: 'Scale model only', options: [] });
-	walk.set('figure', { disabled: true, note: 'Scale model only', value: false });
 	doll.set('levels', storeys < 2 ? { disabled: true, note: 'One level' } : {
 		disabled: false,
 		options: [{ value: storeys - 1, label: `All levels (${storeys})` }, ...Array.from({ length: storeys - 1 }, (_, k) => storeys - 2 - k).map((i) => ({ value: i, label: upTo(i) }))],
 		value: xr.maxStorey ?? storeys - 1,
 	});
-	doll.set('figure', { value: xr.figureOn });
 }
 
 /**
@@ -215,12 +212,6 @@ export function menuAction(xr, target) {
 			updateLabels(xr);
 			break;
 		}
-		case 'figure':
-			xr.figureOn = !xr.figureOn;
-			writeSetting('figure', xr.figureOn);
-			xr.applyView();
-			updateLabels(xr);
-			break;
 		case 'light':
 			if (value) xr.lighting?.setTime(value);
 			else xr.lighting?.nextTime();
