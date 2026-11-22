@@ -155,7 +155,7 @@ Without a key the button is simply hidden. The Chooser script is the only file l
 
 ## Feedback
 
-Problems and ideas are welcome as [issues](https://github.com/marcalnet/CasaWalk/issues). It helps to say:
+Problems and ideas are welcome as [issues](https://github.com/marcalnet/CasaWalkVR/issues). It helps to say:
 
 - the headset and its browser version (or the desktop browser);
 - what you did and what you expected;
@@ -169,8 +169,8 @@ Things nobody has been able to check yet: a real Quest 3, 3S, Pro or Quest 1, Sa
 The app is plain ES modules served as static files: there is no build step and nothing to install to run it. Clone it and the Node tests already work (Node 24; `nvm use` picks it up):
 
 ```bash
-git clone https://github.com/marcalnet/CasaWalk.git
-cd CasaWalk
+git clone https://github.com/marcalnet/CasaWalkVR.git
+cd CasaWalkVR
 npm test               # parser, lighting, depth-shading, headset and safety tests: no install, no downloads
 npm run serve          # the app at http://localhost:8123/ (2D preview; WebXR on a headset needs https)
 ```

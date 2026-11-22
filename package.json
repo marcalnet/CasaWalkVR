@@ -4,7 +4,7 @@
   "private": true,
   "license": "MIT",
   "homepage": "https://www.casawalkvr.com/",
-  "repository": "github:marcalnet/CasaWalk",
+  "repository": "github:marcalnet/CasaWalkVR",
   "description": "WebXR viewer for Sweet Home 3D files on Meta Quest. Dev tooling only: the app itself has no build step.",
   "type": "module",
   "scripts": {
