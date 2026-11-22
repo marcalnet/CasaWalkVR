@@ -72,7 +72,7 @@ test('tweens run on the frame clock, are capped short, and end once', () => {
 });
 
 test('vibration patterns are short and gentle, one per meaning', () => {
-	assert.deepEqual(Object.keys(PATTERNS).sort(), ['click', 'shutter', 'tick']);
+	assert.deepEqual(Object.keys(PATTERNS).sort(), ['click', 'deny', 'shutter', 'tick']);
 	for (const [name, pulses] of Object.entries(PATTERNS)) {
 		for (const p of pulses) {
 			assert.ok(p.strength > 0 && p.strength <= 1 && p.ms > 0 && p.ms <= 60 && p.at >= 0 && p.at < 0.3, name);
@@ -110,7 +110,7 @@ test('Haptics plays patterns on the frame clock, and only on controllers that ca
 });
 
 test('sound recipes: short, never clipping, envelopes that start and end silent', () => {
-	assert.deepEqual(Object.keys(RECIPES).sort(), ['beep', 'shutter', 'squeak', 'tick', 'whoosh']);
+	assert.deepEqual(Object.keys(RECIPES).sort(), ['aim', 'beep', 'close', 'deny', 'grab', 'open', 'press', 'release', 'settle', 'shutter', 'squeak', 'step', 'tick', 'whoosh']);
 	for (const [name, r] of Object.entries(RECIPES)) {
 		const len = recipeLength(r);
 		assert.ok(len > 0.01 && len <= FEEDBACK_MAX + 0.01, `${name}: ${len} s`);

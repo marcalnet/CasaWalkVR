@@ -11,8 +11,11 @@
 //            first opened.
 //   Photo    a short white flash and a note in front of you after the Photo
 //            button (the picture itself: XRExperience.capturePhoto()).
-//   Hands    "Pick up your controllers" in front of you while the Quest
-//            reports bare hands only (their pinches do nothing: xr-input.js).
+//   Hands    bare hands wear the orb on the wrist; touching it with the
+//            other index opens the menu within reach, and its keys are
+//            pressed by touch (js/touch.js), as controllers can with their
+//            tip. A pinch never clicks. Without hand joints: "Pick up your
+//            controllers" in front of you (C0.1).
 //
 // Each frame the mode calls buttons() and point(); point() claims the
 // trigger of every controller whose laser is on the menu or an orb
@@ -20,7 +23,9 @@
 
 import * as THREE from 'three';
 import { WelcomeCard } from './panel.js';
-import { yawOf } from './xr-input.js';
+import { yawOf, WRIST_ORB } from './xr-input.js';
+import { TOUCH, touchState, stepTouch, reset as resetTouch, ringSize } from './touch.js';
+import { KEY } from './theme.js';
 import { PLINTH_REST } from './xr-scene.js';
 
 const MENU_DISTANCE = 0.75, MENU_DROP = 0.1, MENU_LEFT = 0.1; // summoned menu, relative to the eyes (controls card to its left)
@@ -28,7 +33,13 @@ const MENU_DISTANCE = 0.75, MENU_DROP = 0.1, MENU_LEFT = 0.1; // summoned menu, 
 // never sits between you and the model (it used to appear right in front of
 // the face on entry), and you can watch the model while changing a setting.
 const MENU_DOLL_DISTANCE = 0.95, MENU_DOLL_SIDE = THREE.MathUtils.degToRad(34);
-const ORB_TOUCH = 0.08, ORB_RELEASE = 0.14; // touching an orb with the other hand
+const ORB_TOUCH = 0.08, ORB_RELEASE = 0.14; // touching an orb with the other controller
+const ORB_TIP_TOUCH = 0.03, ORB_TIP_RELEASE = 0.07; // touching an orb with a bare fingertip
+const ORB_ON_GRIP = new THREE.Vector3(0, 0.035, 0.115); // a controller's orb, in its grip space
+// The menu opened by a bare hand comes within reach (milestone C0.2): 50 cm in
+// front, 25 cm below the eyes, tilted back 20° like a lectern; in the scale
+// model 45° to the left, clear of the model.
+const MENU_NEAR = 0.5, MENU_NEAR_DROP = 0.25, MENU_NEAR_TILT = THREE.MathUtils.degToRad(20), MENU_NEAR_SIDE = THREE.MathUtils.degToRad(45);
 // The note after a photo. Photos are kept in the app and saved from the page
 // after VR (a download in VR would end the session).
 const PHOTO_TEXT = {
@@ -49,6 +60,8 @@ export class XRUI {
 		this.tab = null; // the menu's tab last shown (kept between the two modes' menus)
 		this.drag = null; // a slider being dragged: { c, id }
 		this.orbs = [0, 1].map(() => makeOrb());
+		this.touches = []; // per input entry: its touch on the open menu (js/touch.js)
+		this.nearMenu = false; // the open menu was opened by a bare hand, within reach
 		this.buildWelcome();
 		this.buildPhotoFeedback();
 		this.buildHandsNote();
@@ -159,7 +172,7 @@ export class XRUI {
 	 * on its left: walking, in front of the head and a little to the left; in
 	 * the dollhouse, well to the left and further away, clear of the model.
 	 */
-	openMenu(headMatrix = this.xr.camera.matrix) {
+	openMenu(headMatrix = this.xr.camera.matrix, { near = false } = {}) {
 		const xr = this.xr;
 		this.closeMenu();
 		const panel = xr.menus[xr.mode];
@@ -167,13 +180,22 @@ export class XRUI {
 		const head = new THREE.Vector3().setFromMatrixPosition(headMatrix);
 		const yaw = yawOf(headMatrix);
 		const doll = xr.mode === 'dollhouse';
-		const towards = yaw + (doll ? MENU_DOLL_SIDE : 0); // (a positive angle turns left)
+		const towards = yaw + (near ? (doll ? MENU_NEAR_SIDE : 0) : doll ? MENU_DOLL_SIDE : 0); // (a positive angle turns left)
 		const dir = new THREE.Vector3(-Math.sin(towards), 0, -Math.cos(towards));
 		const left = new THREE.Vector3(-Math.cos(yaw), 0, Math.sin(yaw));
-		panel.mesh.position.copy(head).addScaledVector(dir, doll ? MENU_DOLL_DISTANCE : MENU_DISTANCE).addScaledVector(left, doll ? 0 : MENU_LEFT);
-		panel.mesh.position.y -= MENU_DROP;
+		if (near) {
+			// Within reach of a bare hand, below the eyes, tilted back like a lectern.
+			panel.mesh.position.copy(head).addScaledVector(dir, MENU_NEAR);
+			panel.mesh.position.y -= MENU_NEAR_DROP;
+		} else {
+			panel.mesh.position.copy(head).addScaledVector(dir, doll ? MENU_DOLL_DISTANCE : MENU_DISTANCE).addScaledVector(left, doll ? 0 : MENU_LEFT);
+			panel.mesh.position.y -= MENU_DROP;
+		}
 		xr.rig.updateMatrixWorld(true);
 		panel.mesh.lookAt(xr.rig.localToWorld(head.clone().setY(panel.mesh.position.y)));
+		panel.mesh.rotateX(near ? -MENU_NEAR_TILT : 0);
+		this.nearMenu = near;
+		if (panel.card) panel.card.mesh.visible = !near; // (the controls card shows the controllers: not for hands)
 		if (this.tab) panel.setTab(this.tab);
 		panel.setHover(null);
 		panel.mesh.visible = true;
@@ -188,14 +210,15 @@ export class XRUI {
 
 	toggleMenu() { this.menu ? this.closeMenu() : this.openMenu(); }
 
-	/** Puts an orb on each controller. */
+	/** Puts an orb on each controller's grip, or on each tracked bare hand's wrist. */
 	placeOrbs() {
-		const active = this.xr.input.active();
+		const input = this.xr.input, wearers = input.wearers();
 		this.orbs.forEach((o, i) => {
-			const holder = active[i] ?? null;
-			if (holder === o.holder) return;
+			const holder = wearers[i] ?? null;
+			const anchor = holder ? input.wristOf(holder) : null;
+			if (holder === o.holder && o.group.parent === anchor) return;
 			o.group.removeFromParent();
-			if (holder) holder.grip.add(o.group);
+			if (holder) { anchor.add(o.group); o.group.position.copy(holder.isHand ? WRIST_ORB : ORB_ON_GRIP); }
 			o.holder = holder;
 		});
 	}
@@ -254,27 +277,113 @@ export class XRUI {
 				close = true;
 			}
 		}
-		// Touch: the other hand's controller reaches into an orb.
+		// Touch: the other controller, or the other hand's index fingertip, reaches into an orb.
 		const p = new THREE.Vector3(), q = new THREE.Vector3();
+		let byHand = false;
 		for (const o of this.orbs) {
 			if (!o.holder) continue;
 			o.group.getWorldPosition(p);
-			let near = Infinity;
-			for (const c of active) {
+			let touching = false, hand = false, clear = true;
+			for (const c of input.wearers()) {
 				if (c === o.holder) continue;
-				input.pose(c, q);
-				near = Math.min(near, q.distanceTo(p));
+				const d = c.isHand ? c.touch.tip.distanceTo(p) : (input.pose(c, q), q.distanceTo(p));
+				const [on, off] = c.isHand ? [ORB_TIP_TOUCH, ORB_TIP_RELEASE] : [ORB_TOUCH, ORB_RELEASE];
+				if (d < on) { touching = true; hand ||= c.isHand; }
+				if (d < off) clear = false;
 			}
-			if (near < ORB_TOUCH && o.armed) { toggle = true; o.armed = false; }
-			if (near > ORB_RELEASE) o.armed = true;
-			if (near < ORB_RELEASE) hot.add(o);
+			if (touching && o.armed) { toggle = true; o.armed = false; byHand ||= hand; }
+			if (clear) o.armed = true;
+			if (!clear) hot.add(o);
 		}
+		// Touch keys: fingertips and controller tips press the open menu (milestone C0.2).
+		const touched = this.touchMenu();
+		hover ||= touched.hover;
+		action ||= touched.action;
 		this.menu?.setHover(hover);
 		const t = performance.now() / 1000;
 		for (const o of this.orbs) animateOrb(o, t, hot.has(o));
-		if (toggle) this.toggleMenu();
-		else if (close) this.closeMenu();
+		if (toggle) {
+			if (this.menu) this.closeMenu();
+			else this.openMenu(undefined, { near: byHand });
+			if (byHand) this.feel(null, this.menu ? 'open' : 'close');
+		} else if (close) this.closeMenu();
 		return { action };
+	}
+
+	/** A sound (if sound is on) and, on a controller, a vibration. */
+	feel(c, sound, haptic = null, gain = 1) {
+		const xr = this.xr;
+		if (sound && xr.soundLevel !== 'off') xr.sound.play(sound, gain);
+		if (haptic && c?.isController) xr.haptics.play(c, haptic);
+	}
+
+	/**
+	 * Every fingertip and controller tip against the open menu: hover ring,
+	 * contact, click, release (js/touch.js). Returns { hover, action }.
+	 */
+	touchMenu() {
+		const xr = this.xr, panel = this.menu, now = performance.now() / 1000;
+		let hover = null, action = null;
+		for (const c of xr.input.controllers) {
+			const st = this.touches[c.index] ||= this.newTouch();
+			const busy = c.claim.trigger === 'tool' || c.claim.trigger === 'ui' && this.drag?.c === c;
+			if (!panel || !c.touch.tracked || busy || st.panel !== panel || st.kind !== c.touch.kind) {
+				// Gone, switched, or another menu: nothing in progress completes.
+				resetTouch(st.s);
+				st.panel = panel; st.kind = c.touch.kind; st.last = null; st.slider = null;
+				st.ring.visible = false;
+				xr.handViews?.[c.index] && (xr.handViews[c.index].near = false);
+				if (!panel || !c.touch.tracked || busy) continue;
+			}
+			const geo = panel.mesh.geometry.parameters;
+			panel.mesh.updateMatrixWorld(true);
+			const L = panel.mesh.worldToLocal(st.local.copy(c.touch.tip));
+			const inside = Math.abs(L.x) <= geo.width / 2 + TOUCH.MARGIN && Math.abs(L.y) <= geo.height / 2 + TOUCH.MARGIN;
+			const depth = L.z - TOUCH.RADIUS;
+			const lateral = st.last ? Math.hypot(L.x - st.last.x, L.y - st.last.y) : 0;
+			const dt = st.t ? Math.min(now - st.t, 0.1) : 1 / 72;
+			st.t = now;
+			st.last = (st.last ?? new THREE.Vector2()).set(L.x, L.y);
+			const uv = { x: L.x / geo.width + 0.5, y: L.y / geo.height + 0.5 };
+			const target = inside ? panel.hitTest(uv) : null;
+			for (const e of stepTouch(st.s, { depth, inside, lateral, dt })) {
+				if (e === 'contact') this.feel(c, 'tick', 'tick', 0.5);
+				else if (e === 'click') {
+					const key = target ? `${target.id}|${target.value ?? ''}` : null;
+					if (now - st.lastClick < TOUCH.PANEL_GAP || (key && key === st.lastKey && now - st.lastClick < TOUCH.KEY_GAP)) continue;
+					if (target) {
+						st.lastClick = now; st.lastKey = key;
+						action = panel.press(target) ?? action;
+						if (action?.slider) st.slider = action.id;
+						this.feel(c, 'press', 'click');
+					} else if (panel.disabledAt(uv)) this.feel(c, 'deny', 'deny');
+				} else if (e === 'release') { st.slider = null; this.feel(c, 'release', null, 0.6); }
+			}
+			const live = st.s.phase === 'hover' || st.s.phase === 'contact' || st.s.phase === 'pressed';
+			if (st.s.phase === 'pressed' && st.slider) {
+				const value = panel.sliderValue(st.slider, uv);
+				if (value !== null) action = { id: st.slider, value };
+				hover = { id: st.slider, slider: true };
+			} else if (live) hover ||= target;
+			// The ring under the fingertip shows where it will land.
+			if (live) {
+				if (st.ring.parent !== panel.mesh) panel.mesh.add(st.ring);
+				st.ring.position.set(L.x, L.y, 0.002);
+				st.ring.scale.setScalar(ringSize(Math.max(depth, 0)));
+			}
+			st.ring.visible = live;
+			if (xr.handViews?.[c.index]) xr.handViews[c.index].near = live;
+		}
+		return { hover, action };
+	}
+
+	newTouch() {
+		const ring = new THREE.Mesh(RING_GEO, new THREE.MeshBasicMaterial({ color: KEY.ring, transparent: true, opacity: 0.9, depthTest: false, depthWrite: false }));
+		ring.renderOrder = 12;
+		ring.visible = false;
+		ring.name = 'touch-ring';
+		this.xr.hideFromPhotos(ring);
+		return { s: touchState(), ring, panel: null, kind: null, last: null, local: new THREE.Vector3(), t: 0, slider: null, lastClick: -1, lastKey: null };
 	}
 
 	/** A / X toggles the menu; B / Y closes it. Returns true if a button was used. */
@@ -296,6 +405,7 @@ export class XRUI {
 		this.photoNote.mesh.visible = false;
 		this.handsNote.mesh.visible = false;
 		for (const o of this.orbs) { o.group.removeFromParent(); o.holder = null; }
+		for (const st of this.touches) { if (!st) continue; resetTouch(st.s); st.ring.visible = false; st.panel = null; st.slider = null; }
 	}
 }
 
@@ -303,6 +413,9 @@ export class XRUI {
  * Orb: a glowing core inside a faceted amber crystal, circled by two thin
  * rings. animateOrb() makes it breathe, turn and shimmer.
  */
+// The hover ring under a fingertip: 1 m across, scaled to its size (ringSize()).
+const RING_GEO = new THREE.RingGeometry(0.4, 0.5, 32);
+
 function makeOrb() {
 	const group = new THREE.Group();
 	group.name = 'menu-orb';
@@ -317,7 +430,7 @@ function makeOrb() {
 	const body = new THREE.Group();
 	body.add(core, shell, ring1, ring2);
 	group.add(body, target);
-	group.position.set(0, 0.035, 0.115); // on the wrist: touch it with the other hand to open the menu
+	group.position.copy(ORB_ON_GRIP); // on the wrist: touch it with the other hand to open the menu (a bare wrist: WRIST_ORB)
 	return { group, body, core, shell, shellMat, ring1, ring2, ringMat, target, holder: null, armed: true, glow: 0, phase: Math.random() * 10 };
 }
 

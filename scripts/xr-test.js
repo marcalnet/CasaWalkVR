@@ -83,6 +83,44 @@ const STATE_KEY = { trigger: 'trigger', squeeze: 'grip', 'a-button': 'a', 'x-but
 const appSees = (hand, id, v) => page.waitForFunction(({ hand, key, v }) => { const c = window.__casawalk.xr.input.hands[hand]; return !c || !window.__casawalk.xr.session || c.state[key] === v; },
 	{ hand, key: STATE_KEY[id], v }, { timeout: 1000, polling: 5 }).catch(() => {});
 const click = async (hand, id) => { await button(hand, id, 1); await frames(4); await appSees(hand, id, true); await button(hand, id, 0); await frames(4); await appSees(hand, id, false); };
+/**
+ * Moves an emulated hand ('hand') or controller so its touch tip (the index
+ * fingertip, or the controller's tip nub) passes through world points, a few
+ * frames each (the app reads the tip once a frame).
+ */
+const tipPath = async (kind, side, points, wait = 3) => {
+	for (const p of points) {
+		for (let k = 0; k < 2; k++) { // (twice: the second pass corrects what one frame of lag left)
+			await page.evaluate(({ kind, side, p }) => {
+				const x = window.__casawalk.xr, d = window.__device, V = x.rig.position.constructor;
+				const c = x.input.controllers.find((c) => c.handedness === side);
+				x.rig.updateMatrixWorld(true);
+				const want = x.rig.worldToLocal(new V(...p)), have = x.rig.worldToLocal(c.touch.tip.clone());
+				const dev = kind === 'hand' ? d.hands[side] : d.controllers[side];
+				dev.position.set(dev.position.x + want.x - have.x, dev.position.y + want.y - have.y, dev.position.z + want.z - have.z);
+			}, { kind, side, p });
+			await frames(wait);
+		}
+	}
+};
+/**
+ * Presses a menu key by touch, straight along the panel's normal: the tip's
+ * centre from `from` in front of the face to `to` (negative: pushed in), then
+ * back out to 8 cm. hold: stay pushed in; backOnly: only come back out.
+ */
+const pressKey = async (kind, side, menu, id, { from = 0.06, to = -0.006, hold = false, backOnly = false } = {}) => {
+	const pts = await page.evaluate(({ menu, id, from, to }) => {
+		const x = window.__casawalk.xr, p = x.menus[menu], r = p.rects().find((r) => r.id === id);
+		const g = p.mesh.geometry.parameters, V = x.rig.position.constructor;
+		const lx = ((r.x + r.w / 2) / p.size.w - 0.5) * g.width, ly = (0.5 - (r.y + r.h / 2) / p.size.h) * g.height;
+		p.mesh.updateMatrixWorld(true);
+		const at = (z) => p.mesh.localToWorld(new V(lx, ly, z)).toArray();
+		const steps = 12;
+		return { path: Array.from({ length: steps + 1 }, (_, i) => at(from + (to - from) * i / steps)), out: at(0.08) };
+	}, { menu, id, from, to });
+	if (!backOnly) await tipPath(kind, side, pts.path, 2);
+	if (!hold) await tipPath(kind, side, [pts.out], 3);
+};
 const stick = (hand, x, y) => page.evaluate(({ hand, x, y }) => window.__device.controllers[hand].updateAxes('thumbstick', x, y), { hand, x, y });
 const state = () => page.evaluate(() => {
 	const x = window.__casawalk.xr;
@@ -467,10 +505,12 @@ check('touching an orb opens the menu', (await state()).menu === 'dollhouse');
 await restRight(); await restLeft(); await frames(5);
 await click('right', 'b-button');
 
-// Bare hands (milestone C0.1): the Quest turns a pinch into a select of a
-// hand source (the app asks for hand tracking, so it has the joints too). Put the controllers down, aim the right hand at the model and
-// pinch: nothing may happen (no step inside, no menu), and the note asks for
-// the controllers. Then pick them up again: the note goes, all as before.
+// Bare hands (milestones C0.1, C0.2): the Quest turns a pinch into a select of
+// a hand source. Put the controllers down, aim the right hand at the model
+// and pinch: nothing may happen (no step inside, no menu). The app asks for
+// hand tracking, so the hands have joints: they are drawn, wear the orb, and
+// press the menu's keys by touch (the "Pick up your controllers" note is only
+// for hands without joints). Then pick the controllers up again: all as before.
 {
 	const top = await toLocal(await modelTop());
 	await page.evaluate(async (top) => {
@@ -498,8 +538,9 @@ await click('right', 'b-button');
 	});
 	await shot('hands-note');
 	check('bare hands: a pinch reaches the app as a select', h.selects >= 2, JSON.stringify(h));
-	check('bare hands: pinches do nothing (no step inside, no menu, no laser)', before && h.mode === 'dollhouse' && !h.menu && h.active === 0 && h.hands === 2 && !h.lasers && !h.bodies && !h.marker, JSON.stringify(h));
-	check('bare hands: "Pick up your controllers" in front of you', h.note && await page.evaluate(() => /controllers/.test(window.__casawalk.xr.ui.handsNote.title)));
+	check('bare hands: pinches do nothing (no step inside, no menu, no laser)', !before && h.mode === 'dollhouse' && !h.menu && h.active === 0 && h.hands === 2 && !h.lasers && !h.bodies && !h.marker, JSON.stringify(h));
+	const drawn = await page.evaluate(() => { const x = window.__casawalk.xr; return { views: x.handViews.map((v) => v.group.visible && v.colourMesh.visible && v.alpha === 1), orbs: x.ui.orbs.map((o) => o.holder?.isHand && o.group.parent === o.holder.wrist) }; });
+	check('bare hands with joints: drawn, an orb on each wrist, no "Pick up your controllers" note', !h.note && drawn.views.every(Boolean) && drawn.orbs.every(Boolean), JSON.stringify(drawn));
 	// Touch groundwork (C0): the hands' poke points and pinches are read (nothing uses them yet).
 	const touch = () => page.evaluate(() => window.__casawalk.xr.input.controllers.map((c) => ({ side: c.handedness, kind: c.touch.kind, tracked: c.touch.tracked,
 		tip: c.touch.tip.toArray(), radius: c.touch.radius, held: c.touch.select.held, value: c.touch.select.value, lost: c.touch.select.lost,
@@ -524,6 +565,41 @@ await click('right', 'b-button');
 	await page.evaluate(() => { window.__device.hands.right.updatePinchValue(0); window.__device.hands.right.connected = true; }); await frames(8);
 	const back2 = right(await touch());
 	check('touch: the hand comes back, tracked and not pinching', back2.kind === 'hand' && back2.tracked && !back2.held, JSON.stringify(back2));
+
+	// Touch keys (C0.2). The right index touches the orb on the left wrist: the menu opens within reach.
+	const orbL = await page.evaluate(() => { const o = window.__casawalk.xr.ui.orbs.find((o) => o.holder?.handedness === 'left'); return o.group.getWorldPosition(new (o.group.position.constructor)()).toArray(); });
+	await tipPath('hand', 'right', [orbL.map((v, i) => v + [0.08, 0.04, 0.04][i]), orbL]);
+	await tipPath('hand', 'right', [orbL.map((v, i) => v + [0.12, 0.06, 0.06][i])]);
+	const nm = await page.evaluate(() => {
+		const x = window.__casawalk.xr, p = x.menu?.mesh, V = x.rig.position.constructor;
+		if (!p) return { open: false };
+		const at = p.getWorldPosition(new V()), head = x.headWorld();
+		return { open: x.menu === x.menus.dollhouse, near: x.ui.nearMenu, ahead: Math.hypot(at.x - head.x, at.z - head.z), below: head.y - at.y, card: x.menu.card.mesh.visible };
+	});
+	check('touching the orb on a bare wrist opens the menu within reach (no controls card)', nm.open && nm.near && Math.abs(nm.ahead - 0.5) < 0.02 && Math.abs(nm.below - 0.25) < 0.02 && !nm.card, JSON.stringify(nm));
+	const ceilings = () => page.evaluate(() => window.__casawalk.xr.menus.dollhouse.get('ceilings').value);
+	const c0v = await ceilings();
+	await pressKey('hand', 'right', 'dollhouse', 'ceilings', { hold: true });
+	await shot('hands-press');
+	await pressKey('hand', 'right', 'dollhouse', 'ceilings', { backOnly: true });
+	const c1v = await ceilings();
+	await pressKey('hand', 'right', 'dollhouse', 'ceilings');
+	const c2v = await ceilings();
+	check('a fingertip from the front presses a key once, and again after letting go', c1v === !c0v && c2v === c0v, JSON.stringify({ c0v, c1v, c2v }));
+	// From behind (the tip appears inside the key) and pinches over a key: nothing.
+	await pressKey('hand', 'right', 'dollhouse', 'ceilings', { from: -0.004, to: -0.012 });
+	await pressKey('hand', 'right', 'dollhouse', 'ceilings', { from: -0.004, to: 0.08 });
+	const c3v = await ceilings();
+	await pressKey('hand', 'right', 'dollhouse', 'ceilings', { from: 0.06, to: 0.025, hold: true });
+	for (let i = 0; i < 2; i++) {
+		await page.evaluate(() => window.__device.hands.right.updatePinchValue(1)); await frames(5);
+		await page.evaluate(() => window.__device.hands.right.updatePinchValue(0)); await frames(5);
+	}
+	await pressKey('hand', 'right', 'dollhouse', 'ceilings', { backOnly: true });
+	const c4v = await ceilings(), still = await state();
+	check('a fingertip from behind, and pinches over a key, click nothing', c3v === c0v && c4v === c0v && still.menu === 'dollhouse' && still.mode === 'dollhouse', JSON.stringify({ c3v, c4v, menu: still.menu }));
+	await tipPath('hand', 'right', [orbL.map((v, i) => v + [0.08, 0.04, 0.04][i]), orbL, orbL.map((v, i) => v + [0.12, 0.06, 0.06][i])]);
+	check('touching the orb again closes the menu', (await state()).menu === null);
 	await page.evaluate(() => { window.__device.primaryInputMode = 'controller'; });
 	await waitXR(); await frames(8);
 	{
@@ -535,6 +611,15 @@ await click('right', 'b-button');
 		const grips = await page.evaluate(() => window.__casawalk.xr.input.controllers.map((c) => { c.grip.updateMatrixWorld(true); return new (c.grip.position.constructor)().setFromMatrixPosition(c.grip.matrixWorld).toArray(); }));
 		const near = c0.every((t, i) => { const d = Math.hypot(...t.tip.map((v, k) => v - grips[i][k])); return d > 0.03 && d < 0.06; });
 		check('touch: controllers have a poke point in front, and the trigger selects', c0.every((t) => t.kind === 'controller' && t.tracked) && near && c1.held && c1.value === 1, JSON.stringify({ kinds: c0.map((t) => t.kind), near, held: c1.held }));
+		// The controller's tip nub presses keys by touch too.
+		await click('right', 'a-button');
+		const v0 = await page.evaluate(() => window.__casawalk.xr.menus.dollhouse.get('ceilings').value);
+		await pressKey('controller', 'right', 'dollhouse', 'ceilings');
+		const v1 = await page.evaluate(() => window.__casawalk.xr.menus.dollhouse.get('ceilings').value);
+		const nub = await page.evaluate(() => window.__casawalk.xr.input.active().every((c) => c.body.children.length === 2 && c.body.visible));
+		check('a controller\'s tip nub presses a key by touch', v1 === !v0 && nub, JSON.stringify({ v0, v1, nub }));
+		await pressKey('controller', 'right', 'dollhouse', 'ceilings');
+		await click('right', 'b-button');
 	}
 	const back = await page.evaluate(() => { const x = window.__casawalk.xr; return { note: x.ui.handsNote.mesh.visible, active: x.input.active().length, lasers: x.input.active().every((c) => c.line.visible && c.body.visible) }; });
 	check('controllers again: the note goes, lasers back', !back.note && back.active === 2 && back.lasers, JSON.stringify(back));

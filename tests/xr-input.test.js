@@ -32,3 +32,16 @@ test('pinch: hysteresis between starting and ending', () => {
 	const mid = pinchValue(0.04);
 	assert.ok(mid > 0 && mid < 1);
 });
+
+// The "Pick up your controllers" note (C0.1) is only for hands without joints;
+// tracked hands wear the orb and press keys (C0.2).
+test('the note shows only for bare hands without joints, and only without controllers', async () => {
+	const { XRInput } = await import('../js/xr-input.js');
+	const make = (list) => Object.assign(Object.create(XRInput.prototype), { controllers: list });
+	const hand = (joints, tracked = joints) => ({ source: { hand: joints ? {} : null }, isHand: true, isController: false, touch: { tracked } });
+	const pad = { source: {}, isHand: false, isController: true, touch: { tracked: true } };
+	assert.equal(make([hand(false), hand(false)]).handsOnly(), true);
+	assert.equal(make([hand(true), hand(true)]).handsOnly(), false);
+	assert.equal(make([hand(false), pad]).handsOnly(), false);
+	assert.deepEqual(make([hand(true), hand(true, false), pad]).wearers().map((c) => c.isHand), [true, false]);
+});

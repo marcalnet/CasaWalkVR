@@ -84,6 +84,8 @@ Press **Enter VR** once a model is open. In the headset, the menu switches betwe
 
 **Menu:** touch one wrist with the other hand (a glowing orb sits on each wrist), point at an orb and pull the trigger, or press **A** or **X**: the menu opens with a drawing of the controllers and what each button does. At the scale model it opens to your left, clear of the model; while walking, in front of you. **B** / **Y** or a click elsewhere closes it. When you enter VR, a welcome card above the home says how, until you first open the menu.
 
+**Bare hands** (being built, milestone C0): put the controllers down and your hands appear. Touch the orb on one wrist with the other index finger: the menu opens within reach, and you press its keys with your fingertip, like real keys (push in to click; come back out before the next press). A controller can press them the same way with its tip. Pinching does nothing, on purpose. Moving with bare hands (holding the model, stepping inside, teleporting) comes next.
+
 The menu has three tabs, **View**, **Walk** and **Sound**, the same in both menus, with the actions (Walk in or Back to the scale model, Recentre, Photo, Exit VR) below them on every tab. Settings are **switches** for what is on or off (Shadows, Depth shading, Ceilings, Passthrough, Solid walls), a row of **options** with the current one in blue where there are a few to choose from (Time of day, Turn, Height, Sound: one click, nothing to open), a **dropdown** for Levels (homes can have many) and a **slider** for See-through (pull the trigger on it and drag). A setting that belongs to the scale model is greyed out while walking. Settings, and the tab you last used, are remembered.
 
 **Scale model**
@@ -118,7 +120,7 @@ Built for and tested on a **Meta Quest 2**. It uses only standard WebXR, so:
 
 - **Quest 3, 3S and Pro** should work as they are, with colour passthrough and more speed. The scripted test passes with their emulated controller layouts, but nobody has tried the real devices yet.
 - **Quest 1** may work in VR only (it has no passthrough for web pages) with small homes: its processor is much slower, and Meta no longer updates its browser. Untested.
-- Other WebXR headsets with two controllers that have a thumbstick, trigger, grip and two buttons should also work; hand tracking alone is not supported yet: with bare hands, pinches do nothing and a note asks you to pick up the controllers.
+- Other WebXR headsets with two controllers that have a thumbstick, trigger, grip and two buttons should also work; bare hands work for the menu so far (see above); if the headset gives no hand joints, a note asks you to pick up the controllers.
 
 ## What gets shown from a Sweet Home 3D file
 
@@ -215,7 +217,9 @@ js/xr-menus.js    what the headset menus say and do (cells defined once, rows of
 js/xr-scene.js    gallery room, plinth, skies, markers
 js/xr-targets.js  what the lasers, the teleport arc and your feet can hit (no DOM)
 js/xr-tools.js    the hand-held tool system (the tools arrive later)
-js/xr-input.js    controllers, lasers, buttons, thumbsticks, teleport arc
+js/xr-input.js    controllers, lasers, buttons, thumbsticks, teleport arc, bare hands' touch state
+js/touch.js       touch keys pressed by a fingertip or a controller's tip
+js/hands.js       bare hands, drawn
 js/settings.js    every remembered setting, its key and meaning
 js/tween.js, js/haptics.js, js/sound.js   feedback: motion, vibration, synthesised sounds
 js/panel.js       canvas-texture VR menu (switches, options, slider, buttons) and controls card

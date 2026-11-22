@@ -415,6 +415,13 @@ export class Panel {
 		return r.value !== undefined ? { id: r.id, value: r.value } : { id: r.id };
 	}
 
+	/** The disabled cell under UV coordinates (a touch on it says no), or null. */
+	disabledAt(uv) {
+		if (!uv || this.open) return null;
+		const x = uv.x * this.size.w, y = (1 - uv.y) * this.size.h;
+		return this.boxes.find((b) => b.cell.disabled && x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h)?.cell ?? null;
+	}
+
 	/**
 	 * A click on a target: opens or closes a dropdown (returns null), picks a
 	 * dropdown option (closes the list; returns { id, value }), or returns the

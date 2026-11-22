@@ -37,6 +37,36 @@ export const RECIPES = {
 	] },
 	// Air moving past: a tool flying back.
 	whoosh: { layers: [{ noise: true, band: [400, 1800], q: 0.8, env: [[0, 0], [0.12, 0.35], [0.3, 0]] }] },
+	// Milestone C0 (SPEC.md, "C0. Hands and touch"): touch keys, the menus, moving.
+	// A key clicks: a short dry click with a little body.
+	press: { layers: [
+		{ noise: true, band: 3000, q: 1.5, env: [[0, 0], [0.001, 0.35], [0.015, 0]] },
+		{ tone: 'sine', hz: 220, env: [[0, 0], [0.002, 0.25], [0.03, 0]] },
+	] },
+	// A key springs back: the same, quieter and higher.
+	release: { layers: [{ noise: true, band: 4000, q: 1.5, env: [[0, 0], [0.001, 0.14], [0.015, 0]] }] },
+	// No: a disabled key, a teleport onto red. A low dull knock.
+	deny: { layers: [{ tone: 'sine', hz: 140, env: [[0, 0], [0.004, 0.4], [0.06, 0]] }] },
+	// A menu or the board opens: two soft rising notes; closes: falling.
+	open: { layers: [
+		{ tone: 'triangle', hz: 660, env: [[0, 0], [0.005, 0.18], [0.04, 0]] },
+		{ at: 0.045, tone: 'triangle', hz: 880, env: [[0, 0], [0.005, 0.18], [0.04, 0]] },
+	] },
+	close: { layers: [
+		{ tone: 'triangle', hz: 880, env: [[0, 0], [0.005, 0.15], [0.04, 0]] },
+		{ at: 0.045, tone: 'triangle', hz: 660, env: [[0, 0], [0.005, 0.15], [0.04, 0]] },
+	] },
+	// Grabbing the model or the space: soft low noise.
+	grab: { layers: [{ noise: true, band: [300, 800], q: 0.9, env: [[0, 0], [0.01, 0.25], [0.05, 0]] }] },
+	// The model lands on the plinth, or the zoom settles on a scale: a wooden knock.
+	settle: { layers: [
+		{ tone: 'sine', hz: 500, env: [[0, 0], [0.002, 0.3], [0.07, 0]] },
+		{ noise: true, band: 1200, q: 2, env: [[0, 0], [0.001, 0.12], [0.02, 0]] },
+	] },
+	// The teleport arc appears: a soft rising blip.
+	aim: { layers: [{ tone: 'sine', hz: [500, 900], env: [[0, 0], [0.01, 0.15], [0.06, 0]] }] },
+	// A teleport or stepping inside: soft air, shorter and lower than whoosh.
+	step: { layers: [{ noise: true, band: [300, 1100], q: 0.8, env: [[0, 0], [0.07, 0.3], [0.18, 0]] }] },
 };
 
 /** A layer's envelope level at `t` seconds from its start (linear between points; 0 outside). */

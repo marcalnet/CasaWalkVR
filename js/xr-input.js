@@ -13,11 +13,13 @@
 // are taken in this order: a held tool, then the UI, then the mode, which
 // only uses what is still free. Sticks are never claimed. Cleared by update().
 //
-// Bare hands (milestone C0.1, a stop-gap until hands are supported in C0):
-// the Quest turns a pinch into a "select" of a hand input source whose
-// gamepad looks like a controller's (the pinch on button 0). Such sources are
-// not controllers here: their buttons are never read, they get no laser or
-// body, and handsOnly() tells the UI to ask for the controllers.
+// Bare hands: the Quest turns a pinch into a "select" of a hand input source
+// whose gamepad looks like a controller's (the pinch on button 0). Such
+// sources are not controllers here: their buttons are never read (a pinch
+// never clicks anything), they get no laser or body. With joints (the
+// session asks for hand tracking) a hand presses keys with its fingertip
+// (js/touch.js) and wears the orb on c.wrist; without joints, handsOnly()
+// tells the UI to ask for the controllers (C0.1).
 //
 // Touch (milestone C0 groundwork, read by nothing yet): every entry also has
 // c.touch, the same for a hand and a controller, so the touch menus and the
@@ -37,6 +39,8 @@
 // names, such as 'wrist' or 'index-finger-tip').
 
 import * as THREE from 'three';
+import { TOUCH } from './touch.js';
+import { KEY } from './theme.js';
 
 const DEADZONE = 0.2;
 const RAY_LENGTH = 5;
@@ -44,7 +48,8 @@ export const PINCH_ON = 0.015; // metres between thumb and index tips: a pinch s
 export const PINCH_OFF = 0.03; // and ends (more than PINCH_ON: hysteresis)
 const PINCH_OPEN = 0.07; // select.value is 0 from here, 1 at PINCH_ON
 const TIP_OFFSET = new THREE.Vector3(0, -0.01, -0.045); // a controller's poke point, in its grip space
-const TIP_RADIUS = 0.01; // a controller's poke point size
+const TIP_RADIUS = TOUCH.RADIUS; // the poke point's size, fingertip and controller tip alike
+const WRIST_ORB = new THREE.Vector3(0, 0.035, 0.01); // the orb over the back of a bare wrist, in the wrist joint's space
 
 export class XRInput {
 	constructor(renderer, rig) {
@@ -54,6 +59,8 @@ export class XRInput {
 		const rayGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, -1)]);
 		const bodyGeo = new THREE.BoxGeometry(0.035, 0.03, 0.11).translate(0, -0.005, 0.03);
 		const bodyMat = new THREE.MeshLambertMaterial({ color: 0x2b3036 });
+		const nubGeo = new THREE.CylinderGeometry(0.004, 0.005, 0.024, 10), nubMat = new THREE.MeshLambertMaterial({ color: KEY.nub });
+		const nubEndGeo = new THREE.SphereGeometry(TIP_RADIUS * 0.7, 12, 8), nubEndMat = new THREE.MeshBasicMaterial({ color: KEY.nubEnd });
 
 		for (let i = 0; i < 2; i++) {
 			const ray = renderer.xr.getController(i); // target-ray space
@@ -70,8 +77,19 @@ export class XRInput {
 			ray.add(dot);
 			const body = new THREE.Mesh(bodyGeo, bodyMat);
 			grip.add(body);
+			// The tip nub that presses keys by touch (milestone C0.2): a small rod with an orange end.
+			const nub = new THREE.Mesh(nubGeo, nubMat);
+			nub.position.copy(TIP_OFFSET).add(new THREE.Vector3(0, 0, 0.012));
+			nub.rotation.x = Math.PI / 2;
+			const nubEnd = new THREE.Mesh(nubEndGeo, nubEndMat);
+			nubEnd.position.copy(TIP_OFFSET);
+			body.add(nub, nubEnd);
+			// Where a bare hand wears the orb: follows the wrist joint (controllers wear it on the grip).
+			const wrist = new THREE.Group();
+			wrist.name = 'wrist';
+			rig.add(wrist);
 
-			const c = { index: i, ray, grip, hand, line, dot, body, touch: emptyTouch(), source: null, handedness: null, isController: false, isHand: false, state: emptyState(), claim: { trigger: null, grip: null, a: null, b: null, stickPress: null } };
+			const c = { index: i, ray, grip, hand, wrist, line, dot, body, touch: emptyTouch(), source: null, handedness: null, isController: false, isHand: false, state: emptyState(), claim: { trigger: null, grip: null, a: null, b: null, stickPress: null } };
 			ray.addEventListener('connected', (e) => {
 				c.source = e.data;
 				c.handedness = e.data.handedness;
@@ -132,14 +150,17 @@ export class XRInput {
 		t.kind = c.isHand ? 'hand' : c.isController ? 'controller' : null;
 		let held = false;
 		if (c.isHand) {
-			const tip = c.hand.joints['index-finger-tip'], thumb = c.hand.joints['thumb-tip'];
-			t.tracked = !!(c.hand.visible && tip?.visible && thumb?.visible);
+			const tip = c.hand.joints['index-finger-tip'], thumb = c.hand.joints['thumb-tip'], wrist = c.hand.joints.wrist;
+			t.tracked = !!(c.hand.visible && tip?.visible && thumb?.visible && wrist?.visible);
 			if (t.tracked) {
+				// The orb's anchor follows the wrist joint (its +Y is out of the back of the hand).
+				c.wrist.position.copy(wrist.position);
+				c.wrist.quaternion.copy(wrist.quaternion);
 				c.hand.updateMatrixWorld(true);
 				t.tip.setFromMatrixPosition(tip.matrixWorld);
 				_v.setFromMatrixPosition(thumb.matrixWorld);
 				const d = t.tip.distanceTo(_v) / c.hand.matrixWorld.getMaxScaleOnAxis(); // in real metres, whatever the rig's scale
-				t.radius = tip.jointRadius ?? TIP_RADIUS;
+				t.radius = TIP_RADIUS;
 				sel.value = pinchValue(d);
 				held = nextPinch(was, d);
 			}
@@ -178,8 +199,20 @@ export class XRInput {
 	/** Active controllers (connected, with a gamepad). */
 	active() { return this.controllers.filter((c) => c.source && c.isController); }
 
-	/** True while the Quest reports bare hands and no controller (the "Pick up your controllers" note). */
-	handsOnly() { return this.controllers.some((c) => c.source && c.isHand) && this.active().length === 0; }
+	/**
+	 * True while the Quest reports bare hands without joints (hand tracking not
+	 * given) and no controller: the "Pick up your controllers" note (C0.1).
+	 */
+	handsOnly() {
+		const hands = this.controllers.filter((c) => c.source && c.isHand);
+		return hands.length > 0 && hands.every((c) => !c.source.hand) && this.active().length === 0;
+	}
+
+	/** Entries that wear an orb: controllers, and bare hands with tracked joints. */
+	wearers() { return this.controllers.filter((c) => c.source && (c.isController || (c.isHand && c.touch.tracked))); }
+
+	/** Where an entry wears the orb: a controller's grip, or a bare hand's wrist anchor. */
+	wristOf(c) { return c.isHand ? c.wrist : c.grip; }
 
 	/** Sets a raycaster from a controller's laser. */
 	setRaycaster(c, raycaster) {
@@ -235,6 +268,8 @@ export function isHandSource(source) {
 	const gp = source.gamepad;
 	return !gp || (gp.axes?.length ?? 0) === 0;
 }
+
+export { WRIST_ORB };
 
 /** Pinch with hysteresis: held from PINCH_ON, until the tips are more than PINCH_OFF apart. */
 export function nextPinch(held, distance) {

@@ -46,3 +46,25 @@ export const PLATE = {
 	ratio: { x: 256, y: 122, px: 74, weight: 700, colour: '#2a1e0c' },
 	fallback: '#d8c9a3', // plain plate if the artwork can't be loaded
 };
+
+/**
+ * Bare hands (milestone C0.2): frosted paper white, translucent, with the
+ * index fingertip in the orange accent (the thing that presses). In
+ * passthrough only a faint outline and the fingertip show: your real hand is
+ * already there.
+ */
+export const HAND = {
+	fill: '#f4f1ea', // the hand
+	opacity: 0.55, // VR view
+	passthroughOpacity: 0.15, // passthrough view
+	tip: BADGE.orb.fill, // the fingertip "pen"
+	tipIdle: 0.35, // its opacity when no key is near
+	fade: 0.15, // seconds to fade out when tracking is lost
+};
+
+/** Touch keys on panels: the ring under a fingertip, and the controller's tip nub. */
+export const KEY = {
+	ring: BADGE.orb.fill, // the hover ring under the fingertip
+	nub: '#c9ced4', // a controller's tip nub
+	nubEnd: BADGE.orb.fill, // its orange end
+};

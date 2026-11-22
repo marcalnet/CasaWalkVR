@@ -37,6 +37,7 @@
 
 import * as THREE from 'three';
 import { XRInput } from './xr-input.js';
+import { HandView } from './hands.js';
 import { SeeThrough, SEE_THROUGH_MAX } from './walls.js';
 import { takePhoto, photoName, saveFile, withHidden } from './photo.js';
 import { readSetting } from './settings.js';
@@ -93,7 +94,9 @@ export class XRExperience {
 		this.floorRay = new THREE.Raycaster(); // all hits, so the first upward face is found
 		this.input = new XRInput(renderer, rig);
 		this.input.setVisible(false);
-		this.hideFromPhotos(...this.input.controllers.flatMap((c) => [c.ray, c.grip])); // lasers, controllers, and what they carry (orbs, tools)
+		this.hideFromPhotos(...this.input.controllers.flatMap((c) => [c.ray, c.grip, c.wrist])); // lasers, controllers, and what they carry (orbs, tools)
+		this.handViews = this.input.controllers.map((c) => new HandView(c)); // bare hands, drawn (milestone C0.2)
+		this.hideFromPhotos(...this.handViews.map((v) => v.group));
 		// Scenery: the gallery and its sky, the stage with the plinth, the walk sky.
 		Object.assign(this, buildShowroom(scene)); // showroom, showroomSky
 		Object.assign(this, buildStage(scene)); // stage, gallery, pedestal, plinthMaterials
@@ -229,6 +232,7 @@ export class XRExperience {
 		this.mode = null;
 		this.pendingRecentre = false;
 		this.ui.reset(); // menu, welcome card, photo note, orbs
+		for (const v of this.handViews) v.hide();
 		this.photoPending = false;
 		this.tools.end(); // tools back in the fan; measurements and drawings cleared
 		this.tweens.clear();
@@ -427,6 +431,7 @@ export class XRExperience {
 			}
 		}
 		this.modes[this.mode]?.update(dt);
+		for (const v of this.handViews) v.update(dt, { passthrough: !this.vrView });
 		this.tools.update(dt);
 		this.tweens.update(dt);
 		this.haptics.update(dt);
