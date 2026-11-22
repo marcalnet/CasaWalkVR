@@ -34,7 +34,7 @@ function appKey(href) {
 	try { url = new URL(href); } catch { return null; }
 	if (url.origin !== SCOPE.origin || !url.pathname.startsWith(SCOPE.pathname)) return null;
 	const path = url.pathname.slice(SCOPE.pathname.length);
-	const isApp = path === '' || path === 'index.html' || path === 'examples/example-home.sh3d' || /^(js|vendor)\/.+\.js$/.test(path) || /^vendor\/.+\.(woff2|wasm)$/.test(path) || /^assets\/.+\.(png|webp|jpg)$/.test(path) || path === 'config.js';
+	const isApp = path === '' || path === 'index.html' || /^examples\/[\w-]+\.(sh3d|jpg)$/.test(path) || /^(js|vendor)\/.+\.js$/.test(path) || /^vendor\/.+\.(woff2|wasm)$/.test(path) || /^assets\/.+\.(png|webp|jpg)$/.test(path) || path === 'config.js';
 	return isApp ? url.origin + url.pathname : null; // the ?query is ignored
 }
 

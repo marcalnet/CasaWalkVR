@@ -96,10 +96,12 @@ test('offline worker only handles the app\'s own files', () => {
 	assert.equal(key(`${base}js/main.js`), `${base}js/main.js`);
 	assert.equal(key(`${base}vendor/three/three.module.js`), `${base}vendor/three/three.module.js`);
 	assert.equal(key(`${base}examples/example-home.sh3d`), `${base}examples/example-home.sh3d`);
+	assert.equal(key(`${base}examples/pond-house.sh3d`), `${base}examples/pond-house.sh3d`); // the sample homes and their pictures
+	assert.equal(key(`${base}examples/pond-house.jpg`), `${base}examples/pond-house.jpg`);
 	assert.equal(key(`${base}vendor/kalam/kalam-latin-400.woff2`), `${base}vendor/kalam/kalam-latin-400.woff2`); // the notes' font, offline too
 	assert.equal(key(`${base}assets/ui/scale-plate.png`), `${base}assets/ui/scale-plate.png`); // interface artwork, offline too
 	// Left alone: other sites, other folders of the same site, model files, the worker itself.
-	for (const u of ['https://dl.dropboxusercontent.com/s/x/home.sh3d', 'https://example.github.io/OtherProject/js/main.js', `${base}tests/fixtures/private/home.sh3d`, `${base}sw.js`, `${base}README.md`, 'not a url']) {
+	for (const u of ['https://dl.dropboxusercontent.com/s/x/home.sh3d', 'https://example.github.io/OtherProject/js/main.js', `${base}tests/fixtures/private/home.sh3d`, `${base}sw.js`, `${base}README.md`, `${base}examples/notes.txt`, 'not a url']) {
 		assert.equal(key(u), null, u);
 	}
 	// Only GET requests are answered.

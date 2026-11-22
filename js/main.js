@@ -16,6 +16,7 @@ import { Sharer, Joiner } from './pairing.js';
 import { readSetting, writeSetting } from './settings.js';
 import { listRecents, getRecent, addRecent, removeRecent, getLastLink, setLastLink, addPhoto, listPhotos, getPhoto, removePhoto, markPhotoSaved } from './storage.js';
 import { saveFile } from './photo.js';
+import { SAMPLES, sampleById } from './samples.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -776,8 +777,35 @@ $('file-input').addEventListener('change', async (ev) => {
 	load(files, picked.length === 1 ? picked[0].name : `${picked.length} files`, { type: 'file' }).catch(() => {});
 });
 
-// A small two-storey house made for this viewer (scripts/make-example.js).
-$('open-example').addEventListener('click', () => loadUrl('examples/example-home.sh3d', { remember: false }).catch(() => {}));
+// The sample homes (js/samples.js): a chooser of cards, one tap opens one.
+// (examples/example-home.sh3d stays as the tests' small fixture.)
+for (const s of SAMPLES) {
+	const b = document.createElement('button');
+	b.className = 'sample';
+	b.dataset.sample = s.id;
+	const img = document.createElement('img');
+	img.src = s.picture;
+	img.alt = '';
+	img.loading = 'lazy';
+	const text = document.createElement('div');
+	const name = document.createElement('b'), line = document.createElement('span'), size = document.createElement('span');
+	name.textContent = s.name;
+	line.textContent = s.line;
+	size.textContent = s.credit ? `${s.credit} \u00b7 ${s.size}` : s.size;
+	text.append(name, line, size);
+	b.append(img, text);
+	b.addEventListener('click', () => {
+		$('samples').hidden = true;
+		$('open-sample').setAttribute('aria-expanded', 'false');
+		loadUrl(s.file, { remember: false }).catch(() => {});
+	});
+	$('samples').append(b);
+}
+$('open-sample').addEventListener('click', () => {
+	const open = $('samples').hidden;
+	$('samples').hidden = !open;
+	$('open-sample').setAttribute('aria-expanded', String(open));
+});
 $('open-link').addEventListener('click', () => {
 	const url = $('link-input').value;
 	if (url.trim()) loadUrl(url).catch(() => {});
@@ -922,7 +950,7 @@ if ('serviceWorker' in navigator && (location.protocol === 'https:' || new URLSe
 		// which files were used (and the example home), so they work offline.
 		if (firstVisit) {
 			const used = performance.getEntriesByType('resource').map((r) => r.name);
-			reg.active?.postMessage({ cache: [location.href, new URL('examples/example-home.sh3d', location.href).href, ...used] });
+			reg.active?.postMessage({ cache: [location.href, ...['examples/example-home.sh3d', ...SAMPLES.flatMap((s) => [s.file, s.picture])].map((f) => new URL(f, location.href).href), ...used] });
 		}
 	}).catch((e) => console.warn('Offline support is not available', e));
 }
@@ -967,8 +995,11 @@ if ('serviceWorker' in navigator && (location.protocol === 'https:' || new URLSe
 // ?model=<url> opens a model straight away (also used by the screenshot tests).
 const params = new URLSearchParams(location.search);
 const initial = params.get('model');
+const sample = sampleById(params.get('sample')); // ?sample=pond-house: one of ours (only listed ids)
 let ready = Promise.resolve(true);
-if (initial) {
+if (sample && !initial) {
+	ready = loadUrl(sample.file, { remember: false }).then(() => true, () => false);
+} else if (initial) {
 	// Only models on this site open by themselves. A link to somewhere else
 	// could have been put in the address by anyone, so it waits for a click.
 	const link = checkLink(initial, location.href);
@@ -988,6 +1019,7 @@ if (initial) {
 // Test hooks for scripts/screenshots.js
 window.__casawalk = {
 	lighting,
+	open: (url) => loadUrl(url, { remember: false }), // (opens a model on this site: the example home for the headset test)
 	get sharer() { return sharer; },
 	get joiner() { return joiner; },
 	depth,

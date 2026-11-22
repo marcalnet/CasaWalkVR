@@ -8,9 +8,13 @@
 //   on anything but walls, doors and windows, so stairs work and the arc still
 //   passes through doorways.
 //   Walls always stop the arc.
+//   Water (pieces named water, pond, pool...: optimise.js WATER_NAME) is never
+//   a landing or a floor: the arc meets it as a red landing, a laser pointing
+//   at it finds no floor, and the feet never stand on it. It blocks no
+//   movement.
 
 import * as THREE from 'three';
-import { isOpening } from './optimise.js';
+import { isOpening, isWater } from './optimise.js';
 
 export const UP = new THREE.Vector3(0, 1, 0);
 export const DOWN = new THREE.Vector3(0, -1, 0);
@@ -28,12 +32,13 @@ export function targetSets(model) {
 	const L = { main: shown('main'), walls: shown('walls'), floors: shown('floors'), ground: shown('ground') };
 	const walls = L.walls;
 	const anywhere = model.multiLevel || L.floors.length === 0;
-	const furniture = L.main.filter((m) => !isOpening(m));
+	const water = L.main.filter((m) => isWater(m));
+	const furniture = L.main.filter((m) => !isOpening(m) && !water.includes(m));
 	const walkable = [...L.floors, ...L.ground, ...(anywhere ? furniture : [])];
 	return {
 		pointable: [...L.main, ...walls, ...L.floors],
-		floors: [...L.floors, ...L.ground],
-		solid: [...walls, ...walkable],
+		floors: [...L.floors, ...L.ground, ...water], // (water is met first, and gives no floor: findFloor)
+		solid: [...walls, ...walkable, ...water], // (met, never valid: not walkable)
 		walkable: new Set(walkable),
 		walkableList: walkable,
 		obstacles: [...L.main, ...walls],
@@ -57,7 +62,7 @@ export function findFloor(raycaster, floors, worldPoint, lift) {
 	raycaster.far = Infinity;
 	const hits = raycaster.intersectObjects(floors, false);
 	const h = hits.find((x) => !x.face || worldNormal(x).y > 0.7);
-	return h ? h.point : null;
+	return h && !isWater(h.object) ? h.point : null; // (water over the ground: no floor there)
 }
 
 /**

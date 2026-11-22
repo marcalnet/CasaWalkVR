@@ -218,7 +218,21 @@ const clickMenu = async (id, value) => {
 /** The kept photos (the page's roll), newest first. */
 const photos = () => page.evaluate(async () => (await import('/js/storage.js')).listPhotos());
 /** World point on top of the model (plinth centre, slightly forward). */
-const modelTop = () => page.evaluate(() => { const x = window.__casawalk.xr; return x.stage.localToWorld(x.modes.dollhouse.doll.pos.clone().add(new (x.modes.dollhouse.doll.pos.constructor)(0.05, 0.02, 0.25))).toArray(); });
+const modelTop = () => page.evaluate(async () => {
+	const x = window.__casawalk.xr, V = x.modes.dollhouse.doll.pos.constructor;
+	const p = x.stage.localToWorld(x.modes.dollhouse.doll.pos.clone().add(new V(0.05, 0.02, 0.25)));
+	if (x.mode !== 'dollhouse' || x.findFloor(p.clone(), 0.5)) return p.toArray();
+	// (No floor there, e.g. a pond, which is never a landing: aim at the middle of the largest room instead.)
+	const { roomLanding, area } = await import('/js/rooms.js');
+	const rooms = (x.model.plan?.rooms ?? []).filter((r) => r.name).sort((a, b) => area(b.points) - area(a.points));
+	for (const r of rooms) {
+		const l = roomLanding(r);
+		if (!l) continue;
+		const q = x.centerer.localToWorld(new V(l.x, r.floorY, l.z));
+		if (x.findFloor(q.clone(), 0.5)) return q.toArray();
+	}
+	return p.toArray();
+});
 const waitXR = () => page.waitForFunction(() => { const x = window.__casawalk.xr; return x.mode && !x.pendingRecentre && x.ui.wrist.orb.holder; }, null, { timeout: 8000 }).catch(() => {});
 /** What a session leaves on the 2D page: should be nothing. Returns the names of what was left. */
 const leftovers = () => page.evaluate(() => {
@@ -934,7 +948,20 @@ const walkUntil = async (pred, arg, timeout = 15000) => {
 		for (let i = 0; i < 144; i++) { const ang = i / 144 * Math.PI * 2, d = look(ang); if (d && d > 0.5 && d < 2 && (!best || d < best.d) && flat(ang, d)) best = { a: ang, d }; }
 		return best && { ...best, head: head.toArray() };
 	}, a);
-	const w = await wallAt(null);
+	let w = await wallAt(null);
+	// None near the walk-in spot (e.g. a glass pavilion): stand in each room's middle in turn until one is.
+	const rooms = await page.evaluate(() => (window.__casawalk.xr.model.plan?.rooms ?? []).length);
+	for (let i = 0; !w && i < rooms; i++) {
+		const moved = await page.evaluate(async (i) => {
+			const x = window.__casawalk.xr, r = x.model.plan.rooms[i], { roomLanding } = await import('/js/rooms.js');
+			const l = roomLanding(r);
+			if (!l) return false;
+			x.modes.walk.placeUser(x.centerer.localToWorld(new (x.rig.position.constructor)(l.x, r.floorY, l.z)), null);
+			x.modes.walk.body = null;
+			return true;
+		}, i);
+		if (moved) { await frames(5); w = await wallAt(null); }
+	}
 	if (!w) {
 		check('Solid walls (needs a flat wall 0.5-2 m away)', false);
 	} else {
@@ -1014,8 +1041,17 @@ await shot('reentered');
 await page.evaluate(() => window.__casawalk.xr.end());
 await frames(5);
 
-// The example home (two storeys, lamps): level picker, lamps at night.
-await page.click('#open-example');
+// The sample homes: "Try a sample home" shows a card per home; one tap opens it.
+{
+	await page.click('#open-sample');
+	const cards = await page.evaluate(() => [...document.querySelectorAll('#samples button')].map((b) => ({ id: b.dataset.sample, name: b.querySelector('b').textContent, pic: b.querySelector('img').complete && b.querySelector('img').naturalWidth > 0 })));
+	await page.click('#samples button[data-sample="pond-house"]');
+	await page.waitForFunction(() => /Loaded pond-house/.test(document.getElementById('status').textContent), null, { timeout: 20000 }).catch(() => {});
+	const ph = await page.evaluate(() => ({ status: document.getElementById('status').textContent, hidden: document.getElementById('samples').hidden }));
+	check('Try a sample home: a card for Pond House, with its picture; one tap opens it', cards.length >= 1 && cards[0].id === 'pond-house' && cards[0].name === 'Pond House' && cards[0].pic && /Loaded pond-house/.test(ph.status) && ph.hidden, JSON.stringify({ cards, ...ph }));
+}
+// The example home (two storeys, lamps): level picker, lamps at night. (The tests' small fixture: opened directly.)
+await page.evaluate(() => window.__casawalk.open('examples/example-home.sh3d'));
 await page.waitForFunction(() => /Loaded example-home/.test(document.getElementById('status').textContent), null, { timeout: 20000 });
 await page.evaluate(() => window.__device.position.set(0, 1.6, 0));
 await lookDown();

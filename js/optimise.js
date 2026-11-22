@@ -48,6 +48,22 @@ export function isOpening(obj) {
 	return false;
 }
 
+/**
+ * Pieces named for water (a pond, a pool) are never stood on or landed on,
+ * even in a home with several levels where other furniture can be (stairs).
+ * A few languages, whole words (German: the start of one), case-insensitive.
+ */
+export const WATER_NAME = /\b(water|pond|pool|agua|eau|acqua|piscina|estany|bassa)\b|\bwasser/i; // (German joins words: Wasserfläche)
+
+/** True for a water piece (by its Sweet Home 3D name). Merged meshes carry it as userData.water. */
+export function isWater(obj) {
+	for (let o = obj; o; o = o.parent) {
+		if (o.userData?.water) return true;
+		if (o.userData?.piece) return WATER_NAME.test(o.userData.piece.name ?? '');
+	}
+	return false;
+}
+
 /** Which layer an object of the loaded scene belongs to, from its top-level group name. */
 function layerOf(obj, root) {
 	let o = obj;
@@ -122,6 +138,7 @@ export function optimiseModel(root) {
 		const layer = layerOf(o, root);
 		const storey = storeyOf(o);
 		const opening = layer === 'main' && isOpening(o); // doors and windows merge on their own
+		const water = layer === 'main' && !opening && isWater(o); // and so does water
 		const m = o.matrixWorld;
 		const mirrored = m.determinant() < 0;
 		const g0 = o.geometry;
@@ -138,9 +155,9 @@ export function optimiseModel(root) {
 			const g = extract(base, part.start, part.count, !!part.material.vertexColors);
 			g.applyMatrix4(m);
 			if (mirrored) flipWinding(g);
-			const key = `${layer}#${storey}#${opening ? 'opening' : ''}#${materialKey(part.material)}`;
+			const key = `${layer}#${storey}#${opening ? 'opening' : water ? 'water' : ''}#${materialKey(part.material)}`;
 			let b = buckets.get(key);
-			if (!b) { b = { layer, storey, opening, material: part.material, geoms: [] }; buckets.set(key, b); }
+			if (!b) { b = { layer, storey, opening, water, material: part.material, geoms: [] }; buckets.set(key, b); }
 			b.geoms.push(g);
 		}
 	});
@@ -165,6 +182,7 @@ export function optimiseModel(root) {
 		mesh.matrixAutoUpdate = false;
 		mesh.userData.storey = b.storey;
 		if (b.opening) mesh.userData.opening = true;
+		if (b.water) mesh.userData.water = true;
 		layers[b.layer].add(mesh);
 		triangles += merged.index.count / 3;
 		drawCalls++;

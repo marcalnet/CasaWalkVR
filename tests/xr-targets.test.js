@@ -75,3 +75,25 @@ test('findFloor takes the first upward-facing floor below a point', () => {
 	assert.ok(p && Math.abs(p.y) < 1e-6 && Math.abs(p.x - 2) < 1e-6);
 	assert.equal(findFloor(ray, t.floors, V(30, 0.4, 30), 0.01), null, 'outside the ground: no floor');
 });
+
+// Pond House: a pond of flat water pieces. In a home with several levels you
+// can stand on furniture (stairs), but never on water, nor on the ground under it.
+test('water is never a landing or a floor, in any language; it blocks nothing', async () => {
+	const { WATER_NAME, isWater } = await import('../js/optimise.js');
+	for (const n of ['Pond water', 'Swimming pool', 'Water', 'Piscina', 'Agua', "Plan d'eau", 'Wasserfläche', 'Acqua', 'Estany']) assert.ok(WATER_NAME.test(n), n);
+	for (const n of ['Watering can', 'Pooled lamp', 'Table', 'Beau chair']) assert.ok(!WATER_NAME.test(n), n);
+	const piece = new THREE.Group();
+	piece.userData.piece = { name: 'Pond', kind: 'piece' };
+	const inner = new THREE.Mesh(new THREE.BoxGeometry(), mat);
+	piece.add(inner);
+	assert.ok(isWater(inner), 'a mesh inside a water piece, before the merge');
+	const h = home({ multiLevel: true });
+	const pond = box(3, 0.02, 3, -1.5, 0.005, 1.5, { water: true }); // merged: userData.water
+	h.model.layers.main.add(pond);
+	const t = targetSets(h.model);
+	assert.ok(!t.walkable.has(pond) && t.walkable.has(h.table), 'furniture can be stood on (several levels), water not');
+	const seg = hitSegment(ray, V(-1.5, 1.5, 1.5), V(-1.5, -0.1, 1.5), t);
+	assert.ok(seg && !seg.valid, 'the arc meets the water: a red landing');
+	assert.equal(findFloor(ray, t.floors, V(-1.5, 0, 1.5), 1), null, 'pointing at the pond: no floor, no marker');
+	assert.ok(findFloor(ray, t.floors, V(2, 0, 2), 1), 'beside it: the floor');
+});

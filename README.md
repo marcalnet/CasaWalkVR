@@ -4,7 +4,7 @@
 
 A WebXR viewer for [Sweet Home 3D](https://www.sweethome3d.com/) homes on Meta Quest. Open a `.sh3d` file directly (no export step), look at it as a scale model, then walk through it at real size. It also opens OBJ (plain, or zipped with MTL and textures) and GLB, including compressed GLB (Draco, meshopt).
 
-**Try it: [casawalkvr.com](https://www.casawalkvr.com/)** (press *Try the example home* if you have no file to hand).
+**Try it: [casawalkvr.com](https://www.casawalkvr.com/)** (press *Try a sample home* if you have no file to hand).
 
 It runs in the Meta Quest Browser: no app store, no developer mode, no sideloading. The same page works on a desktop browser as a 2D preview, so you can check a file before putting the headset on.
 
@@ -19,7 +19,7 @@ It runs in the Meta Quest Browser: no app store, no developer mode, no sideloadi
 ## Using it
 
 1. Open the app's URL (GitHub Pages) in a browser.
-2. **Open file**, drop a file anywhere on the page (on a computer), or paste a share link (Dropbox, Google Drive, OneDrive, GitHub; see [Links](#links-from-storage-services)) and press **Load**. No file to hand? **Try the example home**, a small two-storey house made for this viewer. The model's details show at the bottom right.
+2. **Open file**, drop a file anywhere on the page (on a computer), or paste a share link (Dropbox, Google Drive, OneDrive, GitHub; see [Links](#links-from-storage-services)) and press **Load**. No file to hand? **Try a sample home**: **Pond House**, a glass pavilion over a pond with two levels, stairs and a terrace, or **Urban Flat**, a one-bedroom corner flat with a balcony, both designed for CasaWalk (more will follow). A link opens one directly: `?sample=pond-house` or `?sample=urban-flat`. The model's details show at the bottom right.
 3. In the card at the top right, choose the **Time of day** (morning by default, noon, sunset or night), switch **Shadows** and **Depth shading** on or off, and press the big **Enter VR** button. The files card at the top left can be hidden with **–**.
 4. Drag to orbit, scroll or pinch to zoom, right-drag to pan.
 5. Next time, tap the model under **Recent**: the last 5 models are kept in the browser, so reopening one needs no download. For a model opened from a link, **↻** downloads the latest version from the same link (handy after editing the home on the Mac). The last link you used is also remembered in the link box.
@@ -192,7 +192,8 @@ Optional extras:
 
 ```bash
 npm run fixtures       # download two public Sweet Home 3D example homes as more test files
-npm run example        # rebuild examples/example-home.sh3d (after editing scripts/make-example.js)
+npm run example        # rebuild examples/example-home.sh3d, the tests' small fixture (after editing scripts/make-example.js)
+npm run samples        # rebuild the sample homes in examples/ (scripts/make-pond-house.js, make-urban-flat.js; colours from scripts/sample-palette.js)
 npm run ui-assets      # redraw the draft interface artwork in assets/ui/
 npm run vendor         # copy three.js, three-mesh-bvh, fflate and the font into vendor/ (after changing versions)
 ```
@@ -239,7 +240,8 @@ js/pairing.js     the direct computer-to-headset link (PeerJS)
 js/sh3d.js        SH3D parser and scene builder (no DOM; Node-testable)
 js/formats.js     zip / OBJ / GLB / DAE / 3DS loading, unit detection
 sw.js             service worker: offline use, and no mix of old and new files after an update
-examples/         the generated example home (original content, made by scripts/make-example.js)
+examples/         sample homes (Pond House, Urban Flat: scripts/make-*.js, one palette in scripts/sample-palette.js) and the tests' small example home (scripts/make-example.js); original content
+js/samples.js     the sample homes the page offers (one entry per home)
 vendor/           three.js, three-mesh-bvh, fflate, PeerJS and the Kalam font (with licences)
 scripts/          vendoring, fixtures, example home, local server, screenshots, emulated headset test
 tests/            Node tests
