@@ -14,7 +14,8 @@ import { checkLink, fileNameOf, sendToQuestUrl, resolveOneDrive, resolveGoogleDr
 import { isPairId } from './transfer.js';
 import { Sharer, Joiner } from './pairing.js';
 import { readSetting, writeSetting } from './settings.js';
-import { listRecents, getRecent, addRecent, removeRecent, getLastLink, setLastLink } from './storage.js';
+import { listRecents, getRecent, addRecent, removeRecent, getLastLink, setLastLink, addPhoto, listPhotos, getPhoto, removePhoto, markPhotoSaved } from './storage.js';
+import { saveFile } from './photo.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -74,14 +75,28 @@ let current = null; // result of openFiles(), with root replaced by the merged m
 const depth = new DepthShading();
 depth.setEnabled(readSetting('depth'));
 
+let newPhotos = 0; // taken in the VR session that is running (or just ended)
 const xr = new XRExperience({ renderer, scene, camera, rig, anchor, centerer, lighting, depth, onEnd: () => {
 	controls.enabled = true;
 	scene.background = lighting.background();
 	lighting.fit();
 	frame('iso');
 	invalidate();
+	// Photos taken in VR wait here, to be saved to Downloads.
+	renderPhotos().then(() => {
+		if (!newPhotos) return;
+		setStatus(newPhotos === 1 ? 'You took a photo in VR. Save it below.' : `You took ${newPhotos} photos in VR. Save them below.`);
+		$('panel').classList.remove('collapsed');
+		$('photos-section').scrollIntoView({ block: 'nearest' });
+		newPhotos = 0;
+	});
 	// A model that arrived from the computer while in VR opens now.
 	if (pendingModel) { const m = pendingModel; pendingModel = null; load(m.files, m.name, { type: 'sent' }).catch(() => {}); }
+}, onPhoto: async (blob, name) => {
+	// Kept, not downloaded: the browser's download prompt would end the VR session.
+	const kept = await addPhoto(blob, name);
+	if (kept) newPhotos++;
+	return kept;
 } });
 
 // When the light changes (here or from the headset menu): remember it and update the views.
@@ -229,7 +244,7 @@ async function load(files, label, source = { type: 'file' }) {
 		// Bulbs of the home's lamps: they glow at sunset and at night.
 		const lamps = merged.stats ? lighting.setLamps(result.lamps) : lighting.setLamps(null);
 		if (lamps) current.root.add(lamps);
-		xr.setModel({ group: current.root, layers: current.layers, lamps, storeys: result.storeys ?? 1, storeyNames: result.storeyNames ?? [], bounds: current.bounds, observer: current.observer, skyColor: result.home?.skyColor, multiLevel: elevations.size > 1 });
+		xr.setModel({ group: current.root, layers: current.layers, lamps, storeys: result.storeys ?? 1, storeyNames: result.storeyNames ?? [], bounds: current.bounds, observer: current.observer, skyColor: result.home?.skyColor, multiLevel: elevations.size > 1, plan: result.plan ?? null });
 		depth.setModel(merged.stats ? current.layers : null); // (not in the ?nomerge debug view)
 		prepareTextures(current.root);
 		lighting.setHome({ compass: result.home?.compass, skyColor: result.home?.skyColor });
@@ -515,6 +530,73 @@ async function renderRecents() {
 		return li;
 	}));
 }
+
+// ---------------------------------------------------------------------------
+// Photos taken in VR (kept in storage.js until saved to Downloads)
+// ---------------------------------------------------------------------------
+
+let photoUrls = []; // thumbnails' object URLs, freed on each redraw
+
+async function renderPhotos() {
+	const items = await listPhotos();
+	for (const u of photoUrls) URL.revokeObjectURL(u);
+	photoUrls = [];
+	$('photos-section').hidden = items.length === 0;
+	const unsaved = items.filter((p) => !p.saved).length;
+	$('photos-title').textContent = `Photos (${items.length})`;
+	$('photos-note').textContent = unsaved
+		? `Taken in VR and kept here. ${unsaved === items.length ? 'Save them' : `Save the ${unsaved} new ${unsaved === 1 ? 'one' : 'ones'}`} to the headset's Downloads (Files app).`
+		: 'All saved to Downloads (Files app on the headset). Delete them here when you like.';
+	$('photos-save').hidden = unsaved === 0;
+	const rows = await Promise.all(items.map(async (p) => {
+		const li = document.createElement('li');
+		const img = document.createElement('img');
+		img.alt = '';
+		img.loading = 'lazy';
+		const rec = await getPhoto(p.id);
+		if (rec?.blob) { const url = URL.createObjectURL(rec.blob); photoUrls.push(url); img.src = url; }
+		const meta = document.createElement('span');
+		meta.className = 'photo-meta';
+		const when = document.createElement('b');
+		when.textContent = ago(p.date);
+		meta.append(when, p.saved ? ' · saved' : '');
+		meta.title = p.name;
+		const save = document.createElement('button');
+		save.className = 'recent-icon';
+		save.textContent = '↓';
+		save.title = 'Save to Downloads';
+		save.setAttribute('aria-label', `Save the photo from ${ago(p.date)} to Downloads`);
+		save.addEventListener('click', async () => { await savePhoto(p.id); renderPhotos(); });
+		const del = document.createElement('button');
+		del.className = 'recent-icon';
+		del.textContent = '×';
+		del.title = 'Delete this photo';
+		del.setAttribute('aria-label', `Delete the photo from ${ago(p.date)}`);
+		del.addEventListener('click', async () => { await removePhoto(p.id); renderPhotos(); });
+		li.append(img, meta, save, del);
+		return li;
+	}));
+	$('photos').replaceChildren(...rows);
+}
+
+/** Saves one kept photo to Downloads (on the Quest: the Files app). */
+async function savePhoto(id) {
+	const p = await getPhoto(id);
+	if (!p?.blob) return;
+	saveFile(p.blob, p.name);
+	await markPhotoSaved(id);
+}
+
+$('photos-save').addEventListener('click', async () => {
+	const unsaved = (await listPhotos()).filter((p) => !p.saved).reverse(); // oldest first
+	for (const [i, p] of unsaved.entries()) {
+		await savePhoto(p.id);
+		if (i < unsaved.length - 1) await new Promise((r) => setTimeout(r, 400)); // (one at a time)
+	}
+	setStatus(unsaved.length === 1 ? 'Photo saved to Downloads.' : `${unsaved.length} photos saved to Downloads.`);
+	renderPhotos();
+});
+renderPhotos();
 
 // ---------------------------------------------------------------------------
 // Enter VR (shown only when the browser supports it; passthrough is chosen in the headset)

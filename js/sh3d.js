@@ -317,7 +317,7 @@ function surfaceMaterial(colorHex, map) {
  * @param opts.loadModel(ref)    -> Promise<THREE.Object3D|null> raw model for a ZIP entry name
  * @param opts.loadTexture(ref)  -> THREE.Texture|null for a ZIP entry name (may load asynchronously)
  * @param opts.onProgress(done, total)
- * @returns { root, stats, observer, bounds }  root is scaled to metres.
+ * @returns { root, stats, observer, bounds, lamps, storeys, storeyNames, plan }  root is scaled to metres.
  */
 export async function buildHome(home, opts = {}) {
 	const loadModel = opts.loadModel || (async () => null);
@@ -405,6 +405,19 @@ export async function buildHome(home, opts = {}) {
 		lamps,
 		storeys: storeys.length,
 		storeyNames: home.storeyNames ?? [],
+		// Plan outlines in metres (x, z), for choosing where stepping inside
+		// lands (js/rooms.js): each room with its name and floor height, and
+		// each wall as a line with its thickness.
+		plan: {
+			rooms: home.rooms.filter((r) => r.points.length >= 3).map((r) => ({
+				name: r.name, storey: storeyOf(r.levelId), floorY: levelElevation(r.levelId) / 100,
+				points: r.points.map(([x, y]) => [x / 100, y / 100]),
+			})),
+			walls: home.walls.map((w) => ({
+				a: [w.xStart / 100, w.yStart / 100], b: [w.xEnd / 100, w.yEnd / 100], thickness: w.thickness / 100,
+				storey: storeyOf(w.levelId), floorY: levelElevation(w.levelId) / 100,
+			})),
+		},
 		stats: {
 			walls: home.walls.length,
 			rooms: home.rooms.length,

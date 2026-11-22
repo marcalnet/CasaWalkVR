@@ -9,7 +9,8 @@
 //   Recent models (kept in IndexedDB) still load.
 //
 // Only this site's own app files are handled: pages, scripts, the font, the
-// compressed-glTF decoder (WebAssembly) and the example home. Model downloads
+// compressed-glTF decoder (WebAssembly), the interface artwork (assets/) and
+// the example home. Model downloads
 // and everything on other sites are left alone.
 
 const CACHE = 'sweet-home-vr-v1';
@@ -33,7 +34,7 @@ function appKey(href) {
 	try { url = new URL(href); } catch { return null; }
 	if (url.origin !== SCOPE.origin || !url.pathname.startsWith(SCOPE.pathname)) return null;
 	const path = url.pathname.slice(SCOPE.pathname.length);
-	const isApp = path === '' || path === 'index.html' || path === 'examples/example-home.sh3d' || /^(js|vendor)\/.+\.js$/.test(path) || /^vendor\/.+\.(woff2|wasm)$/.test(path) || path === 'config.js';
+	const isApp = path === '' || path === 'index.html' || path === 'examples/example-home.sh3d' || /^(js|vendor)\/.+\.js$/.test(path) || /^vendor\/.+\.(woff2|wasm)$/.test(path) || /^assets\/.+\.(png|webp|jpg)$/.test(path) || path === 'config.js';
 	return isApp ? url.origin + url.pathname : null; // the ?query is ignored
 }
 

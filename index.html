@@ -4,7 +4,7 @@
 	<meta charset="utf-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 	<title>Sweet Home VR</title>
-	<meta name="description" content="View Sweet Home 3D homes as a dollhouse and walk through them in VR on Meta Quest.">
+	<meta name="description" content="View Sweet Home 3D homes as a scale model, then walk through them at real size, in VR on Meta Quest.">
 	<!--
 		Content Security Policy: the page may only run its own scripts (plus the
 		import map below, pinned by its hash), show its own or in-memory images,
@@ -96,6 +96,14 @@
 		.recent-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
 		.recent-meta { font-size: 11.5px; color: var(--muted); white-space: nowrap; }
 		.recent-icon { padding: 0; font-size: 18px; min-width: 0; width: 40px; }
+		/* Photos taken in VR, kept until saved to Downloads. */
+		#photos-section { display: flex; flex-direction: column; gap: 6px; min-height: 0; }
+		#photos { list-style: none; padding: 0; margin: 0; display: grid; gap: 4px; overflow-y: auto; max-height: 200px; }
+		#photos li { display: grid; grid-template-columns: 54px minmax(0, 1fr) 40px 40px; gap: 5px; align-items: center; }
+		#photos img { width: 54px; height: 36px; object-fit: cover; border-radius: 6px; background: var(--line); display: block; }
+		#photos button { min-height: 36px; }
+		.photo-meta { font-size: 12.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+		.photo-meta b { color: var(--text); font-weight: 600; }
 		details { font-size: 13px; }
 		summary { cursor: pointer; color: var(--muted); }
 		details .row { display: flex; align-items: center; gap: 10px; margin-top: 6px; }
@@ -261,6 +269,13 @@
 			<section id="recent-section" hidden>
 				<h2>Recent</h2>
 				<ul id="recent"></ul>
+			</section>
+			<!-- Photos taken in VR: kept here (a download in VR would end the session), saved to Downloads from here. -->
+			<section id="photos-section" hidden>
+				<h2 id="photos-title">Photos</h2>
+				<p id="photos-note" class="hint"></p>
+				<ul id="photos"></ul>
+				<button id="photos-save" class="primary">Save all to Downloads</button>
 			</section>
 			<details>
 				<summary>File options</summary>

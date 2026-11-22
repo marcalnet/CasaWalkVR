@@ -14,7 +14,8 @@
     "test": "node --import ./tests/register.js --test tests/*.test.js",
     "serve": "node scripts/serve.js",
     "shots": "node scripts/screenshots.js",
-    "xr-test": "node scripts/xr-test.js"
+    "xr-test": "node scripts/xr-test.js",
+    "ui-assets": "node scripts/make-ui-assets.js"
   },
   "devDependencies": {
     "@fontsource/kalam": "5.3.0",

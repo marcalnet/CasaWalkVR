@@ -32,7 +32,7 @@ async function setup() {
 	const x = new XRExperience({ renderer, scene, camera, rig, anchor, centerer, onEnd: () => ended++ });
 	const b = built.bounds;
 	centerer.position.set(-(b.min.x + b.max.x) / 2, -b.min.y, -(b.min.z + b.max.z) / 2);
-	x.setModel({ group, layers, storeys: built.storeys, storeyNames: built.storeyNames, bounds: b, observer: built.observer, multiLevel: home.storeys.length > 1 });
+	x.setModel({ group, layers, storeys: built.storeys, storeyNames: built.storeyNames, bounds: b, observer: built.observer, multiLevel: home.storeys.length > 1, plan: built.plan });
 	// A pretend session with two controllers (buttons as in the xr-standard mapping).
 	x.session = { end: () => x.handleEnd() };
 	x.sessionMode = 'ar';
@@ -52,19 +52,50 @@ async function setup() {
 	return { x, ended: () => ended, press, frame, hands: x.input.hands };
 }
 
-const shape = (p) => p.rows.map((r) => r.map((c) => [c.id, c.type, c.label, ...(c.options ?? []).map((o) => o.label)].join(':')).join(' | '));
+const shape = (rows) => rows.map((r) => r.map((c) => [c.id, c.type, c.label, ...(c.options ?? []).map((o) => o.label)].join(':')).join(' | '));
 
-test('the menus have the same rows, cells and options as before the split', async () => {
+test('the menus: the same tabs in both modes, the actions under them', async () => {
 	const { x } = await setup();
-	assert.deepEqual(shape(x.menus.dollhouse), ['walk:button:Walk in | recentre:button:Recentre | photo:button:Photo', 'light:choice:Time of day:Morning:Noon:Sunset:Night',
-		'shadows:switch:Shadows | depth:switch:Depth', 'ceilings:switch:Ceilings | figure:switch:Figure', 'seethrough:slider:See-through',
-		'levels:dropdown:Levels:All levels (2):Up to Ground floor', 'view:choice:View:VR:Passthrough', 'exit:button:Exit VR']);
-	assert.deepEqual(shape(x.menus.walk), ['light:choice:Time of day:Morning:Noon:Sunset:Night', 'shadows:switch:Shadows | depth:switch:Depth',
-		'ceilings:switch:Ceilings | solid:switch:Solid walls', 'seethrough:slider:See-through', 'turn:choice:Turn:15°:30°:45°',
-		'height:choice:Height:Yours:1.4 m:1.7 m:2.0 m', 'view:choice:View:VR:Passthrough', 'photo:button:Photo | dollhouse:button:Back to the dollhouse | exit:button:Exit VR']);
+	for (const p of Object.values(x.menus)) {
+		assert.deepEqual(p.tabs.map((t) => t.label), ['View', 'Walk', 'Sound']);
+		assert.deepEqual(shape(p.tabs[0].rows), ['light:choice:Time of day:Morning:Noon:Sunset:Night', 'shadows:switch:Shadows | depth:switch:Depth shading',
+			'ceilings:switch:Ceilings | figure:switch:Figure', 'seethrough:slider:See-through', `levels:dropdown:Levels${p === x.menus.dollhouse ? ':All levels (2):Up to Ground floor' : ''}`, 'view:switch:Passthrough']);
+		assert.deepEqual(shape(p.tabs[1].rows), ['turn:choice:Turn:15°:30°:45°', 'height:choice:Height:Yours:1.4 m:1.7 m:2.0 m', 'solid:switch:Solid walls']);
+		assert.deepEqual(shape(p.tabs[2].rows), ['sound:choice:Sound:Off:Effects']);
+	}
+	assert.deepEqual(shape(x.menus.dollhouse.actions), ['walk:button:Walk in | recentre:button:Recentre | photo:button:Photo', 'exit:button:Exit VR']);
+	assert.deepEqual(shape(x.menus.walk.actions), ['photo:button:Photo | dollhouse:button:Back to the scale model | exit:button:Exit VR']);
 	assert.ok(x.menus.dollhouse.get('exit').primary && x.menus.walk.get('exit').primary);
-	assert.equal(x.menus.dollhouse.title, 'Dollhouse');
+	assert.equal(x.menus.dollhouse.title, 'Scale model');
 	assert.equal(x.menus.walk.title, 'Walking');
+	// Scale-model settings are greyed out while walking; the menus are the same size whatever the tab.
+	assert.ok(x.menus.walk.get('levels').disabled && x.menus.walk.get('figure').disabled && /scale model/i.test(x.menus.walk.get('figure').note));
+	const h = x.menus.dollhouse.size.h;
+	x.menus.dollhouse.setTab('sound');
+	assert.equal(x.menus.dollhouse.size.h, h);
+	assert.ok(x.menus.dollhouse.rects().some((r) => r.id === 'exit') && !x.menus.dollhouse.rects().some((r) => r.id === 'light'), 'actions on every tab; other tabs\' cells not clickable');
+	x.menus.dollhouse.setTab('view');
+});
+
+test('the tab you left a menu on is the one the other menu opens on', async () => {
+	const { x } = await setup();
+	x.ui.openMenu();
+	x.menu.setTab('walk');
+	x.ui.closeMenu();
+	x.menuAction('walk');
+	x.ui.openMenu();
+	assert.equal(x.menu, x.menus.walk);
+	assert.equal(x.menu.tab, 'walk');
+});
+
+test('Sound: off and on, remembered', async () => {
+	const { x } = await setup();
+	x.menuAction({ id: 'sound', value: 'off' });
+	assert.equal(x.soundLevel, 'off');
+	assert.equal(x.sound.level, 'off');
+	assert.equal(x.menus.walk.get('sound').value, 'off');
+	x.menuAction({ id: 'sound', value: 'effects' });
+	assert.equal(x.sound.level, 'effects');
 });
 
 test('the menu closes on Walk in, Recentre, Photo, Back and Exit only', async () => {

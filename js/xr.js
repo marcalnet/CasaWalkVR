@@ -40,7 +40,8 @@ import { XRInput } from './xr-input.js';
 import { SeeThrough, SEE_THROUGH_MAX } from './walls.js';
 import { takePhoto, photoName, saveFile, withHidden } from './photo.js';
 import { readSetting } from './settings.js';
-import { buildShowroom, buildStage, fitPlinth, buildWalkSky, buildFigure, recolourSphere } from './xr-scene.js';
+import { buildShowroom, buildStage, fitPlinth, placePlate, buildWalkSky, buildFigure, recolourSphere } from './xr-scene.js';
+import { ScalePlate } from './panel.js';
 import { targetSets, findFloor } from './xr-targets.js';
 import { buildMenus, updateLabels, menuAction } from './xr-menus.js';
 import { XRUI } from './xr-ui.js';
@@ -62,9 +63,13 @@ export class XRExperience {
 	 * @param opts.lighting  Lighting (time of day, shadows): the menu changes it
 	 * @param opts.depth     DepthShading (corner gradients, headset only): the menu switches it
 	 * @param opts.onEnd()  called after the session ends (2D page restores its view)
+	 * @param opts.onPhoto(blob, name) -> Promise<{ dropped }|null>  keeps a photo taken in VR
+	 *        (the page's photo roll: nothing is downloaded during VR, where the
+	 *        browser's download prompt would end the session); without it, the
+	 *        photo is downloaded at once
 	 */
-	constructor({ renderer, scene, camera, rig, anchor, centerer, lighting, depth, onEnd }) {
-		Object.assign(this, { renderer, scene, camera, rig, anchor, centerer, lighting, depth, onEnd });
+	constructor({ renderer, scene, camera, rig, anchor, centerer, lighting, depth, onEnd, onPhoto }) {
+		Object.assign(this, { renderer, scene, camera, rig, anchor, centerer, lighting, depth, onEnd, onPhoto });
 		this.model = null; // { group, layers, bounds, observer, skyColor }
 		this.session = null;
 		this.sessionMode = null; // 'vr' | 'ar' (the session type)
@@ -79,6 +84,7 @@ export class XRExperience {
 		// See-through walls and furniture (headset only): 0 = as modelled, 1 = glass house.
 		this.seeThroughAmount = readSetting('seeThrough');
 		this.seeThrough = new SeeThrough();
+		this.soundLevel = readSetting('sound'); // off | effects | all (effects and ambience)
 		this.maxStorey = null; // dollhouse: highest storey shown (null = all)
 		this.pendingRecentre = false;
 		this.photoPending = false;
@@ -92,6 +98,7 @@ export class XRExperience {
 		// Scenery: the gallery and its sky, the stage with the plinth, the walk sky.
 		Object.assign(this, buildShowroom(scene)); // showroom, showroomSky
 		Object.assign(this, buildStage(scene)); // stage, gallery, pedestal, plinthMaterials
+		this.plate = new ScalePlate(); // the model's true scale, on the plinth (SPEC.md B2)
 		this.setPlinth(1.2, 0.9);
 		this.walkSky = buildWalkSky(camera);
 		this.figure = buildFigure();
@@ -103,6 +110,7 @@ export class XRExperience {
 		this.tweens = new Tweens();
 		this.haptics = new Haptics();
 		this.sound = new Sound();
+		this.sound.setLevel(this.soundLevel);
 	}
 
 	/** The open menu (a Panel), or null. */
@@ -111,18 +119,20 @@ export class XRExperience {
 	/** Objects never drawn in a photo (the interface); hiding one hides what it carries. */
 	hideFromPhotos(...objects) { for (const o of objects) this.photoHidden.add(o); }
 
-	/** Sizes the plinth for a model footprint of w x d metres. */
+	/** Sizes the plinth for a model footprint of w x d metres, with the scale plate on it. */
 	setPlinth(w, d) {
+		this.plate.mesh.removeFromParent(); // (fitPlinth rebuilds the plinth's parts)
 		const { W, D, distance } = fitPlinth(this, w, d);
 		this.plinthSize = { W, D };
 		this.plinthDistance = distance; // from where you stand to the plinth's centre
+		placePlate(this.plate.mesh, this.pedestal, W, D);
 	}
 
 	// -----------------------------------------------------------------------
 	// Model and session
 	// -----------------------------------------------------------------------
 
-	/** model: { group, layers, bounds (Box3, model space, no ground), observer, skyColor, multiLevel } */
+	/** model: { group, layers, bounds (Box3, model space, no ground), observer, skyColor, multiLevel, plan (rooms and walls, js/sh3d.js; null for OBJ and GLB) } */
 	setModel(model) {
 		this.model = model;
 		this._targets = null; // mesh sets for raycasts, rebuilt on demand
@@ -275,7 +285,7 @@ export class XRExperience {
 			this.pedestal.visible = vr;
 			this.walkSky.visible = false;
 			this.model.layers.ground.visible = false;
-			this.setLift(vr ? this.modes.dollhouse.dollLift : 0);
+			this.setLift(this.modes.dollhouse.viewLift()); // (the same in passthrough: the model stays put)
 		} else if (this.mode === 'walk') {
 			this.showroom.visible = false;
 			this.walkSky.visible = vr;
@@ -372,8 +382,8 @@ export class XRExperience {
 
 	/**
 	 * Photo button: the view from your head, level, without the menu, lasers,
-	 * controllers, orbs or arc (everything in photoHidden), saved as a JPEG
-	 * download (js/photo.js).
+	 * controllers, orbs or arc (everything in photoHidden), as a JPEG
+	 * (js/photo.js), kept in the page's photo roll (onPhoto).
 	 */
 	async capturePhoto() {
 		this.photoPending = false;
@@ -384,15 +394,21 @@ export class XRExperience {
 			this.rig.updateMatrixWorld(true);
 			return takePhoto(this.renderer, this.scene, this.camera.matrixWorld.clone(), { near: XR_NEAR, far: XR_FAR });
 		});
-		let error = null;
+		let error = null, kept = null;
 		try {
-			saveFile(await job, photoName());
+			const blob = await job;
+			if (this.onPhoto) {
+				kept = await this.onPhoto(blob, photoName());
+				if (!kept) throw new Error('The photo could not be kept');
+			} else {
+				saveFile(blob, photoName());
+			}
 		} catch (e) {
 			console.warn('Photo failed', e);
 			error = e;
 		}
 		this.photoBusy = false;
-		this.ui.showPhotoResult(error);
+		this.ui.showPhotoResult(error, kept);
 	}
 
 	// -----------------------------------------------------------------------

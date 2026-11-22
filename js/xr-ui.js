@@ -27,12 +27,20 @@ const MENU_DISTANCE = 0.75, MENU_DROP = 0.1, MENU_LEFT = 0.1; // summoned menu, 
 // the face on entry), and you can watch the model while changing a setting.
 const MENU_DOLL_DISTANCE = 0.95, MENU_DOLL_SIDE = THREE.MathUtils.degToRad(34);
 const ORB_TOUCH = 0.08, ORB_RELEASE = 0.14; // touching an orb with the other hand
+// The note after a photo. Photos are kept in the app and saved from the page
+// after VR (a download in VR would end the session).
+const PHOTO_TEXT = {
+	kept: { title: 'Nice shot!', line: 'It waits on the page for when you leave VR.' },
+	full: { title: 'Nice shot!', line: 'Only the last 50 are kept: the oldest made room.' },
+	failed: { title: 'The photo didn\'t work', line: 'Try again, or use the Quest\'s own screenshot.' },
+};
 
 export class XRUI {
 	/** xr: the XRExperience (rig, camera, input, menus, mode, model, stage, ...). */
 	constructor(xr) {
 		this.xr = xr;
 		this.menu = null; // the open Panel, or null
+		this.tab = null; // the menu's tab last shown (kept between the two modes' menus)
 		this.drag = null; // a slider being dragged: { c, id }
 		this.orbs = [0, 1].map(() => makeOrb());
 		this.buildWelcome();
@@ -51,8 +59,9 @@ export class XRUI {
 	buildWelcome() {
 		this.welcome = new WelcomeCard('Welcome', [
 			{ key: 'Wrist', kind: 'orb', text: 'Touch a wrist with the other hand: menu' },
-			{ key: 'Trigger', kind: 'trigger', text: 'Point at the home and pull: step inside' },
 			{ small: true, text: 'Or press A or X, or point at the glowing orb on a wrist.' },
+			{ key: 'Trigger', kind: 'trigger', text: 'Point at a room and pull: step inside' },
+			{ small: true, text: 'The orange marker shows where you\'ll land.' },
 		], { width: 0.9 });
 		this.welcome.mesh.visible = false;
 		this.welcomeOn = false; // until the menu is first opened
@@ -90,22 +99,26 @@ export class XRUI {
 		this.flash.visible = false;
 		this.flash.name = 'photo-flash';
 		camera.add(this.flash);
-		this.photoNote = new WelcomeCard('Photo saved', [{ small: true, text: 'Files app on the headset, Downloads' }], { width: 0.34 });
+		this.photoNote = new WelcomeCard(PHOTO_TEXT.kept.title, [{ small: true, text: PHOTO_TEXT.kept.line }], { width: 0.34 });
 		this.photoNote.mesh.position.set(0, -0.16, -0.7);
 		this.photoNote.mesh.visible = false;
 		camera.add(this.photoNote.mesh);
 		this.photoFx = null; // { t, error }
 	}
 
-	/** After a photo: the flash (if it worked) and the note saying where it went, or that it failed. */
-	showPhotoResult(error) {
-		this.photoNote.title = error ? 'The photo could not be saved' : 'Photo saved';
-		this.photoNote.lines = [{ small: true, text: error ? 'Try again, or use the Quest\'s own screenshot.' : 'Files app on the headset, Downloads' }];
+	/**
+	 * After a photo: the flash (if it worked) and the note saying where it
+	 * went, or that it failed. kept: { dropped } from the photo roll.
+	 */
+	showPhotoResult(error, kept = null) {
+		const t = error ? PHOTO_TEXT.failed : kept?.dropped ? PHOTO_TEXT.full : PHOTO_TEXT.kept;
+		this.photoNote.title = t.title;
+		this.photoNote.lines = [{ small: true, text: t.line }];
 		this.photoNote.draw();
 		this.photoFx = { t: 0, error };
 	}
 
-	/** Advances the flash and the "Photo saved" note. */
+	/** Advances the flash and the photo note. */
 	runPhotoFx(dt) {
 		const f = this.photoFx;
 		if (!f) return;
@@ -140,6 +153,7 @@ export class XRUI {
 		panel.mesh.position.y -= MENU_DROP;
 		xr.rig.updateMatrixWorld(true);
 		panel.mesh.lookAt(xr.rig.localToWorld(head.clone().setY(panel.mesh.position.y)));
+		if (this.tab) panel.setTab(this.tab);
 		panel.setHover(null);
 		panel.mesh.visible = true;
 		this.menu = panel;
@@ -147,7 +161,7 @@ export class XRUI {
 	}
 
 	closeMenu() {
-		if (this.menu) { this.menu.closeDropdown(); this.menu.mesh.visible = false; }
+		if (this.menu) { this.tab = this.menu.tab; this.menu.closeDropdown(); this.menu.mesh.visible = false; }
 		this.menu = null;
 	}
 

@@ -1,5 +1,8 @@
 // What the headset menus say and do (SPEC.md, "Experience and controls"):
-// one menu per mode, each a settings list with a controls card beside it.
+// one menu per mode, each a settings list in tabs (View, Walk, Sound; the same
+// tabs in both modes) with the actions below them on every tab, and a
+// controls card beside it. ("dollhouse" in the code is the scale model on
+// screen.)
 // On/off settings are switches, settings with a few values are choices with
 // every option visible (one click, no dropdown to open in VR), a list that
 // can be long is a dropdown (Levels), see-through is a slider, and actions
@@ -16,7 +19,7 @@ import { TIMES } from './lighting.js';
 import { SETTINGS, writeSetting } from './settings.js';
 
 const MENU_WIDTH = 0.62; // metres
-const HINT = 'Touch a wrist with the other hand, or press A / X';
+const HINT = 'To open this menu: touch a wrist, or press A or X';
 const TIME_LABELS = { morning: 'Morning', noon: 'Noon', sunset: 'Sunset', night: 'Night' };
 const TURNS = SETTINGS.turn.options; // snap turn, degrees
 const HEIGHTS = SETTINGS.height.options; // person height, metres (0 = your own)
@@ -30,37 +33,40 @@ const CELLS = {
 	photo: { id: 'photo', label: 'Photo', icon: 'camera' },
 	light: { type: 'choice', id: 'light', label: 'Time of day', options: TIMES.map((t) => ({ value: t, label: TIME_LABELS[t] ?? t })), value: 'morning' },
 	shadows: sw('shadows', 'Shadows'),
-	depth: sw('depth', 'Depth'),
+	depth: sw('depth', 'Depth shading'),
 	ceilings: sw('ceilings', 'Ceilings'),
 	figure: sw('figure', 'Figure'),
 	solid: sw('solid', 'Solid walls'),
 	seethrough: { type: 'slider', id: 'seethrough', label: 'See-through', value: 0, format: (v) => (v > 0 ? `${Math.round(v * 100)}%` : 'Off') },
 	levels: { type: 'dropdown', id: 'levels', label: 'Levels', options: [], disabled: true, note: 'One level' },
-	view: { type: 'choice', id: 'view', label: 'View', options: [{ value: 'vr', label: 'VR' }, { value: 'ar', label: 'Passthrough' }], value: 'vr' },
+	view: sw('view', 'Passthrough'), // on: the room around you; off: the VR world
+	sound: { type: 'choice', id: 'sound', label: 'Sound', options: [{ value: 'off', label: 'Off' }, { value: 'effects', label: 'Effects' }], value: 'effects' },
 	turn: { type: 'choice', id: 'turn', label: 'Turn', options: TURNS.map((t) => ({ value: t, label: `${t}°` })), value: 30 },
 	height: { type: 'choice', id: 'height', label: 'Height', options: HEIGHTS.map((h) => ({ value: h, label: h ? `${h.toFixed(1)} m` : 'Yours' })), value: 0 },
-	dollhouse: { id: 'dollhouse', label: 'Back to the dollhouse' },
+	dollhouse: { id: 'dollhouse', label: 'Back to the scale model' },
 	exit: { id: 'exit', label: 'Exit VR', primary: true },
 };
 
-/** The menus: a title and rows of cell ids. */
+/** The tabs (the same in both menus), each with rows of cell ids. A Tools tab joins with the tools (milestone C). */
+export const TABS = [
+	{ id: 'view', label: 'View', rows: [['light'], ['shadows', 'depth'], ['ceilings', 'figure'], ['seethrough'], ['levels'], ['view']] },
+	{ id: 'walk', label: 'Walk', rows: [['turn'], ['height'], ['solid']] },
+	{ id: 'sound', label: 'Sound', rows: [['sound']] },
+];
+
+/** The menus: a title, the tabs, and the actions shown under every tab. */
 export const MENUS = {
-	dollhouse: {
-		title: 'Dollhouse',
-		rows: [['walk', 'recentre', 'photo'], ['light'], ['shadows', 'depth'], ['ceilings', 'figure'], ['seethrough'], ['levels'], ['view'], ['exit']],
-	},
-	walk: {
-		title: 'Walking',
-		// The two ways out, side by side at the bottom (at the user's request), after Photo.
-		rows: [['light'], ['shadows', 'depth'], ['ceilings', 'solid'], ['seethrough'], ['turn'], ['height'], ['view'], ['photo', 'dollhouse', 'exit']],
-	},
+	dollhouse: { title: 'Scale model', actions: [['walk', 'recentre', 'photo'], ['exit']] },
+	// The two ways out, side by side at the bottom (at the user's request), after Photo.
+	walk: { title: 'Walking', actions: [['photo', 'dollhouse', 'exit']] },
 };
 
 /** The controls card beside each menu: what each stick, trigger, grip and button does in that mode. */
 function controlsCards() {
 	const either = (btn) => [
-		{ kind: 'stick', key: 'Stick', text: '↔ rotate   ↕ zoom' },
-		{ kind: 'trigger', key: 'Trigger', text: 'Jump in where you point' },
+		{ kind: 'stick', key: 'Stick', text: '↔ turn   ↕ zoom' },
+		{ kind: 'trigger', key: 'Point', text: 'At a room: see where you land' },
+		{ kind: 'trigger', key: 'Trigger', text: 'Step inside there' },
 		{ kind: 'grip', key: 'Grip', text: 'Hold to move the model' },
 		{ kind: 'button', key: btn[0], text: 'Menu' },
 		{ kind: 'button', key: btn[1], text: 'Close the menu' },
@@ -69,28 +75,27 @@ function controlsCards() {
 	// Pictures: the menu's Photo button (the Quest's own screenshot, Meta
 	// button + trigger, also sends the trigger here and jumps you).
 	const footer = { footer: { key: 'Photo', lines: [
-		'The Photo button saves what you see,',
-		'without this menu, to the headset\'s',
-		'Files app, in Downloads.',
+		'Takes a picture of what you see, without the menu.',
+		'They wait on the page for when you leave VR.',
 	] } };
 	return {
-		dollhouse: new ControlsCard('Controls: dollhouse', { left: either('XY'), right: either('AB') }, footer),
+		dollhouse: new ControlsCard('Controls: scale model', { left: either('XY'), right: either('AB') }, footer),
 		walk: new ControlsCard('Controls: walking', {
 			left: [
 				{ kind: 'stick', key: 'Stick', text: 'Walk where you look' },
-				{ kind: 'trigger', key: 'Trigger', text: 'Hold, aim, release: teleport' },
+				{ kind: 'trigger', key: 'Trigger', text: 'Hold, aim, let go: teleport' },
 				{ kind: 'grip', key: 'Grip', text: 'Hold and pull: move' },
 				{ kind: 'button', key: 'X', text: 'Menu' },
-				{ kind: 'button', key: 'Y', text: 'Back to the dollhouse' },
+				{ kind: 'button', key: 'Y', text: 'Back to the scale model' },
 				{ kind: 'orb', key: 'Wrist', text: 'Touch with the other hand: menu' },
 			],
 			right: [
 				{ kind: 'stick', key: 'Stick ↔', text: 'Turn' },
-				{ kind: 'stick', key: 'Stick ↑', text: 'Aim, release: teleport' },
-				{ kind: 'trigger', key: 'Trigger', text: 'Hold, aim, release: teleport' },
+				{ kind: 'stick', key: 'Stick ↑', text: 'Aim, let go: teleport' },
+				{ kind: 'trigger', key: 'Trigger', text: 'Hold, aim, let go: teleport' },
 				{ kind: 'grip', key: 'Grip', text: 'Hold and pull: move' },
 				{ kind: 'button', key: 'A', text: 'Menu' },
-				{ kind: 'button', key: 'B', text: 'Back to the dollhouse' },
+				{ kind: 'button', key: 'B', text: 'Back to the scale model' },
 				{ kind: 'orb', key: 'Wrist', text: 'Touch with the other hand: menu' },
 			],
 		}, footer),
@@ -105,8 +110,9 @@ function controlsCards() {
 export function buildMenus(rig) {
 	const cards = controlsCards();
 	const menus = {};
-	for (const [mode, { title, rows }] of Object.entries(MENUS)) {
-		const p = new Panel(rows.map((row) => row.map((id) => CELLS[id])), { title, hint: HINT, width: MENU_WIDTH, pxPerM: 1600 });
+	const cells = (rows) => rows.map((row) => row.map((id) => CELLS[id]));
+	for (const [mode, { title, actions }] of Object.entries(MENUS)) {
+		const p = new Panel({ tabs: TABS.map((t) => ({ ...t, rows: cells(t.rows) })), actions: cells(actions) }, { title, hint: HINT, width: MENU_WIDTH, pxPerM: 1600 });
 		p.mesh.visible = false;
 		p.mesh.material.depthTest = false; // never hidden inside a wall
 		const card = cards[mode];
@@ -124,7 +130,7 @@ export function buildMenus(rig) {
 /** Shows the current settings in both menus (switch positions, chosen options, slider, levels). */
 export function updateLabels(xr) {
 	const ceilings = xr.model?.layers.ceilings.visible ?? true;
-	const view = xr.sessionMode === 'vr' ? { disabled: true, note: 'VR only' } : { disabled: false, value: xr.view };
+	const view = xr.sessionMode === 'vr' ? { disabled: true, note: 'Not available', value: false } : { disabled: false, value: xr.view === 'ar' };
 	for (const p of Object.values(xr.menus)) {
 		p.set('ceilings', { value: ceilings });
 		p.set('view', view);
@@ -135,8 +141,9 @@ export function updateLabels(xr) {
 		}
 		if (xr.depth) {
 			const preparing = xr.depth.enabled && xr.depth.state === 'baking';
-			p.set('depth', { value: xr.depth.enabled, label: preparing ? `Depth ${xr.depth.label()}` : 'Depth' });
+			p.set('depth', { value: xr.depth.enabled, label: preparing ? `Depth shading ${xr.depth.label()}` : 'Depth shading' });
 		}
+		p.set('sound', { value: xr.soundLevel === 'off' ? 'off' : 'effects' });
 	}
 	const walk = xr.menus.walk, doll = xr.menus.dollhouse;
 	walk.set('turn', { value: xr.snapAngle });
@@ -149,6 +156,9 @@ export function updateLabels(xr) {
 	const storeys = xr.model?.storeys ?? 1;
 	const names = xr.model?.storeyNames ?? [];
 	const upTo = (i) => `Up to ${names[i] || `level ${i + 1}`}`;
+	// (Levels and the figure belong to the scale model: greyed out while walking.)
+	walk.set('levels', { disabled: true, note: 'Scale model only', options: [] });
+	walk.set('figure', { disabled: true, note: 'Scale model only', value: false });
 	doll.set('levels', storeys < 2 ? { disabled: true, note: 'One level' } : {
 		disabled: false,
 		options: [{ value: storeys - 1, label: `All levels (${storeys})` }, ...Array.from({ length: storeys - 1 }, (_, k) => storeys - 2 - k).map((i) => ({ value: i, label: upTo(i) }))],
@@ -217,6 +227,13 @@ export function menuAction(xr, target) {
 			updateLabels(xr);
 			break;
 		case 'shadows': xr.lighting?.setShadows(!xr.lighting.shadows); updateLabels(xr); break;
+		case 'sound':
+			xr.soundLevel = value === 'off' ? 'off' : value === 'effects' ? 'effects' : xr.soundLevel === 'off' ? 'effects' : 'off';
+			writeSetting('sound', xr.soundLevel);
+			xr.sound.setLevel(xr.soundLevel);
+			if (xr.soundLevel !== 'off') xr.sound.play('tick'); // (so you hear what you chose)
+			updateLabels(xr);
+			break;
 		case 'depth': xr.depth?.setEnabled(!xr.depth.enabled); updateLabels(xr); break;
 		case 'solid':
 			xr.solid = !xr.solid;

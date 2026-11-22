@@ -25,6 +25,7 @@ export const SETTINGS = {
 	figure: { key: 'svr.figure', flag: true, fallback: true }, // scale figure beside the dollhouse
 	solid: { key: 'svr.solidWalls', flag: true, fallback: false }, // walls stop you while walking
 	seeThrough: { key: 'svr.seeThrough', range: true, fallback: 0 }, // 0 = as modelled, 1 = glass house
+	sound: { key: 'svr.sound', options: ['off', 'effects', 'all'], fallback: 'all' }, // all: effects and the ambience (milestone H)
 };
 
 /** The value a stored string stands for (null or undefined: nothing stored). */

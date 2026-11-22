@@ -1,18 +1,18 @@
 # Sweet Home VR
 
-A WebXR viewer for [Sweet Home 3D](https://www.sweethome3d.com/) homes on Meta Quest. Open a `.sh3d` file directly (no export step), look at it as a dollhouse, then walk through it at real scale. It also opens OBJ (plain, or zipped with MTL and textures) and GLB, including compressed GLB (Draco, meshopt).
+A WebXR viewer for [Sweet Home 3D](https://www.sweethome3d.com/) homes on Meta Quest. Open a `.sh3d` file directly (no export step), look at it as a scale model, then walk through it at real size. It also opens OBJ (plain, or zipped with MTL and textures) and GLB, including compressed GLB (Draco, meshopt).
 
 **Try it: [marcalprats.github.io/SweetHomeVR](https://marcalprats.github.io/SweetHomeVR/)** (press *Try the example home* if you have no file to hand).
 
 It runs in the Meta Quest Browser: no app store, no developer mode, no sideloading. The same page works on a desktop browser as a 2D preview, so you can check a file before putting the headset on.
 
-| On the page | Dollhouse, in the headset | Walking inside |
+| On the page | Scale model, in the headset | Walking inside |
 | --- | --- | --- |
-| ![The page with the example home](docs/page.jpg) | ![The dollhouse on its plinth with the menu open](docs/dollhouse.jpg) | ![Inside the example home's living room](docs/walk.jpg) |
+| ![The page with the example home](docs/page.jpg) | ![The scale model on its plinth with the menu open](docs/dollhouse.jpg) | ![Inside the example home's living room](docs/walk.jpg) |
 
 (Pictures: the example home that ships with the project. The headset views are from an emulated Quest 2.)
 
-> Status: all planned work is done (see [SPEC.md](SPEC.md)): 2D preview, the VR/AR dollhouse, walking at 1:1, time of day, shadows and depth shading, a safety audit, and offline use. Tested on a real Quest 2 only.
+> Status: all planned work is done (see [SPEC.md](SPEC.md)): 2D preview, the scale model in VR and passthrough, walking at 1:1, time of day, shadows and depth shading, a safety audit, and offline use. Tested on a real Quest 2 only.
 
 ## Using it
 
@@ -80,28 +80,30 @@ Supported files:
 
 Press **Enter VR** once a model is open. In the headset, the menu switches between VR and passthrough.
 
-**Menu:** touch one wrist with the other hand (a glowing orb sits on each wrist), point at an orb and pull the trigger, or press **A** or **X**: the menu opens with a drawing of the controllers and what each button does. In the dollhouse it opens to your left, clear of the model; while walking, in front of you. **B** / **Y** or a click elsewhere closes it. When you enter VR, a welcome card above the home says how, until you first open the menu.
+**Menu:** touch one wrist with the other hand (a glowing orb sits on each wrist), point at an orb and pull the trigger, or press **A** or **X**: the menu opens with a drawing of the controllers and what each button does. At the scale model it opens to your left, clear of the model; while walking, in front of you. **B** / **Y** or a click elsewhere closes it. When you enter VR, a welcome card above the home says how, until you first open the menu.
 
-The menu is a list of settings: **switches** for what is on or off (Shadows, Depth, Ceilings, Figure, Solid walls), a row of **options** with the current one in blue where there are a few to choose from (Time of day, Turn, Height, View: one click, nothing to open), a **dropdown** for Levels (homes can have many), a **slider** for See-through (pull the trigger on it and drag), and **buttons** for actions (Walk in, Recentre, Photo, Back to the dollhouse, Exit VR). Settings are remembered.
+The menu has three tabs, **View**, **Walk** and **Sound**, the same in both menus, with the actions (Walk in or Back to the scale model, Recentre, Photo, Exit VR) below them on every tab. Settings are **switches** for what is on or off (Shadows, Depth shading, Ceilings, Figure, Passthrough, Solid walls), a row of **options** with the current one in blue where there are a few to choose from (Time of day, Turn, Height, Sound: one click, nothing to open), a **dropdown** for Levels (homes can have many) and a **slider** for See-through (pull the trigger on it and drag). A setting that belongs to the scale model is greyed out while walking. Settings, and the tab you last used, are remembered.
 
-**Dollhouse**
-- The home stands on a low museum plinth in a gallery room. You look down at it as a 2 m tall person would, whether you sit or stand, so it's easy to look into the rooms. If you change position, **Recentre** measures your height again.
-- **Thumbstick** left/right rotates it; up/down zooms it (½× to 4×).
-- Point the **laser** at it: an orange figure shows where you'd stand. **Trigger** takes you there at real size.
+**Scale model**
+- The home stands on a low museum plinth in a gallery room, 60 cm in front of you. You look down at it as a 2 m tall person would, whether you sit or stand, so it's easy to look into the rooms. If you change position, **Recentre** measures your height again. **Passthrough** (View tab) swaps the gallery for your own room; the model stays exactly where it is.
+- **Thumbstick** left/right turns it; up/down zooms it (½× to 4×). A brass plate on the plinth shows its true scale (e.g. 1:42); let go of a zoom near a standard scale (1:10, 1:20, 1:25, 1:50, 1:100…) and it settles on it with a light tick.
+- Point the **laser** at a room: an orange marker hops to the room's clear middle, with the room's name above it and a small arrow for the way you'll face. **Trigger** takes you there at real size. (Pointing at the garden, you land where you point, clear of the walls, facing the house. OBJ and GLB files have no rooms: you land where you point.)
 - **Grip** and move your hand to lift it or move it; it never sinks into the plinth.
 - A small grey **scale figure** (1.75 m at the model's scale) stands by the home's front corner, like the little people in architects' models, so you can judge its size.
-- Menu: **Walk in** (at Sweet Home 3D's virtual visitor position), **Recentre**, **Photo**, **Time of day** (morning, noon, sunset, night), **Shadows**, **Depth**, **Ceilings**, **Figure**, **See-through**, **Levels** (in a home with several storeys: all of them, or up to a level, by its Sweet Home 3D name, with the ceilings off the top one shown), **View** (VR or passthrough), **Exit VR**.
+- Menu: **Walk in** (at Sweet Home 3D's virtual visitor position), **Recentre**, **Photo**, **Exit VR**; View tab: **Time of day** (morning, noon, sunset, night), **Shadows**, **Depth shading**, **Ceilings**, **Figure**, **See-through**, **Levels** (in a home with several storeys: all of them, or up to a level, by its Sweet Home 3D name, with the ceilings off the top one shown), **Passthrough**.
 
-**Inside, at 1:1**
+**Walking, at 1:1**
 - **Left stick** walks where you look. In a one-level home you stay on the floor and walk through furniture; in a home with several levels you can step onto anything, so stairs work.
 - **Solid walls** (menu, off by default): walls stop you, whether you use the stick, pull yourself along or walk for real in your room, and you slide along them. Only walls: furniture, doors and windows stay walk-through, so doorways and stairs work. (OBJ and GLB files have no separate walls, so the switch is greyed out for them.)
 - **Hold a grip** (the button on the side of the handle) and move your hand to pull yourself along, as if grabbing the room.
 - **Right stick** left/right turns in steps (15°, 30° or 45°, set in the menu).
-- **Right stick forward**, or **hold a trigger**, and aim: a blue ring shows where you'll land (red on a wall). The arc stays low enough to pass through doorways. Let go to jump there.
-- **B** or **Y** goes back to the dollhouse.
-- Menu: **Time of day**, **Shadows**, **Depth**, **Ceilings**, **Solid walls**, **See-through**, **Turn**, **Height** (yours, 1.4, 1.7 or 2.0 m), **View**, and at the bottom **Photo**, **Back to the dollhouse** and **Exit VR**.
+- **Right stick forward**, or **hold a trigger**, and aim: a blue ring shows where you'll land (red on a wall). The arc stays low enough to pass through doorways. Let go to teleport there.
+- **B** or **Y** goes back to the scale model.
+- Menu: the same tabs (Walk tab: **Turn**, **Height** (yours, 1.4, 1.7 or 2.0 m), **Solid walls**), and at the bottom **Photo**, **Back to the scale model** and **Exit VR**.
 
-**Photo** (both menus): saves what you see, without the menu, lasers or controllers, as a picture. On the Quest it goes to the **Files** app, in **Downloads** (a web page can't add it to the headset's screenshot gallery). Use it instead of the Quest's own screenshot (Meta button + trigger): that trigger pull also reaches the viewer and makes you jump.
+**Photo** (both menus): takes a picture of what you see, without the menu, lasers or controllers. It is kept in the viewer, and when you leave VR the page lists your photos: **Save all to Downloads** (or one by one) puts them in the Quest's **Files** app, in **Downloads**. (Nothing is downloaded during VR: the Quest Browser asks for permission at the first download, and its question would end the VR session. The first save on the page may ask once: choose Allow.) The viewer keeps your last 50 photos until you delete them. Use it instead of the Quest's own screenshot (Meta button + trigger): that trigger pull also reaches the viewer and makes you jump.
+
+**Sound** (Sound tab): Off or Effects (a light tick when the zoom settles on a scale; the hand-held tools will add more).
 
 **See-through** (headset only, both menus): a slider that fades walls and furniture, up to a glass house where only 15% of them is left, so you can see into every room at once. Floors and ceilings stay as they are. Faded walls and furniture cast no shadows, like glass. The 2D page always shows the home as modelled.
 
@@ -177,7 +179,7 @@ The browser-driven checks need the dev tools (Playwright and Meta's IWER headset
 npm install            # dev tools only; the app never needs it
 npx playwright install chromium
 npm run shots          # screenshots of each test home into test-output/
-npm run xr-test        # a scripted VR session on an emulated Quest 2: 111 checks and screenshots
+npm run xr-test        # a scripted VR session on an emulated Quest 2: 118 checks and screenshots
 XR_DEVICE=metaQuest3 npm run xr-test   # or oculusQuest1, metaQuestPro: their controller layouts
 ```
 
@@ -188,6 +190,7 @@ Optional extras:
 ```bash
 npm run fixtures       # download two public Sweet Home 3D example homes as more test files
 npm run example        # rebuild examples/example-home.sh3d (after editing scripts/make-example.js)
+npm run ui-assets      # redraw the draft interface artwork in assets/ui/
 npm run vendor         # copy three.js, three-mesh-bvh, fflate and the font into vendor/ (after changing versions)
 ```
 
@@ -204,7 +207,7 @@ index.html        2D UI and import map
 config.js         Dropbox app key, Google API key, defaults
 js/main.js        2D page, renderer, loading, UI
 js/xr.js          VR/AR session: the frame order and the parts below
-js/xr-dollhouse.js  the dollhouse on its plinth: turn, zoom, move, step inside
+js/xr-dollhouse.js  the scale model on its plinth: turn, zoom, move, scale plate, where stepping inside lands
 js/xr-walk.js     walking at 1:1: stick, teleport, snap turn, grip pull, floors and solid walls
 js/xr-ui.js       wrist orbs, opening and pointing at the menu, welcome card, photo note
 js/xr-menus.js    what the headset menus say and do (cells defined once, rows of ids)
@@ -216,7 +219,10 @@ js/settings.js    every remembered setting, its key and meaning
 js/tween.js, js/haptics.js, js/sound.js   feedback: motion, vibration, synthesised sounds
 js/panel.js       canvas-texture VR menu (switches, options, slider, buttons) and controls card
 js/walls.js       solid walls while walking and see-through walls and furniture (headset only)
-js/photo.js       the menu's Photo button: renders the view without the menu and saves a JPEG
+js/photo.js       the menu's Photo button: renders the view without the menu as a JPEG
+js/rooms.js       where stepping inside lands: a room's clear middle and long direction (no DOM)
+js/theme.js       fonts, colours and corner radii of everything drawn in the headset
+assets/ui/        replaceable interface artwork (draft textures; see its README)
 js/lighting.js    time of day (sun from the home's compass) and shadows
 js/depth.js       depth shading for the headset: corner gradients baked per vertex
 js/optimise.js    merge geometry by material, BVH for raycasts

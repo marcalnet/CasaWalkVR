@@ -21,20 +21,14 @@
 // slider) or null when the click only opened or closed a dropdown.
 
 import * as THREE from 'three';
+import { FONT, COLOURS, BADGE, LABEL, PLATE } from './theme.js';
 
 const PX_PER_M = 1024; // canvas pixels per metre of panel
 const PAD = 28, GAP = 14, ROW_H = 80, TITLE_H = 72, HINT_H = 52;
 const PRIMARY_H = 108, PRIMARY_GAP = 26; // the primary button: taller, set apart
+const TAB_H = 66, TAB_GAP = 18; // the row of tabs, and the space under it
+const TAB = '#tab'; // a click target's id for a tab (its value is the tab's id)
 const CHOICE_MAX = 6; // more options than this: a stepper
-const FONT = '-apple-system, "Segoe UI", Roboto, sans-serif';
-const COLOURS = {
-	panel: 'rgba(233,237,241,0.96)',
-	cell: '#ffffff', edge: '#d3d9df', text: '#1d2329', soft: '#5d6873',
-	hover: '#e3edfb', hoverEdge: '#3d6fd8', accent: '#3d6fd8', accentText: '#ffffff',
-	segment: '#eef1f4', track: '#c4ccd4',
-	primary: '#e07a1f', primaryHover: '#b85f12', primaryText: '#ffffff',
-	off: '#e2e6ea', offText: '#9aa3ac',
-};
 const SWITCH_W = 96, SWITCH_H = 52;
 const OPTION_H = 64, OPTION_MIN_H = 40; // dropdown list rows (shrunk to fit a long list)
 
@@ -47,11 +41,19 @@ export class Panel {
 	 *              { type: 'slider', id, label, value: 0..1, format(value) -> text }
 	 *              { type: 'dropdown', id, label, options: [{ value, label }], value }
 	 *              any cell: disabled, note (text shown instead of the control when disabled)
+	 *              Or, for a menu with tabs: { tabs: [{ id, label, rows }], actions: rows }:
+	 *              a row of tabs, the chosen tab's rows, then the actions, shown on
+	 *              every tab. The panel is as tall as its tallest tab, so the
+	 *              actions never move. Clicking a tab is handled here (like a dropdown).
 	 * @param opts  { title, hint (small text at the bottom), width (m), pxPerM (canvas pixels per metre) }
 	 */
 	constructor(rows, { title = '', hint = '', width = 0.62, pxPerM = PX_PER_M } = {}) {
-		this.rows = rows.map((r) => r.map((c) => ({ type: 'button', ...c })));
-		this.cells = new Map(this.rows.flat().map((c) => [c.id, c]));
+		const spec = Array.isArray(rows) ? { tabs: [{ id: '', label: '', rows }], actions: [] } : rows;
+		const cellsOf = (rs) => rs.map((r) => r.map((c) => ({ type: 'button', ...c })));
+		this.tabs = spec.tabs.map((t) => ({ id: t.id, label: t.label, rows: cellsOf(t.rows) }));
+		this.actions = cellsOf(spec.actions ?? []);
+		this.tab = this.tabs[0].id; // the tab shown
+		this.cells = new Map([...this.tabs.flatMap((t) => t.rows), ...this.actions].flat().map((c) => [c.id, c]));
 		this.title = title;
 		this.hint = hint;
 		this.hover = null; // key of the hovered target
@@ -72,12 +74,26 @@ export class Panel {
 		this.draw();
 	}
 
-	/** Cell rectangles in canvas pixels (and the panel height). */
-	layout() {
+	/** Every row, all tabs and the actions (to read the menu's content). */
+	get rows() { return [...this.tabs.flatMap((t) => t.rows), ...this.actions]; }
+
+	/** The tab a cell is on (its id), or null for the actions. */
+	tabOf(id) { return this.tabs.find((t) => t.rows.some((r) => r.some((c) => c.id === id)))?.id ?? null; }
+
+	/** Shows another tab. */
+	setTab(id) {
+		if (id === this.tab || !this.tabs.some((t) => t.id === id)) return;
+		this.open = null;
+		this.tab = id;
+		this.hover = null;
+		this.boxes = this.layout();
+		this.draw();
+	}
+
+	/** Lays rows out from height y: boxes, and the height they end at. */
+	place(rows, y, boxes) {
 		const full = this.size.w - 2 * PAD;
-		let y = PAD + (this.title ? TITLE_H : 0);
-		const boxes = [];
-		this.rows.forEach((row, i) => {
+		rows.forEach((row, i) => {
 			const primary = row.some((c) => c.primary);
 			if (i > 0) y += primary ? PRIMARY_GAP : GAP;
 			const h = primary ? PRIMARY_H : ROW_H;
@@ -85,6 +101,26 @@ export class Panel {
 			row.forEach((cell, k) => boxes.push({ cell, x: PAD + k * (w + GAP), y, w, h, primary: !!cell.primary }));
 			y += h;
 		});
+		return y;
+	}
+
+	/** Cell rectangles in canvas pixels (and the panel height). */
+	layout() {
+		let y = PAD + (this.title ? TITLE_H : 0);
+		const boxes = [];
+		if (this.tabs.length > 1) {
+			const full = this.size.w - 2 * PAD, w = (full - (this.tabs.length - 1) * 8) / this.tabs.length;
+			this.tabBoxes = this.tabs.map((t, i) => ({ id: t.id, label: t.label, x: PAD + i * (w + 8), y, w, h: TAB_H }));
+			y += TAB_H + TAB_GAP;
+		} else {
+			this.tabBoxes = [];
+		}
+		// The tab's rows, in the space of the tallest tab, then the actions.
+		const top = y;
+		const tallest = Math.max(...this.tabs.map((t) => this.place(t.rows, top, [])));
+		this.place(this.tabs.find((t) => t.id === this.tab).rows, top, boxes);
+		y = tallest;
+		if (this.actions.length) y = this.place(this.actions, y + (this.actions[0].some((c) => c.primary) ? PRIMARY_GAP : GAP + 14), boxes);
 		this.size.h = Math.round(y + (this.hint ? HINT_H : 0) + PAD);
 		return boxes;
 	}
@@ -106,7 +142,7 @@ export class Panel {
 	 * the rest of the panel, which closes it).
 	 */
 	rects() {
-		const out = [];
+		const out = this.open ? [] : this.tabBoxes.map((t) => ({ id: TAB, value: t.id, x: t.x, y: t.y, w: t.w, h: t.h }));
 		if (this.open) {
 			const list = this.list();
 			if (list) {
@@ -190,6 +226,7 @@ export class Panel {
 			ctx.font = `600 40px ${FONT}`;
 			ctx.fillText(this.title, PAD + 8, PAD + TITLE_H / 2 - 4);
 		}
+		this.drawTabs(ctx);
 		for (const b of this.boxes) this.drawCell(ctx, b);
 		if (this.hint) {
 			ctx.fillStyle = COLOURS.soft;
@@ -200,6 +237,22 @@ export class Panel {
 		}
 		if (this.open) this.drawList(ctx);
 		this.texture.needsUpdate = true;
+	}
+
+	/** The row of tabs: the shown one white and raised, the others flat. */
+	drawTabs(ctx) {
+		for (const t of this.tabBoxes) {
+			const on = t.id === this.tab, hot = !on && this.hover === `${TAB}|${t.id}`;
+			roundRect(ctx, t.x, t.y, t.w, t.h, 18);
+			ctx.fillStyle = on ? COLOURS.tabActive : hot ? COLOURS.hover : COLOURS.tab;
+			ctx.fill();
+			if (on || hot) { ctx.lineWidth = hot ? 4 : 2; ctx.strokeStyle = hot ? COLOURS.hoverEdge : COLOURS.edge; ctx.stroke(); }
+			ctx.fillStyle = on ? COLOURS.tabActiveText : COLOURS.tabText;
+			ctx.textAlign = 'center';
+			fitFont(ctx, t.label, t.w - 24, 32, 18, on ? 700 : 500);
+			ctx.fillText(t.label, t.x + t.w / 2, t.y + t.h / 2 + 2);
+			ctx.textAlign = 'left';
+		}
 	}
 
 	/** The open dropdown's list over a dimmed panel. */
@@ -285,9 +338,11 @@ export class Panel {
 		ctx.fillText(c.label, b.x + 24, b.y + b.h / 2 + 2);
 		if (c.disabled) {
 			if (c.note) {
+				// (The note may use the space after the label, also over a switch's.)
+				const room = b.w - Math.min(this.labelWidth(b) - 36, ctx.measureText(c.label).width) - 72;
 				ctx.fillStyle = COLOURS.offText;
 				ctx.textAlign = 'right';
-				fitFont(ctx, c.note, b.w - this.labelWidth(b) - 24, 28, 18, 500);
+				fitFont(ctx, c.note, room, 28, 18, 500);
 				ctx.fillText(c.note, b.x + b.w - 24, b.y + b.h / 2 + 2);
 				ctx.textAlign = 'left';
 			}
@@ -367,6 +422,7 @@ export class Panel {
 	 */
 	press(target) {
 		if (!target) return null;
+		if (target.id === TAB) { this.setTab(target.value); return null; }
 		if (target.toggle) { this.open = this.open === target.id ? null : target.id; this.hover = null; this.draw(); return null; }
 		if (target.dismiss) { this.closeDropdown(); return null; }
 		if (this.open) {
@@ -439,14 +495,6 @@ function roundRect(ctx, x, y, w, h, r) {
 
 const CARD_W = 1200, CARD_H = 1140; // canvas pixels (room for 7 rows)
 const FOOTER_H = 190; // extra height for the footer tip (screenshot reminder)
-const BADGE = {
-	stick: { fill: '#5d6873', text: '#fff' },
-	shot: { fill: '#7a4fd0', text: '#fff' },
-	trigger: { fill: '#3d6fd8', text: '#fff' },
-	grip: { fill: '#2f9e6a', text: '#fff' },
-	button: { fill: '#1d2329', text: '#fff' },
-	orb: { fill: '#d9822b', text: '#fff' },
-};
 
 export class ControlsCard {
 	/**
@@ -667,4 +715,114 @@ function drawCamera(ctx, x, y, colour) {
 	ctx.fillStyle = colour;
 	ctx.beginPath(); ctx.arc(x, y + 2, 5, 0, Math.PI * 2); ctx.fill();
 	ctx.restore();
+}
+
+// ---------------------------------------------------------------------------
+// Label: a short line of text floating in the world, turned to face you (a
+// room's name above the "stand here" marker). Fixed height in metres, drawn
+// over everything; redrawn only when its text changes.
+// ---------------------------------------------------------------------------
+
+const LABEL_W = 768, LABEL_H = 112; // canvas pixels
+
+export class Label {
+	/** height: metres, of the whole label (the pill around the text). */
+	constructor({ height = 0.05 } = {}) {
+		this.text = '';
+		this.canvas = typeof document !== 'undefined' ? document.createElement('canvas') : null;
+		if (this.canvas) { this.canvas.width = LABEL_W; this.canvas.height = LABEL_H; }
+		this.texture = this.canvas ? new THREE.CanvasTexture(this.canvas) : null;
+		if (this.texture) { this.texture.colorSpace = THREE.SRGBColorSpace; this.texture.anisotropy = 4; }
+		this.mesh = new THREE.Mesh(new THREE.PlaneGeometry(height * LABEL_W / LABEL_H, height),
+			new THREE.MeshBasicMaterial({ map: this.texture, transparent: true, toneMapped: false, depthTest: false }));
+		this.mesh.name = 'label';
+		this.mesh.renderOrder = 12;
+		this.mesh.visible = false;
+	}
+
+	/** Shows `text` (an empty text hides the label). */
+	set(text) {
+		text = String(text ?? '').trim();
+		if (text !== this.text) { this.text = text; this.draw(); }
+		this.mesh.visible = !!text;
+	}
+
+	draw() {
+		if (!this.canvas) return;
+		const ctx = this.canvas.getContext('2d');
+		ctx.clearRect(0, 0, LABEL_W, LABEL_H);
+		if (!this.text) return;
+		fitFont(ctx, this.text, LABEL_W - 80, 58, 30, LABEL.weight); // (sets ctx.font)
+		const w = Math.min(LABEL_W - 8, ctx.measureText(this.text).width + 64);
+		roundRect(ctx, (LABEL_W - w) / 2, 6, w, LABEL_H - 12, (LABEL_H - 12) / 2);
+		ctx.fillStyle = LABEL.fill;
+		ctx.fill();
+		ctx.lineWidth = 4;
+		ctx.strokeStyle = LABEL.edge;
+		ctx.stroke();
+		ctx.fillStyle = LABEL.text;
+		ctx.textAlign = 'center';
+		ctx.textBaseline = 'middle';
+		ctx.fillText(this.text, LABEL_W / 2, LABEL_H / 2 + 2);
+		this.texture.needsUpdate = true;
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Scale plate: a small plate on the plinth's front edge showing the model's
+// true scale (e.g. "1:42"), like a museum caption. The plate is artwork
+// (assets/ui/scale-plate.png, replaceable); "Scale" and the ratio are drawn
+// on it here, with the theme's font and colours (js/theme.js).
+// ---------------------------------------------------------------------------
+
+export class ScalePlate {
+	constructor() {
+		this.ratio = null;
+		const [w, h] = PLATE.size;
+		this.canvas = typeof document !== 'undefined' ? document.createElement('canvas') : null;
+		if (this.canvas) { this.canvas.width = w; this.canvas.height = h; }
+		this.texture = this.canvas ? new THREE.CanvasTexture(this.canvas) : null;
+		if (this.texture) { this.texture.colorSpace = THREE.SRGBColorSpace; this.texture.anisotropy = 4; }
+		// Lit like the gallery, with a little light of its own so the ratio stays readable at night.
+		this.mesh = new THREE.Mesh(new THREE.PlaneGeometry(...PLATE.metres),
+			new THREE.MeshLambertMaterial({ map: this.texture, transparent: true, emissive: 0xffffff, emissiveMap: this.texture, emissiveIntensity: 0.35 }));
+		this.mesh.name = 'scale-plate';
+		this.image = null;
+		if (typeof Image !== 'undefined') {
+			const img = new Image();
+			img.onload = () => { this.image = img; this.draw(); };
+			img.src = PLATE.image;
+		}
+	}
+
+	/** Shows the scale 1:ratio (rounded: no false precision); redraws only when the number shown changes. */
+	set(ratio) {
+		if (!(ratio > 0)) return;
+		const r = Math.max(1, Math.round(ratio));
+		if (r === this.ratio) return;
+		this.ratio = r;
+		this.draw();
+	}
+
+	/** The text shown, e.g. "1:42". */
+	get text() { return this.ratio ? `1:${this.ratio}` : ''; }
+
+	draw() {
+		if (!this.canvas) return;
+		const ctx = this.canvas.getContext('2d');
+		const [w, h] = PLATE.size;
+		ctx.clearRect(0, 0, w, h);
+		if (this.image) ctx.drawImage(this.image, 0, 0, w, h);
+		else { roundRect(ctx, 6, 6, w - 12, h - 12, 26); ctx.fillStyle = PLATE.fallback; ctx.fill(); }
+		ctx.textAlign = 'center';
+		ctx.textBaseline = 'middle';
+		const c = PLATE.caption, r = PLATE.ratio;
+		ctx.fillStyle = c.colour;
+		ctx.font = `${c.weight} ${c.px}px ${FONT}`;
+		ctx.fillText(c.text, c.x, c.y);
+		ctx.fillStyle = r.colour;
+		ctx.font = `${r.weight} ${r.px}px ${FONT}`;
+		ctx.fillText(this.text, r.x, r.y);
+		this.texture.needsUpdate = true;
+	}
 }

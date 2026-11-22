@@ -18,8 +18,9 @@ export const DOWN = new THREE.Vector3(0, -1, 0);
 /**
  * Mesh sets for a model { layers, multiLevel }: what the laser can hit
  * (pointable), what counts as floor in the dollhouse (floors), what the
- * teleport arc hits (solid), and what you can stand on (walkable, as a Set
- * and as a list). Only what is shown: storeys hidden by the level picker are
+ * teleport arc hits (solid), what you can stand on (walkable, as a Set
+ * and as a list), and what a landing spot must be clear of (obstacles:
+ * furniture, doors, windows and walls). Only what is shown: storeys hidden by the level picker are
  * left out. Ask again after showing or hiding meshes.
  */
 export function targetSets(model) {
@@ -35,6 +36,7 @@ export function targetSets(model) {
 		solid: [...walls, ...walkable],
 		walkable: new Set(walkable),
 		walkableList: walkable,
+		obstacles: [...L.main, ...walls],
 	};
 }
 

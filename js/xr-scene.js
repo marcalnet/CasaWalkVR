@@ -12,7 +12,9 @@ export const PLINTH_HEIGHT = 0.6; // low table: you look down into the rooms
 // which showed as flickering polygon-shaped patches all over the floors.
 export const PLINTH_REST = PLINTH_HEIGHT + 0.004;
 const PLINTH_MARGIN = 0.2; // table left around the model (it is ~1.2 m across)
-const PLINTH_FRONT_GAP = 0.3; // from where you stand to the plinth's front edge
+// From where you stand to the plinth's front edge (60 cm at the user's request:
+// you can't walk around in the gallery, and 30 cm put the model too close).
+const PLINTH_FRONT_GAP = 0.6;
 export const EYE_BELOW_TOP = 0.11; // eyes are about this far below the top of the head
 export const FIGURE_HEIGHT = 1.75; // the scale figure beside the dollhouse, metres at the model's scale
 export const FIGURE_GAP = 0.45; // how far in front of the home it stands, metres at the model's scale
@@ -85,6 +87,18 @@ export function fitPlinth({ pedestal, gallery, plinthMaterials: M }, w, d) {
 	return { W, D, distance };
 }
 
+/**
+ * Puts the scale plate on the plinth top, near its front edge on the right,
+ * tilted up towards you like a museum caption (the plinth is W x D).
+ */
+export function placePlate(plate, pedestal, W, D) {
+	const ph = plate.geometry.parameters?.height ?? 0.05;
+	const tilt = THREE.MathUtils.degToRad(35); // up from lying flat
+	plate.rotation.set(-(Math.PI / 2 - tilt), 0, 0);
+	plate.position.set(W / 2 - 0.15, PLINTH_HEIGHT + Math.sin(tilt) * ph / 2 + 0.002, D / 2 - 0.065);
+	pedestal.add(plate);
+}
+
 /** Sky for walk mode in the VR view: follows the head (a child of the camera), coloured by recolourSphere(). */
 export function buildWalkSky(camera) {
 	const sky = new THREE.Mesh(gradientSphere(200, 0xcce4fc, 0xffffff), new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide, depthWrite: false, fog: false }));
@@ -106,7 +120,12 @@ export function buildMarkers() {
 	body.position.y = 0.65;
 	const head = new THREE.Mesh(new THREE.SphereGeometry(0.15, 20, 12), mat);
 	head.position.y = 1.55;
-	const ring = new THREE.Mesh(new THREE.RingGeometry(0.3, 0.4, 32).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xd9822b, side: THREE.DoubleSide }));
+	// The ring, with a small arrow in front: the way you will face (the
+	// marker turns with it). One geometry, so one draw call.
+	const arrow = new THREE.ShapeGeometry(new THREE.Shape([new THREE.Vector2(-0.14, 0.42), new THREE.Vector2(0.14, 0.42), new THREE.Vector2(0, 0.62)]));
+	const ringGeo = mergeGeometries([new THREE.RingGeometry(0.3, 0.4, 32), arrow]).rotateX(-Math.PI / 2);
+	arrow.dispose();
+	const ring = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({ color: 0xd9822b, side: THREE.DoubleSide }));
 	ring.position.y = 0.02;
 	m.add(body, head, ring);
 	m.visible = false;
