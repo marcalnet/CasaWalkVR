@@ -12,9 +12,13 @@
 //   a landing or a floor: the arc meets it as a red landing, a laser pointing
 //   at it finds no floor, and the feet never stand on it. It blocks no
 //   movement.
+//   Glass (pieces named glass..., or a transparent material: optimise.js
+//   GLASS_NAME, isGlassMaterial) is never a landing or a floor either. It is
+//   still furniture: met by the arc (as a red landing) only where furniture
+//   is met, in a home with several levels; flown through in a one-level one.
 
 import * as THREE from 'three';
-import { isOpening, isWater } from './optimise.js';
+import { isOpening, isWater, isGlass } from './optimise.js';
 
 export const UP = new THREE.Vector3(0, 1, 0);
 export const DOWN = new THREE.Vector3(0, -1, 0);
@@ -34,11 +38,12 @@ export function targetSets(model) {
 	const anywhere = model.multiLevel || L.floors.length === 0;
 	const water = L.main.filter((m) => isWater(m));
 	const furniture = L.main.filter((m) => !isOpening(m) && !water.includes(m));
-	const walkable = [...L.floors, ...L.ground, ...(anywhere ? furniture : [])];
+	const glass = furniture.filter((m) => isGlass(m));
+	const walkable = [...L.floors, ...L.ground, ...(anywhere ? furniture.filter((m) => !glass.includes(m)) : [])];
 	return {
 		pointable: [...L.main, ...walls, ...L.floors],
 		floors: [...L.floors, ...L.ground, ...water], // (water is met first, and gives no floor: findFloor)
-		solid: [...walls, ...walkable, ...water], // (met, never valid: not walkable)
+		solid: [...walls, ...walkable, ...water, ...(anywhere ? glass : [])], // (met, never valid: not walkable)
 		walkable: new Set(walkable),
 		walkableList: walkable,
 		obstacles: [...L.main, ...walls],

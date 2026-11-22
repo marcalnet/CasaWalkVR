@@ -786,12 +786,12 @@ check('at the scale model, B never leaves VR', (await state()).presenting && (aw
 		return { back: back.toArray(), in: inn.toArray(), bw, iw, gap, shown: x.modes.dollhouse.doorGroup.visible && x.stage.visible,
 			ahead: +Math.hypot(inn.x - head.x, inn.z - head.z).toFixed(2), below: +(head.y - inn.y).toFixed(2), topDown: +down(top).toFixed(1), modelDown: +Math.max(...corners).toFixed(1) };
 	});
-	check('the doors at the scale model: a big Walk in →, a small ← Back to its left, at elbow height within reach, under the line to the model, shown without opening a menu',
-		doors.shown && doors.iw > 0.25 && doors.bw <= doors.iw / 2 && doors.gap >= 0.02 && doors.ahead < 0.45 && doors.below > 0.5 && doors.below < 0.7 && doors.topDown > doors.modelDown, JSON.stringify(doors));
-	// Seated: the doors stay at elbow height (60 cm below the eyes).
+	check('the doors at the scale model: a big Walk in →, a small ← Back to its left, at waist height within reach, under the line to the model, shown without opening a menu',
+		doors.shown && doors.iw > 0.25 && doors.bw <= doors.iw / 2 && doors.gap >= 0.02 && doors.ahead < 0.45 && doors.below > 0.55 && doors.below < 0.75 && doors.topDown > doors.modelDown, JSON.stringify(doors));
+	// Seated: the doors stay at waist height (65 cm below the eyes).
 	await page.evaluate(() => window.__device.position.set(0, 1.1, 0)); await frames(10);
 	const seated = await page.evaluate(() => { const x = window.__casawalk.xr, V = x.rig.position.constructor; return +(x.headWorld().y - x.modes.dollhouse.doors.keys.get('in').face.getWorldPosition(new V()).y).toFixed(2); });
-	check('seated, the doors are still at elbow height', seated > 0.5 && seated < 0.7, JSON.stringify({ seated }));
+	check('seated, the doors are still at waist height', seated > 0.55 && seated < 0.75, JSON.stringify({ seated }));
 	await page.evaluate(() => window.__device.position.set(0, 1.6, 0)); await frames(10);
 	await lookDown(-0.85); await frames(3);
 	await shot('plinth-doors');

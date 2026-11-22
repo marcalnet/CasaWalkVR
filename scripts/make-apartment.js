@@ -1,4 +1,4 @@
-// Generates examples/urban-flat.sh3d: CasaWalk's small sample home, the second the page offers
+// Generates examples/apartment.sh3d ("Apartment"; called Urban Flat until 23 Nov 2026): CasaWalk's small sample home, the second the page offers
 // ("Try a sample home", js/samples.js). Designed for CasaWalk, 22 Nov 2026 (plan "Open L").
 // A one-bedroom city flat of about 50 m² (54 m² to the wall axes) on a corner, with a balcony.
 // The entrance opens straight into one 34 m² space (dining, kitchen, living) wrapped round by glass;
@@ -13,14 +13,14 @@
 // small rooms, furniture close together, a balcony, glass on two sides.
 //
 // Written like scripts/make-example.js; reproducible output (fixed zip dates, sorted entries).
-//   npm run urban-flat     (commit the output)
+//   npm run apartment     (commit the output)
 
 import fs from 'node:fs';
 import path from 'node:path';
 import { zipSync, strToU8 } from 'fflate';
 import { materials, argb } from './sample-palette.js';
 
-const out = path.resolve(import.meta.dirname, '../examples/urban-flat.sh3d');
+const out = path.resolve(import.meta.dirname, '../examples/apartment.sh3d');
 fs.mkdirSync(path.dirname(out), { recursive: true });
 const PI = Math.PI;
 
@@ -31,7 +31,7 @@ const b = (x0, y0, z0, x1, y1, z1, mat) => ({ box: [[x0, y0, z0], [x1, y1, z1]],
 const c = (cx, cz, r, y0, y1, mat, seg = 12, r1 = r) => ({ cyl: [cx, cz, r, r1, y0, y1, seg], mat });
 
 function toObj(name, solids) {
-	const lines = [`# ${name}: generated for CasaWalk (Urban Flat)`, `mtllib ${name}.mtl`];
+	const lines = [`# ${name}: generated for CasaWalk (Apartment)`, `mtllib ${name}.mtl`];
 	const used = new Set();
 	let n = 0;
 	const all = [];
@@ -278,7 +278,7 @@ room('Landing', argb('putty'), rect(350, -180, 590, 0), { ceilingVisible: 'false
 
 const home = [
 	"<?xml version='1.0'?>",
-	"<home version='7200' name='Urban Flat' camera='observerCamera' wallHeight='255'>",
+	"<home version='7200' name='Apartment' camera='observerCamera' wallHeight='255'>",
 	"  <environment groundColor='FFB9B6AE' skyColor='FFCCE4FC' lightColor='FFD0D0D0' ceillingLightColor='FFD0D0D0'/>",
 	"  <compass x='-120' y='-120' diameter='100' northDirection='0.0' longitude='0.0407' latitude='0.8529' timeZone='Europe/Paris'/>",
 	// Just inside the entrance, looking across the room to the glass and the balcony.

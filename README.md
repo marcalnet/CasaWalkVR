@@ -19,7 +19,7 @@ It runs in the Meta Quest Browser: no app store, no developer mode, no sideloadi
 ## Using it
 
 1. Open the app's URL (GitHub Pages) in a browser.
-2. **Open file**, drop a file anywhere on the page (on a computer), or paste a share link (Dropbox, Google Drive, OneDrive, GitHub; see [Links](#links-from-storage-services)) and press **Load**. No file to hand? **Try a sample home**: **Pond House**, a house by a pond with two levels, a floating stair, a deck and a terrace, or **Urban Flat**, a one-bedroom corner flat with a balcony, both designed for CasaWalk (more will follow). A link opens one directly: `?sample=pond-house` or `?sample=urban-flat`. The model's details show at the bottom right.
+2. **Open file**, drop a file anywhere on the page (on a computer), or paste a share link (Dropbox, Google Drive, OneDrive, GitHub; see [Links](#links-from-storage-services)) and press **Load**. No file to hand? **Try a sample home**: **Pond House**, a house by a pond with two levels, a floating stair, a deck and a terrace, or the **Apartment**, a one-bedroom corner flat with a balcony, both designed for CasaWalk (more will follow). A link opens one directly: `?sample=pond-house` or `?sample=apartment`. The model's details show at the bottom right.
 3. In the card at the top right, choose the **Time of day** (morning by default, noon, sunset or night), switch **Shadows** and **Depth shading** on or off, and press the big **Enter VR** button. The files card at the top left can be hidden with **–**.
 4. Drag to orbit, scroll or pinch to zoom, right-drag to pan.
 5. Next time, tap the model under **Recent**: the last 5 models are kept in the browser, so reopening one needs no download. For a model opened from a link, **↻** downloads the latest version from the same link (handy after editing the home on the Mac). The last link you used is also remembered in the link box.
@@ -90,7 +90,7 @@ Press **Enter VR →** once a model is open: it starts at the scale model. The a
 
 **Scale model**
 - The home stands on a low museum plinth in a gallery room, 60 cm in front of you. You look down at it as a 2 m tall person would, whether you sit or stand, so it's easy to look into the rooms. If you change position, the Quest's own recentre (hold the Meta button) brings the plinth in front of you and measures your height again. **Passthrough** (View tab) swaps the gallery for your own room; the model stays exactly where it is.
-- **Walk in →** (big) and **← Back** (leave VR, small, on its left) also float in front of you at elbow height, under the model: press them with a fingertip, a controller's tip, or point and pull the trigger.
+- **Walk in →** (big) and **← Back** (leave VR, small, on its left) also float in front of you at waist height, under the model: press them with a fingertip, a controller's tip, or point and pull the trigger.
 - **Thumbstick** left/right turns it; up/down zooms it (½× to 4×). A brass plate on the plinth shows its true scale (e.g. 1:42); let go of a zoom near a standard scale (1:10, 1:20, 1:25, 1:50, 1:100…) and it settles on it with a light tick.
 - Point the **laser** at a room: an orange marker hops to the room's clear middle, with the room's name above it and a small arrow for the way you'll face. **Trigger** takes you there at real size. (Pointing at the garden, you land where you point, clear of the walls, facing the house. OBJ and GLB files have no rooms: you land where you point.)
 - **Grip** and move your hand to lift it or move it; it never sinks into the plinth.
@@ -194,7 +194,7 @@ Optional extras:
 ```bash
 npm run fixtures       # download two public Sweet Home 3D example homes as more test files
 npm run example        # rebuild examples/example-home.sh3d, the tests' small fixture (after editing scripts/make-example.js)
-npm run samples        # rebuild the sample homes in examples/ (scripts/make-pond-house.js, make-urban-flat.js; colours from scripts/sample-palette.js)
+npm run samples        # rebuild the sample homes in examples/ (scripts/make-pond-house.js, make-apartment.js; colours from scripts/sample-palette.js)
 npm run ui-assets      # redraw the draft interface artwork in assets/ui/
 npm run vendor         # copy three.js, three-mesh-bvh, fflate and the font into vendor/ (after changing versions)
 ```
@@ -242,7 +242,7 @@ js/pairing.js     the direct computer-to-headset link (PeerJS)
 js/sh3d.js        SH3D parser and scene builder (no DOM; Node-testable)
 js/formats.js     zip / OBJ / GLB / DAE / 3DS loading, unit detection
 sw.js             service worker: offline use, and no mix of old and new files after an update
-examples/         sample homes (Pond House, Urban Flat: scripts/make-*.js, one palette in scripts/sample-palette.js) and the tests' small example home (scripts/make-example.js); original content
+examples/         sample homes (Pond House, Apartment: scripts/make-*.js, one palette in scripts/sample-palette.js) and the tests' small example home (scripts/make-example.js); original content
 js/samples.js     the sample homes the page offers (one entry per home)
 vendor/           three.js, three-mesh-bvh, fflate, PeerJS and the Kalam font (with licences)
 scripts/          vendoring, fixtures, example home, local server, screenshots, emulated headset test

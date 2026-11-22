@@ -97,3 +97,42 @@ test('water is never a landing or a floor, in any language; it blocks nothing', 
 	assert.equal(findFloor(ray, t.floors, V(-1.5, 0, 1.5), 1), null, 'pointing at the pond: no floor, no marker');
 	assert.ok(findFloor(ray, t.floors, V(2, 0, 2), 1), 'beside it: the floor');
 });
+
+// Glass (the user's decision, with the Pond House stair's glass balustrade):
+// never a landing or a floor; by name or by a transparent material. It blocks
+// no more than before: met by the arc only where furniture is (several levels).
+test('glass is never a landing, by name or transparent material; it blocks nothing new', async () => {
+	const { GLASS_NAME, isGlass, isGlassMaterial, optimiseModel } = await import('../js/optimise.js');
+	for (const n of ['Glass balustrade', 'Glazing', 'Glazed screen', 'Mesa de vidrio', 'Table en verre', 'Glasscheibe', 'Glas', 'Vetro']) assert.ok(GLASS_NAME.test(n), n);
+	for (const n of ['Table', 'Sofa', 'Bookcase', 'Overglaze vase']) assert.ok(!GLASS_NAME.test(n), n);
+	assert.ok(isGlassMaterial(new THREE.MeshLambertMaterial({ transparent: true, opacity: 0.3 })) && !isGlassMaterial(mat));
+	const piece = new THREE.Group();
+	piece.userData.piece = { name: 'Glass table', kind: 'piece' };
+	const inner = new THREE.Mesh(new THREE.BoxGeometry(), mat);
+	piece.add(inner);
+	assert.ok(isGlass(inner), 'a mesh inside a glass piece, before the merge');
+	// The merge: a stair's oak treads and its see-through rail in one piece; only the rail is glass.
+	const root = new THREE.Group(), main = new THREE.Group();
+	main.name = 'main'; root.add(main);
+	const stair = new THREE.Group();
+	stair.userData.piece = { name: 'Stair', kind: 'piece' };
+	stair.add(new THREE.Mesh(new THREE.BoxGeometry(1, 0.1, 1), new THREE.MeshLambertMaterial({ color: 0x996633 })),
+		new THREE.Mesh(new THREE.BoxGeometry(0.01, 1, 1), new THREE.MeshLambertMaterial({ transparent: true, opacity: 0.25 })));
+	main.add(stair);
+	const merged = optimiseModel(root).layers.main.children;
+	assert.equal(merged.filter((m) => m.userData.glass).length, 1, 'the rail merges as glass, the treads do not');
+	// Several levels: furniture can be stood on, glass not; the arc meets it as a red landing.
+	const h = home({ multiLevel: true });
+	const pane = box(1, 0.02, 1, -1.5, 1.0, 1.5, { glass: true }); // a glass table top, 1 m up
+	h.model.layers.main.add(pane);
+	let t = targetSets(h.model);
+	assert.ok(!t.walkable.has(pane) && t.walkable.has(h.table), 'furniture can be stood on (several levels), glass not');
+	const seg = hitSegment(ray, V(-1.5, 2, 1.5), V(-1.5, -0.1, 1.5), t);
+	assert.ok(seg && !seg.valid, 'the arc meets the glass: a red landing');
+	// One level: the arc flies through furniture, glass included, to the floor.
+	const one = home();
+	one.model.layers.main.add(box(1, 0.02, 1, -1.5, 1.0, 1.5, { glass: true }));
+	t = targetSets(one.model);
+	const through = hitSegment(ray, V(-1.5, 2, 1.5), V(-1.5, -0.1, 1.5), t);
+	assert.ok(through && through.valid && Math.abs(through.point.y) < 0.02, 'one level: through the glass to the floor');
+});

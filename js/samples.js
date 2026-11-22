@@ -5,7 +5,8 @@
 // they double as test homes (SPEC.md, "Sample homes"). Pure: no page code.
 //
 // Each: id (the ?sample= link), name, line (what it shows), file, picture,
-// size (as shown), credit (for a home "after" a famous one; '' for our own).
+// size (as shown), credit (for a home "after" a famous one; '' for our own),
+// aliases (old ?sample= ids that still open it, so old links never break).
 
 export const SAMPLES = [
 	{
@@ -18,17 +19,18 @@ export const SAMPLES = [
 		credit: '',
 	},
 	{
-		id: 'urban-flat',
-		name: 'Urban Flat',
+		id: 'apartment',
+		name: 'Apartment',
 		line: 'A one-bedroom corner flat: one open room, balcony, glass on three sides',
-		file: 'examples/urban-flat.sh3d',
-		picture: 'examples/urban-flat.jpg',
+		file: 'examples/apartment.sh3d',
+		picture: 'examples/apartment.jpg',
 		size: '47 kB',
 		credit: '',
+		aliases: ['urban-flat'], // (its name until 23 Nov 2026)
 	},
 ];
 
 /** The sample for a ?sample= value, or null (only listed ids: the link never names a file). */
 export function sampleById(id) {
-	return SAMPLES.find((s) => s.id === id) ?? null;
+	return SAMPLES.find((s) => s.id === id || s.aliases?.includes(id)) ?? null;
 }

@@ -64,6 +64,29 @@ export function isWater(obj) {
 	return false;
 }
 
+/**
+ * Glass is never stood on or landed on either (the user's decision, with the
+ * Pond House stair's glass balustrade): pieces named for glass, in a few
+ * languages (German and Dutch: the start of a word), and any transparent
+ * material on furniture (opacity below 1; doors and windows are openings).
+ * It blocks no more than before: it is furniture, met only where furniture is.
+ */
+export const GLASS_NAME = /\b(glass|glazing|glazed|vidrio|verre|vetro|vidre)\b|\bglas/i; // (German joins words: Glasscheibe)
+
+/** A glass material: see-through as loaded (the model's own opacity, before any headset setting). */
+export function isGlassMaterial(m) {
+	return !!m && m.opacity < 1;
+}
+
+/** True for a glass piece (by its Sweet Home 3D name). Merged meshes carry it as userData.glass. */
+export function isGlass(obj) {
+	for (let o = obj; o; o = o.parent) {
+		if (o.userData?.glass) return true;
+		if (o.userData?.piece) return GLASS_NAME.test(o.userData.piece.name ?? '');
+	}
+	return false;
+}
+
 /** Which layer an object of the loaded scene belongs to, from its top-level group name. */
 function layerOf(obj, root) {
 	let o = obj;
@@ -139,6 +162,7 @@ export function optimiseModel(root) {
 		const storey = storeyOf(o);
 		const opening = layer === 'main' && isOpening(o); // doors and windows merge on their own
 		const water = layer === 'main' && !opening && isWater(o); // and so does water
+		const glassPiece = layer === 'main' && !opening && !water && isGlass(o); // and glass (also by material, below)
 		const m = o.matrixWorld;
 		const mirrored = m.determinant() < 0;
 		const g0 = o.geometry;
@@ -155,9 +179,10 @@ export function optimiseModel(root) {
 			const g = extract(base, part.start, part.count, !!part.material.vertexColors);
 			g.applyMatrix4(m);
 			if (mirrored) flipWinding(g);
-			const key = `${layer}#${storey}#${opening ? 'opening' : water ? 'water' : ''}#${materialKey(part.material)}`;
+			const glass = glassPiece || (layer === 'main' && !opening && !water && isGlassMaterial(part.material));
+			const key = `${layer}#${storey}#${opening ? 'opening' : water ? 'water' : glass ? 'glass' : ''}#${materialKey(part.material)}`;
 			let b = buckets.get(key);
-			if (!b) { b = { layer, storey, opening, water, material: part.material, geoms: [] }; buckets.set(key, b); }
+			if (!b) { b = { layer, storey, opening, water, glass, material: part.material, geoms: [] }; buckets.set(key, b); }
 			b.geoms.push(g);
 		}
 	});
@@ -183,6 +208,7 @@ export function optimiseModel(root) {
 		mesh.userData.storey = b.storey;
 		if (b.opening) mesh.userData.opening = true;
 		if (b.water) mesh.userData.water = true;
+		if (b.glass) mesh.userData.glass = true;
 		layers[b.layer].add(mesh);
 		triangles += merged.index.count / 3;
 		drawCalls++;

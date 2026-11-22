@@ -40,12 +40,12 @@ const ROTATE_SPEED = 1.6; // rad/s at full stick
 const ZOOM_SPEED = 1.2; // e-folds/s at full stick
 // The doors at the scale model, metres (the user's Quest 2 tests): Walk in →
 // is the big one, ← Back about a third as long, the same height, on its left.
-// They float at elbow height in front of you (on the plinth's edge you had to
+// They float at waist height in front of you (on the plinth's edge you had to
 // crouch to touch them with bare hands), close enough to touch, and low enough
-// to stay under the line from the eyes to the model (60° below the horizon at
+// to stay under the line from the eyes to the model (65° below the horizon at
 // their middle; the model's near edge is about 58° down from where you stand).
 const DOOR_IN = [0.32, 0.09], DOOR_BACK = [0.1, 0.09];
-const DOOR_BELOW_EYES = 0.6; // elbow height, standing or seated (the lift keeps the eyes at the same height)
+const DOOR_BELOW_EYES = 0.65; // waist height (the user's word), standing or seated (the lift keeps the eyes at the same height)
 const DOOR_AHEAD = 0.3; // in front of where you stand
 const DOOR_TILT = 35; // degrees from flat, like the scale plate: the face turned up towards your eyes
 const DOOR_FOLLOW = 0.08; // the doors move to a new head height once it differs by this much
@@ -87,7 +87,7 @@ export class Dollhouse {
 	}
 
 	/**
-	 * The doors in front of where you stand, at elbow height for eyes at
+	 * The doors in front of where you stand, at waist height for eyes at
 	 * eyeY (stage space; by default where the lift puts them), tilted up
 	 * towards you: Walk in → in the middle, ← Back 3 cm to its left.
 	 */

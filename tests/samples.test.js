@@ -6,6 +6,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { unzipSync } from 'fflate';
 import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
+import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
 import { parseHome, buildHome } from '../js/sh3d.js';
 import { prepareObjText } from '../js/formats.js';
 import { SAMPLES, sampleById } from '../js/samples.js';
@@ -17,13 +18,27 @@ const ROOT = path.resolve(import.meta.dirname, '..');
 async function open(entries) {
 	const home = parseHome(new TextDecoder().decode(entries['Home.xml']));
 	const built = await buildHome(home, {
-		loadModel: async (ref) => new OBJLoader().parse(prepareObjText(new TextDecoder().decode(entries[ref])).replace(/^\s*mtllib.*$/gm, '')),
+		// The model with its colours (MTL), as the app loads it: glass is told by its opacity.
+		loadModel: async (ref) => {
+			const text = prepareObjText(new TextDecoder().decode(entries[ref]));
+			const loader = new OBJLoader();
+			const lib = text.match(/^\s*mtllib\s+(.+?)\s*$/m)?.[1];
+			const folder = ref.includes('/') ? ref.slice(0, ref.lastIndexOf('/') + 1) : '';
+			if (lib && entries[folder + lib]) {
+				const creator = new MTLLoader().parse(new TextDecoder().decode(entries[folder + lib]), '');
+				creator.preload();
+				loader.setMaterials(creator);
+			}
+			return loader.parse(text.replace(/^\s*mtllib.*$/gm, ''));
+		},
 	});
 	return { home, built };
 }
 
 test('the sample list: unique ids, each with its file and picture in examples/', () => {
-	assert.deepEqual(SAMPLES.map((s) => s.id).slice(0, 2), ['pond-house', 'urban-flat'], 'Pond House first, then Urban Flat');
+	assert.deepEqual(SAMPLES.map((s) => s.id).slice(0, 2), ['pond-house', 'apartment'], 'Pond House first, then the Apartment');
+	assert.equal(sampleById('urban-flat')?.id, 'apartment', 'its old link still opens it');
+	assert.equal(sampleById('nope'), null);
 	assert.equal(new Set(SAMPLES.map((s) => s.id)).size, SAMPLES.length);
 	for (const s of SAMPLES) {
 		assert.match(s.id, /^[a-z0-9-]+$/);
@@ -57,10 +72,13 @@ test('Pond House: 2 levels, 17 rooms (14 named; the pond is water, not a room), 
 	const t = targetSets({ layers, multiLevel: true });
 	const water = layers.main.children.filter((m) => m.userData.water);
 	assert.ok(water.length > 0 && water.every((m) => !t.walkable.has(m)) && t.walkableList.some((m) => layers.main.children.includes(m)));
+	// The stair's glass balustrade (and the shower's glass) is never stood on either.
+	const glass = layers.main.children.filter((m) => m.userData.glass);
+	assert.ok(glass.length > 0 && glass.every((m) => !t.walkable.has(m)), 'glass is never a landing');
 });
 
-test('Urban Flat: one level without <level> elements, named zones in one open room, lamps, nothing missing', async () => {
-	const entries = unzipSync(new Uint8Array(fs.readFileSync(path.join(ROOT, 'examples/urban-flat.sh3d'))));
+test('Apartment: one level without <level> elements, named zones in one open room, lamps, nothing missing', async () => {
+	const entries = unzipSync(new Uint8Array(fs.readFileSync(path.join(ROOT, 'examples/apartment.sh3d'))));
 	const xml = new TextDecoder().decode(entries['Home.xml']);
 	assert.doesNotMatch(xml, /<level /, 'the parser path without levels');
 	const { built } = await open(entries);
