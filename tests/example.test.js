@@ -86,11 +86,11 @@ test('morning is the default light; lamps show at sunset and at night only', asy
 
 test('offline worker only handles the app\'s own files', () => {
 	const handlers = {};
-	const self = { location: { href: 'https://example.github.io/SweetHomeVR/sw.js' }, addEventListener: (n, f) => { handlers[n] = f; }, skipWaiting() {}, clients: {} };
+	const self = { location: { href: 'https://example.github.io/CasaWalk/sw.js' }, addEventListener: (n, f) => { handlers[n] = f; }, skipWaiting() {}, clients: {} };
 	const ctx = vm.createContext({ self, URL, Set, Promise, setTimeout, caches: {}, fetch: () => Promise.reject(new Error('no network')) });
 	vm.runInContext(`${fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8')}\nself.appKey = appKey;`, ctx);
 	const key = self.appKey;
-	const base = 'https://example.github.io/SweetHomeVR/';
+	const base = 'https://example.github.io/CasaWalk/';
 	assert.equal(key(base), base);
 	assert.equal(key(`${base}?model=https://x.example/a.sh3d`), base); // the query is ignored
 	assert.equal(key(`${base}js/main.js`), `${base}js/main.js`);

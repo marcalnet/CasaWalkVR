@@ -32,7 +32,7 @@ const MATERIALS = {
 const b = (x0, y0, z0, x1, y1, z1, mat) => ({ min: [x0, y0, z0], max: [x1, y1, z1], mat });
 
 function toObj(name, boxes) {
-	const lines = [`# ${name}: generated for Sweet Home VR`, `mtllib ${name}.mtl`];
+	const lines = [`# ${name}: generated for CasaWalk`, `mtllib ${name}.mtl`];
 	const used = new Set();
 	let n = 0;
 	for (const { min: [x0, y0, z0], max: [x1, y1, z1], mat } of boxes) {

@@ -87,7 +87,7 @@ test('pairing names are random, well formed, and checked', () => {
 	for (const bad of ['', 'casawalk-', 'casawalk-ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'casawalk-abc', `casawalk-${'a'.repeat(27)}`, 'peerjs-anything', '<script>', null, 42]) assert.equal(isPairId(bad), false, String(bad));
 	// Web Launch carries the pairing name to the headset as ?pair=.
 	const id = newPairId();
-	const target = new URL(new URL(sendToQuestUrl('https://example.github.io/SweetHomeVR/?model=x', { pair: id })).searchParams.get('url'));
+	const target = new URL(new URL(sendToQuestUrl('https://example.github.io/CasaWalk/?model=x', { pair: id })).searchParams.get('url'));
 	assert.equal(target.searchParams.get('pair'), id);
 	assert.equal(target.searchParams.get('model'), null);
 });

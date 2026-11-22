@@ -6,7 +6,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { shareLink, checkLink, resolveOneDrive, resolveGoogleDrive, looksLikeWebPage, LinkError, ONEDRIVE_TOKEN_URL, ONEDRIVE_SHARES_URL, GOOGLE_DRIVE_API } from '../js/links.js';
 
-const page = 'https://example.github.io/SweetHomeVR/';
+const page = 'https://example.github.io/CasaWalk/';
 
 test('Google Drive: every share link form gives the file id', () => {
 	for (const link of [

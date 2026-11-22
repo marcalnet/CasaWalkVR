@@ -77,7 +77,7 @@ test('zip bombs are refused before anything is unpacked', () => {
 });
 
 test('only https links, or links on this site, may be downloaded', () => {
-	const page = 'https://example.github.io/SweetHomeVR/';
+	const page = 'https://example.github.io/CasaWalk/';
 	assert.equal(checkLink('https://host.example/a/home.sh3d', page).ok, true);
 	assert.equal(checkLink('https://host.example/a/home.sh3d', page).sameOrigin, false);
 	assert.equal(checkLink('tests/fixtures/x.sh3d', page).sameOrigin, true);
@@ -97,13 +97,13 @@ test('only https links, or links on this site, may be downloaded', () => {
 });
 
 test('Send to my Quest: Meta\'s Web Launch address carries the viewer and the pasted link', () => {
-	const page = 'https://example.github.io/SweetHomeVR/?model=old#x';
+	const page = 'https://example.github.io/CasaWalk/?model=old#x';
 	const dropbox = 'https://www.dropbox.com/scl/fi/abc/My%20home.sh3d?rlkey=k&dl=0';
 	const launch = new URL(sendToQuestUrl(page, dropbox));
 	assert.equal(launch.origin + launch.pathname, 'https://www.oculus.com/open_url/');
 	// What opens on the headset: this viewer, with the link as ?model= (old query and # removed).
 	const target = new URL(launch.searchParams.get('url'));
-	assert.equal(target.origin + target.pathname, 'https://example.github.io/SweetHomeVR/');
+	assert.equal(target.origin + target.pathname, 'https://example.github.io/CasaWalk/');
 	assert.equal(target.searchParams.get('model'), dropbox); // survives both rounds of encoding unchanged
 	assert.equal(target.hash, '');
 	assert.deepEqual([...launch.searchParams.keys()], ['url']);
@@ -112,7 +112,7 @@ test('Send to my Quest: Meta\'s Web Launch address carries the viewer and the pa
 	assert.equal(arrived.ok, true);
 	assert.equal(arrived.sameOrigin, false);
 	// Without a link, the viewer alone.
-	assert.equal(new URL(sendToQuestUrl(page)).searchParams.get('url'), 'https://example.github.io/SweetHomeVR/');
+	assert.equal(new URL(sendToQuestUrl(page)).searchParams.get('url'), 'https://example.github.io/CasaWalk/');
 	// Web Launch only takes https pages: nothing is built from a local test server.
 	assert.equal(sendToQuestUrl('http://localhost:8123/', dropbox), null);
 	assert.equal(sendToQuestUrl('not a url'), null);
