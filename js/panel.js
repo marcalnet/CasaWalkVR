@@ -8,7 +8,7 @@
 //           Turn, Height, View): every option is one click away, which beats
 //           a dropdown in VR. More than CHOICE_MAX options become a stepper
 //           (‹ value ›).
-//   slider  a value from 0 to 1 (See-through): press the trigger on the
+//   slider  a value from 0 to 1: press the trigger on the
 //           track and drag.
 //   dropdown  a list that can be long (Levels: a home can have many): the
 //           cell shows the current option; a click opens the list over the
@@ -56,7 +56,7 @@ export class Panel {
 		this.cells = new Map([...this.tabs.flatMap((t) => t.rows), ...this.actions].flat().map((c) => [c.id, c]));
 		this.title = title;
 		this.hint = hint;
-		this.close = close; // a Close key (×) at the end of the row of tabs
+		this.close = close; // a Close key (×) in the top-right corner, in the title's row
 		this.background = background; // an image drawn under everything (the board's frame and paper), once loaded
 		this.hover = null; // key of the hovered target
 		this.open = null; // id of the dropdown whose list is open
@@ -108,13 +108,14 @@ export class Panel {
 
 	/** Cell rectangles in canvas pixels (and the panel height). */
 	layout() {
-		let y = PAD + (this.title ? TITLE_H : 0);
+		let y = PAD + (this.title || this.close ? TITLE_H : 0);
 		const boxes = [];
+		// The Close key: the board's top-right corner, where a window's close is
+		// (the user's bare-hands test: beside the last tab it read as a tab).
+		this.closeBox = this.close ? { x: this.size.w - PAD - TAB_H, y: PAD + (TITLE_H - TAB_H) / 2 - 4, w: TAB_H, h: TAB_H } : null;
 		if (this.tabs.length > 1) {
-			const closeW = this.close ? TAB_H + 8 : 0;
-			const full = this.size.w - 2 * PAD - closeW, w = (full - (this.tabs.length - 1) * 8) / this.tabs.length;
+			const full = this.size.w - 2 * PAD, w = (full - (this.tabs.length - 1) * 8) / this.tabs.length;
 			this.tabBoxes = this.tabs.map((t, i) => ({ id: t.id, label: t.label, x: PAD + i * (w + 8), y, w, h: TAB_H }));
-			this.closeBox = this.close ? { x: this.size.w - PAD - TAB_H, y, w: TAB_H, h: TAB_H } : null;
 			y += TAB_H + TAB_GAP;
 		} else {
 			this.tabBoxes = [];
@@ -247,7 +248,7 @@ export class Panel {
 		this.texture.needsUpdate = true;
 	}
 
-	/** The row of tabs: the shown one white and raised, the others flat; then the Close key. */
+	/** The Close key (top-right corner), then the row of tabs: the shown one white and raised, the others flat. */
 	drawTabs(ctx) {
 		if (this.closeBox) {
 			const b = this.closeBox, hot = this.hover === 'close|';

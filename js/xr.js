@@ -146,7 +146,6 @@ export class XRExperience {
 		this.plinthSize = { W, D };
 		this.plinthDistance = distance; // from where you stand to the plinth's centre
 		placePlate(this.plate.mesh, this.pedestal, W, D);
-		this.modes?.dollhouse.placeDoors(); // (the doors on the plinth's front edge)
 	}
 
 	// -----------------------------------------------------------------------

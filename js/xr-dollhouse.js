@@ -15,7 +15,7 @@
 import * as THREE from 'three';
 import { UP, DOWN } from './xr-targets.js';
 import { yawOf } from './xr-input.js';
-import { PLINTH_REST, PLINTH_HEIGHT, EYE_BELOW_TOP, buildMarkers } from './xr-scene.js';
+import { PLINTH_REST, EYE_BELOW_TOP, buildMarkers } from './xr-scene.js';
 import { KeyPad } from './keys.js';
 import { roomAt, roomLanding, alongAxis, clearOfWalls, headingOf } from './rooms.js';
 import { Label } from './panel.js';
@@ -38,7 +38,17 @@ export function nearestScale(ratio) {
 }
 const ROTATE_SPEED = 1.6; // rad/s at full stick
 const ZOOM_SPEED = 1.2; // e-folds/s at full stick
-const DOOR_SIZE = [0.24, 0.11]; // the doors on the plinth, metres: big, seen from where you stand
+// The doors at the scale model, metres (the user's Quest 2 tests): Walk in →
+// is the big one, ← Back about a third as long, the same height, on its left.
+// They float at elbow height in front of you (on the plinth's edge you had to
+// crouch to touch them with bare hands), close enough to touch, and low enough
+// to stay under the line from the eyes to the model (60° below the horizon at
+// their middle; the model's near edge is about 58° down from where you stand).
+const DOOR_IN = [0.32, 0.09], DOOR_BACK = [0.1, 0.09];
+const DOOR_BELOW_EYES = 0.6; // elbow height, standing or seated (the lift keeps the eyes at the same height)
+const DOOR_AHEAD = 0.3; // in front of where you stand
+const DOOR_TILT = 35; // degrees from flat, like the scale plate: the face turned up towards your eyes
+const DOOR_FOLLOW = 0.08; // the doors move to a new head height once it differs by this much
 const MARKER_HEIGHT = 1.7; // metres at the model's scale (the "stand here" figure)
 // A landing spot must be free of furniture from this height above the floor
 // (rugs and thresholds don't count) up to head height, around a body's width.
@@ -59,14 +69,14 @@ export class Dollhouse {
 		this.labels = this.markers.map(() => new Label());
 		for (const l of this.labels) xr.scene.add(l.mesh);
 		xr.hideFromPhotos(...this.markers, ...this.labels.map((l) => l.mesh));
-		// The doors on the plinth (the user's Quest 2 test): always there, without
-		// opening the orb. ← Back (leave VR) on the left, Walk in → beside it on
-		// the right, on the plinth's front edge by the scale plate, tilted up
-		// towards you. Pressed by touch, a controller's tip or its laser.
+		// The doors at the scale model (the user's Quest 2 tests): always there,
+		// without opening the orb. A big Walk in → in front of you at elbow
+		// height, a small ← Back (leave VR) on its left, tilted up towards you.
+		// Pressed by touch, a controller's tip or its laser.
 		this.doors = new KeyPad(xr, 'plinth-door');
 		this.doorGroup = new THREE.Group();
 		this.doorGroup.name = 'plinth-doors';
-		for (const slot of ['back', 'in']) this.doorGroup.add(this.doors.add(slot, DOOR_SIZE[0], DOOR_SIZE[1]).group);
+		this.doorGroup.add(this.doors.add('back', ...DOOR_BACK).group, this.doors.add('in', ...DOOR_IN).group);
 		this.doors.setSpec('back', { id: 'back', look: 'outline', icon: 'back', label: '\u2190 Back', caption: 'Leave VR' });
 		this.doors.setSpec('in', { id: 'in', look: 'filled', icon: 'in', label: 'Walk in \u2192', caption: 'Inside the home' });
 		xr.stage.add(this.doorGroup);
@@ -77,17 +87,24 @@ export class Dollhouse {
 	}
 
 	/**
-	 * The doors on the plinth's front edge, tilted up 35° like the scale plate
-	 * (on its right): Walk in → in the middle of the edge, ← Back to its left.
-	 * Called again whenever the plinth is resized.
+	 * The doors in front of where you stand, at elbow height for eyes at
+	 * eyeY (stage space; by default where the lift puts them), tilted up
+	 * towards you: Walk in → in the middle, ← Back 3 cm to its left.
 	 */
-	placeDoors() {
-		const xr = this.xr, { D } = xr.plinthSize, tilt = THREE.MathUtils.degToRad(35), [w, h] = DOOR_SIZE;
-		const y = PLINTH_HEIGHT + Math.sin(tilt) * h / 2 + 0.004, z = -xr.plinthDistance + D / 2 - 0.065;
-		this.doors.keys.get('in').group.position.set(0, 0, 0);
-		this.doors.keys.get('back').group.position.set(-(w + 0.03), 0, 0);
-		this.doorGroup.position.set(0, y, z);
-		this.doorGroup.rotation.set(-(Math.PI / 2 - tilt), 0, 0);
+	placeDoors(eyeY = DOLLHOUSE_PERSON - EYE_BELOW_TOP) {
+		const both = DOOR_IN[0] + DOOR_BACK[0] + 0.03;
+		this.doors.keys.get('in').group.position.set(both / 2 - DOOR_IN[0] / 2, 0, 0);
+		this.doors.keys.get('back').group.position.set(-both / 2 + DOOR_BACK[0] / 2, 0, 0);
+		this.doorGroup.position.set(0, eyeY - DOOR_BELOW_EYES, -DOOR_AHEAD);
+		this.doorGroup.rotation.set(-(Math.PI / 2 - THREE.MathUtils.degToRad(DOOR_TILT)), 0, 0);
+		this.doorEyes = eyeY;
+	}
+
+	/** The doors follow a new head height (sitting down, standing up), never while being pressed. */
+	followDoors(door) {
+		if (door.near || door.hot.size) return; // (hot: the keys a fingertip is on)
+		const eye = this.xr.stage.worldToLocal(this.xr.headWorld()).y;
+		if (eye > 0.5 && Math.abs(eye - this.doorEyes) > DOOR_FOLLOW) this.placeDoors(eye);
 	}
 
 	/** A new model: the markers go into model space (they turn and zoom with it). */
@@ -230,8 +247,9 @@ export class Dollhouse {
 		ui.faceWelcome();
 		if (ui.buttons()) return;
 		const point = ui.point();
-		// The doors on the plinth (not while a menu is open in front of them).
+		// The doors (not while a menu is open in front of them).
 		const door = this.doors.update(dt, { active: !xr.menu });
+		this.followDoors(door);
 		const action = point.action ?? door.action;
 		const { pointable } = xr.targets();
 		let jumpTo = null;

@@ -776,11 +776,26 @@ check('at the scale model, B never leaves VR', (await state()).presenting && (aw
 		const x = window.__casawalk.xr, V = x.rig.position.constructor, d = x.modes.dollhouse.doors;
 		const w = (slot) => d.keys.get(slot).face.getWorldPosition(new V());
 		const head = x.headWorld(), back = w('back'), inn = w('in');
-		return { back: back.toArray(), in: inn.toArray(), leftOfIn: back.x < inn.x, shown: x.modes.dollhouse.doorGroup.visible && x.stage.visible, ahead: +Math.hypot(inn.x - head.x, inn.z - head.z).toFixed(2) };
+		const size = (slot) => { const g = d.keys.get(slot).face.geometry; g.computeBoundingBox(); const b = g.boundingBox; return +(b.max.x - b.min.x).toFixed(3); };
+		const bw = size('back'), iw = size('in'), gap = +((inn.x - iw / 2) - (back.x + bw / 2)).toFixed(3);
+		// Under the line from the eyes to the model: the doors' top edge is further below the horizon than any corner of the model.
+		const down = (p) => Math.atan2(head.y - p.y, Math.hypot(p.x - head.x, p.z - head.z)) * 180 / Math.PI;
+		const top = d.keys.get('in').face.localToWorld(new V(0, d.keys.get('in').h / 2, 0));
+		const B = x.model.bounds, corners = [];
+		for (const cx of [B.min.x, B.max.x]) for (const cy of [B.min.y, B.max.y]) for (const cz of [B.min.z, B.max.z]) corners.push(down(x.centerer.localToWorld(new V(cx, cy, cz))));
+		return { back: back.toArray(), in: inn.toArray(), bw, iw, gap, shown: x.modes.dollhouse.doorGroup.visible && x.stage.visible,
+			ahead: +Math.hypot(inn.x - head.x, inn.z - head.z).toFixed(2), below: +(head.y - inn.y).toFixed(2), topDown: +down(top).toFixed(1), modelDown: +Math.max(...corners).toFixed(1) };
 	});
-	check('the plinth\'s doors: ← Back on the left, Walk in → beside it, on the front edge, shown without opening a menu', doors.shown && doors.leftOfIn && doors.ahead < 0.9, JSON.stringify(doors));
-	await lookDown(); await frames(3);
+	check('the doors at the scale model: a big Walk in →, a small ← Back to its left, at elbow height within reach, under the line to the model, shown without opening a menu',
+		doors.shown && doors.iw > 0.25 && doors.bw <= doors.iw / 2 && doors.gap >= 0.02 && doors.ahead < 0.45 && doors.below > 0.5 && doors.below < 0.7 && doors.topDown > doors.modelDown, JSON.stringify(doors));
+	// Seated: the doors stay at elbow height (60 cm below the eyes).
+	await page.evaluate(() => window.__device.position.set(0, 1.1, 0)); await frames(10);
+	const seated = await page.evaluate(() => { const x = window.__casawalk.xr, V = x.rig.position.constructor; return +(x.headWorld().y - x.modes.dollhouse.doors.keys.get('in').face.getWorldPosition(new V()).y).toFixed(2); });
+	check('seated, the doors are still at elbow height', seated > 0.5 && seated < 0.7, JSON.stringify({ seated }));
+	await page.evaluate(() => window.__device.position.set(0, 1.6, 0)); await frames(10);
+	await lookDown(-0.85); await frames(3);
 	await shot('plinth-doors');
+	await lookDown(); await frames(3);
 	await aimW('right', R, doors.in); await frames(5);
 	await click('right', 'trigger'); await settled();
 	s = await state();

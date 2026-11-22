@@ -11,10 +11,10 @@ export const SAMPLES = [
 	{
 		id: 'pond-house',
 		name: 'Pond House',
-		line: 'A glass pavilion over a pond: 2 levels, stairs, terrace',
+		line: 'A house by a pond: 2 levels, a floating stair, a deck, a terrace',
 		file: 'examples/pond-house.sh3d',
 		picture: 'examples/pond-house.jpg',
-		size: '35 kB',
+		size: '34 kB',
 		credit: '',
 	},
 	{

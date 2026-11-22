@@ -2,7 +2,7 @@
 // a raised face with an icon, a hand-lettered word and a small caption,
 // pressed by a fingertip or a controller's tip (js/touch.js), or by a
 // controller's laser and trigger. Used by the wrist menu (js/wrist-menu.js)
-// and by the doors on the plinth (js/xr-dollhouse.js).
+// and by the doors at the scale model (js/xr-dollhouse.js).
 //
 // A KeyPad holds a few keys. Its owner places each key's group, sets what it
 // shows (setSpec), and calls update() once a frame; update() returns the id of

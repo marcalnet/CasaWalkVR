@@ -62,7 +62,7 @@ test('the settings boards: the same tabs at both layers, a Close key, every targ
 	for (const p of Object.values(x.menus)) {
 		assert.deepEqual(p.tabs.map((t) => t.label), ['View', 'Walk', 'General']);
 		assert.deepEqual(shape(p.tabs[0].rows), ['light:choice:Time of day:Morning:Noon:Sunset:Night', 'shadows:switch:Shadows | depth:switch:Depth shading',
-			'ceilings:switch:Ceilings | view:switch:Passthrough', 'seethrough:switch:See-through', `levels:choice:Levels${p === x.menus.dollhouse ? ':All levels (2):Up to Ground floor' : ''}`]);
+			'ceilings:switch:Ceilings | view:switch:Passthrough', 'seethrough:switch:Transparent walls', `levels:choice:Levels${p === x.menus.dollhouse ? ':All levels (2):Up to Ground floor' : ''}`]);
 		assert.deepEqual(shape(p.tabs[1].rows), ['height:choice:Height:Yours:1.4 m:1.7 m:2.0 m', 'solid:switch:Solid walls']);
 		assert.deepEqual(shape(p.tabs[2].rows), ['toolFan:choice:Tool fan:Left hand:Right hand', 'sound:choice:Sound:Off:Effects']);
 		assert.equal(p.actions.length, 0, 'no actions on the board: the doors are on the wrist');
@@ -262,7 +262,7 @@ test('mirrored: a tool in the left hand has Y as its second button', async () =>
 	assert.ok(x.ui.wrist.open && x.ui.wrist.pinned, 'A opens the wrist menu, pinned');
 });
 
-test('the doors on the plinth: ← Back on the left, Walk in → on the right; Walk in goes inside', async () => {
+test('the doors at the scale model: a big Walk in →, a small ← Back on its left; Walk in goes inside', async () => {
 	const { x, go, frame, settle } = await setup();
 	const d = x.modes.dollhouse.doors;
 	const back = d.keys.get('back'), inn = d.keys.get('in');
@@ -270,7 +270,9 @@ test('the doors on the plinth: ← Back on the left, Walk in → on the right; W
 	x.stage.updateMatrixWorld(true);
 	const at = (k) => k.group.getWorldPosition(new THREE.Vector3());
 	assert.ok(at(back).x < at(inn).x, 'Back on the left of Walk in');
-	assert.ok(Math.min(inn.w, inn.h) >= 0.07, 'big enough to touch');
+	assert.ok(Math.min(inn.w, inn.h, back.w, back.h) >= 0.07, 'big enough to touch');
+	assert.ok(inn.w >= 2 * back.w && back.h === inn.h, 'Walk in is the big one; Back half as long or less, the same height');
+	assert.ok(at(inn).x - inn.w / 2 - (at(back).x + back.w / 2) >= 0.02, 'apart');
 	// The laser presses it like any key: Walk in goes inside, as the wrist menu's does.
 	assert.equal(d.press(inn, null).id, 'in');
 	go('in');

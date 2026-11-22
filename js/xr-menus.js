@@ -23,7 +23,8 @@ import { BOARD } from './theme.js';
 const BOARD_PX_PER_M = 1450; // canvas pixels per metre: a row of 80 px is 5.5 cm
 const TIME_LABELS = { morning: 'Morning', noon: 'Noon', sunset: 'Sunset', night: 'Night' };
 const HEIGHTS = SETTINGS.height.options; // person height, metres (0 = your own)
-// See-through is one switch: on is 75% (the user's Quest 2 test: the only level that reads well; 100% is too thin).
+// Transparent walls (called See-through until the user's bare-hands test: too
+// close to Passthrough) is one switch: on is 75% (the user's Quest 2 test: the only level that reads well; 100% is too thin).
 export const SEE_THROUGH_ON = 0.75;
 
 const sw = (id, label) => ({ type: 'switch', id, label, value: false });
@@ -35,7 +36,7 @@ const CELLS = {
 	depth: sw('depth', 'Depth shading'),
 	ceilings: sw('ceilings', 'Ceilings'),
 	solid: sw('solid', 'Solid walls'),
-	seethrough: sw('seethrough', 'See-through'),
+	seethrough: sw('seethrough', 'Transparent walls'),
 	levels: { type: 'choice', stepper: true, id: 'levels', label: 'Levels', options: [], disabled: true, note: 'One level' },
 	view: sw('view', 'Passthrough'), // on: the room around you; off: the VR world
 	toolFan: { type: 'choice', id: 'toolFan', label: 'Tool fan', options: [{ value: 'left', label: 'Left hand' }, { value: 'right', label: 'Right hand' }], value: 'left' },
