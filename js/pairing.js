@@ -103,7 +103,7 @@ export class Sharer {
 
 	/** The headset connects: only the first connection is accepted. */
 	accept(conn) {
-		if (this.conn || conn.metadata?.app !== 'sweet-home-vr') { conn.close(); return; }
+		if (this.conn || conn.metadata?.app !== 'casawalk') { conn.close(); return; }
 		this.conn = conn;
 		conn.on('data', (data) => {
 			if (typeof data !== 'string') return;
@@ -210,7 +210,7 @@ export class Joiner {
 		this.peer.on('error', (e) => { if (this.phase === 'connecting') this.fail(explain(e, 'headset')); });
 		this.timer = setTimeout(() => { if (this.phase === 'connecting') this.fail('Your computer did not answer. Check both are on the internet, then press Send to my Quest on it again.'); }, CONNECT_TIMEOUT_MS);
 		this.peer.on('open', () => {
-			const conn = this.peer.connect(pairId, { reliable: true, serialization: 'raw', metadata: { app: 'sweet-home-vr', v: PROTOCOL } });
+			const conn = this.peer.connect(pairId, { reliable: true, serialization: 'raw', metadata: { app: 'casawalk', v: PROTOCOL } });
 			this.conn = conn;
 			conn.on('open', () => {
 				clearTimeout(this.timer);

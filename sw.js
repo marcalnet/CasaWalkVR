@@ -13,7 +13,7 @@
 // the example home. Model downloads
 // and everything on other sites are left alone.
 
-const CACHE = 'sweet-home-vr-v1';
+const CACHE = 'casawalk-v1';
 const SCOPE = new URL('./', self.location.href); // the folder this file is served from
 const NETWORK_WAIT_MS = 4000;
 
@@ -22,7 +22,7 @@ self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', (event) => {
 	event.waitUntil((async () => {
 		for (const name of await caches.keys()) {
-			if (name.startsWith('sweet-home-vr-') && name !== CACHE) await caches.delete(name);
+			if ((name.startsWith('casawalk-') || name.startsWith('sweet-home-vr-')) && name !== CACHE) await caches.delete(name);
 		}
 		await self.clients.claim();
 	})());

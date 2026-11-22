@@ -9,8 +9,8 @@ import { TIMES } from '../js/lighting.js';
 test('the storage keys never change', () => {
 	const keys = Object.fromEntries(Object.entries(SETTINGS).map(([name, s]) => [name, s.key]));
 	assert.deepEqual(keys, {
-		light: 'svr.light', shadows: 'svr.shadows', depth: 'svr.depth', view: 'svr.view', turn: 'svr.snapAngle',
-		height: 'svr.height', figure: 'svr.figure', solid: 'svr.solidWalls', seeThrough: 'svr.seeThrough', sound: 'svr.sound',
+		light: 'casawalk.light', shadows: 'casawalk.shadows', depth: 'casawalk.depth', view: 'casawalk.view', turn: 'casawalk.snapAngle',
+		height: 'casawalk.height', figure: 'casawalk.figure', solid: 'casawalk.solidWalls', seeThrough: 'casawalk.seeThrough', sound: 'casawalk.sound',
 	});
 });
 
@@ -55,7 +55,7 @@ test('reading and writing use localStorage, and never throw without it', () => {
 		Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: { getItem: (k) => store.get(k) ?? null, setItem: (k, v) => store.set(k, v) } });
 		assert.equal(readSetting('turn'), 30);
 		writeSetting('turn', 15);
-		assert.equal(store.get('svr.snapAngle'), '15');
+		assert.equal(store.get('casawalk.snapAngle'), '15');
 		assert.equal(readSetting('turn'), 15);
 		// Private mode: storage throws; the defaults are used.
 		Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: { getItem() { throw new Error('denied'); }, setItem() { throw new Error('denied'); } } });

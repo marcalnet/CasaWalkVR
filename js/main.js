@@ -721,7 +721,7 @@ function sendToQuest() {
 			const local = new URL(location.href);
 			local.searchParams.delete('model');
 			local.searchParams.set('pair', sh.id);
-			window.__svr.pairUrl = local.toString();
+			window.__casawalk.pairUrl = local.toString();
 			setStatus(`Testing locally: open ${local} on the other device and press Receive there.`);
 		}
 		sharer = sh;
@@ -976,7 +976,7 @@ if (initial) {
 }
 
 // Test hooks for scripts/screenshots.js
-window.__svr = {
+window.__casawalk = {
 	lighting,
 	get sharer() { return sharer; },
 	get joiner() { return joiner; },

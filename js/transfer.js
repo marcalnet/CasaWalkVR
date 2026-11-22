@@ -22,15 +22,15 @@ const HIGH_WATER = 1024 * 1024; // pause sending while this much is still queued
 const MAX_FILES = 2000; // an OBJ with its textures is a handful; a .sh3d is one
 const MAX_NAME = 255;
 
-// Pairing names: "svr-" and 26 random base-32 characters (130 bits), so
+// Pairing names: "casawalk-" and 26 random base-32 characters (130 bits), so
 // nobody can guess one. Lowercase letters and digits only, as PeerJS requires.
 const ALPHABET = 'abcdefghijklmnopqrstuvwxyz234567';
-const PAIR_RE = /^svr-[a-z2-7]{26}$/;
+const PAIR_RE = /^casawalk-[a-z2-7]{26}$/;
 
 /** A new random pairing name. */
 export function newPairId() {
 	const bytes = crypto.getRandomValues(new Uint8Array(26));
-	return `svr-${[...bytes].map((b) => ALPHABET[b & 31]).join('')}`;
+	return `casawalk-${[...bytes].map((b) => ALPHABET[b & 31]).join('')}`;
 }
 
 /** True for a well-formed pairing name (anything else in ?pair= is ignored). */

@@ -13,19 +13,19 @@ import { TIMES } from './lighting.js';
 
 export const SETTINGS = {
 	// 2D page and headset
-	// (The light used to be saved as 'svr.time' on every visit, chosen or not.
+	// (The light used to be saved as 'casawalk.time' on every visit, chosen or not.
 	// A new key let everyone start from the morning default once.)
-	light: { key: 'svr.light', options: TIMES, fallback: null }, // null: lighting.js's own default
-	shadows: { key: 'svr.shadows', flag: true, fallback: false },
-	depth: { key: 'svr.depth', flag: true, fallback: false },
+	light: { key: 'casawalk.light', options: TIMES, fallback: null }, // null: lighting.js's own default
+	shadows: { key: 'casawalk.shadows', flag: true, fallback: false },
+	depth: { key: 'casawalk.depth', flag: true, fallback: false },
 	// Headset
-	view: { key: 'svr.view', options: ['vr', 'ar'], fallback: 'vr' }, // VR or passthrough, in an AR session
-	turn: { key: 'svr.snapAngle', options: [15, 30, 45], fallback: 30 }, // snap turn, degrees
-	height: { key: 'svr.height', options: [0, 1.4, 1.7, 2.0], fallback: 0 }, // person height, metres (0 = your own)
-	figure: { key: 'svr.figure', flag: true, fallback: true }, // scale figure beside the dollhouse
-	solid: { key: 'svr.solidWalls', flag: true, fallback: false }, // walls stop you while walking
-	seeThrough: { key: 'svr.seeThrough', range: true, fallback: 0 }, // 0 = as modelled, 1 = glass house
-	sound: { key: 'svr.sound', options: ['off', 'effects', 'all'], fallback: 'all' }, // all: effects and the ambience (milestone H)
+	view: { key: 'casawalk.view', options: ['vr', 'ar'], fallback: 'vr' }, // VR or passthrough, in an AR session
+	turn: { key: 'casawalk.snapAngle', options: [15, 30, 45], fallback: 30 }, // snap turn, degrees
+	height: { key: 'casawalk.height', options: [0, 1.4, 1.7, 2.0], fallback: 0 }, // person height, metres (0 = your own)
+	figure: { key: 'casawalk.figure', flag: true, fallback: true }, // scale figure beside the dollhouse
+	solid: { key: 'casawalk.solidWalls', flag: true, fallback: false }, // walls stop you while walking
+	seeThrough: { key: 'casawalk.seeThrough', range: true, fallback: 0 }, // 0 = as modelled, 1 = glass house
+	sound: { key: 'casawalk.sound', options: ['off', 'effects', 'all'], fallback: 'all' }, // all: effects and the ambience (milestone H)
 };
 
 /** The value a stored string stands for (null or undefined: nothing stored). */

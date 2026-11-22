@@ -60,9 +60,9 @@ test('the shader hook finds its places in the vendored three.js shaders', () => 
 	depth.hook(material);
 	const shader = { uniforms: {}, vertexShader: THREE.ShaderLib.lambert.vertexShader, fragmentShader: THREE.ShaderLib.lambert.fragmentShader };
 	material.onBeforeCompile(shader);
-	assert.equal(shader.uniforms.svrDepth, depth.uniform);
-	assert.match(shader.vertexShader, /attribute float svrAo;[\s\S]*vSvrAo = svrAo;/);
-	assert.match(shader.fragmentShader, /outgoingLight \*= mix\(1\.0, vSvrAo \* [\s\S]*#include <opaque_fragment>/);
+	assert.equal(shader.uniforms.cwDepth, depth.uniform);
+	assert.match(shader.vertexShader, /attribute float cwAo;[\s\S]*vCwAo = cwAo;/);
+	assert.match(shader.fragmentShader, /outgoingLight \*= mix\(1\.0, vCwAo \* [\s\S]*#include <opaque_fragment>/);
 });
 
 test('bake on the example home: corners are darker than the middle of a wall; VR only', async () => {
@@ -97,7 +97,7 @@ test('bake on the example home: corners are darker than the middle of a wall; VR
 	let middle = null, corner = null;
 	const v = new THREE.Vector3();
 	for (const m of layers.walls.children) {
-		const p = m.geometry.attributes.position, n = m.geometry.attributes.normal, ao = m.geometry.attributes.svrAo;
+		const p = m.geometry.attributes.position, n = m.geometry.attributes.normal, ao = m.geometry.attributes.cwAo;
 		for (let i = 0; i < p.count; i++) {
 			v.fromBufferAttribute(p, i);
 			if (Math.abs(v.z - 0.1) > 1e-3 || n.getZ(i) < 0.9) continue;

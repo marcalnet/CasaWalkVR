@@ -33,7 +33,7 @@ page.on('pageerror', (e) => console.log('  [pageerror]', e.message));
 let failed = false;
 if (!filter) {
 	await page.goto(`http://localhost:${port}/?test`);
-	const dec = await page.evaluate(() => window.__svr.decoders());
+	const dec = await page.evaluate(() => window.__casawalk.decoders());
 	const ok = Object.values(dec).every((v) => v === true);
 	console.log(`• compressed glTF decoders: ${ok ? 'all start' : 'FAILED'}`, JSON.stringify(dec));
 	failed ||= !ok;
@@ -44,14 +44,14 @@ for (const fx of fixtures) {
 	console.log(`• ${fx}`);
 	const t0 = Date.now();
 	await page.goto(`http://localhost:${port}/?test&model=${encodeURIComponent(fx)}`);
-	const ok = await page.evaluate(() => window.__svr.ready);
+	const ok = await page.evaluate(() => window.__casawalk.ready);
 	if (!ok) { console.log('  FAILED to load:', await page.textContent('#status')); continue; }
 	// Let textures decode.
 	await page.waitForTimeout(1500);
-	console.log(`  loaded in ${Date.now() - t0} ms`, JSON.stringify(await page.evaluate(() => window.__svr.stats())));
+	console.log(`  loaded in ${Date.now() - t0} ms`, JSON.stringify(await page.evaluate(() => window.__casawalk.stats())));
 	await page.evaluate(() => { document.getElementById('panel').classList.add('collapsed'); document.getElementById('view').hidden = true; });
 	for (const v of VIEWS) {
-		await page.evaluate((view) => window.__svr.frame(view), v);
+		await page.evaluate((view) => window.__casawalk.frame(view), v);
 		await page.waitForTimeout(200);
 		await page.screenshot({ path: path.join(outDir, `${name}-${v}.png`) });
 	}

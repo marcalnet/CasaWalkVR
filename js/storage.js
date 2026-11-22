@@ -10,12 +10,12 @@
 // Every call is wrapped so private windows or blocked storage just mean
 // "no recents" instead of breaking the app.
 
-const DB_NAME = 'sweet-home-vr';
+const DB_NAME = 'casawalk';
 const STORE = 'recent';
 const PHOTOS = 'photos';
 const MAX_RECENTS = 5;
 export const MAX_PHOTOS = 50; // the oldest photo makes room for a new one
-const LAST_LINK_KEY = 'svr.lastLink';
+const LAST_LINK_KEY = 'casawalk.lastLink';
 
 let dbPromise = null;
 

@@ -137,7 +137,7 @@ export class SeeThrough {
 		for (const m of fade) {
 			m.material = Array.isArray(m.material) ? m.material.map(own) : own(m.material);
 			for (const mat of [].concat(m.material)) {
-				mat.userData.svrBase ??= { opacity: mat.opacity, transparent: mat.transparent, depthWrite: mat.depthWrite };
+				mat.userData.cwBase ??= { opacity: mat.opacity, transparent: mat.transparent, depthWrite: mat.depthWrite };
 			}
 		}
 		this.meshes = fade;
@@ -155,7 +155,7 @@ export class SeeThrough {
 		const faded = amount > 0;
 		for (const m of this.meshes) {
 			for (const mat of [].concat(m.material)) {
-				const b = mat.userData.svrBase;
+				const b = mat.userData.cwBase;
 				if (!b) continue;
 				mat.opacity = b.opacity * keep;
 				const transparent = b.transparent || faded;

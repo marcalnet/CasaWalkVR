@@ -337,7 +337,7 @@ export class XRExperience {
 		const faded = 1 - SEE_THROUGH_MAX * amount < 0.9;
 		let changed = false;
 		for (const m of this.seeThrough.meshes) {
-			const glass = [].concat(m.material).some((mat) => { const b = mat.userData.svrBase ?? mat; return b.transparent && b.opacity < 0.9; });
+			const glass = [].concat(m.material).some((mat) => { const b = mat.userData.cwBase ?? mat; return b.transparent && b.opacity < 0.9; });
 			const cast = !glass && !faded;
 			if (m.castShadow !== cast) { m.castShadow = cast; changed = true; }
 		}

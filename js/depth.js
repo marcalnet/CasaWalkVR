@@ -18,7 +18,7 @@ import * as THREE from 'three';
 import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 import { MeshBVH } from 'three-mesh-bvh';
 
-const ATTR = 'svrAo'; // per-vertex light factor, 0-255 (255 = fully open)
+const ATTR = 'cwAo'; // per-vertex light factor, 0-255 (255 = fully open)
 const GRID = 0.3; // metres: walls, floors and ceilings are cut along a grid this fine
 const REACH = 0.6; // metres: how far a corner's shade reaches
 const FLOOR = 0.4; // never darker than this
@@ -228,23 +228,23 @@ export class DepthShading {
 	 * it, so turning it on and off never recompiles anything.
 	 */
 	hook(material) {
-		if (material.userData.svrDepth) return;
-		material.userData.svrDepth = true;
+		if (material.userData.cwDepth) return;
+		material.userData.cwDepth = true;
 		const uniform = this.uniform;
 		material.onBeforeCompile = (shader) => {
-			shader.uniforms.svrDepth = uniform;
+			shader.uniforms.cwDepth = uniform;
 			shader.vertexShader = shader.vertexShader
-				.replace('#include <common>', `#include <common>\nattribute float ${ATTR};\nvarying float vSvrAo;\nvarying vec3 vSvrNormal;`)
-				.replace('#include <begin_vertex>', `#include <begin_vertex>\nvSvrAo = ${ATTR};\nvSvrNormal = normal;`);
+				.replace('#include <common>', `#include <common>\nattribute float ${ATTR};\nvarying float vCwAo;\nvarying vec3 vCwNormal;`)
+				.replace('#include <begin_vertex>', `#include <begin_vertex>\nvCwAo = ${ATTR};\nvCwNormal = normal;`);
 			shader.fragmentShader = shader.fragmentShader
-				.replace('#include <common>', '#include <common>\nuniform float svrDepth;\nvarying float vSvrAo;\nvarying vec3 vSvrNormal;')
+				.replace('#include <common>', '#include <common>\nuniform float cwDepth;\nvarying float vCwAo;\nvarying vec3 vCwNormal;')
 				.replace('#include <opaque_fragment>', [
-					'float svrSide = 0.5 + 0.5 * dot(normalize(vSvrNormal), vec3(0.545, 0.25, 0.8));',
-					'outgoingLight *= mix(1.0, vSvrAo * mix(0.8, 1.0, svrSide), svrDepth);',
+					'float cwSide = 0.5 + 0.5 * dot(normalize(vCwNormal), vec3(0.545, 0.25, 0.8));',
+					'outgoingLight *= mix(1.0, vCwAo * mix(0.8, 1.0, cwSide), cwDepth);',
 					'#include <opaque_fragment>',
 				].join('\n'));
 		};
-		material.customProgramCacheKey = () => 'svr-depth';
+		material.customProgramCacheKey = () => 'cw-depth';
 		material.needsUpdate = true;
 	}
 
@@ -292,7 +292,7 @@ export class DepthShading {
 		}
 		// 2. Everything that blocks light: the whole model except glass.
 		// (The model's own opacity: see-through in the headset (js/walls.js) is not glass.)
-		const solid = (mesh) => ![].concat(mesh.material).some((m) => { const b = m.userData.svrBase ?? m; return b.transparent && b.opacity < 0.9; });
+		const solid = (mesh) => ![].concat(mesh.material).some((m) => { const b = m.userData.cwBase ?? m; return b.transparent && b.opacity < 0.9; });
 		const blockers = [...baked, ...of(BLOCKING_LAYERS)].map((m) => m.mesh).filter(solid);
 		const total = baked.reduce((n, m) => n + m.mesh.geometry.attributes.position.count, 0);
 		if (!blockers.length || !total) return;
