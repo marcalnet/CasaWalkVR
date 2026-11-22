@@ -14,7 +14,7 @@ export const SAMPLES = [
 		line: 'A house by a pond: 2 levels, a floating stair, a deck, a terrace',
 		file: 'examples/pond-house.sh3d',
 		picture: 'examples/pond-house.jpg',
-		size: '34 kB',
+		size: '38 kB',
 		credit: '',
 	},
 	{

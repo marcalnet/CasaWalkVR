@@ -1,8 +1,8 @@
 // Generates examples/pond-house.sh3d: CasaWalk's own sample home, the first the page offers
 // ("Try a sample home", js/samples.js). Designed for CasaWalk, 22 Nov 2026.
 // A two-storey house by a pond, designed for CasaWalk (revised 22 Nov 2026 with the user, to an
-// architect's standard; see THE PLAN below): a glazed day floor at the water's edge, a solid night floor
-// above, a floating stair in the living room. Nothing here copies an existing building or model.
+// architect's standard; see THE PLAN below): an open day floor at the water's edge, a solid night floor
+// above with a terrace over the pond, a floating stair in the living room. Nothing here copies an existing building or model.
 //
 // Written like scripts/make-example.js: the plan in Home.xml, furniture built from plain boxes and
 // cylinders (OBJ + MTL), zipped with fixed dates so the output is reproducible.
@@ -79,24 +79,27 @@ const MODELS = {
 	column: [b(0, 0, 0, 20, 288, 20, 'steelWhite')], // one storey each: the garden level part and the pavilion part are separate pieces
 	columnP: [b(0, 0, 0, 20, 300, 20, 'steelWhite')],
 	pier: [b(0, 0, 0, 80, 288, 120, 'masonry')],
-	// Floating stair: 16 oak treads 7 cm thick, 90 cm deep from the wall, 26 cm goings, 17 risers of 17.6 cm,
-	// cantilevered from the wall on the model's east side (model x 90); rising north (model z 0 = the top,
-	// plan y 269). No stringer, nothing beneath.
+	// Floating stair (v4): 16 oak treads 7 cm thick, 90 cm deep, 26 cm goings, 17 risers of 17.6 cm,
+	// cantilevered from the wall on the model's x 0 side; rising towards model z 0 (the top). No stringer,
+	// nothing beneath. Balustrade (the user's call): slim vertical oak rods, 3 cm, two per tread on the open
+	// side, from each tread up to the ceiling (288 cm): a mid-century rod screen.
 	stairsFloating: (() => {
 		const r = 300 / 17, out = [];
-		for (let i = 0; i < 16; i++) { const z1 = 416 - i * 26, z0 = z1 - 26, top = +((i + 1) * r).toFixed(2); out.push(b(0, +(top - 7).toFixed(2), z0, 90, top, z1, 'oak')); }
-		// The invisible balustrade (the user's call): frameless clear glass, 1.2 cm, on the open side, its top
-		// edge 1 m above the pitch line (in 13 cm steps, as near a raked edge as boxes allow), from the floor
-		// to the landing, so nobody falls off the open side.
-		for (let k = 0; k < 32; k++) { const z1 = 416 - k * 13, z0 = z1 - 13, top = +((416 - z0) / 26 * r + 100).toFixed(2); out.push(b(-1.2, Math.max(0, +(Math.floor(k / 2) * r - 7).toFixed(2)), z0, 0, top, z1, 'glass')); }
+		for (let i = 0; i < 16; i++) {
+			const z1 = 416 - i * 26, z0 = z1 - 26, top = +((i + 1) * r).toFixed(2);
+			out.push(b(0, +(top - 7).toFixed(2), z0, 90, top, z1, 'oak'));
+			for (const dz of [6.5, 19.5]) out.push(c(87, z0 + dz, 1.5, top, 288, 'oak', 6));
+		}
 		return out;
 	})(),
-	// Outdoor stair in the east wall's slot: 16 solid stone steps rising north to the terrace (model z 0 = the top)
+	// The same oak rods as a railing (100 cm, with a handrail) where the upper hall overlooks the stair: 250 long
+	rodRail: [...Array.from({ length: 23 }, (_, i) => c(5 + i * 10.9, 2, 1.5, 0, 97, 'oak', 6)), b(0, 97, -1, 250, 101, 5, 'oak')],
+	// Outdoor stair in the west wall's slot: 16 solid stone steps (model z 0 = the top)
 	stairsOut: Array.from({ length: 16 }, (_, i) => b(0, 0, 416 - (i + 1) * 26, 110, +((i + 1) * 300 / 17).toFixed(2), 416 - i * 26, 'masonry')),
 	shower: [b(0, 0, 0, 90, 6, 90, 'stone'), b(0, 6, 88, 90, 200, 90, 'glass'), c(70, 12, 10, 196, 198, 'brass', 10), c(70, 6, 1, 160, 198, 'brass', 6)],
 	tallWindow: [b(0, 0, 0, 4, 200, 30, 'steelWhite'), b(146, 0, 0, 150, 200, 30, 'steelWhite'), b(4, 0, 0, 146, 4, 30, 'steelWhite'), b(4, 196, 0, 146, 200, 30, 'steelWhite'), b(4, 4, 14, 146, 196, 16, 'glass')],
 	railing: [b(0, 96, 0, 300, 100, 4, 'graphite'), ...Array.from({ length: 11 }, (_, i) => b(i * 29.6, 0, 1, i * 29.6 + 3, 96, 3, 'graphite'))],
-	waterA: [b(0, 0, 0, 950, 1, 520, 'water')],
+	waterA: [b(0, 0, 0, 950, 1, 620, 'water')],
 	waterB: [b(0, 0, 0, 700, 1, 520, 'water')],
 	stepsOut: steps(2, 15, 35, 160),
 	ledge: [b(0, 0, 0, 260, 22, 90, 'masonry'), b(30, 22, 10, 200, 38, 80, 'masonry')],
@@ -174,31 +177,32 @@ const opening = (...a) => piece('doorOrWindow', ...a);
 const light = (...a) => piece('light', ...a);
 
 // ===========================================================================
-// THE PLAN (revised 22 Nov 2026 with the user, to an architect's standard)
-// A two-storey house on a 3 m grid, 18 x 6 m to the wall axes (plus the outdoor stair).
-// Zoning: the ground floor is the day floor (living room, kitchen and dining, a bathroom), glazed to
-// the south and west where the pond is, opening onto a deck at the water's edge. The upper floor is the
-// night floor (main bedroom with its en-suite, a second bedroom, an office), a solid plastered box
-// with punched windows, off one landing along the north side (rooms face south, to the sun and pond).
-// Circulation first: the front door (north) opens into a hall that joins the living room (west) and the
-// kitchen (east). The stair is part of the living room: floating oak treads cantilevered from its stone
-// wall (mid-century, the user's choice), rising north to the middle of the upper landing.
-// Wet rooms stack: the ground-floor bathroom sits under the upper shower room; the en-suite shares
-// its wet wall line and sits over the kitchen's sink run.
-// The outdoor stair is built into the east wall: a stone screen wall continues the east facade, and the
-// stair rises between it and the house to the main bedroom's terrace (on the kitchen's roof).
+// THE PLAN (v4, 22 Nov 2026, with the user, to an architect's standard)
+// A two-storey house by a pond on a 3 m grid, 18 x 6 m to the wall axes, with a terrace cantilevered
+// over the water (a nod to the great American house over a waterfall; nothing copied).
+// Ground floor, the day floor: two thirds (x 0-1200) one open space, living room (west, by the stone
+// fireplace wall) and kitchen (east), the kitchen bar between them as the divider; glazed to the south,
+// onto a deck at the pond. Then, half as wide as the last third (x 1200-1500): a bathroom (opening onto the
+// deck) and a store; beyond them the upper floor overhangs a covered terrace by 3 m (stepped, brutalist volumes).
+// The stair: floating oak treads fixed into the north wall, rising east from the living room to the
+// two-thirds line, with a screen of slim oak rods on the open side and nothing beneath.
+// Upper floor, the night floor: the stair arrives in a square hall (no long corridor) that opens to every
+// room: the main bedroom suite to the west (through a walk-in dressing, with its en-suite), next to the
+// pond and onto the terrace over it; a shower room; the office and a second bedroom to the east.
+// Wet rooms cluster: the en-suite and the shower room share a wall, over the kitchen and the bathroom.
+// The outdoor stair rises in a slot along the west wall, behind a stone screen that continues the facade,
+// from the garden to the terrace.
 // Stairs: 17 risers of 17.6 cm, 26 cm goings (2R + G = 61 cm), landings at least the stair's width.
-// Grid: x 0 | 375 | 760 (stair) 870 | 1050 | 1200 | 1500 | 1800 | 1920 (screen wall); y 100 | 269/275 | 700.
 // ===========================================================================
 
 const G = 'level-ground', P = 'level-upper';
 const STONE = argb('masonry'), FRAME = argb('steelWhite'), RENDER = argb('putty'), PLASTER = argb('walls'), OCHRE = argb('concrete');
 
-// --- Site: trees, shrubs, the pond (south-west, at the deck's edge), its stone ledges and boulders
-furniture('Tree', 'tree', G, -250, 250);
-furniture('Tree', 'tree', G, 2150, -150);
+// --- Site: trees, shrubs, the pond (south and south-west, under the terrace), ledges and boulders
+furniture('Tree', 'tree', G, -420, 450);
+furniture('Tree', 'tree', G, 2050, -150);
 furniture('Tree', 'tree', G, 1550, 1300);
-furniture('Shrub', 'shrub', G, 2100, 600);
+furniture('Shrub', 'shrub', G, 2000, 600);
 furniture('Shrub', 'shrub', G, 300, -120);
 furniture('Shrub', 'shrub', G, 1350, -100);
 furniture('Stone ledge', 'ledge', G, 150, 1370);
@@ -206,133 +210,147 @@ furniture('Stone ledge', 'ledge', G, 700, 1380, { angle: 0.15 });
 furniture('Stone ledge', 'ledge', G, 1180, 1180, { angle: PI / 2 });
 furniture('Boulder', 'boulder', G, -220, 1000, { angle: 0.4 });
 furniture('Boulder', 'boulder', G, 1050, 1000, { angle: -0.3 });
-// The pond: flat water pieces (not a room, so nobody steps inside onto the water), from the deck's edge
-furniture('Pond', 'waterA', G, 125, 1160);
+// The pond: flat water pieces (not a room, so nobody steps inside onto the water); it runs under the terrace
+furniture('Pond', 'waterA', G, 125, 1110);
 furniture('Pond', 'waterB', G, 950, 1160);
 furniture('Water lilies', 'lily', G, 300, 1250, { elevation: 1 });
 furniture('Water lilies', 'lily', G, 420, 1180, { elevation: 1 });
 furniture('Water lilies', 'lily', G, 900, 1270, { elevation: 1 });
 
-// --- Ground floor: living room (west), hall, open stair, bathroom, kitchen and dining (east)
-// Living room, round the fireplace on the north wall; the pond to the south and west
-furniture('Fireplace', 'fireplace', G, 380, 150);
-furniture('Rug', 'rug', G, 380, 400);
-furniture('Coffee table', 'coffeeTable', G, 380, 395);
-furniture('Sofa', 'sofa', G, 380, 525, { angle: PI });
-furniture('Lounge chair', 'loungeChair', G, 160, 380, { angle: -PI / 2 });
-furniture('Lounge chair', 'loungeChair', G, 600, 380, { angle: PI / 2 });
-furniture('Sideboard', 'sideboard', G, 610, 138);
-furniture('Floor lamp', 'floorLamp', G, 60, 620);
-furniture('Plant', 'plant', G, 45, 145);
-// The stair: floating oak treads fixed into the living room's stone wall (the bathroom wall), rising north;
-// no stringer, nothing beneath: the room flows under it. An invisible balustrade (frameless clear glass)
-// on the open side. Treads x 772.5-862.5, y 269-685.
-furniture('Stair', 'stairsFloating', G, 816.9, 477);
-// Hall: the front door, a lamp, a plant
-light('Hall lamp', 'pendant', G, 960, 190, { elevation: 160, bulbs: [{ z: 0.1, diameter: 0.6 }] });
-furniture('Plant', 'plant', G, 1025, 140);
-// Bathroom (stacked under the upper shower room): from the hall, and from the deck (after the pond)
-furniture('Basin', 'basin', G, 1016, 370, { angle: PI / 2 });
-furniture('Toilet', 'toilet', G, 1012, 500, { angle: PI / 2 });
-furniture('Shower', 'shower', G, 997, 630, { angle: PI / 2 });
-// Kitchen and dining: a run along the north wall, tall units on the east wall, the table by the glass
-furniture('Kitchen counter', 'counter', G, 1335, 146);
-furniture('Kitchen counter', 'counter', G, 1635, 146);
-furniture('Tall unit', 'tallUnit', G, 1754, 310, { angle: PI / 2 });
-furniture('Tall unit', 'tallUnit', G, 1754, 430, { angle: PI / 2 });
-furniture('Dining table', 'diningTable', G, 1330, 480);
-for (const [dx, dy, a] of [[-90, 0, -PI / 2], [90, 0, PI / 2], [0, -90, PI], [0, 90, 0]]) furniture('Dining chair', 'diningChair', G, 1330 + dx, 480 + dy, { angle: a });
-light('Pendant', 'pendant', G, 1330, 480, { elevation: 150, bulbs: [{ z: 0.1, diameter: 0.6 }] });
-// Deck at the pond's edge
-furniture('Lounger', 'lounger', G, 120, 755, { angle: PI / 2 });
-furniture('Lounger', 'lounger', G, 120, 845, { angle: PI / 2 });
-furniture('Side table', 'sideTable', G, 265, 800);
-furniture('Planter', 'planter', G, 700, 860);
-furniture('Planter', 'planter', G, 1550, 860);
-// The outdoor stair, in the east wall's slot: up to the main bedroom's terrace (x 1805-1915, y 274-690)
-furniture('Outdoor stair', 'stairsOut', G, 1860, 482);
+// --- Ground floor
+// Living room: round the fireplace in the west stone wall
+furniture('Fireplace', 'fireplace', G, 50, 400, { angle: -PI / 2 });
+furniture('Rug', 'rug', G, 260, 400, { angle: PI / 2 });
+furniture('Coffee table', 'coffeeTable', G, 250, 400, { angle: PI / 2 });
+furniture('Sofa', 'sofa', G, 420, 400, { angle: PI / 2 });
+furniture('Lounge chair', 'loungeChair', G, 200, 200, { angle: -0.5 });
+furniture('Lounge chair', 'loungeChair', G, 200, 600, { angle: PI + 0.5 });
+furniture('Floor lamp', 'floorLamp', G, 480, 620);
+furniture('Plant', 'plant', G, 40, 140);
+// Dining by the glass, between the sofa and the bar
+furniture('Dining table', 'diningTable', G, 650, 520);
+for (const [dx, dy, a] of [[-90, 0, -PI / 2], [90, 0, PI / 2], [0, -90, PI], [0, 90, 0]]) furniture('Dining chair', 'diningChair', G, 650 + dx, 520 + dy, { angle: a });
+light('Pendant', 'pendant', G, 650, 520, { elevation: 150, bulbs: [{ z: 0.1, diameter: 0.6 }] });
+// The kitchen bar (the divider), stools on the living side; the worktop run on the east wall
+furniture('Kitchen bar', 'island', G, 900, 480, { angle: PI / 2 });
+for (const y of [400, 480, 560]) furniture('Stool', 'stool', G, 815, y);
+for (const y of [420, 540]) light('Pendant', 'pendant', G, 900, y, { elevation: 160, bulbs: [{ z: 0.1, diameter: 0.6 }] });
+furniture('Kitchen counter', 'counter', G, 1160, 545, { angle: PI / 2 });
+// The stair: floating oak treads fixed into the north wall (y 115-205), rising east, foot at x 784, top at
+// x 1200; its rod screen on the open (south) side
+furniture('Stair', 'stairsFloating', G, 992, 161.5, { angle: PI / 2 });
+// Store and bathroom: half the last third (x 1200-1500); the upper floor sails on 3 m beyond them (the user's
+// brutalist move: the volumes step, the upper box overhangs a covered terrace to the east)
+furniture('Shelves', 'bookshelf', G, 1350, 131);
+furniture('Bath', 'bath', G, 1385, 345);
+furniture('Toilet', 'toilet', G, 1462, 450, { angle: PI / 2 });
+furniture('Basin', 'basin', G, 1232, 520, { angle: -PI / 2 });
+furniture('Shower', 'shower', G, 1447, 640, { angle: PI / 2 });
+// Deck at the pond's edge (partly under the terrace)
+furniture('Lounger', 'lounger', G, 1100, 760, { angle: PI / 2 });
+furniture('Lounger', 'lounger', G, 1100, 850, { angle: PI / 2 });
+furniture('Side table', 'sideTable', G, 1250, 800);
+furniture('Planter', 'planter', G, 1450, 860);
+// The outdoor stair in the west wall's slot (x -125 to -15, y 284-700), rising south to the terrace
+furniture('Outdoor stair', 'stairsOut', G, -70, 492, { angle: PI });
 
 // Openings, ground floor
-opening('Front door', 'frontDoor', G, 960, 100, { angle: PI });
-opening('Door', 'door', G, 922, 269); // hall -> bathroom
-opening('Door', 'door', G, 922, 700); // bathroom -> deck
-for (const x of [165, 1500]) opening('Glass wall', 'glassPanel', G, x, 700);
-for (const x of [465, 1200]) opening('Glass door', 'glassDoor', G, x, 700); // living and kitchen to the deck
-for (const y of [255, 545]) opening('Glass wall', 'glassPanelNarrow', G, 0, y, { angle: PI / 2 });
-opening('Window', 'ribbon', G, 380, 100, { angle: PI, elevation: 170 }); // above the fireplace
-opening('Window', 'ribbon', G, 1500, 100, { angle: PI, elevation: 110 }); // above the worktop
+opening('Front door', 'frontDoor', G, 650, 100, { angle: PI });
+opening('Door', 'door', G, 1200, 250, { angle: -PI / 2 }); // store
+opening('Door', 'door', G, 1200, 350, { angle: -PI / 2 }); // bathroom
+opening('Door', 'door', G, 1300, 700); // bathroom -> deck
+for (const x of [150, 750, 1050]) opening('Glass wall', 'glassPanel', G, x, 700);
+opening('Glass door', 'glassDoor', G, 450, 700); // living -> deck
+opening('Window', 'ribbon', G, 1500, 500, { angle: -PI / 2, elevation: 170 }); // bathroom, high, onto the covered terrace
+opening('Window', 'ribbon', G, 330, 100, { angle: PI, elevation: 170 }); // living, high
 
-// --- Upper floor: landing (north), office, bedroom, shower room, main bedroom with en-suite, terrace
-// Office
-furniture('Desk', 'desk', P, 190, 650, { angle: PI });
-furniture('Desk chair', 'deskChair', P, 190, 585);
-furniture('Bookshelf', 'bookshelf', P, 353, 480, { angle: PI / 2 });
-// Bedroom
-furniture('Bed', 'bed', P, 489, 520, { angle: -PI / 2 });
-furniture('Bedside table', 'bedside', P, 405, 392);
-furniture('Wardrobe', 'wardrobe', P, 722, 480, { angle: PI / 2 });
-// Shower room (over the ground-floor bathroom)
-furniture('Basin', 'basin', P, 1016, 370, { angle: PI / 2 });
-furniture('Toilet', 'toilet', P, 1012, 500, { angle: PI / 2 });
-furniture('Shower', 'shower', P, 997, 630, { angle: PI / 2 });
-// Main bedroom and en-suite
-furniture('Bed', 'bed', P, 1164, 500, { angle: -PI / 2 });
-furniture('Bedside table', 'bedside', P, 1081, 382);
-furniture('Bedside table', 'bedside', P, 1081, 618);
-light('Bedside lamp', 'tableLamp', P, 1081, 382, { elevation: 45, bulbs: [{ z: 0.85, diameter: 0.6 }] });
-light('Bedside lamp', 'tableLamp', P, 1081, 618, { elevation: 45, bulbs: [{ z: 0.85, diameter: 0.6 }] });
-furniture('Wardrobe', 'wardrobe', P, 1385, 653, { angle: PI });
-furniture('Lounge chair', 'loungeChair', P, 1420, 330, { angle: PI / 2 + 0.4 });
-furniture('Basin', 'basin', P, 1320, 141);
-furniture('Toilet', 'toilet', P, 1230, 145);
-furniture('Shower', 'shower', P, 1440, 160, { angle: -PI / 2 });
-// Terrace
-furniture('Lounger', 'lounger', P, 1650, 520);
-furniture('Planter', 'planter', P, 1650, 140);
+// --- Upper floor
+// Main bedroom (west, by the pond, onto the terrace)
+furniture('Bed', 'bed', P, 300, 223);
+furniture('Bedside table', 'bedside', P, 185, 140);
+furniture('Bedside table', 'bedside', P, 415, 140);
+light('Bedside lamp', 'tableLamp', P, 185, 140, { elevation: 45, bulbs: [{ z: 0.85, diameter: 0.6 }] });
+light('Bedside lamp', 'tableLamp', P, 415, 140, { elevation: 45, bulbs: [{ z: 0.85, diameter: 0.6 }] });
+furniture('Rug', 'rugRound', P, 300, 450);
+furniture('Lounge chair', 'loungeChair', P, 480, 560, { angle: -0.6 });
+furniture('Plant', 'plant', P, 40, 650);
+// Walk-in dressing (between the hall and the bedroom) and the en-suite
+furniture('Wardrobe', 'wardrobe', P, 775, 462, { angle: PI });
+furniture('Bath', 'bath', P, 750, 647, { angle: PI });
+furniture('Basin', 'basin', P, 1000, 531);
+furniture('Toilet', 'toilet', P, 880, 536);
+furniture('Shower', 'shower', P, 1099, 640, { angle: PI / 2 });
+// Hall: the rod railing over the stair, a bench
+furniture('Railing', 'rodRail', P, 1075, 213);
+furniture('Bench', 'daybed', P, 1060, 455, { angle: PI });
+furniture('Plant', 'plant', P, 1380, 130);
+// Shower room
+furniture('Shower', 'shower', P, 1349, 640, { angle: PI / 2 });
+furniture('Basin', 'basin', P, 1220, 659, { angle: PI });
+furniture('Toilet', 'toilet', P, 1364, 540, { angle: PI / 2 });
+// Office and bedroom (east)
+furniture('Desk', 'desk', P, 1600, 150);
+furniture('Desk chair', 'deskChair', P, 1600, 215, { angle: PI });
+furniture('Bookshelf', 'bookshelf', P, 1600, 378, { angle: PI });
+furniture('Bed', 'bed', P, 1686, 572, { angle: PI / 2 });
+furniture('Wardrobe', 'wardrobe', P, 1650, 438);
+// Terrace over the pond
+furniture('Lounger', 'lounger', P, 200, 900, { angle: PI });
+furniture('Lounger', 'lounger', P, 320, 900, { angle: PI });
+furniture('Side table', 'sideTable', P, 420, 830);
+furniture('Planter', 'planter', P, 800, 1010);
+furniture('Planter', 'planter', P, 60, 1010);
 
 // Openings, upper floor
-for (const [x, label] of [[300, 'Door'], [700, 'Door'], [960, 'Door'], [1125, 'Door'], [1350, 'Door']]) opening(label, 'door', P, x, 275);
-opening('Glass door', 'glassDoor', P, 1500, 480, { angle: -PI / 2 }); // main bedroom -> terrace
-for (const x of [190, 570, 1165]) opening('Window', 'tallWindow', P, x, 700, { elevation: 40 });
-opening('Window', 'tallWindow', P, 0, 480, { angle: PI / 2, elevation: 40 }); // the office looks west over the pond
-for (const x of [300, 640]) opening('Window', 'ribbon', P, x, 100, { angle: PI, elevation: 100 }); // the landing
-opening('Window', 'ribbon', P, 1080, 100, { angle: PI, elevation: 100 });
-opening('Window', 'ribbon', P, 1340, 100, { angle: PI, elevation: 160 }); // en-suite, high
+opening('Glass door', 'glassDoor', P, 300, 700); // main bedroom -> terrace
+opening('Window', 'ribbon', P, 0, 400, { angle: PI / 2, elevation: 140 }); // main bedroom, west, over the stair's screen wall
+opening('Door', 'door', P, 600, 300, { angle: PI / 2 }); // bedroom <- dressing
+opening('Door', 'door', P, 950, 350, { angle: PI / 2 }); // dressing <- hall
+opening('Door', 'door', P, 700, 500); // dressing -> en-suite
+opening('Door', 'door', P, 1230, 500); // hall -> shower room
+opening('Door', 'door', P, 1400, 250, { angle: -PI / 2 }); // hall -> office
+opening('Door', 'door', P, 1400, 450, { angle: -PI / 2 }); // hall -> bedroom
+opening('Window', 'ribbon', P, 875, 700, { elevation: 160 }); // en-suite
+opening('Window', 'ribbon', P, 1275, 700, { elevation: 160 }); // shower room
+opening('Window', 'ribbon', P, 1300, 100, { angle: PI, elevation: 100 }); // hall
+opening('Window', 'ribbon', P, 1600, 100, { angle: PI, elevation: 100 }); // office
+for (const y of [250, 550]) opening('Window', 'tallWindow', P, 1800, y, { angle: -PI / 2, elevation: 40 }); // office, bedroom
+opening('Window', 'tallWindow', P, 1600, 700, { elevation: 40 }); // bedroom
 
 // --- Walls
 const wall = (id, level, x0, y0, x1, y1, { height, heightAtEnd, thickness = 15, left, right, color = PLASTER, start, end } = {}) =>
 	xml.push(`<wall${attrs({ id, level, wallAtStart: start, wallAtEnd: end, xStart: x0, yStart: y0, xEnd: x1, yEnd: y1, height, heightAtEnd, thickness, leftSideColor: left ?? color, rightSideColor: right ?? color, topColor: left ?? color })}/>`);
-// Ground floor: stone to the north and east (the screen wall's line continues it), steel-and-glass to the south and west
-wall('wall-g-n', G, 0, 100, 1935, 100, { height: 288, thickness: 30, left: STONE, right: PLASTER, end: 'wall-g-e' });
-wall('wall-g-e', G, 1800, 100, 1800, 700, { height: 288, thickness: 30, left: STONE, right: PLASTER, start: 'wall-g-n', end: 'wall-g-s1' });
-wall('wall-g-s1', G, 1800, 700, 1050, 700, { height: 288, thickness: 10, color: FRAME, start: 'wall-g-e' });
-wall('wall-g-s2', G, 1050, 700, 870, 700, { height: 288, thickness: 30, left: STONE, right: PLASTER }); // the bathroom's outer wall
-wall('wall-g-s3', G, 870, 700, 0, 700, { height: 288, thickness: 10, color: FRAME, end: 'wall-g-w' });
-wall('wall-g-w', G, 0, 700, 0, 100, { height: 288, thickness: 10, color: FRAME, start: 'wall-g-s3' });
-wall('wall-g-bath-w', G, 870, 700, 870, 269, { height: 288 }); // the stair's wall
-wall('wall-g-bath-n', G, 870, 269, 1050, 269, { height: 288 });
-wall('wall-g-bath-e', G, 1050, 269, 1050, 700, { height: 288 });
-// The east wall's slot: a stone screen wall carries the east facade's plane past the outdoor stair, 1 m above the terrace
-wall('wall-screen', G, 1920, 100, 1920, 700, { height: 400, thickness: 30, color: STONE });
+// Ground floor: stone to the north, east and west (the fireplace wall), steel-and-glass to the south of the open space
+wall('wall-g-n', G, 0, 100, 1500, 100, { height: 288, thickness: 30, left: STONE, right: PLASTER, start: 'wall-g-w', end: 'wall-g-e' });
+wall('wall-g-e', G, 1500, 100, 1500, 700, { height: 288, thickness: 30, left: STONE, right: PLASTER, start: 'wall-g-n', end: 'wall-g-s1' });
+wall('wall-g-s1', G, 1500, 700, 1200, 700, { height: 288, thickness: 30, left: STONE, right: PLASTER, start: 'wall-g-e', end: 'wall-g-s2' }); // the bathroom's outer wall
+wall('wall-g-s2', G, 1200, 700, 0, 700, { height: 288, thickness: 10, color: FRAME, start: 'wall-g-s1', end: 'wall-g-w' });
+wall('wall-g-w', G, 0, 700, 0, 100, { height: 288, thickness: 30, left: STONE, right: STONE, start: 'wall-g-s2', end: 'wall-g-n' }); // the fireplace wall, stone inside too
+wall('wall-g-third', G, 1200, 100, 1200, 700, { height: 288 }); // the open space | store, bathroom
+wall('wall-g-store', G, 1200, 300, 1500, 300, { height: 288 });
+// The west wall's slot: a stone screen continues the west facade's plane past the outdoor stair, 1 m above the terrace
+wall('wall-screen', G, -145, 200, -145, 810, { height: 400, thickness: 30, color: STONE });
 // Upper floor: a plastered box, warm render outside
-const shell = [[0, 100], [1500, 100], [1500, 700], [0, 700]];
+const shell = [[0, 100], [1800, 100], [1800, 700], [0, 700]];
 shell.forEach(([x, y], i) => { const [x2, y2] = shell[(i + 1) % 4]; wall(`wall-p${i}`, P, x, y, x2, y2, { height: 280, thickness: 30, left: RENDER, right: PLASTER, start: `wall-p${(i + 3) % 4}`, end: `wall-p${(i + 1) % 4}` }); });
-wall('wall-p-land-w', P, 0, 275, 760, 275, { height: 280, thickness: 12 }); // landing | office, bedroom
-wall('wall-p-land-e', P, 870, 275, 1500, 275, { height: 280, thickness: 12 }); // landing | shower room, main bedroom; en-suite | main bedroom
-wall('wall-p-office', P, 375, 275, 375, 700, { height: 280, thickness: 12 });
-wall('wall-p-void-w', P, 760, 275, 760, 700, { height: 280, thickness: 12 }); // the stairwell's sides
-wall('wall-p-void-e', P, 870, 275, 870, 700, { height: 280, thickness: 12 });
-wall('wall-p-shower', P, 1050, 275, 1050, 700, { height: 280, thickness: 12 });
-wall('wall-p-ensuite', P, 1200, 100, 1200, 275, { height: 280, thickness: 12 });
-// Terrace parapets (render)
-wall('wall-t-n', P, 1500, 100, 1920, 100, { height: 100, thickness: 20, color: RENDER });
-wall('wall-t-s', P, 1500, 700, 1800, 700, { height: 100, thickness: 20, color: RENDER });
-wall('wall-t-e', P, 1800, 274, 1800, 700, { height: 100, thickness: 20, color: RENDER }); // over the outdoor stair
+wall('wall-p-bed', P, 600, 100, 600, 700, { height: 280, thickness: 12 }); // main bedroom | dressing, en-suite
+wall('wall-p-wet', P, 600, 500, 1400, 500, { height: 280, thickness: 12 }); // dressing, hall | en-suite, shower room
+wall('wall-p-dress', P, 950, 211, 950, 500, { height: 280, thickness: 12 }); // dressing | hall
+wall('wall-p-void-s', P, 784, 211, 950, 211, { height: 280, thickness: 12 }); // the stairwell | dressing
+wall('wall-p-void-w', P, 784, 100, 784, 211, { height: 280, thickness: 12 });
+wall('wall-p-wc', P, 1150, 500, 1150, 700, { height: 280, thickness: 12 }); // en-suite | shower room
+wall('wall-p-east', P, 1400, 100, 1400, 700, { height: 280, thickness: 12 }); // hall | office, bedroom
+wall('wall-p-office', P, 1400, 400, 1800, 400, { height: 280, thickness: 12 });
+// Terrace over the pond: render parapets; the outdoor stair arrives at its north-west corner
+wall('wall-t-w', P, 0, 810, 0, 1050, { height: 100, thickness: 20, color: RENDER, end: 'wall-t-s' });
+wall('wall-t-s', P, 0, 1050, 900, 1050, { height: 100, thickness: 20, color: RENDER, start: 'wall-t-w', end: 'wall-t-e' });
+wall('wall-t-e', P, 900, 1050, 900, 700, { height: 100, thickness: 20, color: RENDER, start: 'wall-t-s' });
+wall('wall-t-landing', P, -130, 810, 0, 810, { height: 100, thickness: 20, color: RENDER });
 
 // A low curved stone wall round the far side of the pond (a round wall: arcExtent), and a sloping
 // garden wall stepping down beside the entrance path (heightAtEnd): both test the parser's wall shapes.
 xml.push(`<wall${attrs({ id: 'wall-pond', level: G, xStart: 1300, yStart: 1420, xEnd: -350, yEnd: 1420, arcExtent: 0.9, height: 55, thickness: 30, leftSideColor: STONE, rightSideColor: STONE, topColor: STONE })}/>`);
-xml.push(`<wall${attrs({ id: 'wall-path', level: G, xStart: 1150, yStart: -250, xEnd: 1150, yEnd: 60, height: 40, heightAtEnd: 140, thickness: 25, leftSideColor: STONE, rightSideColor: STONE, topColor: STONE })}/>`);
+xml.push(`<wall${attrs({ id: 'wall-path', level: G, xStart: 850, yStart: -250, xEnd: 850, yEnd: 60, height: 40, heightAtEnd: 140, thickness: 25, leftSideColor: STONE, rightSideColor: STONE, topColor: STONE })}/>`);
 
 // --- Rooms
 const room = (name, level, floorColor, points, extra = {}) => {
@@ -342,22 +360,24 @@ const rect = (x0, y0, x1, y1) => [[x0, y0], [x1, y0], [x1, y1], [x0, y1]];
 const OAK = argb('floor'), LIMESTONE = argb('paleStone'), PAVING = argb('paving'), SLATE = argb('stone');
 const open = { ceilingVisible: 'false' };
 // Ground floor
-room('Living room', G, LIMESTONE, rect(0, 100, 760, 700));
-room('', G, LIMESTONE, rect(760, 269, 870, 700), open); // under the open stair: no ceiling (the stairwell)
-room('Hall', G, LIMESTONE, rect(760, 100, 1050, 269));
-room('Bathroom', G, SLATE, rect(870, 269, 1050, 700));
-room('Kitchen and dining', G, LIMESTONE, rect(1050, 100, 1800, 700));
-room('Deck', G, PAVING, rect(0, 700, 1920, 900), open);
-room('', G, PAVING, rect(1800, 100, 1920, 700), open); // the outdoor stair's slot
-room('Path', G, PAVING, rect(810, -120, 1110, 100), open);
+room('Living room and kitchen', G, LIMESTONE, [[0, 100], [784, 100], [784, 211], [1200, 211], [1200, 700], [0, 700]]);
+room('', G, LIMESTONE, rect(784, 100, 1200, 211), open); // under the stair: no ceiling (the stairwell)
+room('Store', G, SLATE, rect(1200, 100, 1500, 300));
+room('Bathroom', G, SLATE, rect(1200, 300, 1500, 700));
+room('Covered terrace', G, PAVING, rect(1500, 100, 1800, 700)); // under the upper floor's overhang: its ceiling is the upper floor
+room('Deck', G, PAVING, [[0, 700], [1800, 700], [1800, 900], [600, 900], [600, 800], [0, 800]], open);
+room('', G, PAVING, rect(0, 700, 900, 1050), { floorVisible: 'false' }); // the terrace's soffit over the deck and pond (ceiling only)
+room('', G, PAVING, rect(-130, 200, 0, 810), open); // the outdoor stair's slot
+room('Path', G, PAVING, rect(500, -120, 800, 100), open);
 // Upper floor
-room('Landing', P, OAK, rect(0, 100, 1200, 269));
-room('Office', P, OAK, rect(0, 275, 375, 700));
-room('Bedroom', P, OAK, rect(375, 275, 760, 700));
-room('Shower room', P, SLATE, rect(870, 275, 1050, 700));
-room('Main bedroom', P, OAK, rect(1050, 275, 1500, 700));
-room('En-suite', P, SLATE, rect(1200, 100, 1500, 275));
-room('Terrace', P, PAVING, [[1500, 100], [1920, 100], [1920, 274], [1800, 274], [1800, 700], [1500, 700]], open);
+room('Main bedroom', P, OAK, rect(0, 100, 600, 700));
+room('Dressing', P, OAK, [[600, 100], [784, 100], [784, 211], [950, 211], [950, 500], [600, 500]]);
+room('En-suite', P, SLATE, rect(600, 500, 1150, 700));
+room('Hall', P, OAK, [[950, 211], [1200, 211], [1200, 100], [1400, 100], [1400, 500], [950, 500]]);
+room('Shower room', P, SLATE, rect(1150, 500, 1400, 700));
+room('Office', P, OAK, rect(1400, 100, 1800, 400));
+room('Bedroom', P, OAK, rect(1400, 400, 1800, 700));
+room('Terrace', P, PAVING, [[-130, 700], [900, 700], [900, 1050], [0, 1050], [0, 810], [-130, 810]], open);
 
 const home = [
 	"<?xml version='1.0'?>",
@@ -365,7 +385,7 @@ const home = [
 	`  <environment groundColor='${argb('grass')}' skyColor='FFCCE4FC' lightColor='FFD0D0D0' ceillingLightColor='FFD0D0D0'/>`,
 	"  <compass x='-500' y='-150' diameter='100' northDirection='0.0' longitude='0.0407' latitude='0.8529' timeZone='Europe/Paris'/>",
 	// In the living room, looking south-west to the pond.
-	`  <observerCamera attribute='observerCamera' lens='PINHOLE' x='650' y='250' z='165' yaw='0.6' pitch='0.05' fieldOfView='1.0995574'/>`,
+	`  <observerCamera attribute='observerCamera' lens='PINHOLE' x='700' y='300' z='165' yaw='0.6' pitch='0.05' fieldOfView='1.0995574'/>`,
 	`  <level id='${G}' name='Ground floor' elevation='0' floorThickness='12' height='288' elevationIndex='0'/>`,
 	`  <level id='${P}' name='Upper floor' elevation='300' floorThickness='12' height='280' elevationIndex='0'/>`,
 	...xml.map((l) => `  ${l}`),
