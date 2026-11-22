@@ -4,7 +4,7 @@
 
 A WebXR viewer for [Sweet Home 3D](https://www.sweethome3d.com/) homes on Meta Quest. Open a `.sh3d` file directly (no export step), look at it as a scale model, then walk through it at real size. It also opens OBJ (plain, or zipped with MTL and textures) and GLB, including compressed GLB (Draco, meshopt).
 
-**Try it: [marcalprats.github.io/SweetHomeVR](https://marcalprats.github.io/SweetHomeVR/)** (press *Try the example home* if you have no file to hand).
+**Try it: [casawalkvr.com](https://www.casawalkvr.com/)** (press *Try the example home* if you have no file to hand).
 
 It runs in the Meta Quest Browser: no app store, no developer mode, no sideloading. The same page works on a desktop browser as a 2D preview, so you can check a file before putting the headset on.
 
@@ -58,7 +58,7 @@ Google only gives shared files to other websites through its Drive API, which ne
 2. **APIs & Services → Library**: find **Google Drive API** and press **Enable**.
 3. **APIs & Services → Credentials → Create credentials → API key**.
 4. Edit the key:
-   - **Application restrictions → Websites**: add your site, e.g. `https://marcalprats.github.io/*`. Add `http://localhost:*/*` too, to test locally.
+   - **Application restrictions → Websites**: add your site, e.g. `https://www.casawalkvr.com/*`. Add `http://localhost:*/*` too, to test locally.
    - **API restrictions → Restrict key → Google Drive API** only.
    - Save.
 5. Put the key in `config.js` as `googleApiKey`, then commit and push.
@@ -127,7 +127,7 @@ Walls (including sloping and round walls, colours and textures per side), door a
 
 ## Hosting
 
-The site is plain static files with no build step: GitHub Pages serves the repository root. WebXR only works over HTTPS, so on the Quest use the GitHub Pages URL, not a local `http://` address.
+The site is plain static files with no build step: GitHub Pages serves the repository root at [www.casawalkvr.com](https://www.casawalkvr.com/) (the `CNAME` file; a fork that hosts its own copy deletes it and uses its own GitHub Pages address). WebXR only works over HTTPS, so on the Quest use that address, not a local `http://` one.
 
 ### Dropbox Chooser (for your own copy)
 
@@ -155,7 +155,7 @@ Without a key the button is simply hidden. The Chooser script is the only file l
 
 ## Feedback
 
-Problems and ideas are welcome as [issues](https://github.com/marcalprats/SweetHomeVR/issues). It helps to say:
+Problems and ideas are welcome as [issues](https://github.com/marcalnet/CasaWalk/issues). It helps to say:
 
 - the headset and its browser version (or the desktop browser);
 - what you did and what you expected;
@@ -169,8 +169,8 @@ Things nobody has been able to check yet: a real Quest 3, 3S, Pro or Quest 1, Sa
 The app is plain ES modules served as static files: there is no build step and nothing to install to run it. Clone it and the Node tests already work (Node 24; `nvm use` picks it up):
 
 ```bash
-git clone https://github.com/marcalprats/SweetHomeVR.git
-cd SweetHomeVR
+git clone https://github.com/marcalnet/CasaWalk.git
+cd CasaWalk
 npm test               # parser, lighting, depth-shading, headset and safety tests: no install, no downloads
 npm run serve          # the app at http://localhost:8123/ (2D preview; WebXR on a headset needs https)
 ```
