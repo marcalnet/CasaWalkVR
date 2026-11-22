@@ -12,6 +12,12 @@
 // is on the menu or an orb) or 'tool' (a hand-held tool, milestones C-F). They
 // are taken in this order: a held tool, then the UI, then the mode, which
 // only uses what is still free. Sticks are never claimed. Cleared by update().
+//
+// Bare hands (milestone C0.1, a stop-gap until hands are supported in C0):
+// the Quest turns a pinch into a "select" of a hand input source whose
+// gamepad looks like a controller's (the pinch on button 0). Such sources are
+// not controllers here: their buttons are never read, they get no laser or
+// body, and handsOnly() tells the UI to ask for the controllers.
 
 import * as THREE from 'three';
 
@@ -39,19 +45,25 @@ export class XRInput {
 			const dot = new THREE.Mesh(new THREE.SphereGeometry(0.008, 12, 8), new THREE.MeshBasicMaterial({ color: 0xd9822b }));
 			dot.visible = false;
 			ray.add(dot);
-			grip.add(new THREE.Mesh(bodyGeo, bodyMat));
+			const body = new THREE.Mesh(bodyGeo, bodyMat);
+			grip.add(body);
 
-			const c = { index: i, ray, grip, line, dot, source: null, handedness: null, state: emptyState(), claim: { trigger: null, grip: null, a: null, b: null, stickPress: null } };
+			const c = { index: i, ray, grip, line, dot, body, source: null, handedness: null, isController: false, isHand: false, state: emptyState(), claim: { trigger: null, grip: null, a: null, b: null, stickPress: null } };
 			ray.addEventListener('connected', (e) => {
 				c.source = e.data;
 				c.handedness = e.data.handedness;
-				c.isController = !!e.data.gamepad && !e.data.hand;
+				c.isHand = isHandSource(e.data);
+				c.isController = !c.isHand;
 				line.visible = c.isController;
-				this.hands[c.handedness] = c;
+				body.visible = c.isController;
+				c.state = emptyState();
+				if (c.isController) this.hands[c.handedness] = c;
 			});
 			ray.addEventListener('disconnected', () => {
 				if (this.hands[c.handedness] === c) this.hands[c.handedness] = null;
 				c.source = null;
+				c.isController = c.isHand = false;
+				c.state = emptyState();
 				line.visible = false;
 				dot.visible = false;
 			});
@@ -63,7 +75,7 @@ export class XRInput {
 	/** Reads gamepads; call once per frame. */
 	update() {
 		for (const c of this.controllers) {
-			const gp = c.source?.gamepad;
+			const gp = c.isController ? c.source?.gamepad : null; // a hand's pinch is never read
 			const prev = c.state;
 			const s = emptyState();
 			if (gp) {
@@ -89,6 +101,9 @@ export class XRInput {
 
 	/** Active controllers (connected, with a gamepad). */
 	active() { return this.controllers.filter((c) => c.source && c.isController); }
+
+	/** True while the Quest reports bare hands and no controller (the "Pick up your controllers" note). */
+	handsOnly() { return this.controllers.some((c) => c.source && c.isHand) && this.active().length === 0; }
 
 	/** Sets a raycaster from a controller's laser. */
 	setRaycaster(c, raycaster) {
@@ -125,8 +140,24 @@ export class XRInput {
 	}
 
 	setVisible(v) {
-		for (const c of this.controllers) { c.ray.visible = v; c.grip.visible = v; }
+		for (const c of this.controllers) { c.ray.visible = v; c.grip.visible = v; c.body.visible = v && c.isController; }
 	}
+}
+
+/**
+ * Whether an XRInputSource is a bare hand (or a gaze or a transient pinch, as
+ * on Apple Vision Pro), not a controller: it has hand joints, a hand profile,
+ * no gamepad, no thumbstick axes, or a ray that is not a tracked pointer.
+ * Quest Browser reports hands with an xr-standard gamepad (the pinch on
+ * button 0) but no axes, and profiles such as 'oculus-hand', 'generic-hand'.
+ */
+export function isHandSource(source) {
+	if (!source) return false;
+	if (source.hand) return true;
+	if ((source.profiles || []).some((p) => /hand/i.test(p))) return true;
+	if (source.targetRayMode && source.targetRayMode !== 'tracked-pointer') return true;
+	const gp = source.gamepad;
+	return !gp || (gp.axes?.length ?? 0) === 0;
 }
 
 function emptyState() {

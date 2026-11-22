@@ -11,6 +11,8 @@
 //            first opened.
 //   Photo    a short white flash and a note in front of you after the Photo
 //            button (the picture itself: XRExperience.capturePhoto()).
+//   Hands    "Pick up your controllers" in front of you while the Quest
+//            reports bare hands only (their pinches do nothing: xr-input.js).
 //
 // Each frame the mode calls buttons() and point(); point() claims the
 // trigger of every controller whose laser is on the menu or an orb
@@ -35,6 +37,10 @@ const PHOTO_TEXT = {
 	failed: { title: 'The photo didn\'t work', line: 'Try again, or use the Quest\'s own screenshot.' },
 };
 
+// The note while the Quest reports bare hands (milestone C0.1): their pinches
+// do nothing until hands are supported (C0), so it says what will work.
+const HANDS_TEXT = { title: 'Pick up your controllers', line: 'Bare hands don\'t work in CasaWalk yet.' };
+
 export class XRUI {
 	/** xr: the XRExperience (rig, camera, input, menus, mode, model, stage, ...). */
 	constructor(xr) {
@@ -45,7 +51,8 @@ export class XRUI {
 		this.orbs = [0, 1].map(() => makeOrb());
 		this.buildWelcome();
 		this.buildPhotoFeedback();
-		xr.hideFromPhotos(this.welcome.mesh, this.flash, this.photoNote.mesh);
+		this.buildHandsNote();
+		xr.hideFromPhotos(this.welcome.mesh, this.flash, this.photoNote.mesh, this.handsNote.mesh);
 	}
 
 	// -----------------------------------------------------------------------
@@ -89,6 +96,20 @@ export class XRUI {
 	/** The welcome card turns to face you (called every dollhouse frame). */
 	faceWelcome() {
 		if (this.welcome.mesh.visible) this.welcome.mesh.lookAt(this.xr.camera.getWorldPosition(new THREE.Vector3()));
+	}
+
+	/** The "Pick up your controllers" note, a little below eye level, in front of you. */
+	buildHandsNote() {
+		this.handsNote = new WelcomeCard(HANDS_TEXT.title, [{ small: true, text: HANDS_TEXT.line }], { width: 0.6 });
+		this.handsNote.mesh.name = 'hands-note';
+		this.handsNote.mesh.position.set(0, -0.08, -0.85);
+		this.handsNote.mesh.visible = false;
+		this.xr.camera.add(this.handsNote.mesh);
+	}
+
+	/** Shows the hands note while only bare hands are reported (called every frame). */
+	showHandsNote() {
+		this.handsNote.mesh.visible = this.xr.input.handsOnly();
 	}
 
 	/** Photo feedback: a short white flash, and a note in front of you for a few seconds. */
@@ -273,6 +294,7 @@ export class XRUI {
 		this.photoFx = null;
 		this.flash.visible = false;
 		this.photoNote.mesh.visible = false;
+		this.handsNote.mesh.visible = false;
 		for (const o of this.orbs) { o.group.removeFromParent(); o.holder = null; }
 	}
 }

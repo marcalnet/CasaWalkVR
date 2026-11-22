@@ -39,7 +39,7 @@ js/sound.js       synthesised sound effects (recipes as data), unlocked by Enter
 js/sh3d.js        SH3D parser and scene builder (pure functions, Node-testable)
 js/formats.js     OBJ / zip / GLB / DAE / 3DS loading and unit detection
 js/optimise.js    merge-by-material and BVH
-js/xr-input.js    controllers, rays, thumbsticks, teleport arc, per-frame button claims
+js/xr-input.js    controllers, rays, thumbsticks, teleport arc, per-frame button claims; bare hands told apart and ignored (C0.1)
 js/panel.js       canvas-texture VR menu (switches, options, slider, buttons) and controls card
 js/walls.js       solid walls while walking and see-through walls and furniture (headset only)
 js/photo.js       the menu's Photo button: renders the view without the menu and saves a JPEG

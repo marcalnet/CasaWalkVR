@@ -119,7 +119,7 @@ Built for and tested on a **Meta Quest 2**. It uses only standard WebXR, so:
 
 - **Quest 3, 3S and Pro** should work as they are, with colour passthrough and more speed. The scripted test passes with their emulated controller layouts, but nobody has tried the real devices yet.
 - **Quest 1** may work in VR only (it has no passthrough for web pages) with small homes: its processor is much slower, and Meta no longer updates its browser. Untested.
-- Other WebXR headsets with two controllers that have a thumbstick, trigger, grip and two buttons should also work; hand tracking alone is not supported.
+- Other WebXR headsets with two controllers that have a thumbstick, trigger, grip and two buttons should also work; hand tracking alone is not supported yet: with bare hands, pinches do nothing and a note asks you to pick up the controllers.
 
 ## What gets shown from a Sweet Home 3D file
 

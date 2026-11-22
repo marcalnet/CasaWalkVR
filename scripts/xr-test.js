@@ -52,6 +52,12 @@ await page.addInitScript((name) => {
 	d.stereoEnabled = false; // one view, so screenshots are easy to read
 	d.installRuntime({ forceInstall: true });
 	window.__device = d;
+	// The Quest Browser reports bare hands (a pinch is a select) even though
+	// the app never asks for hand tracking; the emulator only shows hands to
+	// a session that asked. So the test asks for it, as an optional feature,
+	// on the app's behalf (milestone C0.1's bare-hands check).
+	const request = navigator.xr.requestSession.bind(navigator.xr);
+	navigator.xr.requestSession = (mode, init = {}) => request(mode, { ...init, optionalFeatures: [...(init.optionalFeatures || []), 'hand-tracking'] });
 }, DEVICE);
 
 let step = 0;
@@ -147,6 +153,7 @@ const leftovers = () => page.evaluate(() => {
 	want('grab/tele/fade/drag', !x.modes.dollhouse.grab && !x.modes.walk.tele && !x.modes.walk.fade && !x.ui.drag && !x.pendingRecentre);
 	want('menu', x.menu === null && Object.values(x.menus).every((p) => !p.mesh.visible && !p.open));
 	want('welcome', !x.ui.welcome.mesh.visible && !x.ui.welcomeOn);
+	want('hands note', !x.ui.handsNote.mesh.visible);
 	want('photo', !x.photoPending && !x.ui.photoFx && !x.ui.flash.visible && !x.ui.photoNote.mesh.visible && !x.modes.walk.fadeMesh.visible);
 	want('arc', !x.modes.walk.arc.dots.visible && !x.modes.walk.arc.ring.visible);
 	want('orbs', x.ui.orbs.every((o) => !o.group.parent && !o.holder));
@@ -466,6 +473,46 @@ await aim('right', orbL, [orbL[0], orbL[1], orbL[2] - 1]); await frames(5);
 check('touching an orb opens the menu', (await state()).menu === 'dollhouse');
 await restRight(); await restLeft(); await frames(5);
 await click('right', 'b-button');
+
+// Bare hands (milestone C0.1): the Quest turns a pinch into a select of a
+// hand source. Put the controllers down, aim the right hand at the model and
+// pinch: nothing may happen (no step inside, no menu), and the note asks for
+// the controllers. Then pick them up again: the note goes, all as before.
+{
+	const top = await toLocal(await modelTop());
+	await page.evaluate(async (top) => {
+		const THREE = await import('three');
+		const x = window.__casawalk.xr, d = window.__device;
+		x.__selects = 0;
+		x.session.addEventListener('select', (e) => { if (e.inputSource.hand || !e.inputSource.gamepad?.axes.length) x.__selects++; });
+		d.primaryInputMode = 'hand';
+		const h = d.hands.right, from = new THREE.Vector3(0.2, 1.3, -0.3);
+		const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, -1), new THREE.Vector3(...top).sub(from).normalize());
+		h.position.set(from.x, from.y, from.z);
+		h.quaternion.set(q.x, q.y, q.z, q.w);
+	}, top);
+	await frames(8);
+	const before = await page.evaluate(() => window.__casawalk.xr.input.handsOnly());
+	for (let i = 0; i < 2; i++) {
+		await page.evaluate(() => window.__device.hands.right.updatePinchValue(1)); await frames(6);
+		await page.evaluate(() => window.__device.hands.right.updatePinchValue(0)); await frames(6);
+	}
+	const h = await page.evaluate(() => {
+		const x = window.__casawalk.xr, c = x.input.controllers;
+		return { selects: x.__selects, mode: x.mode, menu: !!x.menu, note: x.ui.handsNote.mesh.visible, active: x.input.active().length,
+			hands: c.filter((c) => c.isHand).length, lasers: c.some((c) => c.line.visible), bodies: c.some((c) => c.body.visible && c.isHand),
+			marker: x.modes.dollhouse.markers.some((m) => m.visible), zoom: x.modes.dollhouse.doll.zoom };
+	});
+	await shot('hands-note');
+	check('bare hands: a pinch reaches the app as a select', h.selects >= 2, JSON.stringify(h));
+	check('bare hands: pinches do nothing (no step inside, no menu, no laser)', before && h.mode === 'dollhouse' && !h.menu && h.active === 0 && h.hands === 2 && !h.lasers && !h.bodies && !h.marker, JSON.stringify(h));
+	check('bare hands: "Pick up your controllers" in front of you', h.note && await page.evaluate(() => /controllers/.test(window.__casawalk.xr.ui.handsNote.title)));
+	await page.evaluate(() => { window.__device.primaryInputMode = 'controller'; });
+	await waitXR(); await frames(8);
+	const back = await page.evaluate(() => { const x = window.__casawalk.xr; return { note: x.ui.handsNote.mesh.visible, active: x.input.active().length, lasers: x.input.active().every((c) => c.line.visible && c.body.visible) }; });
+	check('controllers again: the note goes, lasers back', !back.note && back.active === 2 && back.lasers, JSON.stringify(back));
+	await restRight(); await restLeft(); await frames(5);
+}
 
 // Trigger on the model: jump in at 1:1.
 await aimW('right', R, await modelTop()); await frames(6);

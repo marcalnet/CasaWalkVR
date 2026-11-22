@@ -419,6 +419,7 @@ export class XRExperience {
 		if (!this.session || !this.model) return;
 		this.input.update(); // (also clears every controller's claims)
 		this.ui.placeOrbs();
+		this.ui.showHandsNote(); // bare hands: "Pick up your controllers" (their pinches are never read)
 		this.tools.claim(); // a held tool's buttons are its own, before the menu and the mode
 		if (this.pendingRecentre && this.mode === 'dollhouse') {
 			const head = this.viewerMatrix();
