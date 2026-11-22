@@ -14,7 +14,7 @@
 		(npm test prints the right one). To enable the Dropbox Chooser, add
 		https://www.dropbox.com to script-src and frame-src (see README).
 	-->
-	<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'wasm-unsafe-eval' 'sha256-hUvon5CVPXLquT3WJNr9I0hyTxeK5RACPxDkF4pZIVs='; style-src 'self' 'unsafe-inline'; worker-src blob:; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' https: wss://0.peerjs.com data: blob:; base-uri 'none'; form-action 'none'; object-src 'none'">
+	<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'wasm-unsafe-eval' 'sha256-hUvon5CVPXLquT3WJNr9I0hyTxeK5RACPxDkF4pZIVs='; style-src 'self' 'unsafe-inline'; worker-src 'self' blob:; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' https: wss://0.peerjs.com data: blob:; base-uri 'none'; form-action 'none'; object-src 'none'">
 	<!-- Sites we download a model from are not told which page asked. -->
 	<meta name="referrer" content="no-referrer">
 	<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M4 15 16 5l12 10v12H4z' fill='%23d9822b'/%3E%3Cpath d='M13 27v-8h6v8' fill='%23fff'/%3E%3C/svg%3E">

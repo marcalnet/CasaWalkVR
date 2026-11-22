@@ -150,7 +150,7 @@ test('the page allows only its own scripts, and the import map hash is right', (
 	// allows WebAssembly only (the vendored compressed-glTF decoders), never eval.
 	assert.match(csp, /script-src 'self' 'wasm-unsafe-eval' 'sha256-[^']+'(;|$)/);
 	assert.ok(!/'unsafe-(eval|inline)'/.test(csp.match(/script-src [^;]+/)[0]));
-	assert.match(csp, /worker-src blob:(;|$)/); // the decoders' workers, built from vendored files
+	assert.match(csp, /worker-src 'self' blob:(;|$)/); // sw.js (offline use) and the decoders' workers, built from vendored files
 	assert.match(csp, /object-src 'none'/);
 	assert.match(csp, /font-src 'self'(;|$)/); // only the vendored font
 	const fontUrls = [...html.matchAll(/@font-face[^}]*url\("([^"]+)"\)/g)].map((m) => m[1]);
