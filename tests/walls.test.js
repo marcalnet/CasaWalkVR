@@ -133,3 +133,35 @@ test('see-through fades walls and furniture only, and restores them exactly', ()
 	assert.equal(window.material.opacity, 0.4);
 	assert.equal(window.material.transparent, true);
 });
+
+// The user's Quest 2 finding: at 5% walls vanished (faded surfaces wrote no
+// depth, so draw order decided what was in front). The walls are one pane of
+// glass with a depth pass; furniture keeps its own depth.
+test('see-through: walls get a depth pass and draw after the furniture; furniture keeps its depth', () => {
+	const shared = new THREE.MeshLambertMaterial({ color: 0xffffff });
+	const layer = (...meshes) => { const g = new THREE.Group(); if (meshes.length) g.add(...meshes); return g; };
+	const wall = new THREE.Mesh(new THREE.BufferGeometry(), shared);
+	const sofa = new THREE.Mesh(new THREE.BufferGeometry(), shared);
+	const floor = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.MeshLambertMaterial());
+	const s = new SeeThrough();
+	s.setModel({ walls: layer(wall), main: layer(sofa), floors: layer(floor), ceilings: layer(), ground: layer() });
+	assert.notEqual(wall.material, sofa.material, 'a material shared by a wall and furniture is copied for the wall');
+	assert.equal(sofa.material, shared, 'furniture keeps its own material');
+	const depth = wall.children.find((c) => c.name === 'see-through-depth');
+	assert.ok(depth && !depth.visible, 'at 0 the depth pass is hidden');
+	assert.deepEqual([wall.renderOrder, depth.renderOrder, sofa.renderOrder], [3, 2, 1]);
+	s.set(0.05);
+	assert.ok(depth.visible && depth.material.colorWrite === false && depth.material.depthWrite === true);
+	assert.equal(wall.material.depthWrite, false);
+	assert.equal(sofa.material.depthWrite, true, 'faded furniture still hides what is behind it');
+	assert.ok(wall.material.transparent && sofa.material.transparent);
+	assert.ok(Math.abs(wall.material.opacity - (1 - SEE_THROUGH_MAX * 0.05)) < 1e-9);
+	const hits = [];
+	depth.raycast(new THREE.Raycaster(), hits);
+	assert.equal(hits.length, 0, 'the depth pass is never hit by a ray');
+	s.set(0);
+	assert.ok(!depth.visible && wall.material.depthWrite && !wall.material.transparent && wall.material.opacity === 1);
+	// A new model replaces the depth passes.
+	s.setModel({ walls: layer(wall), main: layer(sofa), floors: layer(floor), ceilings: layer(), ground: layer() });
+	assert.equal(wall.children.filter((c) => c.name === 'see-through-depth').length, 1);
+});

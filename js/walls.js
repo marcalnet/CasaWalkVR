@@ -117,30 +117,64 @@ export class SeeThrough {
 	 */
 	setModel(layers) {
 		this.restore();
-		const fade = [...(layers.walls?.children ?? []), ...(layers.main?.children ?? [])].filter((m) => m.isMesh);
-		const keep = new Set();
+		const walls = (layers.walls?.children ?? []).filter((m) => m.isMesh);
+		const main = (layers.main?.children ?? []).filter((m) => m.isMesh);
+		const fade = [...walls, ...main];
+		const floorMats = new Set(), mainMats = new Set();
 		for (const name of ['floors', 'ceilings', 'ground']) {
-			for (const m of layers[name]?.children ?? []) for (const mat of [].concat(m.material)) keep.add(mat);
+			for (const m of layers[name]?.children ?? []) for (const mat of [].concat(m.material)) floorMats.add(mat);
 		}
-		const copies = new Map();
-		const own = (mat) => {
-			if (!keep.has(mat)) return mat;
-			if (!copies.has(mat)) {
-				const c = mat.clone();
-				// Keep the depth shading hook (js/depth.js) on the copy.
-				c.onBeforeCompile = mat.onBeforeCompile;
-				c.customProgramCacheKey = mat.customProgramCacheKey;
-				copies.set(mat, c);
-			}
-			return copies.get(mat);
+		for (const m of main) for (const mat of [].concat(m.material)) mainMats.add(mat);
+		/** A copy of `mat` for one kind of mesh when it is shared with another (one copy per kind and material). */
+		const owner = (shared) => {
+			const copies = new Map();
+			return (mat) => {
+				if (!shared(mat)) return mat;
+				if (!copies.has(mat)) {
+					const c = mat.clone();
+					// Keep the depth shading hook (js/depth.js) on the copy.
+					c.onBeforeCompile = mat.onBeforeCompile;
+					c.customProgramCacheKey = mat.customProgramCacheKey;
+					copies.set(mat, c);
+				}
+				return copies.get(mat);
+			};
 		};
+		// Only walls and furniture fade, and they fade differently (below): a wall
+		// material shared with a floor or with furniture gets its own copy, and a
+		// furniture material shared with a floor gets one.
+		const wallOwn = owner((mat) => floorMats.has(mat) || mainMats.has(mat)), mainOwn = owner((mat) => floorMats.has(mat));
+		for (const m of walls) m.material = Array.isArray(m.material) ? m.material.map(wallOwn) : wallOwn(m.material);
+		for (const m of main) m.material = Array.isArray(m.material) ? m.material.map(mainOwn) : mainOwn(m.material);
 		for (const m of fade) {
-			m.material = Array.isArray(m.material) ? m.material.map(own) : own(m.material);
 			for (const mat of [].concat(m.material)) {
 				mat.userData.cwBase ??= { opacity: mat.opacity, transparent: mat.transparent, depthWrite: mat.depthWrite };
 			}
 		}
 		this.meshes = fade;
+		// The walls are one pane of glass: while faded, an invisible depth pass
+		// (renderOrder 2) keeps only the nearest wall surface, then the walls'
+		// colour (renderOrder 3, no depth writing) blends over the furniture
+		// (renderOrder 1, keeping its own depth) and the floors behind. Without
+		// it, faded surfaces that write no depth are drawn in whatever order the
+		// merged meshes sort in, and a far wall or a sofa paints over the near
+		// wall even at 5% (the user's Quest 2 finding; the tester's diagnosis).
+		this.walls = new Set(walls);
+		this.depthMat ??= new THREE.MeshBasicMaterial({
+			colorWrite: false, depthWrite: true, transparent: true, // transparent: in the transparent list, ordered by renderOrder
+			polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1, // a hair behind, so the wall's own colour passes LessEqual
+		});
+		for (const d of this.depthMeshes ?? []) d.removeFromParent();
+		this.depthMeshes = walls.map((m) => {
+			const d = new THREE.Mesh(m.geometry, this.depthMat); // a child sharing the geometry: storey hiding and transforms follow
+			d.name = 'see-through-depth';
+			d.renderOrder = 2;
+			d.visible = false;
+			d.raycast = () => {}; // never a target, a wall to the collider, or a floor
+			m.add(d);
+			return d;
+		});
+		for (const m of fade) m.renderOrder = this.walls.has(m) ? 3 : 1;
 		this.apply();
 	}
 
@@ -160,10 +194,11 @@ export class SeeThrough {
 				mat.opacity = b.opacity * keep;
 				const transparent = b.transparent || faded;
 				if (mat.transparent !== transparent) { mat.transparent = transparent; mat.needsUpdate = true; }
-				// Faded surfaces don't hide one another: everything behind shows through.
-				mat.depthWrite = faded ? false : b.depthWrite;
+				// Faded walls write no depth (their depth pass did); furniture keeps its own.
+				mat.depthWrite = faded && this.walls?.has(m) ? false : b.depthWrite;
 			}
 		}
+		for (const d of this.depthMeshes ?? []) d.visible = faded;
 	}
 
 	/** Back to the model's own look (used when leaving the headset). */

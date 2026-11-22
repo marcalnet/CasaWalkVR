@@ -32,7 +32,9 @@ const out = path.resolve(root, process.env.XR_OUT || 'test-output');
 const STEADY = !!process.env.XR_STEADY;
 fs.mkdirSync(out, { recursive: true });
 
-const server = await startServer(8129);
+// XR_PORT: another port, so two sessions can run this at once (default 8129).
+const PORT = Number(process.env.XR_PORT) || 8129;
+const server = await startServer(PORT);
 // (--disable-audio-output: sound goes to a stand-in output; headless Chromium
 // cannot wake a real one after the app pauses it.)
 const browser = await chromium.launch({ args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--disable-audio-output'] });
@@ -319,7 +321,7 @@ let bad;
 
 console.log(`Fixture: ${fixture}   Device: ${DEVICE}`);
 // The empty page: two welcome notes by the cards; they go once a model is open.
-await page.goto('http://localhost:8129/?test');
+await page.goto(`http://localhost:${PORT}/?test`);
 await page.waitForFunction(() => !document.getElementById('welcome').hidden, null, { timeout: 5000 }).catch(() => {});
 const welcome = () => page.evaluate(() => {
 	const r = (el) => el.getBoundingClientRect(), w = document.getElementById('welcome');
@@ -335,7 +337,7 @@ const welcome = () => page.evaluate(() => {
 let wl = await welcome();
 check('welcome notes sit under the two cards on the empty page', wl.shown && wl.notes === 2 && wl.layout === 'below' && wl.under && wl.clear && wl.inside && wl.formats, JSON.stringify(wl));
 await shot('welcome');
-await page.goto(`http://localhost:8129/?test&model=${encodeURIComponent(fixture)}`);
+await page.goto(`http://localhost:${PORT}/?test&model=${encodeURIComponent(fixture)}`);
 check('model loads', await page.evaluate(() => window.__casawalk.ready));
 await frames(5);
 check('welcome notes go once a model is open', (await welcome()).shown === false);
@@ -535,6 +537,18 @@ const fade = 1 - 0.85 * g.amount;
 check('See-through 75%: walls and furniture fade', g.amount === 0.75 && Math.abs(g.wall - fade) < 1e-6 && Math.abs(g.piece - fade) < 1e-6 && !g.wallDepthWrite && !g.cast && g.floor === 1 && !g.floorTransparent && (await state()).menu === 'dollhouse', JSON.stringify(g));
 await restRight(); await frames(5);
 await shot('dollhouse-see-through');
+{
+	// The walls' depth pass (one per wall mesh) only while faded: it adds one draw call per wall mesh, and the example home stays under 150 at 100%.
+	const calls = () => page.evaluate(async () => { const S = window.__casawalk, r = S.renderer; for (let k = 0; k < 2; k++) { const f = r.info.render.frame; for (let t = 0; r.info.render.frame === f && t < 100; t++) await new Promise((ok) => setTimeout(ok, 10)); } return r.info.render.calls; });
+	await clickMenu('seethrough', 1); await restRight(); await frames(5);
+	const dc = await page.evaluate(() => { const x = window.__casawalk.xr, depth = x.seeThrough.depthMeshes; return { depth: depth.length, shown: depth.every((d) => d.visible), sofa: x.model.layers.main.children.some((m) => [].concat(m.material).some((mat) => mat.transparent && mat.depthWrite)) }; });
+	dc.on = await calls();
+	await clickMenu('seethrough', 0); await restRight(); await frames(5);
+	dc.off = await calls();
+	await clickMenu('seethrough', 1); await restRight(); await frames(5); // (back to 100% for the next steps)
+	const example = /example-home/.test(fixture);
+	check('see-through 100%: the walls\' depth pass is on (one draw call per wall mesh), furniture keeps its depth', dc.depth > 0 && dc.shown && dc.sofa && dc.on - dc.off <= 2 * dc.depth + 4 && /* (the on-demand shadow map may redraw in that frame too) */ (!example || dc.on < 150), JSON.stringify(dc));
+}
 await clickMenu('seethrough', 0);
 g = await glass();
 check('See-through back to Off restores the model', g.amount === 0 && g.wall === 1 && g.piece === 1 && g.wallDepthWrite && g.cast && (await cell('dollhouse', 'seethrough')).value === 0, JSON.stringify(g));
@@ -1338,7 +1352,7 @@ await enterVR.click(); await waitXR(); await frames(10);
 	bad = await entry();
 	const see = await page.evaluate(() => { const x = window.__casawalk.xr, m = x.seeThrough.meshes.flatMap((k) => [].concat(k.material)).find((mat) => !mat.userData.cwBase.transparent);
 		return { amount: x.seeThroughAmount, keep: m.opacity / m.userData.cwBase.opacity, cell: x.menus.walk.get('seethrough').value }; });
-	const sameAsBefore = diffs(fpA, await fingerprint('reentry-after-mid-teleport')).filter((d) => !/^\.(settings|menus|storage)\.|^\.draw\.[23] /.test(d)); // (see-through is on now; GPU memory counts vary)
+	const sameAsBefore = diffs(fpA, await fingerprint('reentry-after-mid-teleport')).filter((d) => !/^\.(settings|menus|storage)\.|^\.draw\.[0-3] |see-through-depth/.test(d)); // (see-through is on now: the walls' depth pass adds draw calls; GPU memory counts vary)
 	check('re-entering again: the same clean dollhouse; see-through remembered', !bad.length && see.amount === 0.5 && Math.abs(see.keep - 0.575) < 1e-6 && see.cell === 0.5 && !sameAsBefore.length,
 		`${bad} ${JSON.stringify(see)} ${sameAsBefore.slice(0, 3).join('; ')}`);
 	await page.evaluate(() => window.__casawalk.xr.menuAction({ id: 'seethrough', value: 0 }));
