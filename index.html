@@ -139,6 +139,11 @@
 			min-height: 64px; border-radius: 12px; white-space: nowrap; box-shadow: 0 4px 14px rgba(47, 95, 208, .35); }
 		button.xr:hover { filter: brightness(1.1); border-color: var(--xr); }
 		button.xr svg { width: 30px; height: 30px; vertical-align: -8px; margin-right: 10px; }
+		/* Where Enter VR lands (SPEC.md C0, "Layers"): a second line in the
+		   button, and the three layers in the welcome notes' handwriting. */
+		button.xr .where { display: block; font-size: 13px; font-weight: 500; opacity: .9; margin-top: 2px; }
+		#xr-buttons .layers { text-align: center; font-family: "Kalam", "Bradley Hand", cursive; font-size: 15px; color: var(--muted, #6b7480); }
+		#xr-buttons .layers b { color: var(--xr); font-weight: 700; }
 
 		/* ---- Model details, over the view at the bottom right ---- */
 		#stats { position: fixed; bottom: var(--gap); right: calc(var(--gap) + 2px); max-width: min(460px, calc(100vw - 380px)); text-align: right;

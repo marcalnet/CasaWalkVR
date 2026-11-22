@@ -4,8 +4,11 @@
 //   dollhouse  the home on a plinth in a gallery room (VR view) or floating
 //              over passthrough (AR view): js/xr-dollhouse.js
 //   walk       the home at 1:1: js/xr-walk.js
-//   menus      what they say and do: js/xr-menus.js; orbs, opening, closing,
-//              pointing, the welcome card and the photo note: js/xr-ui.js
+//   menus      what they say and do: js/xr-menus.js; the wrist menu:
+//              js/wrist-menu.js; the board, help, welcome card and notes:
+//              js/xr-ui.js
+//   layers     page → scale model → inside, one step at a time: goLayer()
+//              (dive and surface transitions, the arrival title)
 //   tools      hand-held tools (milestones C-F): js/xr-tools.js
 //   scenery    gallery, plinth, skies, markers: js/xr-scene.js
 //   rules      what lasers, the arc and the feet may hit: js/xr-targets.js
@@ -22,7 +25,7 @@
 // Scene graph (owned by main.js):
 //   scene
 //   ├─ rig ─ camera, controllers, menu   moved to place the user
-//   ├─ stage ─ gallery room, plinth      what Recentre moves
+//   ├─ stage ─ gallery room, plinth      what recentring moves
 //   └─ anchor ─ centerer ─ model         anchor: dollhouse position/yaw/scale
 //                                        centerer: puts the model's bottom-centre at the origin
 //
@@ -31,7 +34,7 @@
 // showroom gallery pedestal walkSky), input and raycaster, shared state
 // (session sessionMode model mode menu menus view vrView lift maxStorey
 // baseScale plinthSize plinthDistance and the settings snapAngle personHeight
-// solid seeThroughAmount), its services (lighting depth seeThrough ui
+// solid seeThroughAmount toolFan), its services (lighting depth seeThrough ui
 // modes tools tweens haptics sound) and its methods. Each part owns what it
 // creates and reads shared values when it needs them, never keeping copies.
 
@@ -42,14 +45,15 @@ import { SeeThrough, SEE_THROUGH_MAX } from './walls.js';
 import { takePhoto, photoName, saveFile, withHidden } from './photo.js';
 import { readSetting } from './settings.js';
 import { buildShowroom, buildStage, fitPlinth, placePlate, buildWalkSky, recolourSphere } from './xr-scene.js';
-import { ScalePlate } from './panel.js';
+import { ScalePlate, Label } from './panel.js';
+import { roomAt } from './rooms.js';
 import { targetSets, findFloor } from './xr-targets.js';
 import { buildMenus, updateLabels, menuAction } from './xr-menus.js';
 import { XRUI } from './xr-ui.js';
 import { Dollhouse } from './xr-dollhouse.js';
 import { Walk } from './xr-walk.js';
 import { ToolSystem } from './xr-tools.js';
-import { Tweens } from './tween.js';
+import { Tweens, ease } from './tween.js';
 import { Haptics } from './haptics.js';
 import { Sound } from './sound.js';
 
@@ -85,6 +89,9 @@ export class XRExperience {
 		this.seeThroughAmount = readSetting('seeThrough');
 		this.seeThrough = new SeeThrough();
 		this.soundLevel = readSetting('sound'); // off | effects | all (effects and ambience)
+		this.toolFan = readSetting('toolFan'); // the hand that holds the tool fan; the wrist menu is on the other
+		this.layerFx = null; // a move between layers in progress (goLayer())
+		this.frameDt = 1 / 72;
 		this.maxStorey = null; // dollhouse: highest storey shown (null = all)
 		this.pendingRecentre = false;
 		this.photoPending = false;
@@ -103,8 +110,19 @@ export class XRExperience {
 		this.plate = new ScalePlate(); // the model's true scale, on the plinth (SPEC.md B2)
 		this.setPlinth(1.2, 0.9);
 		this.walkSky = buildWalkSky(camera);
-		this.menus = buildMenus(rig);
-		this.hideFromPhotos(...Object.values(this.menus).map((p) => p.mesh));
+		Object.assign(this, buildMenus(rig)); // menus: the settings boards; help: the help cards
+		this.hideFromPhotos(...Object.values(this.menus).map((p) => p.mesh), ...Object.values(this.help).map((c) => c.mesh));
+		// Moving between layers: a curtain over the eyes (dark for in and back, white for leaving VR) and the arrival title.
+		this.curtain = new THREE.Mesh(new THREE.SphereGeometry(0.3, 16, 8), new THREE.MeshBasicMaterial({ color: 0x000000, side: THREE.BackSide, transparent: true, opacity: 0, depthTest: false, depthWrite: false }));
+		this.curtain.renderOrder = 1002;
+		this.curtain.visible = false;
+		this.curtain.name = 'layer-curtain';
+		camera.add(this.curtain);
+		this.arrival = new Label({ height: 0.12 });
+		this.arrival.mesh.visible = false;
+		this.arrival.mesh.material.depthTest = false;
+		rig.add(this.arrival.mesh);
+		this.hideFromPhotos(this.curtain, this.arrival.mesh);
 		this.modes = { dollhouse: new Dollhouse(this), walk: new Walk(this) };
 		this.ui = new XRUI(this);
 		this.tools = new ToolSystem(this);
@@ -114,7 +132,7 @@ export class XRExperience {
 		this.sound.setLevel(this.soundLevel);
 	}
 
-	/** The open menu (a Panel), or null. */
+	/** The open settings board (a Panel), or null. */
 	get menu() { return this.ui.menu; }
 
 	/** Objects never drawn in a photo (the interface); hiding one hides what it carries. */
@@ -231,7 +249,10 @@ export class XRExperience {
 		this.applySeeThrough(); // the 2D page shows the model as modelled
 		this.mode = null;
 		this.pendingRecentre = false;
-		this.ui.reset(); // menu, welcome card, photo note, orbs
+		this.ui.reset(); // menus, welcome card, notes, the wrist menu
+		this.layerFx = null;
+		this.curtain.visible = false;
+		this.arrival.mesh.visible = false;
 		for (const v of this.handViews) v.hide();
 		this.photoPending = false;
 		this.tools.end(); // tools back in the fan; measurements and drawings cleared
@@ -262,8 +283,101 @@ export class XRExperience {
 	setMode(name, ...args) {
 		if (this.mode && this.mode !== name) this.modes[this.mode].exit();
 		this.mode = name; // (set first: applyStoreys() and applyView() read it)
-		this.ui.closeMenu();
+		this.ui.closeAll();
 		this.modes[name].enter(...args);
+	}
+
+	// -----------------------------------------------------------------------
+	// Layers: page → scale model → inside (SPEC.md C0, "Layers")
+	// -----------------------------------------------------------------------
+
+	/**
+	 * Moves one layer, running `go` while the view is covered: 'in' (the
+	 * scale model grows towards you for 0.3 s, then a short fade; sound dive),
+	 * 'back' (a fade, then the home shrinks down onto the plinth; sound
+	 * surface) or 'out' (a gentle fade to white, then the page). Menus close;
+	 * the modes wait until it is over. The arrival title follows.
+	 */
+	goLayer(dir, go) {
+		if (this.layerFx || !this.session) return;
+		this.ui.closeAll();
+		if (dir !== 'out' && this.soundLevel !== 'off') this.sound.play(dir === 'in' ? 'dive' : 'surface');
+		const doll = this.modes.dollhouse.doll;
+		this.layerFx = { dir, go, t: 0, done: false, zoom: doll.zoom };
+		this.curtain.material.color.set(dir === 'out' ? 0xffffff : 0x000000);
+	}
+
+	/** Advances a move between layers (instead of the mode's update). */
+	runLayerFx(dt) {
+		const f = this.layerFx, doll = this.modes.dollhouse;
+		f.t += dt;
+		const GROW = 0.3, OUT = 0.1, IN = 0.15, WHITE = 0.3;
+		const cover = (v) => { this.curtain.material.opacity = v; this.curtain.visible = v > 0; };
+		if (f.dir === 'out') {
+			cover(Math.min(1, f.t / WHITE));
+			if (f.t >= WHITE && !f.done) { f.done = true; this.layerFx = null; f.go(); }
+			return;
+		}
+		if (f.dir === 'in') {
+			// The model grows towards you, then the fade; inside, the fade lifts.
+			if (!f.done) {
+				const g = Math.min(1, f.t / GROW);
+				if (this.mode === 'dollhouse') { doll.doll.zoom = f.zoom * (1 + 0.6 * ease.inOut(g)); doll.apply(); }
+				cover(THREE.MathUtils.clamp((f.t - (GROW - OUT)) / OUT, 0, 1));
+				if (f.t >= GROW) {
+					f.done = true; f.t = 0;
+					doll.doll.zoom = f.zoom; // (the scale model is as you left it when you come back)
+					f.go();
+					this.showArrival(this.roomHere() || 'Inside');
+				}
+			} else {
+				cover(Math.max(0, 1 - f.t / IN));
+				if (f.t >= IN) { cover(0); this.layerFx = null; }
+			}
+			return;
+		}
+		// 'back': the fade, then the home settles back onto the plinth.
+		if (!f.done) {
+			cover(Math.min(1, f.t / OUT));
+			if (f.t >= OUT) {
+				f.done = true; f.t = 0;
+				f.go();
+				this.showArrival(`Scale model 1:${Math.round(1 / (this.baseScale * doll.doll.zoom))}`);
+			}
+		} else {
+			cover(Math.max(0, 1 - f.t / IN));
+			const g = Math.min(1, f.t / GROW);
+			if (this.mode === 'dollhouse') { doll.doll.zoom = f.zoom * (1 + 0.6 * (1 - ease.out(g))); doll.apply(); }
+			if (f.t >= GROW) { doll.doll.zoom = f.zoom; if (this.mode === 'dollhouse') doll.apply(); cover(0); this.layerFx = null; }
+		}
+	}
+
+	/** The arrival title: the layer's name, 1.5 m in front of you for 1.5 s, then it fades. */
+	showArrival(text) {
+		const head = this.camera.matrix;
+		const yaw = yawOfMatrix(head);
+		const p = new THREE.Vector3().setFromMatrixPosition(head);
+		this.arrival.set(text);
+		this.arrival.mesh.position.set(p.x - Math.sin(yaw) * 1.5, p.y + 0.05, p.z - Math.cos(yaw) * 1.5);
+		this.arrival.mesh.rotation.set(0, yaw, 0);
+		this.arrival.mesh.visible = true;
+		this.arrivalT = 1.5;
+	}
+
+	runArrival(dt) {
+		if (!this.arrival.mesh.visible) return;
+		this.arrivalT -= dt;
+		this.arrival.mesh.material.opacity = Math.min(1, Math.max(0, this.arrivalT / 0.3));
+		if (this.arrivalT <= 0) this.arrival.mesh.visible = false;
+	}
+
+	/** The name of the room you are standing in (walking), or ''. */
+	roomHere() {
+		if (this.mode !== 'walk' || !this.model?.plan) return '';
+		this.rig.updateMatrixWorld(true);
+		const head = this.camera.getWorldPosition(new THREE.Vector3());
+		const feet = this.centerer.worldToLocal(new THREE.Vector3(head.x, this.rig.position.y - this.lift, head.z));
+		return roomAt(this.model.plan, feet.x, feet.y, feet.z)?.name ?? '';
 	}
 
 	/** The head pose for this frame (rig space), straight from WebXR. */
@@ -418,8 +532,8 @@ export class XRExperience {
 
 	update(dt) {
 		if (!this.session || !this.model) return;
+		this.frameDt = dt;
 		this.input.update(); // (also clears every controller's claims)
-		this.ui.placeOrbs();
 		this.ui.showHandsNote(); // bare hands: "Pick up your controllers" (their pinches are never read)
 		this.tools.claim(); // a held tool's buttons are its own, before the menu and the mode
 		if (this.pendingRecentre && this.mode === 'dollhouse') {
@@ -430,7 +544,9 @@ export class XRExperience {
 				this.modes.dollhouse.recentre(head.clone().premultiply(this.rig.matrix));
 			}
 		}
-		this.modes[this.mode]?.update(dt);
+		if (this.layerFx) this.runLayerFx(dt); // moving between layers: the modes wait
+		else this.modes[this.mode]?.update(dt);
+		this.runArrival(dt);
 		for (const v of this.handViews) v.update(dt, { passthrough: !this.vrView });
 		this.tools.update(dt);
 		this.tweens.update(dt);
@@ -439,4 +555,11 @@ export class XRExperience {
 		if (this.photoPending) this.capturePhoto();
 		this.ui.runPhotoFx(dt);
 	}
+}
+
+const _fwd = new THREE.Vector3();
+/** Yaw of a matrix's forward (-Z) direction. */
+function yawOfMatrix(m) {
+	_fwd.set(0, 0, -1).transformDirection(m);
+	return Math.atan2(-_fwd.x, -_fwd.z);
 }

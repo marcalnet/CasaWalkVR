@@ -49,45 +49,71 @@ async function setup() {
 	const BUTTON = { trigger: 0, grip: 1, stick: 3, a: 4, b: 5 };
 	const press = (hand, name, v = true) => { pads[hand].buttons[BUTTON[name]].pressed = v; };
 	const frame = (dt = 1 / 72) => x.update(dt);
-	return { x, ended: () => ended, press, frame, hands: x.input.hands };
+	// Moving between layers takes a few frames (the dive or surface transition).
+	const settle = () => { for (let i = 0; i < 120 && x.layerFx; i++) frame(); };
+	const go = (id) => { x.menuAction(id); settle(); };
+	return { x, ended: () => ended, press, frame, settle, go, hands: x.input.hands };
 }
 
 const shape = (rows) => rows.map((r) => r.map((c) => [c.id, c.type, c.label, ...(c.options ?? []).map((o) => o.label)].join(':')).join(' | '));
 
-test('the menus: the same tabs in both modes, the actions under them', async () => {
+test('the settings boards: the same tabs at both layers, a Close key, every target big enough to touch', async () => {
 	const { x } = await setup();
 	for (const p of Object.values(x.menus)) {
-		assert.deepEqual(p.tabs.map((t) => t.label), ['View', 'Walk', 'Sound']);
+		assert.deepEqual(p.tabs.map((t) => t.label), ['View', 'Walk', 'General']);
 		assert.deepEqual(shape(p.tabs[0].rows), ['light:choice:Time of day:Morning:Noon:Sunset:Night', 'shadows:switch:Shadows | depth:switch:Depth shading',
-			'ceilings:switch:Ceilings | view:switch:Passthrough', 'seethrough:slider:See-through', `levels:dropdown:Levels${p === x.menus.dollhouse ? ':All levels (2):Up to Ground floor' : ''}`]);
+			'ceilings:switch:Ceilings | view:switch:Passthrough', 'seethrough:choice:See-through:Off:25:50:75:100%', `levels:choice:Levels${p === x.menus.dollhouse ? ':All levels (2):Up to Ground floor' : ''}`]);
 		assert.deepEqual(shape(p.tabs[1].rows), ['turn:choice:Turn:15°:30°:45°', 'height:choice:Height:Yours:1.4 m:1.7 m:2.0 m', 'solid:switch:Solid walls']);
-		assert.deepEqual(shape(p.tabs[2].rows), ['sound:choice:Sound:Off:Effects']);
+		assert.deepEqual(shape(p.tabs[2].rows), ['toolFan:choice:Tool fan:Left hand:Right hand', 'sound:choice:Sound:Off:Effects']);
+		assert.equal(p.actions.length, 0, 'no actions on the board: the doors are on the wrist');
+		assert.ok(p.rects().some((r) => r.id === 'close'), 'a Close key');
+		assert.ok(p.get('levels').stepper, 'Levels is a ‹ › stepper');
+		// Touch targets: at least 4 cm (the board is 52 cm wide).
+		const m = p.mesh.geometry.parameters.width / p.size.w;
+		for (const r of p.rects()) assert.ok(Math.min(r.w, r.h) * m >= 0.04 - 1e-9, `${r.id} ${r.value ?? ''}: ${(Math.min(r.w, r.h) * m * 100).toFixed(1)} cm`);
 	}
-	assert.deepEqual(shape(x.menus.dollhouse.actions), ['walk:button:Walk in | recentre:button:Recentre | photo:button:Photo', 'exit:button:Exit VR']);
-	assert.deepEqual(shape(x.menus.walk.actions), ['photo:button:Photo | dollhouse:button:Back to the scale model | exit:button:Exit VR']);
-	assert.ok(x.menus.dollhouse.get('exit').primary && x.menus.walk.get('exit').primary);
-	assert.equal(x.menus.dollhouse.title, 'Scale model');
-	assert.equal(x.menus.walk.title, 'Walking');
-	// Scale-model settings are greyed out while walking; the menus are the same size whatever the tab.
+	assert.equal(x.menus.dollhouse.title, 'Settings \u00b7 Scale model');
+	assert.equal(x.menus.walk.title, 'Settings \u00b7 Inside');
+	// Scale-model settings are greyed out inside; the boards are the same size whatever the tab.
 	assert.ok(x.menus.walk.get('levels').disabled && /scale model/i.test(x.menus.walk.get('levels').note));
-	// The scale figure and its switch are gone (the landing markers show a person's size).
-	assert.ok(Object.values(x.menus).every((p) => !p.get('figure')) && !('figure' in x) && !('figureOn' in x));
+	assert.ok(Object.values(x.menus).every((p) => !p.get('figure') && !p.get('photo') && !p.get('recentre') && !p.get('exit')), 'no figure, Photo, Recentre or Exit VR');
 	const h = x.menus.dollhouse.size.h;
-	x.menus.dollhouse.setTab('sound');
+	x.menus.dollhouse.setTab('general');
 	assert.equal(x.menus.dollhouse.size.h, h);
-	assert.ok(x.menus.dollhouse.rects().some((r) => r.id === 'exit') && !x.menus.dollhouse.rects().some((r) => r.id === 'light'), 'actions on every tab; other tabs\' cells not clickable');
 	x.menus.dollhouse.setTab('view');
 });
 
-test('the tab you left a menu on is the one the other menu opens on', async () => {
-	const { x } = await setup();
+test('the wrist menu: Settings above, Help below, ← Back on the left, Walk in → on the right', async () => {
+	const { keysFor } = await import('../js/wrist-menu.js');
+	const doll = keysFor('dollhouse'), inside = keysFor('walk', 'Living room');
+	assert.deepEqual(Object.fromEntries(Object.entries(doll).map(([k, v]) => [k, [v.id, v.look, v.label, v.caption ?? '']])), {
+		up: ['settings', 'plain', 'Settings', ''], right: ['in', 'filled', 'Walk in \u2192', 'Inside the home'],
+		down: ['help', 'plain', 'Help', ''], left: ['back', 'outline', '\u2190 Back', 'Leave VR'],
+	});
+	assert.deepEqual([inside.right.id, inside.right.look, inside.right.label, inside.right.caption], [null, 'flat', 'Inside', 'Living room'], 'inside: a flat plate, you are as deep as it goes');
+	assert.deepEqual([inside.left.id, inside.left.caption], ['back', 'Scale model']);
+});
+
+test('the tab you left a board on is the one the other board opens on', async () => {
+	const { x, go } = await setup();
 	x.ui.openMenu();
 	x.menu.setTab('walk');
 	x.ui.closeMenu();
-	x.menuAction('walk');
+	go('in');
 	x.ui.openMenu();
 	assert.equal(x.menu, x.menus.walk);
 	assert.equal(x.menu.tab, 'walk');
+});
+
+test('Tool fan: the wrist menu moves to the other wrist, remembered', async () => {
+	const { x } = await setup();
+	assert.equal(x.ui.wrist.side, 'right');
+	x.menuAction({ id: 'toolFan', value: 'right' });
+	assert.equal(x.toolFan, 'right');
+	assert.equal(x.ui.wrist.side, 'left');
+	assert.equal(x.menus.dollhouse.get('toolFan').value, 'right');
+	x.menuAction({ id: 'toolFan', value: 'left' });
+	assert.equal(x.ui.wrist.side, 'right');
 });
 
 test('Sound: off and on, remembered', async () => {
@@ -100,37 +126,46 @@ test('Sound: off and on, remembered', async () => {
 	assert.equal(x.sound.level, 'effects');
 });
 
-test('the menu closes on Walk in, Recentre, Photo, Back and Exit only', async () => {
-	const { x, ended } = await setup();
-	const closes = (id, value) => { x.ui.openMenu(); x.menuAction(value === undefined ? id : { id, value }); return x.menu === null; };
-	for (const [id, v] of [['light', 'noon'], ['shadows'], ['depth'], ['ceilings'], ['ceilings'], ['seethrough', 0.5], ['seethrough', 0], ['levels', 0], ['levels', 1], ['view', 'ar']]) {
-		assert.equal(closes(id, v), false, id);
+test('settings keep the board open; the doors move one layer at a time', async () => {
+	const { x, ended, go } = await setup();
+	const stays = (id, value) => { x.ui.openMenu(); x.menuAction(value === undefined ? id : { id, value }); return x.menu !== null; };
+	for (const [id, v] of [['light', 'noon'], ['shadows'], ['depth'], ['ceilings'], ['ceilings'], ['seethrough', 0.5], ['seethrough', 0], ['levels', 0], ['levels', 1], ['view', 'ar'], ['sound', 'effects']]) {
+		assert.equal(stays(id, v), true, id);
 	}
-	assert.equal(closes('recentre'), true);
-	assert.equal(closes('photo'), true);
-	assert.ok(x.photoPending, 'the photo is taken next frame, once the menu is gone');
-	x.photoPending = false;
-	assert.ok(closes('walk') && x.mode === 'walk');
-	for (const [id, v] of [['turn', 45], ['turn', 30], ['height', 1.7], ['height', 0], ['solid'], ['solid']]) assert.equal(closes(id, v), false, id);
-	assert.ok(closes('dollhouse') && x.mode === 'dollhouse');
-	assert.ok(closes('exit') && x.mode === null && ended() === 1);
+	assert.equal(x.seeThroughAmount, 0);
+	x.menuAction('close');
+	assert.equal(x.menu, null, 'the Close key closes the board');
+	// In: the scale model → inside (the board closes).
+	x.ui.openMenu();
+	go('in');
+	assert.ok(x.mode === 'walk' && x.menu === null && !x.layerFx);
+	for (const [id, v] of [['turn', 45], ['turn', 30], ['height', 1.7], ['height', 0], ['solid'], ['solid']]) assert.equal(stays(id, v), true, id);
+	x.ui.closeMenu();
+	go('in');
+	assert.equal(x.mode, 'walk', 'In does nothing inside: you are as deep as it goes');
+	// Back: inside → the scale model, then the scale model → leaving VR. No key skips a layer.
+	go('back');
+	assert.ok(x.mode === 'dollhouse' && ended() === 0);
+	go('back');
+	assert.ok(x.mode === null && ended() === 1);
 });
 
 test('the interface is never in a photo; what the tools make is', async () => {
 	const { x } = await setup();
 	const hidden = x.photoHidden;
-	for (const o of [...Object.values(x.menus).map((p) => p.mesh), x.ui.welcome.mesh, x.ui.flash, x.ui.photoNote.mesh, x.modes.walk.fadeMesh, x.modes.walk.arc.dots, x.modes.walk.arc.ring,
+	for (const o of [...Object.values(x.menus).map((p) => p.mesh), ...Object.values(x.help).map((c) => c.mesh), x.ui.wrist.cross, x.curtain, x.arrival.mesh, x.ui.welcome.mesh, x.ui.flash, x.ui.photoNote.mesh, x.modes.walk.fadeMesh, x.modes.walk.arc.dots, x.modes.walk.arc.ring,
 		...x.modes.dollhouse.markers, ...x.input.controllers.flatMap((c) => [c.ray, c.grip])]) assert.ok(hidden.has(o), o.name || o.type);
 	assert.ok(!hidden.has(x.tools.annotations) && x.tools.annotations.parent === x.centerer, 'measurements and drawings live in model space and show in photos');
 });
 
 test('leaving VR in the middle of a walk leaves nothing behind', async () => {
-	const { x, ended } = await setup();
-	x.menuAction('walk');
+	const { x, ended, go, frame } = await setup();
+	go('in');
 	x.ui.openMenu();
 	x.ui.setWelcome(true);
 	const c = x.input.controllers[0];
-	x.ui.placeOrbs();
+	frame();
+	assert.ok(x.ui.wrist.orb.holder, 'the orb is on a wrist');
 	const walk = x.modes.walk;
 	Object.assign(walk, { tele: { c, via: 'trigger' }, fade: { t: 0, action: () => { throw new Error('a stale teleport ran'); } } });
 	walk.arc.dots.visible = walk.fadeMesh.visible = true;
@@ -141,23 +176,24 @@ test('leaving VR in the middle of a walk leaves nothing behind', async () => {
 	assert.deepEqual([x.mode, x.menu, walk.tele, walk.fade, x.ui.drag, x.modes.dollhouse.grab, x.ui.welcomeOn, x.pendingRecentre, x.photoPending], [null, null, null, null, null, null, false, false, false]);
 	const shown = [walk.arc.dots, walk.arc.ring, walk.fadeMesh, x.ui.flash, x.ui.photoNote.mesh, x.walkSky, x.showroom, x.stage, x.ui.welcome.mesh, ...x.modes.dollhouse.markers, ...Object.values(x.menus).map((p) => p.mesh)].filter((o) => o.visible);
 	assert.deepEqual(shown.map((o) => o.name || o.type), []);
-	assert.ok(x.ui.orbs.every((o) => !o.group.parent && !o.holder));
+	assert.ok(!x.ui.wrist.orb.group.parent && !x.ui.wrist.orb.holder && !x.ui.wrist.open);
 	assert.equal(x.rig.position.length() + x.anchor.position.length() + x.lift, 0);
 	assert.ok(x.model.layers.ground.visible && ended() === 1);
 	assert.equal(x.tools.annotations.children.length, 0, 'measurements and drawings are cleared');
 });
 
 test('going back to the dollhouse while a teleport fades drops the teleport', async () => {
-	const { x, press, frame, hands } = await setup();
-	x.menuAction('walk');
+	const { x, press, frame, settle, go, hands } = await setup();
+	go('in');
 	let jumped = false;
 	x.modes.walk.fade = { t: 0, action: () => { jumped = true; } };
 	frame();
 	assert.ok(x.modes.walk.fadeMesh.visible, 'fading out');
 	press('right', 'b'); frame(); press('right', 'b', false); frame();
+	settle();
 	assert.equal(x.mode, 'dollhouse');
 	assert.ok(!x.modes.walk.fadeMesh.visible && x.modes.walk.fade === null, 'the view is not left half dark');
-	x.menuAction('walk');
+	go('in');
 	for (let i = 0; i < 30; i++) frame();
 	assert.ok(!jumped, 'the old teleport does not run on the next walk');
 	assert.ok(hands.right);
@@ -179,16 +215,22 @@ test('a held tool owns its hand\'s trigger, grip and A; the other hand and the m
 	assert.equal(x.mode, 'dollhouse');
 	// A: a short press, then a long one (clear all).
 	press('right', 'a'); frame(); press('right', 'a', false); frame();
-	assert.equal(x.menu, null, 'A belongs to the tool, not the menu');
+	assert.ok(x.menu === null && !x.ui.wrist.open, 'A belongs to the tool, not the menu');
 	press('right', 'a');
 	for (let t = 0; t < HOLD + 0.1; t += 0.05) frame(0.05);
 	press('right', 'a', false); frame();
 	assert.deepEqual(got.splice(0), ['A press', 'A hold']);
-	// X (the left hand's A) still opens the menu.
+	// X does nothing (the menu is on the right wrist); the other hand touching the orb opens it.
 	press('left', 'a'); frame(); press('left', 'a', false); frame();
-	assert.ok(x.menu, 'X opens the menu');
+	assert.ok(!x.ui.wrist.open, 'X: not the menu wrist');
+	x.rig.updateMatrixWorld(true);
+	hands.left.grip.position.copy(x.rig.worldToLocal(x.ui.wrist.orb.group.getWorldPosition(new THREE.Vector3()))); // (the grip lives in the rig)
+	frame();
+	assert.ok(x.ui.wrist.open, 'the left controller touching the orb on the right wrist opens the menu');
 	assert.equal(hands.left.claim.trigger, null);
-	x.ui.closeMenu();
+	hands.left.grip.position.set(-0.3, 1, -0.3);
+	frame();
+	x.ui.closeAll();
 	// Leaving VR puts it back and clears what it made.
 	x.end();
 	assert.deepEqual(got, ['back', 'clear']);
@@ -196,7 +238,7 @@ test('a held tool owns its hand\'s trigger, grip and A; the other hand and the m
 });
 
 test('mirrored: a tool in the left hand has Y as its second button', async () => {
-	const { x, press, frame, hands } = await setup();
+	const { x, press, frame, go, hands } = await setup();
 	const got = [];
 	// (Y already held down when the tool is taken: that press is not the tool's.)
 	press('left', 'b'); frame();
@@ -206,12 +248,12 @@ test('mirrored: a tool in the left hand has Y as its second button', async () =>
 	press('left', 'b'); frame(); press('left', 'b', false); frame();
 	assert.deepEqual(got, ['press']);
 	assert.equal(hands.left.claim.stickPress, 'tool', 'the marker owns its stick press');
-	x.menuAction('walk');
+	go('in');
 	x.ui.openMenu();
 	frame();
-	assert.ok(!hands.left.line.visible && hands.right.line.visible, 'walking with the menu open: still no laser on the tool hand');
+	assert.ok(!hands.left.line.visible && hands.right.line.visible, 'walking with the board open: still no laser on the tool hand');
 	x.ui.closeMenu();
 	assert.equal(hands.left.claim.b, 'tool');
 	press('right', 'a'); frame(); press('right', 'a', false); frame();
-	assert.ok(x.menu, 'A opens the menu');
+	assert.ok(x.ui.wrist.open && x.ui.wrist.pinned, 'A opens the wrist menu, pinned');
 });

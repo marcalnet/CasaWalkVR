@@ -65,6 +65,9 @@ export const RECIPES = {
 	] },
 	// The teleport arc appears: a soft rising blip.
 	aim: { layers: [{ tone: 'sine', hz: [500, 900], env: [[0, 0], [0.01, 0.15], [0.06, 0]] }] },
+	// Going one layer deeper (stepping inside), and back up (to the scale model): a soft falling whoosh, and rising.
+	dive: { layers: [{ noise: true, band: [1800, 400], q: 0.8, env: [[0, 0], [0.08, 0.3], [0.3, 0]] }] },
+	surface: { layers: [{ noise: true, band: [400, 1800], q: 0.8, env: [[0, 0], [0.08, 0.3], [0.3, 0]] }] },
 	// A teleport or stepping inside: soft air, shorter and lower than whoosh.
 	step: { layers: [{ noise: true, band: [300, 1100], q: 0.8, env: [[0, 0], [0.07, 0.3], [0.18, 0]] }] },
 };

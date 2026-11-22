@@ -3,7 +3,7 @@
 // WebXR joints, and a few thicker ones across the palm, rebuilt each frame
 // into one mesh per hand. Frosted paper white and translucent (js/theme.js,
 // HAND), drawn in two passes so it reads as one clean shape: first depth
-// only, then colour where the depth is equal (no darker seams where capsules
+// only, then colour where the depth is the hand's own nearest (no darker seams where capsules
 // overlap). The index fingertip carries the orange accent, the "pen": faint,
 // and full when a key is near. In passthrough only a faint outline and the
 // fingertip show. When tracking is lost the hand fades out. Never in photos.
@@ -52,9 +52,13 @@ export class HandView {
 		geo.setIndex(new THREE.BufferAttribute(idx, 1));
 		this.geometry = geo;
 		// Pass 1: depth only. Pass 2: colour where the depth is the hand's own front surface.
-		this.depthMesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ colorWrite: false }));
+		// (Transparent, so it is drawn in the transparent list at its renderOrder, after the menus
+		// and keys: an opaque depth pass would punch holes in them where the finger is in front.)
+		this.depthMesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ colorWrite: false, transparent: true, depthWrite: true }));
 		this.depthMesh.renderOrder = 30;
-		this.colourMat = new THREE.MeshLambertMaterial({ color: HAND.fill, emissive: HAND.fill, emissiveIntensity: 0.35, transparent: true, opacity: HAND.opacity, depthWrite: false, depthFunc: THREE.EqualDepth });
+		this.colourMat = new THREE.MeshLambertMaterial({ color: HAND.fill, emissive: HAND.fill, emissiveIntensity: 0.35, transparent: true, opacity: HAND.opacity, depthWrite: false, depthFunc: THREE.LessEqualDepth });
+		// (LessEqual, not Equal: the two passes use different shaders, and a phone GPU may
+		// compute slightly different depths in each; pass 1 already holds the nearest.)
 		this.colourMesh = new THREE.Mesh(geo, this.colourMat);
 		this.colourMesh.renderOrder = 31;
 		this.tipMat = new THREE.MeshBasicMaterial({ color: HAND.tip, transparent: true, opacity: HAND.tipIdle, depthWrite: false });

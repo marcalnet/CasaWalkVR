@@ -34,7 +34,9 @@
 //            starts below PINCH_ON and ends above PINCH_OFF, so a shaky pinch
 //            never flickers. down/up are this frame's edges; when tracking is
 //            lost mid-pinch, held ends with no up and lost = true (until the
-//            next pinch starts): a hand that vanishes never clicks.
+//            next pinch starts): a hand that vanishes never clicks. A hand
+//            (or controller) found again with the pinch (trigger) already
+//            closed gives no down until it has been seen open.
 // joint(c, name, out) gives any hand joint's world position (WebXR joint
 // names, such as 'wrist' or 'index-finger-tip').
 
@@ -177,7 +179,14 @@ export class XRInput {
 			if (was) sel.lost = true;
 			sel.held = false;
 			sel.value = 0;
+			sel.blocked = true; // found again: no new press until seen let go
 			return;
+		}
+		// Found again after a loss (or a switch): a pinch or trigger already closed
+		// is not a new press; it counts only once it has been seen open.
+		if (sel.blocked) {
+			if (held) { sel.held = false; return; }
+			sel.blocked = false;
 		}
 		sel.held = held;
 		sel.down = held && !was;
@@ -284,7 +293,7 @@ export function pinchValue(distance) {
 const _v = new THREE.Vector3();
 
 function emptyTouch(lost = false) {
-	return { kind: null, tracked: false, tip: new THREE.Vector3(), radius: TIP_RADIUS, select: { value: 0, held: false, down: false, up: false, lost } };
+	return { kind: null, tracked: false, tip: new THREE.Vector3(), radius: TIP_RADIUS, select: { value: 0, held: false, down: false, up: false, lost, blocked: true } };
 }
 
 function emptyState() {

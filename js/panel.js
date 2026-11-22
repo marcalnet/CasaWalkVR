@@ -47,7 +47,7 @@ export class Panel {
 	 *              actions never move. Clicking a tab is handled here (like a dropdown).
 	 * @param opts  { title, hint (small text at the bottom), width (m), pxPerM (canvas pixels per metre) }
 	 */
-	constructor(rows, { title = '', hint = '', width = 0.62, pxPerM = PX_PER_M } = {}) {
+	constructor(rows, { title = '', hint = '', width = 0.62, pxPerM = PX_PER_M, close = false, background = null } = {}) {
 		const spec = Array.isArray(rows) ? { tabs: [{ id: '', label: '', rows }], actions: [] } : rows;
 		const cellsOf = (rs) => rs.map((r) => r.map((c) => ({ type: 'button', ...c })));
 		this.tabs = spec.tabs.map((t) => ({ id: t.id, label: t.label, rows: cellsOf(t.rows) }));
@@ -56,6 +56,8 @@ export class Panel {
 		this.cells = new Map([...this.tabs.flatMap((t) => t.rows), ...this.actions].flat().map((c) => [c.id, c]));
 		this.title = title;
 		this.hint = hint;
+		this.close = close; // a Close key (×) at the end of the row of tabs
+		this.background = background; // an image drawn under everything (the board's frame and paper), once loaded
 		this.hover = null; // key of the hovered target
 		this.open = null; // id of the dropdown whose list is open
 		const wPx = Math.round(width * pxPerM);
@@ -109,8 +111,10 @@ export class Panel {
 		let y = PAD + (this.title ? TITLE_H : 0);
 		const boxes = [];
 		if (this.tabs.length > 1) {
-			const full = this.size.w - 2 * PAD, w = (full - (this.tabs.length - 1) * 8) / this.tabs.length;
+			const closeW = this.close ? TAB_H + 8 : 0;
+			const full = this.size.w - 2 * PAD - closeW, w = (full - (this.tabs.length - 1) * 8) / this.tabs.length;
 			this.tabBoxes = this.tabs.map((t, i) => ({ id: t.id, label: t.label, x: PAD + i * (w + 8), y, w, h: TAB_H }));
+			this.closeBox = this.close ? { x: this.size.w - PAD - TAB_H, y, w: TAB_H, h: TAB_H } : null;
 			y += TAB_H + TAB_GAP;
 		} else {
 			this.tabBoxes = [];
@@ -143,6 +147,7 @@ export class Panel {
 	 */
 	rects() {
 		const out = this.open ? [] : this.tabBoxes.map((t) => ({ id: TAB, value: t.id, x: t.x, y: t.y, w: t.w, h: t.h }));
+		if (!this.open && this.closeBox) out.push({ id: 'close', ...this.closeBox });
 		if (this.open) {
 			const list = this.list();
 			if (list) {
@@ -173,7 +178,7 @@ export class Panel {
 	segments(b) {
 		const c = b.cell, a = this.controlArea(b), gap = 6;
 		const opts = c.options ?? [];
-		if (opts.length > CHOICE_MAX) {
+		if (opts.length > CHOICE_MAX || c.stepper) {
 			const i = Math.max(0, opts.findIndex((o) => o.value === c.value));
 			const arrow = 80;
 			return [
@@ -217,9 +222,12 @@ export class Panel {
 		const ctx = this.canvas.getContext('2d');
 		const { w, h } = this.size;
 		ctx.clearRect(0, 0, w, h);
-		roundRect(ctx, 0, 0, w, h, 36);
-		ctx.fillStyle = COLOURS.panel;
-		ctx.fill();
+		if (this.background?.complete && this.background.naturalWidth) ctx.drawImage(this.background, 0, 0, w, h);
+		else {
+			roundRect(ctx, 0, 0, w, h, 36);
+			ctx.fillStyle = COLOURS.panel;
+			ctx.fill();
+		}
 		ctx.textBaseline = 'middle';
 		if (this.title) {
 			ctx.fillStyle = COLOURS.text;
@@ -239,8 +247,22 @@ export class Panel {
 		this.texture.needsUpdate = true;
 	}
 
-	/** The row of tabs: the shown one white and raised, the others flat. */
+	/** The row of tabs: the shown one white and raised, the others flat; then the Close key. */
 	drawTabs(ctx) {
+		if (this.closeBox) {
+			const b = this.closeBox, hot = this.hover === 'close|';
+			roundRect(ctx, b.x, b.y, b.w, b.h, 18);
+			ctx.fillStyle = hot ? COLOURS.hover : COLOURS.cell;
+			ctx.fill();
+			ctx.lineWidth = hot ? 4 : 2; ctx.strokeStyle = hot ? COLOURS.hoverEdge : COLOURS.edge; ctx.stroke();
+			ctx.strokeStyle = COLOURS.text; ctx.lineWidth = 6; ctx.lineCap = 'round';
+			const m = b.w * 0.32;
+			ctx.beginPath();
+			ctx.moveTo(b.x + m, b.y + m); ctx.lineTo(b.x + b.w - m, b.y + b.h - m);
+			ctx.moveTo(b.x + b.w - m, b.y + m); ctx.lineTo(b.x + m, b.y + b.h - m);
+			ctx.stroke();
+			ctx.lineCap = 'butt';
+		}
 		for (const t of this.tabBoxes) {
 			const on = t.id === this.tab, hot = !on && this.hover === `${TAB}|${t.id}`;
 			roundRect(ctx, t.x, t.y, t.w, t.h, 18);

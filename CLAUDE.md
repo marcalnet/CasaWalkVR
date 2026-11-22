@@ -22,11 +22,12 @@ WebXR viewer for Meta Quest (Quest 3, 3S, 2 and Pro; Quest 3/3S first; Quest 1 n
 index.html        2D UI and import map
 config.js         Dropbox app key, Google API key, defaults
 js/main.js        2D page, renderer, loading, Enter VR/AR buttons
-js/xr.js          XR session: the parts below, the frame order, setMode, photo capture, shared state
+js/xr.js          XR session: the parts below, the frame order, setMode, layers (goLayer: dive, surface), photo capture, shared state
 js/xr-dollhouse.js  scale model mode ("dollhouse" in code): plinth, rotate/zoom/grab, scale plate and zoom settling, where stepping inside lands
 js/xr-walk.js     walk mode: locomotion, teleport and fade, snap turn, grip pull, floor following, solid walls
-js/xr-ui.js       wrist orbs, opening/closing/pointing at the menu (trigger claims), welcome card, photo note
-js/xr-menus.js    the menus as data (cells by id; tabs and actions as rows of ids), controls cards, labels, what a click does
+js/xr-ui.js       the settings board and help (opening, closing, touch and lasers, trigger claims), welcome card, notes
+js/wrist-menu.js  the wrist menu: orb on one wrist, four keys in a cross laid out as seen (Settings, Help, ← Back, Walk in →)
+js/xr-menus.js    the boards as data (cells by id; tabs as rows of ids), help cards, labels, what a key or cell does
 js/xr-scene.js    scenery builders: gallery room, plinth, skies, markers
 js/xr-targets.js  what lasers, the teleport arc and the feet may hit (pure, Node-testable)
 js/xr-tools.js    hand-held tool system: claims, routing, annotations in model space (tools from milestone C)
@@ -42,7 +43,7 @@ js/optimise.js    merge-by-material and BVH
 js/xr-input.js    controllers, rays, thumbsticks, teleport arc, per-frame button claims; bare hands told apart (a pinch never clicks); touch state for hands and controllers (poke point, pinch); controller tip nub
 js/touch.js       touch keys: hover, contact, click, release, front-only (pure, Node-testable)
 js/hands.js       bare hands drawn from the WebXR joints (translucent capsules, orange fingertip)
-js/panel.js       canvas-texture VR menu (switches, options, slider, buttons) and controls card
+js/panel.js       canvas-texture board (switches, options, stepper, Close key), controls and welcome cards, labels
 js/walls.js       solid walls while walking and see-through walls and furniture (headset only)
 js/photo.js       the menu's Photo button: renders the view without the menu and saves a JPEG
 js/lighting.js    time of day (sun from the compass) and on-demand shadows

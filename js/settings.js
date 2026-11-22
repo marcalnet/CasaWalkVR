@@ -26,6 +26,7 @@ export const SETTINGS = {
 	// the landing markers show a person's size. A stored value is simply never read.)
 	solid: { key: 'casawalk.solidWalls', flag: true, fallback: false }, // walls stop you while walking
 	seeThrough: { key: 'casawalk.seeThrough', range: true, fallback: 0 }, // 0 = as modelled, 1 = glass house
+	toolFan: { key: 'casawalk.toolFan', options: ['left', 'right'], fallback: 'left' }, // the hand that holds the tool fan; the wrist menu is on the other
 	sound: { key: 'casawalk.sound', options: ['off', 'effects', 'all'], fallback: 'all' }, // all: effects and the ambience (milestone H)
 };
 

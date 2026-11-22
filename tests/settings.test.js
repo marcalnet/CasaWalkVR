@@ -10,7 +10,7 @@ test('the storage keys never change', () => {
 	const keys = Object.fromEntries(Object.entries(SETTINGS).map(([name, s]) => [name, s.key]));
 	assert.deepEqual(keys, {
 		light: 'casawalk.light', shadows: 'casawalk.shadows', depth: 'casawalk.depth', view: 'casawalk.view', turn: 'casawalk.snapAngle',
-		height: 'casawalk.height', solid: 'casawalk.solidWalls', seeThrough: 'casawalk.seeThrough', sound: 'casawalk.sound',
+		height: 'casawalk.height', solid: 'casawalk.solidWalls', seeThrough: 'casawalk.seeThrough', toolFan: 'casawalk.toolFan', sound: 'casawalk.sound',
 	});
 });
 
@@ -31,6 +31,7 @@ test('stored strings mean what they always meant', () => {
 		[S.solid, null, false], [S.solid, '1', true], [S.solid, '0', false],
 		[S.seeThrough, null, 0], [S.seeThrough, '0.35', 0.35], [S.seeThrough, '1', 1], [S.seeThrough, '0', 0],
 		[S.seeThrough, '1.5', 0], [S.seeThrough, '-0.2', 0], [S.seeThrough, 'NaN', 0], [S.seeThrough, '', 0],
+		[S.toolFan, null, 'left'], [S.toolFan, 'right', 'right'], [S.toolFan, 'up', 'left'],
 		[S.sound, null, 'all'], [S.sound, 'off', 'off'], [S.sound, 'effects', 'effects'], [S.sound, 'loud', 'all'],
 	];
 	for (const [spec, raw, want] of cases) assert.equal(decode(spec, raw), want, `${spec.key} = ${JSON.stringify(raw)}`);

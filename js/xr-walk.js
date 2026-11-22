@@ -182,7 +182,8 @@ export class Walk {
 		const xr = this.xr, ui = xr.ui, input = xr.input, rig = xr.rig;
 		this.runFade(dt);
 		for (const c of input.active()) {
-			if (c.state.down.b && c.claim.b === null && !xr.menu) { xr.setMode('dollhouse'); return; }
+			// B / Y with nothing open: ← Back, one layer up (to the scale model).
+			if (c.state.down.b && c.claim.b === null && !ui.anyOpen) { xr.goLayer('back', () => xr.setMode('dollhouse')); return; }
 		}
 		if (ui.buttons()) { this.tele = null; this.arc.hide(); }
 		const { action } = ui.point();
@@ -190,10 +191,10 @@ export class Walk {
 			xr.menuAction(action);
 			if (xr.mode !== 'walk' || !xr.session) return;
 		}
-		// Lasers only show while the menu is open or one points at an orb (never
+		// Lasers only show while a menu is open or one points at the orb (never
 		// on a hand holding a tool).
 		for (const c of input.active()) {
-			const show = c.claim.trigger === 'ui' || (!!xr.menu && c.claim.trigger !== 'tool');
+			const show = c.claim.trigger === 'ui' || ((!!xr.menu || ui.wrist.open) && c.claim.trigger !== 'tool');
 			input.setLaser(c, show);
 			if (!show) input.showHit(c, null);
 		}

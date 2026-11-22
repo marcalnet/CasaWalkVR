@@ -635,7 +635,11 @@ function updateXRButtons() {
 	b.className = 'xr';
 	// Simple headset glyph, then the label.
 	b.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M4 7h16a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2h-4.2l-2.1-2.4a2.3 2.3 0 0 0-3.4 0L8.2 17H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2zm3.5 3a1.75 1.75 0 1 0 0 3.5 1.75 1.75 0 0 0 0-3.5zm9 0a1.75 1.75 0 1 0 0 3.5 1.75 1.75 0 0 0 0-3.5z"/></svg>';
-	b.append('Enter VR');
+	b.append('Enter VR \u2192'); // → : forward, deeper (left to right is forward, in the headset too)
+	const where = document.createElement('span');
+	where.className = 'where';
+	where.textContent = 'Starts at the scale model';
+	b.append(where);
 	b.disabled = !current || loading > 0;
 	b.title = current ? '' : 'Open a model first';
 	b.addEventListener('click', async () => {
@@ -648,7 +652,13 @@ function updateXRButtons() {
 			setStatus(`Could not start VR: ${e.message}`, true);
 		}
 	});
-	box.append(b);
+	// The three layers, the first lit: page → scale model → inside.
+	const layers = document.createElement('span');
+	layers.className = 'layers';
+	const here = document.createElement('b');
+	here.textContent = 'page';
+	layers.append(here, ' \u2192 scale model \u2192 inside');
+	box.append(b, layers);
 	if (!ON_HEADSET) { box.append(...send()); renderSendNote(); } // e.g. a PC with a headset attached: both ways in
 }
 

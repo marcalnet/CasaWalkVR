@@ -1,45 +1,38 @@
-// The headset's floating interface (SPEC.md, "Experience and controls"):
+// The headset's floating interface (SPEC.md, "Experience and controls" and
+// C0 "Hands and touch"):
 //
-//   Orbs     a living orb on each wrist. Point at one with the other hand's
-//            laser and pull the trigger, touch it with the other controller,
-//            or press A / X, to open this mode's menu; B / Y closes it, and
-//            so does a click anywhere else (which does nothing else).
-//   Menu     opens facing you: walking, in front of the head and a little to
-//            the left; in the dollhouse, well to the left and further away,
-//            clear of the model. What it says and does: js/xr-menus.js.
-//   Welcome  a card above the dollhouse on every entry, until the menu is
-//            first opened.
-//   Photo    a short white flash and a note in front of you after the Photo
-//            button (the picture itself: XRExperience.capturePhoto()).
-//   Hands    bare hands wear the orb on the wrist; touching it with the
-//            other index opens the menu within reach, and its keys are
-//            pressed by touch (js/touch.js), as controllers can with their
-//            tip. A pinch never clicks. Without hand joints: "Pick up your
-//            controllers" in front of you (C0.1).
+//   Wrist    the wrist menu (js/wrist-menu.js): an orb on one wrist, and
+//            four keys in a cross: Settings, Help, ← Back, Walk in →.
+//   Board    Settings opens the settings board within reach (50 cm ahead,
+//            25 cm below the eyes, tilted back 20°; at the scale model 45° to
+//            the left, clear of the model), pressed by touch (js/touch.js) or
+//            by a controller's laser; its handle moves it (a controller's
+//            grip). What it says and does: js/xr-menus.js. It closes with its
+//            Close key, Settings again, B/Y, or by moving between layers,
+//            never on a touch elsewhere.
+//   Help     a card where the board opens: what each control does, for
+//            controllers or for bare hands.
+//   Welcome  a card above the scale model on every entry, until the wrist
+//            menu is first opened.
+//   Photo    the flash and note of a photo (the street camera, milestone D).
+//   Hands    without hand joints: "Pick up your controllers" (C0.1).
 //
 // Each frame the mode calls buttons() and point(); point() claims the
-// trigger of every controller whose laser is on the menu or an orb
-// (c.claim.trigger = 'ui'), so the mode leaves those alone.
+// trigger of every controller whose laser is on the menus (c.claim.trigger =
+// 'ui'), so the mode leaves those alone.
 
 import * as THREE from 'three';
 import { WelcomeCard } from './panel.js';
-import { yawOf, WRIST_ORB } from './xr-input.js';
+import { yawOf } from './xr-input.js';
 import { TOUCH, touchState, stepTouch, reset as resetTouch, ringSize } from './touch.js';
-import { KEY } from './theme.js';
+import { KEY, BOARD } from './theme.js';
 import { PLINTH_REST } from './xr-scene.js';
+import { WristMenu } from './wrist-menu.js';
+import { handsHelp } from './xr-menus.js';
 
-const MENU_DISTANCE = 0.75, MENU_DROP = 0.1, MENU_LEFT = 0.1; // summoned menu, relative to the eyes (controls card to its left)
-// In the dollhouse the menu opens off to the left and further away, so it
-// never sits between you and the model (it used to appear right in front of
-// the face on entry), and you can watch the model while changing a setting.
-const MENU_DOLL_DISTANCE = 0.95, MENU_DOLL_SIDE = THREE.MathUtils.degToRad(34);
-const ORB_TOUCH = 0.08, ORB_RELEASE = 0.14; // touching an orb with the other controller
-const ORB_TIP_TOUCH = 0.03, ORB_TIP_RELEASE = 0.07; // touching an orb with a bare fingertip
-const ORB_ON_GRIP = new THREE.Vector3(0, 0.035, 0.115); // a controller's orb, in its grip space
-// The menu opened by a bare hand comes within reach (milestone C0.2): 50 cm in
-// front, 25 cm below the eyes, tilted back 20° like a lectern; in the scale
-// model 45° to the left, clear of the model.
-const MENU_NEAR = 0.5, MENU_NEAR_DROP = 0.25, MENU_NEAR_TILT = THREE.MathUtils.degToRad(20), MENU_NEAR_SIDE = THREE.MathUtils.degToRad(45);
+// The board (and the help card) within reach: 50 cm in front, 25 cm below the
+// eyes, tilted back 20° like a lectern; at the scale model 45° to the left.
+const BOARD_NEAR = 0.5, BOARD_DROP = 0.25, BOARD_TILT = THREE.MathUtils.degToRad(20), BOARD_SIDE = THREE.MathUtils.degToRad(45);
 // The note after a photo. Photos are kept in the app and saved from the page
 // after VR (a download in VR would end the session).
 const PHOTO_TEXT = {
@@ -50,18 +43,19 @@ const PHOTO_TEXT = {
 
 // The note while the Quest reports bare hands (milestone C0.1): their pinches
 // do nothing until hands are supported (C0), so it says what will work.
-const HANDS_TEXT = { title: 'Pick up your controllers', line: 'Bare hands don\'t work in CasaWalk yet.' };
+const HANDS_TEXT = { title: 'Pick up your controllers', line: 'This headset gives no hand tracking to CasaWalk.' };
 
 export class XRUI {
 	/** xr: the XRExperience (rig, camera, input, menus, mode, model, stage, ...). */
 	constructor(xr) {
 		this.xr = xr;
-		this.menu = null; // the open Panel, or null
-		this.tab = null; // the menu's tab last shown (kept between the two modes' menus)
+		this.menu = null; // the open settings board (a Panel), or null
+		this.help = null; // the open help card, or null
+		this.tab = null; // the board's tab last shown (kept between the two layers' boards)
 		this.drag = null; // a slider being dragged: { c, id }
-		this.orbs = [0, 1].map(() => makeOrb());
-		this.touches = []; // per input entry: its touch on the open menu (js/touch.js)
-		this.nearMenu = false; // the open menu was opened by a bare hand, within reach
+		this.boardDrag = null; // a controller holding the board's handle: { c, offset }
+		this.wrist = new WristMenu(xr);
+		this.touches = []; // per input entry: its touch on the open board (js/touch.js)
 		this.buildWelcome();
 		this.buildPhotoFeedback();
 		this.buildHandsNote();
@@ -77,18 +71,24 @@ export class XRUI {
 	 * how to open the menu, shown on every entry until the menu is opened.
 	 */
 	buildWelcome() {
-		this.welcome = new WelcomeCard('Welcome to CasaWalk', [
-			{ key: 'Wrist', kind: 'orb', text: 'Touch a wrist with the other hand: menu' },
-			{ small: true, text: 'Or press A or X, or point at the glowing orb on a wrist.' },
-			{ key: 'Trigger', kind: 'trigger', text: 'Point at a room and pull: step inside' },
-			{ small: true, text: 'The orange marker shows where you\'ll land.' },
-		], { width: 0.9 });
+		this.welcome = new WelcomeCard('Welcome to CasaWalk', this.welcomeLines(), { width: 1.1 }); // (read from as far as the model)
 		this.welcome.mesh.visible = false;
 		this.welcomeOn = false; // until the menu is first opened
 	}
 
+	/** The welcome card's lines, for the wrist that wears the menu. */
+	welcomeLines() {
+		const side = this.wrist?.side ?? 'right', other = side === 'right' ? 'left' : 'right';
+		// (Minimal until the first-time message with the hand animation replaces it, C0.5.)
+		return [
+			{ key: 'Wrist', kind: 'orb', text: `Touch your ${side} wrist with your ${other} hand: menu` },
+			{ key: 'Trigger', kind: 'trigger', text: 'Point at a room and pull: step inside' },
+		];
+	}
+
 	/** Shows or hides the welcome card (only ever in the dollhouse). */
 	setWelcome(on) {
+		if (on) { this.welcome.lines = this.welcomeLines(); this.welcome.draw(); }
 		this.welcomeOn = on;
 		this.welcome.mesh.visible = on && this.xr.mode === 'dollhouse';
 	}
@@ -102,7 +102,8 @@ export class XRUI {
 		const size = xr.model ? xr.model.bounds.getSize(new THREE.Vector3()).multiplyScalar(xr.baseScale) : new THREE.Vector3(1, 0.4, 1);
 		const top = PLINTH_REST + size.y;
 		const h = card.geometry.parameters.height;
-		card.position.set(0, top + 0.3 + h / 2, -xr.plinthDistance - size.z / 4);
+		// As far away as the model, floating well above its back edge (not in front of the eyes).
+		card.position.set(0, top + 0.45 + h / 2, -xr.plinthDistance - (xr.plinthSize?.D ?? size.z) / 2);
 		if (card.parent !== xr.stage) xr.stage.add(card);
 	}
 
@@ -164,79 +165,92 @@ export class XRUI {
 	}
 
 	// -----------------------------------------------------------------------
-	// Menu and orbs
+	// The board and the help card
 	// -----------------------------------------------------------------------
 
-	/**
-	 * Opens this mode's menu facing the eyes (yaw only), with the controls card
-	 * on its left: walking, in front of the head and a little to the left; in
-	 * the dollhouse, well to the left and further away, clear of the model.
-	 */
-	openMenu(headMatrix = this.xr.camera.matrix, { near = false } = {}) {
+	/** Where the board (or the help card) opens: within reach, tilted back; 45° left at the scale model. */
+	placeNear(mesh, headMatrix = this.xr.camera.matrix) {
+		const xr = this.xr;
+		const head = new THREE.Vector3().setFromMatrixPosition(headMatrix);
+		const yaw = yawOf(headMatrix);
+		const towards = yaw + (xr.mode === 'dollhouse' ? BOARD_SIDE : 0); // (a positive angle turns left)
+		mesh.position.copy(head).add(new THREE.Vector3(-Math.sin(towards), 0, -Math.cos(towards)).multiplyScalar(BOARD_NEAR));
+		mesh.position.y -= BOARD_DROP;
+		xr.rig.updateMatrixWorld(true);
+		mesh.lookAt(xr.rig.localToWorld(head.clone().setY(mesh.position.y)));
+		mesh.rotateX(-BOARD_TILT);
+	}
+
+	/** Opens this layer's settings board. */
+	openMenu(headMatrix) {
 		const xr = this.xr;
 		this.closeMenu();
 		const panel = xr.menus[xr.mode];
 		if (!panel) return;
-		const head = new THREE.Vector3().setFromMatrixPosition(headMatrix);
-		const yaw = yawOf(headMatrix);
-		const doll = xr.mode === 'dollhouse';
-		const towards = yaw + (near ? (doll ? MENU_NEAR_SIDE : 0) : doll ? MENU_DOLL_SIDE : 0); // (a positive angle turns left)
-		const dir = new THREE.Vector3(-Math.sin(towards), 0, -Math.cos(towards));
-		const left = new THREE.Vector3(-Math.cos(yaw), 0, Math.sin(yaw));
-		if (near) {
-			// Within reach of a bare hand, below the eyes, tilted back like a lectern.
-			panel.mesh.position.copy(head).addScaledVector(dir, MENU_NEAR);
-			panel.mesh.position.y -= MENU_NEAR_DROP;
-		} else {
-			panel.mesh.position.copy(head).addScaledVector(dir, doll ? MENU_DOLL_DISTANCE : MENU_DISTANCE).addScaledVector(left, doll ? 0 : MENU_LEFT);
-			panel.mesh.position.y -= MENU_DROP;
-		}
-		xr.rig.updateMatrixWorld(true);
-		panel.mesh.lookAt(xr.rig.localToWorld(head.clone().setY(panel.mesh.position.y)));
-		panel.mesh.rotateX(near ? -MENU_NEAR_TILT : 0);
-		this.nearMenu = near;
-		if (panel.card) panel.card.mesh.visible = !near; // (the controls card shows the controllers: not for hands)
+		this.placeNear(panel.mesh, headMatrix);
 		if (this.tab) panel.setTab(this.tab);
 		panel.setHover(null);
 		panel.mesh.visible = true;
 		this.menu = panel;
-		this.setWelcome(false); // found it: the welcome card has done its job
+		this.feel(null, 'open');
 	}
 
+	/** Closes the board and the help card. */
 	closeMenu() {
-		if (this.menu) { this.tab = this.menu.tab; this.menu.closeDropdown(); this.menu.mesh.visible = false; }
+		if (this.menu) { this.tab = this.menu.tab; this.menu.closeDropdown(); this.menu.mesh.visible = false; this.feel(null, 'close'); }
 		this.menu = null;
+		this.boardDrag = null;
+		this.drag = null;
+		if (this.help) this.help.mesh.visible = false;
+		this.help = null;
 	}
 
-	toggleMenu() { this.menu ? this.closeMenu() : this.openMenu(); }
+	/** Closes everything: board, help, the wrist menu (moving between layers). */
+	closeAll() {
+		this.closeMenu();
+		this.wrist.close();
+	}
 
-	/** Puts an orb on each controller's grip, or on each tracked bare hand's wrist. */
-	placeOrbs() {
-		const input = this.xr.input, wearers = input.wearers();
-		this.orbs.forEach((o, i) => {
-			const holder = wearers[i] ?? null;
-			const anchor = holder ? input.wristOf(holder) : null;
-			if (holder === o.holder && o.group.parent === anchor) return;
-			o.group.removeFromParent();
-			if (holder) { anchor.add(o.group); o.group.position.copy(holder.isHand ? WRIST_ORB : ORB_ON_GRIP); }
-			o.holder = holder;
-		});
+	/** True while the board, the help card or the wrist menu is open. */
+	get anyOpen() { return !!this.menu || !!this.help || this.wrist.open; }
+
+	toggleBoard() { this.menu ? this.closeMenu() : this.openMenu(); }
+
+	/** Help: what each control does here, for controllers, or for bare hands when no controller is held. */
+	toggleHelp() {
+		if (this.help) { this.closeMenu(); return; }
+		this.closeMenu();
+		const xr = this.xr;
+		const card = xr.input.active().length ? xr.help[xr.mode] : xr.help.hands;
+		if (!card) return;
+		if (card === xr.help.hands) { card.lines = handsHelp(this.wrist.side); card.draw(); }
+		this.placeNear(card.mesh);
+		card.mesh.visible = true;
+		this.help = card;
+		this.feel(null, 'open');
+	}
+
+	/** A sound (if sound is on) and, on a controller, a vibration. */
+	feel(c, sound, haptic = null, gain = 1) {
+		const xr = this.xr;
+		if (sound && xr.soundLevel !== 'off') xr.sound.play(sound, gain);
+		if (haptic && c?.isController) xr.haptics.play(c, haptic);
 	}
 
 	/**
-	 * Laser vs. orbs and menu, for every controller; touching an orb with
-	 * the other hand. Clicks are handled here. Claims the trigger of every
-	 * controller whose laser is on the UI this frame (c.claim.trigger =
-	 * 'ui'), and returns the menu action to run, if any: { action }.
-	 * (A controller whose trigger a held tool owns is skipped: its laser is
-	 * hidden.)
+	 * The wrist menu, then lasers and touch on the board, and its handle.
+	 * Claims the trigger of every controller whose laser is on the menus this
+	 * frame (c.claim.trigger = 'ui'), and returns the action to run, if any:
+	 * { action }. (A controller whose trigger a held tool owns is skipped.)
 	 */
-	point() {
+	point(dt = this.xr.frameDt ?? 1 / 72) {
 		const xr = this.xr, input = xr.input, raycaster = xr.raycaster;
-		let hover = null, action = null, toggle = false, close = false;
-		const hot = new Set();
+		let hover = null;
+		let { action } = this.wrist.update(dt);
+		if (this.wrist.open) this.setWelcome(false); // found it: the welcome card has done its job
 		const active = input.active();
 		if (this.drag && (!this.menu || !this.drag.c.source || !this.drag.c.state.trigger)) this.drag = null; // let go
+		this.moveBoard();
 		for (const c of active) {
 			if (c.claim.trigger) continue;
 			input.setRaycaster(c, raycaster);
@@ -250,75 +264,68 @@ export class XRUI {
 				hover = { id: this.drag.id, slider: true };
 				continue;
 			}
-			let orbHit = null, orb = null;
-			for (const o of this.orbs) {
-				if (!o.holder || o.holder === c) continue;
-				const h = raycaster.intersectObject(o.target, false)[0];
-				if (h && (!orbHit || h.distance < orbHit.distance)) { orbHit = h; orb = o; }
-			}
 			if (menuHit) {
 				c.claim.trigger = 'ui';
 				input.showHit(c, menuHit.distance);
 				const target = this.menu.hitTest(menuHit.uv);
 				hover ||= target;
-				if (c.state.down.trigger && target) {
-					// (Opening or closing a dropdown's list is handled by the panel itself.)
-					action = this.menu.press(target);
-					if (action?.slider) this.drag = { c, id: action.id };
+				if (c.state.down.trigger) {
+					if (target) {
+						// (Opening or closing a dropdown's list is handled by the panel itself.)
+						action = this.menu.press(target) ?? action;
+						if (action?.slider) this.drag = { c, id: action.id };
+						this.feel(c, 'press', 'click');
+					} else if (this.menu.disabledAt(menuHit.uv)) this.feel(c, 'deny', 'deny');
 				}
-			} else if (orbHit) {
+			} else if ((this.menu || this.help || (this.wrist.open && this.wrist.pinned)) && c.state.down.trigger) {
+				// A pull elsewhere while a menu is open does nothing (the board never
+				// closes on it); a pinned wrist menu closes.
 				c.claim.trigger = 'ui';
-				hot.add(orb);
-				input.showHit(c, orbHit.distance);
-				if (c.state.down.trigger) toggle = true;
-			} else if (this.menu && c.state.down.trigger) {
-				// Clicking anywhere else closes the menu (and does nothing else).
-				c.claim.trigger = 'ui';
-				close = true;
+				if (!this.menu && !this.help) this.wrist.close(true);
 			}
 		}
-		// Touch: the other controller, or the other hand's index fingertip, reaches into an orb.
-		const p = new THREE.Vector3(), q = new THREE.Vector3();
-		let byHand = false;
-		for (const o of this.orbs) {
-			if (!o.holder) continue;
-			o.group.getWorldPosition(p);
-			let touching = false, hand = false, clear = true;
-			for (const c of input.wearers()) {
-				if (c === o.holder) continue;
-				const d = c.isHand ? c.touch.tip.distanceTo(p) : (input.pose(c, q), q.distanceTo(p));
-				const [on, off] = c.isHand ? [ORB_TIP_TOUCH, ORB_TIP_RELEASE] : [ORB_TOUCH, ORB_RELEASE];
-				if (d < on) { touching = true; hand ||= c.isHand; }
-				if (d < off) clear = false;
-			}
-			if (touching && o.armed) { toggle = true; o.armed = false; byHand ||= hand; }
-			if (clear) o.armed = true;
-			if (!clear) hot.add(o);
-		}
-		// Touch keys: fingertips and controller tips press the open menu (milestone C0.2).
+		// Touch keys: fingertips and controller tips press the open board.
 		const touched = this.touchMenu();
 		hover ||= touched.hover;
 		action ||= touched.action;
 		this.menu?.setHover(hover);
-		const t = performance.now() / 1000;
-		for (const o of this.orbs) animateOrb(o, t, hot.has(o));
-		if (toggle) {
-			if (this.menu) this.closeMenu();
-			else this.openMenu(undefined, { near: byHand });
-			if (byHand) this.feel(null, this.menu ? 'open' : 'close');
-		} else if (close) this.closeMenu();
 		return { action };
 	}
 
-	/** A sound (if sound is on) and, on a controller, a vibration. */
-	feel(c, sound, haptic = null, gain = 1) {
-		const xr = this.xr;
-		if (sound && xr.soundLevel !== 'off') xr.sound.play(sound, gain);
-		if (haptic && c?.isController) xr.haptics.play(c, haptic);
+	/** A controller's grip on the board's handle (its tip near it, or its laser on it) carries the board. */
+	moveBoard() {
+		const xr = this.xr, input = xr.input, panel = this.menu;
+		if (!panel) { this.boardDrag = null; return; }
+		const grip = (c) => { c.grip.updateMatrixWorld(true); return c.grip.matrixWorld; };
+		if (this.boardDrag) {
+			const { c, offset } = this.boardDrag;
+			if (!c.source || !c.isController || !c.state.grip) { this.boardDrag = null; return; }
+			c.claim.grip = 'ui';
+			const world = grip(c).clone().multiply(offset);
+			xr.rig.updateMatrixWorld(true);
+			const local = xr.rig.matrixWorld.clone().invert().multiply(world);
+			local.decompose(panel.mesh.position, panel.mesh.quaternion, new THREE.Vector3());
+			return;
+		}
+		const h = panel.handle, [hw, hh] = BOARD.handle;
+		for (const c of input.active()) {
+			if (!c.state.down.grip || c.claim.grip) continue;
+			h.updateMatrixWorld(true);
+			const L = h.worldToLocal(c.touch.tip.clone());
+			const near = Math.abs(L.x) < hw / 2 + 0.03 && Math.abs(L.y) < hh / 2 + 0.04 && Math.abs(L.z) < 0.06;
+			input.setRaycaster(c, xr.raycaster);
+			const pointed = xr.raycaster.intersectObject(h, false).length > 0;
+			if (!near && !pointed) continue;
+			c.claim.grip = 'ui';
+			panel.mesh.updateMatrixWorld(true);
+			this.boardDrag = { c, offset: grip(c).clone().invert().multiply(panel.mesh.matrixWorld) };
+			this.feel(c, 'grab', 'click');
+			return;
+		}
 	}
 
 	/**
-	 * Every fingertip and controller tip against the open menu: hover ring,
+	 * Every fingertip and controller tip against the open board: hover ring,
 	 * contact, click, release (js/touch.js). Returns { hover, action }.
 	 */
 	touchMenu() {
@@ -332,7 +339,6 @@ export class XRUI {
 				resetTouch(st.s);
 				st.panel = panel; st.kind = c.touch.kind; st.last = null; st.slider = null;
 				st.ring.visible = false;
-				xr.handViews?.[c.index] && (xr.handViews[c.index].near = false);
 				if (!panel || !c.touch.tracked || busy) continue;
 			}
 			const geo = panel.mesh.geometry.parameters;
@@ -372,7 +378,7 @@ export class XRUI {
 				st.ring.scale.setScalar(ringSize(Math.max(depth, 0)));
 			}
 			st.ring.visible = live;
-			if (xr.handViews?.[c.index]) xr.handViews[c.index].near = live;
+			if (live && xr.handViews?.[c.index]) xr.handViews[c.index].near = true; // (the wrist menu set it first this frame)
 		}
 		return { hover, action };
 	}
@@ -386,11 +392,17 @@ export class XRUI {
 		return { s: touchState(), ring, panel: null, kind: null, last: null, local: new THREE.Vector3(), t: 0, slider: null, lastClick: -1, lastKey: null };
 	}
 
-	/** A / X toggles the menu; B / Y closes it. Returns true if a button was used. */
+	/**
+	 * Controller buttons for the menus: A (X when the tool fan is on the right
+	 * hand), on the controller wearing the wrist menu, opens or closes it
+	 * (pinned); B or Y closes whatever is open. Returns true if a button was
+	 * used. (Inside, B / Y with nothing open is Back: js/xr-walk.js.)
+	 */
 	buttons() {
+		const wearer = this.wrist.wearer;
 		for (const c of this.xr.input.active()) {
-			if (c.state.down.a && !c.claim.a) { this.toggleMenu(); return true; }
-			if (c.state.down.b && !c.claim.b && this.menu) { this.closeMenu(); return true; }
+			if (c.state.down.a && !c.claim.a && c === wearer) { this.wrist.toggle({ pinned: true }); if (this.wrist.open) this.setWelcome(false); return true; }
+			if (c.state.down.b && !c.claim.b && this.anyOpen) { this.closeMenu(); this.wrist.close(true); return true; }
 		}
 		return false;
 	}
@@ -404,49 +416,10 @@ export class XRUI {
 		this.flash.visible = false;
 		this.photoNote.mesh.visible = false;
 		this.handsNote.mesh.visible = false;
-		for (const o of this.orbs) { o.group.removeFromParent(); o.holder = null; }
+		this.wrist.reset();
 		for (const st of this.touches) { if (!st) continue; resetTouch(st.s); st.ring.visible = false; st.panel = null; st.slider = null; }
 	}
 }
 
-/**
- * Orb: a glowing core inside a faceted amber crystal, circled by two thin
- * rings. animateOrb() makes it breathe, turn and shimmer.
- */
 // The hover ring under a fingertip: 1 m across, scaled to its size (ringSize()).
 const RING_GEO = new THREE.RingGeometry(0.4, 0.5, 32);
-
-function makeOrb() {
-	const group = new THREE.Group();
-	group.name = 'menu-orb';
-	const core = new THREE.Mesh(new THREE.SphereGeometry(0.011, 16, 12), new THREE.MeshBasicMaterial({ color: 0xfff1d6 }));
-	const shellMat = new THREE.MeshLambertMaterial({ color: 0xe99a45, emissive: 0x8a3f0c, flatShading: true, transparent: true, opacity: 0.78, depthWrite: false });
-	const shell = new THREE.Mesh(new THREE.IcosahedronGeometry(0.024, 0), shellMat);
-	const ringMat = new THREE.MeshBasicMaterial({ color: 0xffd7a3, transparent: true, opacity: 0.9 });
-	const ring1 = new THREE.Mesh(new THREE.TorusGeometry(0.036, 0.0018, 6, 48), ringMat);
-	const ring2 = new THREE.Mesh(new THREE.TorusGeometry(0.031, 0.0016, 6, 48), ringMat);
-	// Larger invisible target so the orb is easy to hit with the laser.
-	const target = new THREE.Mesh(new THREE.SphereGeometry(0.06, 12, 8), new THREE.MeshBasicMaterial({ visible: false }));
-	const body = new THREE.Group();
-	body.add(core, shell, ring1, ring2);
-	group.add(body, target);
-	group.position.copy(ORB_ON_GRIP); // on the wrist: touch it with the other hand to open the menu (a bare wrist: WRIST_ORB)
-	return { group, body, core, shell, shellMat, ring1, ring2, ringMat, target, holder: null, armed: true, glow: 0, phase: Math.random() * 10 };
-}
-
-const ORB_AMBER = new THREE.Color(0xe99a45), ORB_BLUE = new THREE.Color(0x4d8dff);
-const ORB_EMBER = new THREE.Color(0x8a3f0c), ORB_EMBER_BLUE = new THREE.Color(0x173f8a);
-
-function animateOrb(o, time, hot) {
-	const t = time + o.phase;
-	o.glow += ((hot ? 1 : 0) - o.glow) * 0.2;
-	// Breathing: two slow waves, so it never looks mechanical.
-	const breathe = 1 + 0.1 * Math.sin(t * 2.1) + 0.04 * Math.sin(t * 5.3);
-	o.body.scale.setScalar(breathe * (1 + 0.4 * o.glow));
-	o.shell.rotation.set(t * 0.5, t * 0.8, 0);
-	o.ring1.rotation.set(Math.PI / 2 + 0.5 * Math.sin(t * 0.7), t * 1.3, 0);
-	o.ring2.rotation.set(0.6 * Math.sin(t * 0.9), -t * 1.1, Math.PI / 3);
-	o.shellMat.color.copy(ORB_AMBER).lerp(ORB_BLUE, o.glow);
-	o.shellMat.emissive.copy(ORB_EMBER).lerp(ORB_EMBER_BLUE, o.glow).multiplyScalar(0.8 + 0.4 * (0.5 + 0.5 * Math.sin(t * 3.2)));
-	o.ringMat.opacity = 0.6 + 0.35 * (0.5 + 0.5 * Math.sin(t * 2.6));
-}

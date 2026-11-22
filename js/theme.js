@@ -57,14 +57,45 @@ export const HAND = {
 	fill: '#f4f1ea', // the hand
 	opacity: 0.55, // VR view
 	passthroughOpacity: 0.15, // passthrough view
-	tip: BADGE.orb.fill, // the fingertip "pen"
+	tip: COLOURS.accent, // the fingertip "pen": blue, the thing that presses (orange is the thing to press)
 	tipIdle: 0.35, // its opacity when no key is near
 	fade: 0.15, // seconds to fade out when tracking is lost
 };
 
 /** Touch keys on panels: the ring under a fingertip, and the controller's tip nub. */
 export const KEY = {
-	ring: BADGE.orb.fill, // the hover ring under the fingertip
+	ring: COLOURS.accent, // the hover ring under the fingertip (blue, like the fingertip)
 	nub: '#c9ced4', // a controller's tip nub
-	nubEnd: BADGE.orb.fill, // its orange end
+	nubEnd: COLOURS.accent, // its blue end (like the fingertip)
+};
+
+/**
+ * Doors between the layers (page, scale model, inside; SPEC.md C0, "Layers"):
+ * blue means moving between layers, everywhere. The same blue as the page's
+ * Enter VR button (--xr in index.html): change both together.
+ */
+export const DOOR = { fill: '#2f5fd0', outline: '#2f5fd0', text: '#ffffff', soft: '#5d6873' };
+
+/**
+ * The wrist menu (milestone C0.3): four keys in a cross around the orb.
+ * Icons come from assets/ui/wrist-keys.png (a row of dark icons over a row of
+ * white ones, 128 px each: Settings, Help, In, Back); words are drawn by code.
+ */
+export const WRIST = {
+	icons: 'assets/ui/wrist-keys.png',
+	iconSize: 128, // pixels per icon in the atlas
+	iconOrder: ['settings', 'help', 'in', 'back'],
+	key: 0.045, // key face, metres (square)
+	spacing: 0.055, // from the orb's centre to each key's centre
+	raise: 0.006, // a key's face above its base
+	face: '#ffffff', edge: '#d3d9df', text: COLOURS.text, flat: COLOURS.off, flatText: COLOURS.offText,
+	labelFont: '"Kalam", "Bradley Hand", cursive', // hand-lettered labels (vendor/kalam)
+};
+
+/** The settings board (C0.3): its artwork and where it opens. */
+export const BOARD = {
+	image: 'assets/ui/board.png', // aluminium frame and paper, under the settings drawn by code
+	width: 0.52, // metres
+	handle: [0.3, 0.03], // the bar on top that moves it, metres
+	handleColour: '#8f98a3',
 };

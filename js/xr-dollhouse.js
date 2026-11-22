@@ -230,7 +230,7 @@ export class Dollhouse {
 		}
 
 		// Actions that leave the dollhouse end this frame's dollhouse update.
-		if (jumpTo) { xr.setMode('walk', jumpTo.model, jumpTo.yaw); return; }
+		if (jumpTo) { xr.goLayer('in', () => xr.setMode('walk', jumpTo.model, jumpTo.yaw)); return; }
 		if (action) {
 			xr.menuAction(action);
 			if (xr.mode !== 'dollhouse' || !xr.session) return;
