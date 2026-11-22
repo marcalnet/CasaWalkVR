@@ -16,3 +16,6 @@ tests/fixtures/private/
 
 # Private planning notes (business, store, pricing): never published
 /planning/
+
+# Local Claude Code settings and the team's role files (some mention private plans)
+/.claude/
