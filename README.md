@@ -1,4 +1,4 @@
-# CasaWalk
+# CasaWalk VR
 
 *Mi casa es tu casa.* Opens Sweet Home 3D files.
 

@@ -267,7 +267,7 @@ async function load(files, label, source = { type: 'file' }) {
 			store.dispose();
 			invalidate();
 		});
-		document.title = `${label} · CasaWalk`;
+		document.title = `${label} · CasaWalk VR`;
 		// Remember it for one-tap reopening (only once it opened successfully).
 		if (source.type !== 'recent') addRecent({ name: label, files, source }).then(renderRecents);
 	} catch (e) {

@@ -3,8 +3,8 @@
 <head>
 	<meta charset="utf-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-	<title>CasaWalk</title>
-	<meta name="description" content="CasaWalk opens Sweet Home 3D files: view your home as a scale model, then walk through it at real size, in VR on Meta Quest.">
+	<title>CasaWalk VR</title>
+	<meta name="description" content="CasaWalk VR opens Sweet Home 3D files: view your home as a scale model, then walk through it at real size, in VR on Meta Quest.">
 	<!--
 		Content Security Policy: the page may only run its own scripts (plus the
 		import map below, pinned by its hash), show its own or in-memory images,
@@ -74,6 +74,8 @@
 		#panel header { display: flex; align-items: center; gap: 8px; }
 		h1 { font-size: 19px; margin: 0; flex: 1; letter-spacing: -0.01em; }
 		h1 span { color: var(--accent); }
+		/* "VR" says what the app is where people first meet it; the wordmark stays CasaWalk. */
+		h1 small { font-size: 12px; font-weight: 600; color: var(--muted); letter-spacing: 0.06em; margin-left: 2px; vertical-align: 2px; }
 		#collapse { min-height: 32px; padding: 0 11px; }
 		#panel.collapsed > :not(header) { display: none; }
 		.panel-body { display: flex; flex-direction: column; gap: 8px; min-height: 0; }
@@ -244,7 +246,7 @@
 	<!-- Files: open a model, or reopen a recent one. -->
 	<aside id="panel" class="card">
 		<header>
-			<h1>Casa<span>Walk</span></h1>
+			<h1>Casa<span>Walk</span> <small>VR</small></h1>
 			<button id="collapse" title="Hide this panel" aria-label="Hide this panel" aria-expanded="true">–</button>
 		</header>
 		<div class="panel-body">

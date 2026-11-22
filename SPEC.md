@@ -1,6 +1,6 @@
 # CasaWalk: prompt for Claude Code
 
-Paste everything below the line into Claude Code, running in an empty folder on the Mac (e.g. `~/Projects/SweetHomeVR`). Work in Plan mode first and approve the plan before any code is written.
+Paste everything below the line into Claude Code, running in an empty folder on the Mac (e.g. `~/Projects/CasaWalk`). Work in Plan mode first and approve the plan before any code is written.
 
 ---
 
@@ -135,7 +135,7 @@ A model file and a pasted link are untrusted input: the viewer will be shared, a
 ## Experience and controls
 
 **2D page (home screen)**
-- Title: "CasaWalk" (tagline "Mi casa es tu casa", subtitle "Opens Sweet Home 3D files").
+- Name (decided with the user): "CasaWalk VR" wherever someone meets the app (browser tab and bookmark title, page header with a small "VR", README, link previews) and "CasaWalk" wherever they are already using it (headset welcome card, menus, photo file names). Tagline "Mi casa es tu casa", subtitle "Opens Sweet Home 3D files".
 - Buttons: Open from Dropbox, Open from link, Open file, plus the Recent list.
 - Live orbit preview of the model.
 - One **Enter VR** button, shown only if `navigator.xr.isSessionSupported` says so (changed at the user's request from separate VR and AR buttons). When `immersive-ar` is supported the session is an AR session and the in-headset menu switches between the VR view (an opaque world drawn over the passthrough) and the passthrough view (greyscale on Quest 2); otherwise it is an `immersive-vr` session, VR only. Checked on the Quest 2: the Guardian boundary still appears in the VR view of an AR session.

@@ -1,6 +1,6 @@
 # CasaWalk
 
-WebXR viewer for Meta Quest (Quest 3, 3S, 2 and Pro; Quest 3/3S first; Quest 1 not supported) that opens Sweet Home 3D (`.sh3d`) files directly (plus OBJ/zip and GLB): view the home as a tabletop scale model, then walk through it at 1:1 scale. Replaces SketchUp Viewer for Quest for that one job. First called Sweet Home VR; renamed CasaWalk in Nov 2026, internal identifiers included (`casawalk.*` storage keys, the `casawalk` IndexedDB and pairing tag, `window.__casawalk`). The Google Cloud project keeps its id `sweet-home-vr` (ids cannot change).
+WebXR viewer for Meta Quest (Quest 3, 3S, 2 and Pro; Quest 3/3S first; Quest 1 not supported) that opens Sweet Home 3D (`.sh3d`) files directly (plus OBJ/zip and GLB): view the home as a tabletop scale model, then walk through it at 1:1 scale. Replaces SketchUp Viewer for Quest for that one job. Name: "CasaWalk VR" where people meet the app (tab title, page header, README), "CasaWalk" inside the headset and in photo names (SPEC.md, "2D page"). First called Sweet Home VR; renamed CasaWalk in Nov 2026, internal identifiers included (`casawalk.*` storage keys, the `casawalk` IndexedDB and pairing tag, `window.__casawalk`). The Google Cloud project keeps its id `sweet-home-vr` (ids cannot change).
 
 **SPEC.md is the source of truth** for SH3D parsing rules, furniture placement, walls/openings/rooms, controls and performance targets. Read the relevant section before touching that area. Don't propose alternatives to decisions in SPEC.md unless there is a concrete blocker, and explain the blocker.
 
