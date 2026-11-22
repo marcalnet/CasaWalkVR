@@ -835,7 +835,7 @@ check('Levels: All shows every storey again', lv.hidden.length === 0 && lv.level
 	page.off('download', watch);
 	const kept = await photos();
 	const fx = await page.evaluate(() => ({ menu: window.__svr.xr.menu !== null, note: window.__svr.xr.ui.photoNote.mesh.visible, title: window.__svr.xr.ui.photoNote.title, line: window.__svr.xr.ui.photoNote.lines[0].text }));
-	check('Photo: kept for the page, nothing downloaded in VR, and the note says so', kept.length === n0 + 1 && !downloaded && /^Sweet Home VR \d{4}-\d\d-\d\d [\d.]+\.jpg$/.test(kept[0].name) && !fx.menu && fx.note && fx.title === 'Nice shot!' && /page/.test(fx.line),
+	check('Photo: kept for the page, nothing downloaded in VR, and the note says so', kept.length === n0 + 1 && !downloaded && /^CasaWalk \d{4}-\d\d-\d\d [\d.]+\.jpg$/.test(kept[0].name) && !fx.menu && fx.note && fx.title === 'Nice shot!' && /page/.test(fx.line),
 		JSON.stringify({ kept: kept.length, downloaded, name: kept[0]?.name, ...fx }));
 	await click('right', 'a-button');
 }
@@ -887,7 +887,7 @@ check('leaving from walk mode leaves nothing behind', !bad.length, bad.join(', '
 	const jpeg = d ? fs.readFileSync(file) : null;
 	let size = null; // width x height from the JPEG's frame header
 	for (let i = 2; jpeg && i < jpeg.length - 9; i++) if (jpeg[i] === 0xff && jpeg[i + 1] >= 0xc0 && jpeg[i + 1] <= 0xc2) { size = [jpeg.readUInt16BE(i + 7), jpeg.readUInt16BE(i + 5)]; break; }
-	check('after VR: the page offers the photos, and Save all downloads a 1920 x 1080 JPEG', pg.shown && pg.rows >= 1 && /photo/i.test(pg.status) && d && /^Sweet Home VR \d{4}-\d\d-\d\d [\d.]+\.jpg$/.test(d.suggestedFilename()) && size?.join('x') === '1920x1080' && jpeg.length > 30000,
+	check('after VR: the page offers the photos, and Save all downloads a 1920 x 1080 JPEG', pg.shown && pg.rows >= 1 && /photo/i.test(pg.status) && d && /^CasaWalk \d{4}-\d\d-\d\d [\d.]+\.jpg$/.test(d.suggestedFilename()) && size?.join('x') === '1920x1080' && jpeg.length > 30000,
 		JSON.stringify({ ...pg, name: d?.suggestedFilename(), size, bytes: jpeg?.length }));
 	await page.waitForTimeout(1500); // (the rest download one at a time)
 	await page.evaluate(async () => { const s = await import('/js/storage.js'); for (const p of await s.listPhotos()) await s.removePhoto(p.id); });

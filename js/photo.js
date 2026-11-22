@@ -105,10 +105,10 @@ export function withHidden(objects, draw) {
 	}
 }
 
-/** A file name like "Sweet Home VR 2026-11-21 10.42.07.jpg". */
+/** A file name like "CasaWalk 2026-11-21 10.42.07.jpg". */
 export function photoName(date = new Date()) {
 	const p = (n) => String(n).padStart(2, '0');
-	return `Sweet Home VR ${date.getFullYear()}-${p(date.getMonth() + 1)}-${p(date.getDate())} ${p(date.getHours())}.${p(date.getMinutes())}.${p(date.getSeconds())}.jpg`;
+	return `CasaWalk ${date.getFullYear()}-${p(date.getMonth() + 1)}-${p(date.getDate())} ${p(date.getHours())}.${p(date.getMinutes())}.${p(date.getSeconds())}.jpg`;
 }
 
 /** Saves a Blob as a download (on the Quest: Files app, Downloads). */

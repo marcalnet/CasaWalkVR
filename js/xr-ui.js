@@ -57,7 +57,7 @@ export class XRUI {
 	 * how to open the menu, shown on every entry until the menu is opened.
 	 */
 	buildWelcome() {
-		this.welcome = new WelcomeCard('Welcome', [
+		this.welcome = new WelcomeCard('Welcome to CasaWalk', [
 			{ key: 'Wrist', kind: 'orb', text: 'Touch a wrist with the other hand: menu' },
 			{ small: true, text: 'Or press A or X, or point at the glowing orb on a wrist.' },
 			{ key: 'Trigger', kind: 'trigger', text: 'Point at a room and pull: step inside' },

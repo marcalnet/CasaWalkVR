@@ -1,4 +1,6 @@
-# Sweet Home VR
+# CasaWalk
+
+*Mi casa es tu casa.* Opens Sweet Home 3D files.
 
 A WebXR viewer for [Sweet Home 3D](https://www.sweethome3d.com/) homes on Meta Quest. Open a `.sh3d` file directly (no export step), look at it as a scale model, then walk through it at real size. It also opens OBJ (plain, or zipped with MTL and textures) and GLB, including compressed GLB (Draco, meshopt).
 
@@ -74,7 +76,7 @@ Supported files:
 
 **Quest Browser tip:** if picking a `.sh3d` file fails with "Quest Browser blocked this file type", rename it to `.zip`.
 
-**Copying files from a Mac to the Quest by cable:** Android File Transfer is no longer maintained; the free [OpenMTP](https://openmtp.ganeshrvel.com/) works with a Quest 2. Connect the headset by USB-C, accept "Allow access to data" inside the headset, and drag the `.sh3d` into any folder (e.g. a new `Sweet Home VR` folder). Then use **Open file** in the Quest Browser.
+**Copying files from a Mac to the Quest by cable:** Android File Transfer is no longer maintained; the free [OpenMTP](https://openmtp.ganeshrvel.com/) works with a Quest 2. Connect the headset by USB-C, accept "Allow access to data" inside the headset, and drag the `.sh3d` into any folder (e.g. a new `CasaWalk` folder). Then use **Open file** in the Quest Browser.
 
 ## In the headset
 

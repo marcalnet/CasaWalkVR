@@ -1,4 +1,4 @@
-# Sweet Home VR: prompt for Claude Code
+# CasaWalk: prompt for Claude Code
 
 Paste everything below the line into Claude Code, running in an empty folder on the Mac (e.g. `~/Projects/SweetHomeVR`). Work in Plan mode first and approve the plan before any code is written.
 
@@ -6,7 +6,7 @@ Paste everything below the line into Claude Code, running in an empty folder on 
 
 ## Goal
 
-Build **Sweet Home VR**, a simple VR viewer for Meta Quest that opens **Sweet Home 3D (.sh3d)** files directly, with no conversion step. It should also open OBJ (plain, or zipped with MTL and textures) and GLB. It replaces the discontinued SketchUp Viewer for Quest for one job only: looking at a home model as a scale model, then walking through it at real 1:1 scale.
+Build **CasaWalk** (first called Sweet Home VR; renamed at the user's request), a simple VR viewer for Meta Quest that opens **Sweet Home 3D (.sh3d)** files directly, with no conversion step. It should also open OBJ (plain, or zipped with MTL and textures) and GLB. It replaces the discontinued SketchUp Viewer for Quest for one job only: looking at a home model as a scale model, then walking through it at real 1:1 scale.
 
 Headsets (decided with the user, the same as BRINK Traveler supports): Quest 3, Quest 3S, Quest 2 and Quest Pro. Quest 3 / 3S is the main target; Quest 2 and Quest Pro set the performance floor. Quest 1 is not supported (see phase 9 under "Working style").
 
@@ -135,7 +135,7 @@ A model file and a pasted link are untrusted input: the viewer will be shared, a
 ## Experience and controls
 
 **2D page (home screen)**
-- Title: "Sweet Home VR".
+- Title: "CasaWalk" (tagline "Mi casa es tu casa", subtitle "Opens Sweet Home 3D files").
 - Buttons: Open from Dropbox, Open from link, Open file, plus the Recent list.
 - Live orbit preview of the model.
 - One **Enter VR** button, shown only if `navigator.xr.isSessionSupported` says so (changed at the user's request from separate VR and AR buttons). When `immersive-ar` is supported the session is an AR session and the in-headset menu switches between the VR view (an opaque world drawn over the passthrough) and the passthrough view (greyscale on Quest 2); otherwise it is an `immersive-vr` session, VR only. Checked on the Quest 2: the Guardian boundary still appears in the VR view of an AR session.
@@ -166,7 +166,7 @@ A model file and a pasted link are untrusted input: the viewer will be shared, a
 - Person height: menu option Yours / 1.4 / 1.7 / 2.0 m (remembered). For a set height the rig is raised or lowered so the eyes are 11 cm below that height, measured when you enter walk mode or change the option.
 - **B or Y:** back to the scale model (or closes the menu if it is open).
 - **A or X** (or an orb): toggle a menu 0.75 m in front of the head (same design as the scale model menu) with Time of day, Shadows and Depth, Ceilings and Solid walls, See-through, Turn (15° / 30° / 45°), Height (Yours / 1.4 / 1.7 / 2.0 m), View, and on the tall bottom row **Photo**, then the two ways out side by side (at the user's request), **Back to the scale model** (white) and **Exit VR** (orange).
-- **Photo** (added at the user's request; both menus): the Quest's own screenshot (hold the Meta button, pull a trigger) also sends that trigger pull to the page, which jumps you (teleport, or "step inside"); a page cannot see the Meta button, so it cannot tell them apart. The button closes the menu and, the next frame, renders the view once more from the head (roll removed, so the horizon is level; 1920 × 1080, 60° vertical field of view, 4× MSAA) without the menu, lasers, controllers, orbs, arc, markers or welcome card, into a half-float image, converts it to sRGB in a second pass, reads it back and saves it as a JPEG download named "Sweet Home VR <date> <time>.jpg". On the Quest it lands in the Files app, Downloads: a web page cannot write into the headset's screenshot gallery. A short white flash and a note in front of you ("Photo saved", or that it failed) confirm it. In the passthrough view the background is black (a page cannot read the cameras). `js/photo.js`. Lasers are hidden while walking, except while the menu is open or a laser points at an orb. Since B5 the photo is not downloaded during VR (the Quest Browser asks for permission at the first download and its prompt ends the session): it is kept in the app (IndexedDB, the newest 50) and the note says "Nice shot!"; after VR the page lists the photos with thumbnails, **Save all to Downloads**, and save or delete one by one.
+- **Photo** (added at the user's request; both menus): the Quest's own screenshot (hold the Meta button, pull a trigger) also sends that trigger pull to the page, which jumps you (teleport, or "step inside"); a page cannot see the Meta button, so it cannot tell them apart. The button closes the menu and, the next frame, renders the view once more from the head (roll removed, so the horizon is level; 1920 × 1080, 60° vertical field of view, 4× MSAA) without the menu, lasers, controllers, orbs, arc, markers or welcome card, into a half-float image, converts it to sRGB in a second pass, reads it back and saves it as a JPEG download named "CasaWalk <date> <time>.jpg". On the Quest it lands in the Files app, Downloads: a web page cannot write into the headset's screenshot gallery. A short white flash and a note in front of you ("Photo saved", or that it failed) confirm it. In the passthrough view the background is black (a page cannot read the cameras). `js/photo.js`. Lasers are hidden while walking, except while the menu is open or a laser points at an orb. Since B5 the photo is not downloaded during VR (the Quest Browser asks for permission at the first download and its prompt ends the session): it is kept in the app (IndexedDB, the newest 50) and the note says "Nice shot!"; after VR the page lists the photos with thumbnails, **Save all to Downloads**, and save or delete one by one.
 
 ## Design principles (the user's rule for every interface)
 

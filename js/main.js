@@ -1,4 +1,4 @@
-// Sweet Home VR: app entry point.
+// CasaWalk: app entry point.
 // 2D page (home screen) with an orbit-controlled dollhouse preview, file
 // loading, and the Enter VR / Enter AR buttons. The XR modes live in xr.js.
 
@@ -267,7 +267,7 @@ async function load(files, label, source = { type: 'file' }) {
 			store.dispose();
 			invalidate();
 		});
-		document.title = `${label} · Sweet Home VR`;
+		document.title = `${label} · CasaWalk`;
 		// Remember it for one-tap reopening (only once it opened successfully).
 		if (source.type !== 'recent') addRecent({ name: label, files, source }).then(renderRecents);
 	} catch (e) {
