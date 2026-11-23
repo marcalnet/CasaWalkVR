@@ -81,7 +81,7 @@ test('findFloor takes the first upward-facing floor below a point', () => {
 test('water is never a landing or a floor, in any language; it blocks nothing', async () => {
 	const { WATER_NAME, isWater } = await import('../js/optimise.js');
 	for (const n of ['Pond water', 'Swimming pool', 'Water', 'Piscina', 'Agua', "Plan d'eau", 'Wasserfläche', 'Acqua', 'Estany']) assert.ok(WATER_NAME.test(n), n);
-	for (const n of ['Watering can', 'Pooled lamp', 'Table', 'Beau chair']) assert.ok(!WATER_NAME.test(n), n);
+	for (const n of ['Watering can', 'Pooled lamp', 'Table', 'Beau chair', 'Water heater', 'Water tank', 'Pool table', 'Water-cooler', 'Wasserkocher']) assert.ok(!WATER_NAME.test(n), n);
 	const piece = new THREE.Group();
 	piece.userData.piece = { name: 'Pond', kind: 'piece' };
 	const inner = new THREE.Mesh(new THREE.BoxGeometry(), mat);

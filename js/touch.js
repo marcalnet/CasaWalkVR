@@ -22,6 +22,9 @@
 // Only a tip that came from the front counts: it must have hovered first,
 // and move in at an angle within MAX_ANGLE of the normal, slower than
 // MAX_SPEED. Losing the hand is reset(): nothing completes on a loss.
+// Keys where hands rest (the doors at the scale model) pass stricter rules:
+// a narrower angle, and a deliberate push (MIN_SPEED: a hand or controller
+// lowered slowly onto the face never presses it).
 
 export const TOUCH = {
 	RADIUS: 0.009, // the fingertip (or controller tip) is a sphere this big, metres
@@ -34,11 +37,15 @@ export const TOUCH = {
 	MAX_SPEED: 1.5, // m/s at contact; faster is passing through
 	KEY_GAP: 0.2, // one click per key per 0.2 s
 	PANEL_GAP: 0.15, // one panel never takes two clicks from the same hand within 0.15 s
+	MIN_SPEED: 0, // m/s towards the face at contact (0: any)
 };
+
+/** The stricter rules of keys where hands and controllers rest (the doors at the scale model). */
+export const DELIBERATE = { ...TOUCH, MAX_ANGLE: Math.PI * 40 / 180, MIN_SPEED: 0.12 };
 
 /** A fresh touch state, for one fingertip on one panel. */
 export function touchState() {
-	return { phase: 'away', depth: null, push: 0 };
+	return { phase: 'away', depth: null, push: 0, vel: 0 };
 }
 
 /** Forgets a touch (the hand was lost or switched): nothing completes. */
@@ -46,17 +53,21 @@ export function reset(s) {
 	s.phase = 'away';
 	s.depth = null;
 	s.push = 0;
+	s.vel = 0;
 }
 
 /**
  * One frame of one fingertip on one panel. sample: { depth, inside, lateral,
- * dt }. Returns the events of this frame, in order: 'hover', 'contact',
- * 'click', 'release', 'leave', 'block' (an empty list when nothing changed).
+ * dt }; rules: TOUCH, or DELIBERATE. Returns the events of this frame, in
+ * order: 'hover', 'contact', 'click', 'release', 'leave', 'block' (an empty
+ * list when nothing changed).
  */
-export function stepTouch(s, { depth, inside, lateral = 0, dt = 1 / 72 }) {
+export function stepTouch(s, { depth, inside, lateral = 0, dt = 1 / 72 }, rules = TOUCH) {
 	const ev = [];
 	const prev = s.depth;
 	s.depth = depth;
+	// The speed towards the face, smoothed over about 50 ms (one frame is noisy).
+	if (prev !== null) s.vel += ((prev - depth) / Math.max(dt, 1e-3) - s.vel) * Math.min(1, dt / 0.05);
 	const front = depth > 0 && depth <= TOUCH.HOVER;
 	switch (s.phase) {
 		case 'away':
@@ -75,9 +86,10 @@ export function stepTouch(s, { depth, inside, lateral = 0, dt = 1 / 72 }) {
 			if (!inside || depth > TOUCH.HOVER) { s.phase = 'away'; ev.push('leave'); break; }
 			if (depth <= 0) {
 				const inward = prev === null ? 0 : prev - depth; // metres moved towards the face this frame
-				const fast = inward / Math.max(dt, 1e-3) > TOUCH.MAX_SPEED;
-				const slanted = Math.atan2(lateral, Math.max(inward, 1e-6)) > TOUCH.MAX_ANGLE;
-				if (prev === null || fast || slanted) { s.phase = 'blocked'; ev.push('block'); break; }
+				const fast = inward / Math.max(dt, 1e-3) > rules.MAX_SPEED;
+				const slow = rules.MIN_SPEED > 0 && Math.max(s.vel, inward / Math.max(dt, 1e-3)) < rules.MIN_SPEED;
+				const slanted = Math.atan2(lateral, Math.max(inward, 1e-6)) > rules.MAX_ANGLE;
+				if (prev === null || fast || slow || slanted) { s.phase = 'blocked'; ev.push('block'); break; }
 				s.phase = 'contact';
 				ev.push('contact');
 				if (depth <= -TOUCH.CLICK) { s.phase = 'pressed'; ev.push('click'); }

@@ -39,10 +39,16 @@
 //            closed gives no down until it has been seen open.
 // joint(c, name, out) gives any hand joint's world position (WebXR joint
 // names, such as 'wrist' or 'index-finger-tip').
+//
+// Gestures (C0.4): readGestures() runs each bare hand's gesture reader
+// (js/gestures.js: the ready pose, thumb tap and swipes, the closed hand) and
+// leaves this frame's events on c.gestures (an array) and the reader on
+// c.gesture. Controllers have c.gestures = [].
 
 import * as THREE from 'three';
 import { TOUCH } from './touch.js';
 import { KEY } from './theme.js';
+import { HandGestures, JOINTS } from './gestures.js';
 
 const DEADZONE = 0.2;
 const RAY_LENGTH = 5;
@@ -91,7 +97,7 @@ export class XRInput {
 			wrist.name = 'wrist';
 			rig.add(wrist);
 
-			const c = { index: i, ray, grip, hand, wrist, line, dot, body, touch: emptyTouch(), source: null, handedness: null, isController: false, isHand: false, state: emptyState(), claim: { trigger: null, grip: null, a: null, b: null, stickPress: null } };
+			const c = { index: i, ray, grip, hand, wrist, line, dot, body, touch: emptyTouch(), gesture: null, gestures: [], source: null, handedness: null, isController: false, isHand: false, state: emptyState(), claim: { trigger: null, grip: null, a: null, b: null, stickPress: null } };
 			ray.addEventListener('connected', (e) => {
 				c.source = e.data;
 				c.handedness = e.data.handedness;
@@ -101,6 +107,8 @@ export class XRInput {
 				body.visible = c.isController;
 				c.state = emptyState();
 				c.touch = emptyTouch();
+				c.gesture = c.isHand ? new HandGestures(c.handedness) : null;
+				c.gestures = [];
 				if (c.isController) this.hands[c.handedness] = c;
 			});
 			ray.addEventListener('disconnected', () => {
@@ -204,6 +212,30 @@ export class XRInput {
 		c.hand.updateMatrixWorld(true);
 		return out.setFromMatrixPosition(j.matrixWorld);
 	}
+
+	/**
+	 * Runs each bare hand's gesture reader for this frame (see the top of the
+	 * file). axes: the viewer's horizontal { right, forward } (world), so a
+	 * thumb swipe reads as you see it.
+	 */
+	readGestures(dt, axes) {
+		for (const c of this.controllers) {
+			if (!c.gesture) { c.gestures = []; continue; }
+			let joints = null;
+			if (c.touch.tracked) {
+				joints = {};
+				for (const n of JOINTS) {
+					const p = this.joint(c, n);
+					if (!p) { joints = null; break; }
+					joints[n] = p;
+				}
+			}
+			c.gestures = c.gesture.step(joints, dt, axes);
+		}
+	}
+
+	/** Bare hands with gesture readers (tracked or not). */
+	gestureHands() { return this.controllers.filter((c) => c.gesture); }
 
 	/** Active controllers (connected, with a gamepad). */
 	active() { return this.controllers.filter((c) => c.source && c.isController); }
@@ -318,7 +350,7 @@ const GRAVITY = 9.8;
 const ARC_STEP = 0.03; // s per segment
 const ARC_STEPS = 60; // up to 1.8 s of flight
 const DOTS = 40;
-const OK_COLOR = new THREE.Color(0x3d8bfd), BAD_COLOR = new THREE.Color(0xe5484d);
+const OK_COLOR = new THREE.Color(0x3d8bfd), BAD_COLOR = new THREE.Color(0xe5484d), PENDING_COLOR = new THREE.Color(0xffffff);
 
 export class TeleportArc {
 	constructor(scene) {
@@ -344,8 +376,10 @@ export class TeleportArc {
 	 * Traces the arc from `origin` along `dir` and draws it.
 	 * hitSegment(a, b) returns { point, normal (world), valid? } for the first
 	 * hit between a and b, or null (valid defaults to an upward-facing normal). Returns { valid, point } (point may be null).
+	 * snap(point): a better landing for a valid one (a hotspot), or null. pending: a valid
+	 * landing shows white, not yet blue (a bare hand's aim settling).
 	 */
-	update(origin, dir, hitSegment, { ceiling } = {}) {
+	update(origin, dir, hitSegment, { ceiling, snap, pending = false } = {}) {
 		const v = dir.clone().normalize().multiplyScalar(ARC_SPEED);
 		// ceiling (world y): the arc never rises above it, so it passes under
 		// door frames instead of hitting the wall over a doorway. Aiming higher
@@ -370,7 +404,8 @@ export class TeleportArc {
 		}
 		this.points = pts;
 		const valid = !!hit && (hit.valid ?? hit.normal.y > 0.7);
-		const color = valid ? OK_COLOR : BAD_COLOR;
+		const color = valid ? (pending ? PENDING_COLOR : OK_COLOR) : BAD_COLOR;
+		const snapped = valid && snap ? snap(hit.point) : null; // (the ring moves to a hotspot; the arc stays where you point)
 
 		// Dots evenly spaced along the polyline.
 		const lengths = [0];
@@ -390,12 +425,12 @@ export class TeleportArc {
 
 		this.ring.visible = !!hit;
 		if (hit) {
-			this.ring.position.copy(hit.point).addScaledVector(hit.normal, 0.01);
-			this.ring.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), hit.normal);
+			this.ring.position.copy(snapped ?? hit.point).addScaledVector(hit.normal, 0.01);
+			this.ring.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), snapped ? new THREE.Vector3(0, 1, 0) : hit.normal);
 			this.ring.material.color.copy(color);
 			this.ring.children[0].material.color.copy(color);
 		}
-		return { valid, point: hit ? hit.point.clone() : null };
+		return { valid, point: hit ? (snapped ?? hit.point).clone() : null, snapped: !!snapped };
 	}
 
 	hide() {

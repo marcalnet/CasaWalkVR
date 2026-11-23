@@ -25,7 +25,9 @@ import * as THREE from 'three';
 import { WelcomeCard } from './panel.js';
 import { yawOf } from './xr-input.js';
 import { TOUCH, touchState, stepTouch, reset as resetTouch, ringSize } from './touch.js';
-import { KEY, BOARD } from './theme.js';
+import { KEY, BOARD, GUIDE } from './theme.js';
+import { Guide } from './guide.js';
+import { readSetting, writeSetting } from './settings.js';
 import { PLINTH_REST } from './xr-scene.js';
 import { WristMenu } from './wrist-menu.js';
 import { handsHelp } from './xr-menus.js';
@@ -58,6 +60,8 @@ export class XRUI {
 		this.boardDrag = null; // a controller holding the board's handle: { c, offset }
 		this.wrist = new WristMenu(xr);
 		this.wrist.onClose = () => this.hideHelp(); // (Help lives beside the wrist menu)
+		this.guide = new Guide(xr); // how to move, beside the wrist menu or the board (C0.4)
+		xr.hideFromPhotos(this.guide.group);
 		this.touches = []; // per input entry: its touch on the open board (js/touch.js)
 		this.buildWelcome();
 		this.buildPhotoFeedback();
@@ -206,6 +210,34 @@ export class XRUI {
 		this.drag = null;
 	}
 
+	/**
+	 * The guide beside the menu (js/guide.js): on the right of the open board,
+	 * or of the wrist menu (not while Help is there). Bare hands or controllers,
+	 * for the layer you are in; folded into its tab if you hid it.
+	 */
+	placeGuide() {
+		const xr = this.xr, guide = this.guide;
+		const at = this.menu ? this.menu.mesh : this.wrist.open && !this.help ? this.wrist.cross : null;
+		if (!at || !xr.mode) { guide.hide(); return; }
+		if (guide.group.parent !== at) at.add(guide.group);
+		const kind = `${xr.mode === 'walk' ? 'walk' : 'dollhouse'}-${xr.input.active().length ? 'controllers' : 'hands'}`;
+		const folded = readSetting('guide') === 'tab';
+		if (at === this.wrist.cross) {
+			guide.show(kind, folded, GUIDE.width);
+			guide.group.position.copy(this.wrist.besideRight(GUIDE.width));
+		} else {
+			const bw = this.menu.mesh.geometry.parameters.width, w = 0.3;
+			guide.show(kind, folded, w);
+			guide.group.position.set(bw / 2 + 0.03 + w / 2, 0, 0.002);
+		}
+		guide.group.rotation.set(0, 0, 0);
+	}
+
+	/** Counts teleports: after the 5th, the guide folds into its tab by itself (once; remembered). */
+	onTeleport(n) {
+		if (n >= 5 && readSetting('guide') === 'auto') writeSetting('guide', 'tab');
+	}
+
 	/** Hides the help card beside the wrist menu. */
 	hideHelp() {
 		if (this.help) this.help.mesh.visible = false;
@@ -216,6 +248,7 @@ export class XRUI {
 	closeAll() {
 		this.closeMenu();
 		this.wrist.close();
+		this.guide.hide();
 	}
 
 	/** True while the board, the help card or the wrist menu is open. */
@@ -258,6 +291,15 @@ export class XRUI {
 		const xr = this.xr, input = xr.input, raycaster = xr.raycaster;
 		let hover = null;
 		let { action } = this.wrist.update(dt);
+		// The guide beside the menu: its Hide key and its tab.
+		this.placeGuide();
+		const g = this.guide.update(dt, { active: true });
+		if (g.action?.id === 'guide-hide' || g.action?.id === 'guide-show') {
+			writeSetting('guide', g.action.id === 'guide-hide' ? 'tab' : 'full');
+			this.placeGuide();
+			g.action = null;
+		}
+		action ??= g.action;
 		if (this.wrist.open) this.setWelcome(false); // found it: the welcome card has done its job
 		const active = input.active();
 		if (this.drag && (!this.menu || !this.drag.c.source || !this.drag.c.state.trigger)) this.drag = null; // let go
@@ -428,6 +470,7 @@ export class XRUI {
 		this.photoNote.mesh.visible = false;
 		this.handsNote.mesh.visible = false;
 		this.wrist.reset();
+		this.guide.hide();
 		for (const st of this.touches) { if (!st) continue; resetTouch(st.s); st.ring.visible = false; st.panel = null; st.slider = null; }
 	}
 }

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { TOUCH, touchState, stepTouch, reset, ringSize } from '../js/touch.js';
+import { TOUCH, DELIBERATE, touchState, stepTouch, reset, ringSize } from '../js/touch.js';
 
 // Milestone C0.2: keys are pressed by a fingertip from the front, like real
 // keys; nothing else clicks.
@@ -56,4 +56,21 @@ test('the hover ring shrinks as the tip comes closer', () => {
 	assert.equal(ringSize(0.06), 0.025);
 	assert.equal(ringSize(0), 0.01);
 	assert.ok(ringSize(0.03) > 0.01 && ringSize(0.03) < 0.025);
+});
+
+// The doors at the scale model (the Lead's rules): a deliberate push from the front.
+test('deliberate keys: a push clicks; a hand lowered slowly onto the face, or at a slant, never does', () => {
+	const go = (from, to, frames, lateral = 0) => {
+		const s = touchState(), out = [];
+		for (let i = 0; i <= frames; i++) out.push(...stepTouch(s, { depth: from + (to - from) * i / frames, inside: true, lateral, dt: 1 / 72 }, DELIBERATE));
+		return out;
+	};
+	assert.ok(go(0.04, -0.012, 12).includes('click'), 'a push from 4 cm in 1/6 s (about 0.3 m/s): clicks');
+	assert.ok(!go(0.04, -0.012, 72 * 2).includes('click'), 'the same in 2 s (2.6 cm/s): a resting hand, never a click');
+	assert.ok(!go(0.04, -0.012, 12, 0.006).includes('click'), 'at a slant (over 40° from the face\'s normal): no click');
+	assert.ok(go(0.04, -0.012, 12, 0.002).includes('click'), 'a little off straight is fine');
+	// The usual keys still take a slow press.
+	const s = touchState(), out = [];
+	for (let i = 0; i <= 144; i++) out.push(...stepTouch(s, { depth: 0.04 - 0.052 * i / 144, inside: true, lateral: 0, dt: 1 / 72 }));
+	assert.ok(out.includes('click'), 'other keys: a slow press clicks');
 });

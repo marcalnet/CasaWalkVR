@@ -53,7 +53,8 @@ export function isOpening(obj) {
  * even in a home with several levels where other furniture can be (stairs).
  * A few languages, whole words (German: the start of one), case-insensitive.
  */
-export const WATER_NAME = /\b(water|pond|pool|agua|eau|acqua|piscina|estany|bassa)\b|\bwasser/i; // (German joins words: Wasserfläche)
+// (Not things named after water: a water heater, a pool table: the tester's finding.)
+export const WATER_NAME = /\b(water|pond|pool|agua|eau|acqua|piscina|estany|bassa)\b(?![\s-]*(heater|tank|table|cooler|closet|bottle|jug|can|dispenser|softener|filter|pump|pipe|glass|cue))|\bwasser(?!(kocher|hahn|flasche|filter|boiler|tank))/i; // (German joins words: Wasserfläche)
 
 /** True for a water piece (by its Sweet Home 3D name). Merged meshes carry it as userData.water. */
 export function isWater(obj) {

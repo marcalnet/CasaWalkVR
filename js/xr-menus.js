@@ -92,6 +92,26 @@ function controlsCards() {
 }
 
 /**
+ * The guide beside the menu (C0.4): how to move here, for bare hands or for
+ * controllers. Each: a title, four frames (row of the sheet image, a word
+ * each), and the lines under them.
+ */
+export const GUIDES = {
+	'walk-hands': { title: 'How to move', row: 0,
+		frames: ['Hand sideways, fingers curled', 'Tap your thumb: aim', 'Point at the floor', 'Tap again on blue: go'],
+		lines: ['Swipe your thumb left or right: turn', 'Swipe it forward or back: a small step', 'Open your hand: cancel'] },
+	'walk-controllers': { title: 'How to move', row: 1,
+		frames: ['Right stick forward', 'or hold a trigger', 'Aim at the floor', 'Let go on blue: go'],
+		lines: ['Right stick left or right: turn', 'Left stick: walk. Grip and pull: slide', 'B or Y: back to the scale model'] },
+	'dollhouse-hands': { title: 'The scale model', row: 2,
+		frames: ['Close your hand on it: hold', 'Let go: it floats, then goes home', 'Tap your thumb, point at a room', 'Tap again: step inside'],
+		lines: ['Lift it, tilt it, look underneath', 'Open your hand: cancel'] },
+	'dollhouse-controllers': { title: 'The scale model', row: 3,
+		frames: ['Grip: hold it', 'Sticks: turn and zoom', 'Point at a room', 'Pull the trigger: step inside'],
+		lines: ['Lift it, tilt it, look underneath', 'Let go in the air: it goes home by itself'] },
+};
+
+/**
  * Help with bare hands (milestone C0.3: moving with hands comes in C0.4, and
  * this card says so). side: the wrist that wears the menu.
  */
@@ -193,7 +213,7 @@ export function menuAction(xr, target) {
 			break;
 		case 'back':
 			if (xr.mode === 'walk') xr.goLayer('back', () => xr.setMode('dollhouse'));
-			else xr.goLayer('out', () => xr.end()); // from the scale model, Back leaves VR
+			else xr.goLayer('out', () => xr.end()); // from the scale model, Back leaves VR (the door on the plinth is held 0.6 s; the wrist menu's, opened on purpose, is one press)
 			break;
 		case 'dollhouse': if (xr.mode === 'walk') xr.goLayer('back', () => xr.setMode('dollhouse')); break;
 		case 'exit': xr.goLayer('out', () => xr.end()); break;

@@ -86,11 +86,13 @@ Press **Enter VR →** once a model is open: it starts at the scale model. The a
 
 **Help** opens a card beside the menu, on its right, and the menu stays. **Settings** opens a board within reach: a little to your left at the scale model, straight ahead inside. Tabs **View**, **Walk** and **General**, the same at both layers, and a **×** key to close it (B / Y too). Settings are **switches** for what is on or off (Shadows, Depth shading, Ceilings, Passthrough, Transparent walls, Solid walls), a row of **options** with the current one in blue (Time of day, Height, Tool fan, Sound) and a **‹ ›** stepper for Levels (homes can have many). A setting that belongs to the scale model is greyed out inside. Settings, and the tab you last used, are remembered. A controller's grip on the bar on top moves the board.
 
-**Bare hands** (being built, milestone C0): put the controllers down and your hands appear. The wrist menu and the board work by touch. Pinching does nothing, on purpose. Moving with bare hands (holding the model, stepping inside, teleporting) comes next; until then, use Walk in → and ← Back, or the controllers.
+**Bare hands** (being built, milestone C0): put the controllers down and your hands appear. The wrist menu and the board work by touch. Pinching does nothing, on purpose. To move, use Meta's own hand gesture: hold a hand sideways, fingers curled, thumb resting on your index (an orange dot shows on the thumb), and **tap your thumb**: an arc shows where you'll land; when its ring turns blue, **tap again** to go. **Open your hand** to cancel. Swipe your thumb left or right to turn, forward or back for a small step. At the scale model the same tap aims at a room: tap again to step inside. **Close your hand on the model** to hold it: lift it, tilt it, look underneath. Let it go over the plinth and it settles; let it go in the air and it floats, then goes back to its plinth by itself 4 seconds after your hands move away (that works with the controllers' grips too). A **guide** beside the menu shows all this; its Hide key folds it away.
+
+While aiming a teleport (hands or controllers), faint rings on the floor mark the middle of each room and both sides of each doorway; the landing ring snaps to one when you aim near it.
 
 **Scale model**
 - The home stands on a low museum plinth in a gallery room, 60 cm in front of you. You look down at it as a 2 m tall person would, whether you sit or stand, so it's easy to look into the rooms. If you change position, the Quest's own recentre (hold the Meta button) brings the plinth in front of you and measures your height again. **Passthrough** (View tab) swaps the gallery for your own room; the model stays exactly where it is.
-- **Walk in →** (big) and **← Back** (leave VR, small, on its left) also float in front of you at waist height, under the model: press them with a fingertip, a controller's tip, or point and pull the trigger.
+- **Walk in →** (big) and **← Back** (leave VR, small, on its left) also float in front of you at waist height, under the model. Push them with a fingertip or a controller's tip, from the front (resting a hand on them does nothing), or point a controller at them and pull and let go of the trigger. Hold ← Back for a moment (a ring fills) to leave VR.
 - **Thumbstick** left/right turns it; up/down zooms it (½× to 4×). A brass plate on the plinth shows its true scale (e.g. 1:42); let go of a zoom near a standard scale (1:10, 1:20, 1:25, 1:50, 1:100…) and it settles on it with a light tick.
 - Point the **laser** at a room: an orange marker hops to the room's clear middle, with the room's name above it and a small arrow for the way you'll face. **Trigger** takes you there at real size. (Pointing at the garden, you land where you point, clear of the walls, facing the house. OBJ and GLB files have no rooms: you land where you point.)
 - **Grip** and move your hand to lift it or move it; it never sinks into the plinth.
@@ -224,6 +226,9 @@ js/xr-tools.js    the hand-held tool system (the tools arrive later)
 js/xr-input.js    controllers, lasers, buttons, thumbsticks, teleport arc, bare hands' touch state
 js/touch.js       touch keys pressed by a fingertip or a controller's tip
 js/hands.js       bare hands, drawn
+js/gestures.js    bare-hand gestures: the thumb tap and swipes, the closed hand
+js/hotspots.js    teleport hotspots (room middles, doorways)
+js/guide.js       the guide beside the menu
 js/settings.js    every remembered setting, its key and meaning
 js/tween.js, js/haptics.js, js/sound.js   feedback: motion, vibration, synthesised sounds
 js/panel.js       canvas-texture board (switches, options, stepper, Close key), cards and labels

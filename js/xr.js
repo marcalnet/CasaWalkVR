@@ -486,6 +486,13 @@ export class XRExperience {
 		return new THREE.Vector3().setFromMatrixPosition(this.camera.matrix).applyMatrix4(this.rig.matrixWorld);
 	}
 
+	/** The viewer's horizontal right and forward axes (world, unit). */
+	viewAxes() {
+		this.rig.updateMatrixWorld(true);
+		const yaw = yawOfMatrix(this.camera.matrix.clone().premultiply(this.rig.matrixWorld));
+		return { right: new THREE.Vector3(Math.cos(yaw), 0, -Math.sin(yaw)), forward: new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw)) };
+	}
+
 	/** Turns the user by `angle` (radians, + = left) about their head. */
 	turn(angle) {
 		const before = this.headWorld();
@@ -535,6 +542,7 @@ export class XRExperience {
 		if (!this.session || !this.model) return;
 		this.frameDt = dt;
 		this.input.update(); // (also clears every controller's claims)
+		this.input.readGestures(dt, this.viewAxes()); // bare hands: the teleport gesture, the closed hand (C0.4)
 		for (const v of this.handViews) v.near = false; // (a key or the board near a fingertip lights it up again this frame)
 		this.ui.showHandsNote(); // bare hands: "Pick up your controllers" (their pinches are never read)
 		this.tools.claim(); // a held tool's buttons are its own, before the menu and the mode

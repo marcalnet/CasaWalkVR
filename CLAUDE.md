@@ -44,6 +44,9 @@ js/optimise.js    merge-by-material and BVH
 js/xr-input.js    controllers, rays, thumbsticks, teleport arc, per-frame button claims; bare hands told apart (a pinch never clicks); touch state for hands and controllers (poke point, pinch); controller tip nub
 js/touch.js       touch keys: hover, contact, click, release, front-only (pure, Node-testable)
 js/hands.js       bare hands drawn from the WebXR joints (translucent capsules, orange fingertip)
+js/gestures.js    bare-hand gestures from the joints: ready, thumb tap and swipes, closed hand, the aim ray (pure, Node-testable)
+js/hotspots.js    teleport hotspots: room middles and doorways, and snapping to them (pure, Node-testable)
+js/guide.js       the guide beside the menu: how to move, for hands or controllers; Hide folds it into a tab
 js/panel.js       canvas-texture board (switches, options, stepper, Close key), controls and welcome cards, labels
 js/walls.js       solid walls while walking and see-through walls and furniture (headset only)
 js/photo.js       the menu's Photo button: renders the view without the menu and saves a JPEG

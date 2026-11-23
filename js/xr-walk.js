@@ -6,12 +6,23 @@
 // stay on the floor and walk through furniture; with more levels you can
 // stand on anything, so stairs work (js/xr-targets.js). With Solid walls on,
 // walls stop you (furniture never does: js/walls.js). B or Y goes back.
+//
+// Bare hands (C0.4, Meta's hands locomotion; js/gestures.js): hold a hand
+// sideways, fingers curled, thumb on the index (the ready dot shows); tap the
+// thumb: the arc grows from the hand (from the shoulder through the wrist),
+// its ring white while it settles and blue once steady; tap again on blue: go.
+// Open the hand: cancel. Swipe the thumb left or right: turn; forward or back:
+// a 0.75 m step. The ring snaps to hotspots (room middles, doorways:
+// js/hotspots.js), for controllers too.
 
 import * as THREE from 'three';
 import { TeleportArc, yawOf } from './xr-input.js';
 import { WallCollider } from './walls.js';
 import { UP, DOWN, worldNormal, hitSegment } from './xr-targets.js';
 import { EYE_BELOW_TOP, buildFade } from './xr-scene.js';
+import { handAimRay } from './gestures.js';
+import { hotspots, snapTo, HOTSPOT } from './hotspots.js';
+import { Label } from './panel.js';
 
 const WALK_SPEED = 0.75; // m/s at full stick
 const STEP = 0.6; // floor following: look this far above and below the feet
@@ -19,6 +30,10 @@ const FADE_OUT = 0.1, FADE_IN = 0.15; // teleport fade, seconds
 // Highest the teleport arc may rise above your feet: under a door frame
 // (doors are about 2.0-2.1 m), so you can teleport through a doorway.
 const ARC_CEILING = 1.85;
+const STEADY = 0.3; // a bare hand's ring turns blue once it has stayed put this long (s)
+const STEADY_MOVE = 0.15; // ... within this distance (m)
+const HAND_STEP = 0.75; // a thumb swipe forward or back: a step this long (m)
+const MAX_DISCS = 48; // hotspot discs shown while aiming
 
 export class Walk {
 	/** xr: the XRExperience. */
@@ -32,7 +47,17 @@ export class Walk {
 		this.body = null; // where the body was last frame (null: just placed)
 		this.fadeMesh = buildFade(xr.camera);
 		this.arc = new TeleportArc(xr.scene);
-		xr.hideFromPhotos(this.fadeMesh, this.arc.dots, this.arc.ring);
+		// Hotspots: faint discs on the floor while aiming, and the room's name over the one the ring snaps to.
+		this.discs = new THREE.InstancedMesh(new THREE.RingGeometry(0.12, 0.16, 32).rotateX(-Math.PI / 2),
+			new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.35, depthWrite: false }), MAX_DISCS);
+		this.discs.frustumCulled = false;
+		this.discs.count = 0;
+		this.discs.visible = false;
+		this.discs.name = 'hotspots';
+		xr.scene.add(this.discs);
+		this.spotLabel = new Label({ height: 0.12 });
+		xr.scene.add(this.spotLabel.mesh);
+		xr.hideFromPhotos(this.fadeMesh, this.arc.dots, this.arc.ring, this.discs, this.spotLabel.mesh);
 	}
 
 	/** Walk in at the Sweet Home 3D observer camera (or the model's centre). */
@@ -69,6 +94,7 @@ export class Walk {
 	enter(modelPt, yaw) {
 		const xr = this.xr;
 		this.tele = null;
+		this.hideAim();
 		for (const c of xr.input.controllers) { xr.input.showHit(c, null); xr.input.setLaser(c, false); c.pull = null; }
 		xr.applyView();
 		xr.applyStoreys();
@@ -88,11 +114,145 @@ export class Walk {
 	 */
 	exit() {
 		this.tele = null;
-		this.arc.hide();
+		this.hideAim();
 		this.fade = null;
 		this.fadeMesh.material.opacity = 0;
 		this.fadeMesh.visible = false;
 		for (const c of this.xr.input.controllers) c.pull = null;
+	}
+
+	/** Hides the arc, the hotspot discs and the hotspot's name. */
+	hideAim() {
+		this.arc.hide();
+		this.discs.visible = false;
+		this.spotLabel.set('');
+	}
+
+	/** The model's hotspots (model space), worked out once per model. */
+	spots() {
+		const xr = this.xr, m = xr.model;
+		if (!m.hotspots) m.hotspots = hotspots(m.plan, (x, y, z) => xr.modes.dollhouse.isClear(x, y, z));
+		return m.hotspots;
+	}
+
+	/**
+	 * Traces the teleport arc from a ray (world), with the ring snapping to
+	 * hotspots near where it lands; shows the discs of the hotspots near you.
+	 * Returns { valid, point, snapped }.
+	 */
+	aim(origin, dir, { pending = false } = {}) {
+		const xr = this.xr, rig = xr.rig, t = xr.targets();
+		const spots = this.spots();
+		const head = xr.centerer.worldToLocal(xr.headWorld());
+		let snappedTo = null;
+		const snap = (p) => {
+			const m = xr.centerer.worldToLocal(p.clone());
+			snappedTo = snapTo(spots, m, head);
+			return snappedTo ? xr.centerer.localToWorld(new THREE.Vector3(snappedTo.x, snappedTo.y, snappedTo.z)) : null;
+		};
+		// The arc stays low enough to pass through doorways (ARC_CEILING above your feet).
+		const ceiling = rig.position.y - xr.lift + ARC_CEILING;
+		const r = this.arc.update(origin, dir, (a, b) => this.hitSegment(a, b, t), { ceiling, snap, pending });
+		// The discs: hotspots within SHOW metres, on any floor near yours.
+		const feet = rig.position.y - xr.lift, m = new THREE.Matrix4(), p = new THREE.Vector3(), eye = xr.headWorld();
+		let n = 0;
+		for (const s of spots) {
+			if (n >= MAX_DISCS) break;
+			xr.centerer.localToWorld(p.set(s.x, s.y, s.z));
+			if (Math.hypot(p.x - eye.x, p.z - eye.z) > HOTSPOT.SHOW) continue;
+			if (Math.abs(p.y - feet) > 3) continue;
+			this.discs.setMatrixAt(n++, m.makeTranslation(p.x, p.y + 0.012, p.z));
+		}
+		this.discs.count = n;
+		this.discs.instanceMatrix.needsUpdate = true;
+		this.discs.visible = n > 0;
+		// The room's name over the hotspot the ring snapped to.
+		this.spotLabel.set(snappedTo?.name || '');
+		if (snappedTo?.name && r.point) {
+			this.spotLabel.mesh.position.copy(r.point).y += 1.2;
+			this.spotLabel.mesh.lookAt(xr.headWorld());
+		}
+		if (snappedTo && (!this.lastSnap || this.lastSnap !== snappedTo)) xr.sound.play('tick');
+		this.lastSnap = snappedTo;
+		return r;
+	}
+
+	/** Teleports to a world floor point, with the short fade (and the step sound). */
+	go(target) {
+		this.xr.sound.play('step');
+		this.fade = { t: 0, action: () => this.placeUser(target, null) };
+	}
+
+	/**
+	 * A small step (a bare hand's thumb swipe): HAND_STEP forward (dir +1) or
+	 * back (-1), the way you look; never through a wall, onto a floor you can
+	 * stand on. Returns true if it went.
+	 */
+	stepBy(dir) {
+		const xr = this.xr, rig = xr.rig, t = xr.targets();
+		const head = xr.headWorld(), feet = rig.position.y - xr.lift;
+		const { forward } = xr.viewAxes();
+		const from = new THREE.Vector3(head.x, feet + 1, head.z);
+		const to = from.clone().addScaledVector(forward, dir * HAND_STEP);
+		// Walls (and closed glass) in the way: no step.
+		xr.raycaster.set(from, forward.clone().multiplyScalar(dir));
+		xr.raycaster.far = HAND_STEP + 0.25;
+		if (xr.raycaster.intersectObjects(xr.model.layers.walls?.children.filter((m) => m.visible) ?? [], false).length) return false;
+		// A floor under the new spot, within a stair step of yours.
+		xr.floorRay.set(new THREE.Vector3(to.x, feet + STEP, to.z), DOWN);
+		xr.floorRay.far = 2 * STEP;
+		const h = xr.floorRay.intersectObjects(t.walkableList, false).find((x) => worldNormal(x).y > 0.7);
+		if (!h) return false;
+		this.go(h.point);
+		return true;
+	}
+
+	/**
+	 * Bare hands: the teleport gesture, turns and steps (see the top of the
+	 * file). Taps go to nothing while a menu is open or a fingertip is at a key.
+	 */
+	handMoves(dt) {
+		const xr = this.xr, ui = xr.ui, input = xr.input;
+		const busy = !!xr.menu || ui.wrist.open || this.fade;
+		for (const c of input.gestureHands()) {
+			const near = xr.handViews[c.index]?.near;
+			for (const e of c.gestures) {
+				const mine = this.tele?.c === c;
+				if (e.type === 'open' || e.type === 'lost') {
+					if (mine) { this.tele = null; this.hideAim(); xr.sound.play('release'); }
+				} else if (e.type === 'tap' && !near) {
+					if (mine) {
+						const r = this.tele.result;
+						if (r?.valid && this.tele.steady >= STEADY) {
+							this.tele = null;
+							this.hideAim();
+							this.go(r.point);
+							this.teleports = (this.teleports ?? 0) + 1;
+							xr.ui.onTeleport?.(this.teleports);
+						} else xr.sound.play('deny');
+					} else if (!this.tele && !busy) {
+						this.tele = { c, via: 'hand', steady: 0, anchor: null };
+						xr.sound.play('aim');
+					}
+				} else if (e.type === 'turn' && !busy && !near) {
+					xr.turn(-e.dir * THREE.MathUtils.degToRad(xr.snapAngle));
+					xr.sound.play('tick');
+				} else if (e.type === 'step' && !busy && !near) {
+					if (!this.stepBy(e.dir)) xr.sound.play('deny');
+				}
+			}
+		}
+		const tele = this.tele;
+		if (tele?.via !== 'hand') return;
+		if (xr.menu || !tele.c.touch.tracked) { this.tele = null; this.hideAim(); return; }
+		const wrist = input.joint(tele.c, 'wrist');
+		if (!wrist) return;
+		const { origin, dir } = handAimRay(xr.headWorld(), xr.viewAxes().right, wrist, tele.c.handedness);
+		const r = this.aim(origin, dir, { pending: tele.steady < STEADY });
+		// Steady: the landing stays within STEADY_MOVE for STEADY seconds.
+		if (r.valid && r.point && tele.anchor && r.point.distanceTo(tele.anchor) < STEADY_MOVE) tele.steady += dt;
+		else { tele.steady = 0; tele.anchor = r.point?.clone() ?? null; }
+		tele.result = r;
 	}
 
 	/** Lift that puts the eyes at the chosen person height (0 = your own). */
@@ -185,7 +345,7 @@ export class Walk {
 			// B / Y with nothing open: ← Back, one layer up (to the scale model).
 			if (c.state.down.b && c.claim.b === null && !ui.anyOpen) { xr.goLayer('back', () => xr.setMode('dollhouse')); return; }
 		}
-		if (ui.buttons()) { this.tele = null; this.arc.hide(); }
+		if (ui.buttons()) { this.tele = null; this.hideAim(); }
 		const { action } = ui.point();
 		if (action) {
 			xr.menuAction(action);
@@ -200,7 +360,7 @@ export class Walk {
 		}
 
 		const left = input.hands.left, right = input.hands.right;
-		const t = xr.targets();
+		this.handMoves(dt);
 
 		// Teleport: push the right stick forward, or hold a trigger, and aim;
 		// release to go.
@@ -212,23 +372,22 @@ export class Walk {
 				if (c) this.tele = { c, via: 'trigger' };
 			}
 		}
-		if (this.tele) {
+		if (this.tele && this.tele.via !== 'hand') {
 			const { c, via } = this.tele;
 			if (!c.source || (via === 'stick' ? c.state.stick.length() < 0.3 : !c.state.trigger)) {
 				const r = this.tele.result;
 				this.tele = null;
-				this.arc.hide();
+				this.hideAim();
 				if (r?.valid) {
-					const target = r.point;
-					this.fade = { t: 0, action: () => this.placeUser(target, null) };
+					this.go(r.point);
+					this.teleports = (this.teleports ?? 0) + 1;
+					xr.ui.onTeleport?.(this.teleports);
 				}
 			} else {
 				c.ray.updateMatrixWorld(true);
 				const origin = new THREE.Vector3().setFromMatrixPosition(c.ray.matrixWorld);
 				const dir = new THREE.Vector3(0, 0, -1).transformDirection(c.ray.matrixWorld);
-				// The arc stays low enough to pass through doorways (ARC_CEILING above your feet).
-				const ceiling = rig.position.y - xr.lift + ARC_CEILING;
-				this.tele.result = this.arc.update(origin, dir, (a, b) => this.hitSegment(a, b, t), { ceiling });
+				this.tele.result = this.aim(origin, dir);
 			}
 		}
 

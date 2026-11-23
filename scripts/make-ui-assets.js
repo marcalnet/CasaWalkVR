@@ -138,6 +138,64 @@ const ASSETS = [
 			ctx.restore();
 		},
 	},
+	{
+		// The guide beside the menu (C0.4): four pictures per row, 256 px each.
+		// Rows: walking with hands, walking with controllers, the scale model
+		// with hands, with controllers. The words under them are drawn by the app.
+		name: 'guide-sheets.png', w: 1024, h: 1024,
+		draw: (ctx) => {
+			const INK = '#1d2329', BLUE = '#3d6fd8', ORANGE = '#e07a1f', SOFT = '#9aa3ac', WHITE = '#ffffff';
+			ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+			const line = (pts, color = INK, w = 7, dash = null) => { ctx.save(); ctx.strokeStyle = color; ctx.lineWidth = w; if (dash) ctx.setLineDash(dash); ctx.beginPath(); pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y))); ctx.stroke(); ctx.restore(); };
+			const dot = (x, y, r, color) => { ctx.fillStyle = color; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); };
+			const ring = (x, y, color) => { ctx.save(); ctx.strokeStyle = color; ctx.lineWidth = 8; ctx.beginPath(); ctx.ellipse(x, y, 46, 16, 0, 0, Math.PI * 2); ctx.stroke(); ctx.restore(); };
+			const arrow = (x0, y0, x1, y1, color = INK) => { line([[x0, y0], [x1, y1]], color, 7); const a = Math.atan2(y1 - y0, x1 - x0); line([[x1 - 18 * Math.cos(a - 0.5), y1 - 18 * Math.sin(a - 0.5)], [x1, y1], [x1 - 18 * Math.cos(a + 0.5), y1 - 18 * Math.sin(a + 0.5)]], color, 7); };
+			// A hand seen from the side, fingers curled, thumb on top of the index (the ready pose).
+			const fist = (x, y, { thumbUp = false, ready = true, open = false } = {}) => {
+				ctx.save(); ctx.translate(x, y);
+				ctx.fillStyle = '#f4f1ea'; ctx.strokeStyle = INK; ctx.lineWidth = 6;
+				ctx.beginPath(); ctx.roundRect(-55, -30, 80, 70, 24); ctx.fill(); ctx.stroke(); // palm
+				ctx.beginPath(); ctx.roundRect(-80, 0, 34, 70, 14); ctx.fill(); ctx.stroke(); // wrist
+				if (open) { for (let i = 0; i < 4; i++) { ctx.beginPath(); ctx.roundRect(22, -28 + i * 17, 70, 14, 7); ctx.fill(); ctx.stroke(); } }
+				else for (let i = 0; i < 4; i++) { ctx.beginPath(); ctx.arc(28, -12 + i * 16, 14, -Math.PI / 2, Math.PI / 2); ctx.stroke(); }
+				const ty = thumbUp ? -62 : -38;
+				ctx.beginPath(); ctx.roundRect(-20, ty, 58, 16, 8); ctx.fill(); ctx.stroke(); // thumb
+				if (ready && !open) dot(34, ty + 8, 9, ORANGE);
+				ctx.restore();
+			};
+			const controller = (x, y, { trigger = false, grip = false } = {}) => {
+				ctx.save(); ctx.translate(x, y);
+				ctx.fillStyle = '#2b3036'; ctx.beginPath(); ctx.roundRect(-24, -20, 48, 100, 20); ctx.fill();
+				dot(0, -42, 34, '#2b3036'); dot(0, -42, 14, '#5d6873');
+				if (trigger) { ctx.fillStyle = BLUE; ctx.beginPath(); ctx.roundRect(-34, -10, 14, 36, 6); ctx.fill(); }
+				if (grip) { ctx.fillStyle = '#2f9e6a'; ctx.beginPath(); ctx.roundRect(18, 10, 14, 50, 6); ctx.fill(); }
+				ctx.restore();
+			};
+			const house = (x, y, s = 1) => { ctx.save(); ctx.translate(x, y); ctx.scale(s, s); ctx.fillStyle = '#e8dcc8'; ctx.strokeStyle = INK; ctx.lineWidth = 6; ctx.beginPath(); ctx.rect(-40, -10, 80, 56); ctx.fill(); ctx.stroke(); line([[-50, -8], [0, -50], [50, -8]]); ctx.restore(); };
+			const arc = (x0, y0, x1, y1, color) => { for (let i = 0; i <= 12; i++) { const t = i / 12; dot(x0 + (x1 - x0) * t, y0 + (y1 - y0) * t - Math.sin(Math.PI * t) * 60, 5, color); } };
+			const F = 256, at = (col, row) => [col * F + F / 2, row * F + F / 2];
+			// Row 0: walking, bare hands.
+			let [x, y] = at(0, 0); fist(x, y);
+			[x, y] = at(1, 0); fist(x, y + 10, { thumbUp: true }); arrow(x + 4, y - 70, x + 4, y - 98, ORANGE); arrow(x + 4, y - 98 + 8, x + 4, y - 64, ORANGE);
+			[x, y] = at(2, 0); fist(x - 60, y + 30); arc(x - 30, y - 10, x + 70, y + 70, WHITE === '#fff' ? WHITE : SOFT); ring(x + 70, y + 74, SOFT);
+			[x, y] = at(3, 0); fist(x - 60, y + 30, { thumbUp: true }); arc(x - 30, y - 10, x + 70, y + 70, BLUE); ring(x + 70, y + 74, BLUE);
+			// Row 1: walking, controllers.
+			[x, y] = at(0, 1); controller(x, y + 20); arrow(x, y - 30, x, y - 100, BLUE);
+			[x, y] = at(1, 1); controller(x, y + 20, { trigger: true });
+			[x, y] = at(2, 1); controller(x - 70, y + 40); arc(x - 60, y - 20, x + 70, y + 70, BLUE); ring(x + 70, y + 74, BLUE);
+			[x, y] = at(3, 1); ring(x, y + 40, BLUE); arrow(x, y - 70, x, y + 20, INK); dot(x, y + 40, 8, BLUE);
+			// Row 2: the scale model, bare hands.
+			[x, y] = at(0, 2); house(x + 30, y + 20); fist(x - 40, y + 10, { ready: false });
+			[x, y] = at(1, 2); house(x, y - 30, 0.8); line([[x, y + 10], [x, y + 80]], SOFT, 5, [10, 10]); ring(x, y + 90, SOFT);
+			[x, y] = at(2, 2); fist(x - 60, y + 40, { thumbUp: true }); line([[x - 30, y + 10], [x + 60, y - 40]], ORANGE, 6); house(x + 70, y - 50, 0.6);
+			[x, y] = at(3, 2); house(x + 50, y - 40, 0.6); fist(x - 50, y + 40, { thumbUp: true }); arrow(x - 10, y + 0, x + 40, y - 30, BLUE);
+			// Row 3: the scale model, controllers.
+			[x, y] = at(0, 3); house(x + 40, y - 30, 0.7); controller(x - 50, y + 30, { grip: true });
+			[x, y] = at(1, 3); dot(x, y, 50, '#5d6873'); dot(x, y, 26, '#2b3036'); arrow(x - 70, y, x - 105, y, INK); arrow(x + 70, y, x + 105, y, INK); arrow(x, y - 70, x, y - 105, INK); arrow(x, y + 70, x, y + 105, INK);
+			[x, y] = at(2, 3); controller(x - 70, y + 40); line([[x - 70, y - 2], [x + 50, y - 50]], WHITE === '#fff' ? WHITE : SOFT, 5); house(x + 70, y - 60, 0.6);
+			[x, y] = at(3, 3); controller(x - 70, y + 40, { trigger: true }); house(x + 70, y - 60, 0.6); arrow(x + 20, y + 40, x + 70, y - 10, BLUE);
+		},
+	},
 ];
 
 const browser = await chromium.launch();

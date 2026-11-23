@@ -206,7 +206,8 @@ export class WristMenu {
 		if (!this.pinned && this.outT > OUT_OF_VIEW) { this.close(true); return; }
 		// A fingertip near: hold still.
 		const wearer = this.wearer;
-		this.frozen = xr.input.touches().some((c) => c !== wearer && c.touch.tip.distanceTo(this.cross.position) < FREEZE);
+		// (Also while a fingertip is at a key: the outer half of a side key is further than FREEZE from the centre; the tester's finding.)
+		this.frozen = this.keysHot || xr.input.touches().some((c) => c !== wearer && c.touch.tip.distanceTo(this.cross.position) < FREEZE);
 		if (!this.frozen || this.snap) {
 			const z = this._q.subVectors(eye, p).normalize();
 			const at = this._at.copy(p).addScaledVector(z, TOWARDS_EYES);

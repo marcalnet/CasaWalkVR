@@ -60,6 +60,7 @@ export const HAND = {
 	tip: COLOURS.accent, // the fingertip "pen": blue, the thing that presses (orange is the thing to press)
 	tipIdle: 0.35, // its opacity when no key is near
 	fade: 0.15, // seconds to fade out when tracking is lost
+	ready: '#e07a1f', // the teleport "ready" dot where the thumb rests (orange: a gesture you can do now)
 };
 
 /** Touch keys on panels: the ring under a fingertip, and the controller's tip nub. */
@@ -90,6 +91,16 @@ export const WRIST = {
 	raise: 0.006, // a key's face above its base
 	face: '#ffffff', edge: '#d3d9df', text: COLOURS.text, flat: COLOURS.off, flatText: COLOURS.offText,
 	labelFont: '"Kalam", "Bradley Hand", cursive', // hand-lettered labels (vendor/kalam)
+};
+
+/** The guide beside the menu (C0.4): how to move, as pictures and a line each. */
+export const GUIDE = {
+	sheets: 'assets/ui/guide-sheets.png', // 4 rows (walk hands, walk controllers, scale hands, scale controllers) x 4 frames
+	frame: 256, // pixels per frame in the sheet
+	width: 0.24, height: 0.16, // beside the wrist menu, metres (beside the board: scaled to 30 cm wide)
+	paper: '#fbfaf6', edge: '#d8d3c6', text: COLOURS.text, soft: COLOURS.soft,
+	font: '"Kalam", "Bradley Hand", cursive',
+	hideKey: 0.05, tab: [0.06, 0.04], // the Hide guide key, and the folded Guide tab
 };
 
 /** The settings board (C0.3): its artwork and where it opens. */

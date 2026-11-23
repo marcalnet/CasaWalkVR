@@ -406,12 +406,18 @@ export async function buildHome(home, opts = {}) {
 		storeys: storeys.length,
 		storeyNames: home.storeyNames ?? [],
 		// Plan outlines in metres (x, z), for choosing where stepping inside
-		// lands (js/rooms.js): each room with its name and floor height, and
-		// each wall as a line with its thickness.
+		// lands (js/rooms.js): each room with its name and floor height, each
+		// doorway, and each wall as a line with its thickness.
 		plan: {
 			rooms: home.rooms.filter((r) => r.points.length >= 3).map((r) => ({
 				name: r.name, storey: storeyOf(r.levelId), floorY: levelElevation(r.levelId) / 100,
 				points: r.points.map(([x, y]) => [x / 100, y / 100]),
+			})),
+			// Doorways (doors standing on their floor, at least 1.5 m tall; not
+			// windows): where the teleport's hotspots go (js/hotspots.js).
+			doors: doors.map((d) => d.piece).filter((d) => d.elevation < 10 && d.height >= 150).map((d) => ({
+				x: d.x / 100, z: d.y / 100, angle: d.angle, width: d.width / 100, depth: d.depth / 100,
+				storey: storeyOf(d.levelId), floorY: levelElevation(d.levelId) / 100,
 			})),
 			walls: home.walls.map((w) => ({
 				a: [w.xStart / 100, w.yStart / 100], b: [w.xEnd / 100, w.yEnd / 100], thickness: w.thickness / 100,

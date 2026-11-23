@@ -66,8 +66,12 @@ export class HandView {
 		this.tip.renderOrder = 32;
 		this.group = new THREE.Group();
 		this.group.name = 'hand-view';
-		this.group.add(this.depthMesh, this.colourMesh, this.tip);
-		for (const m of [this.depthMesh, this.colourMesh, this.tip]) m.frustumCulled = false;
+		// The teleport "ready" dot (C0.4): on the thumb tip while the hand holds the ready pose.
+		this.readyDot = new THREE.Mesh(new THREE.SphereGeometry(0.006, 12, 8), new THREE.MeshBasicMaterial({ color: HAND.ready, transparent: true, depthWrite: false }));
+		this.readyDot.renderOrder = 32;
+		this.readyDot.visible = false;
+		this.group.add(this.depthMesh, this.colourMesh, this.tip, this.readyDot);
+		for (const m of [this.depthMesh, this.colourMesh, this.tip, this.readyDot]) m.frustumCulled = false;
 		this.group.visible = false;
 		// The joints are in the hand group's space, which is the rig's: the view sits there too.
 		c.hand.parent?.add(this.group);
@@ -85,6 +89,8 @@ export class HandView {
 		this.colourMat.opacity = (passthrough ? HAND.passthroughOpacity : HAND.opacity) * this.alpha;
 		this.depthMesh.visible = this.colourMesh.visible = this.alpha > 0.01;
 		this.tipMat.opacity = (this.near ? 1 : HAND.tipIdle) * this.alpha;
+		this.readyDot.visible = tracked && !!c.gesture?.ready;
+		this.readyDot.material.opacity = this.alpha;
 	}
 
 	/** The capsules from this frame's joints. */
@@ -115,6 +121,8 @@ export class HandView {
 		this.geometry.attributes.normal.needsUpdate = true;
 		const tip = joints['index-finger-tip'];
 		if (tip?.visible) this.tip.position.copy(tip.position);
+		const thumb = joints['thumb-tip'];
+		if (thumb?.visible) this.readyDot.position.copy(thumb.position);
 	}
 
 	/** Leaving VR. */

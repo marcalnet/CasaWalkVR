@@ -11,15 +11,28 @@
 // entry, on Recentre and when coming back from walking).
 // (On screen this will be called the "scale model", milestone B; the code
 // keeps the word dollhouse.)
+//
+// Holding the model (C0.4, both inputs): a grip held anywhere, or a bare hand
+// closed on it (within 8 cm of its box). It follows the hand fully: lift it,
+// tilt it, look under it. Let go near the plinth (its base within 15 cm of
+// the top, over it, tilted under 30°): it settles, level. Let go anywhere
+// else: it floats where it is, with a line down to the floor; once hands
+// and controllers are 30 cm away for 4 s (a ring on the plinth fills), it
+// glides home and settles. Bare hands step inside with the teleport gesture
+// (js/gestures.js): tap the thumb, point at a room (a straight ray from the
+// hand, the marker hops to the room), tap again. Open the hand: cancel.
 
 import * as THREE from 'three';
 import { UP, DOWN } from './xr-targets.js';
 import { yawOf } from './xr-input.js';
-import { PLINTH_REST, EYE_BELOW_TOP, buildMarkers } from './xr-scene.js';
+import { PLINTH_REST, PLINTH_HEIGHT, EYE_BELOW_TOP, buildMarkers } from './xr-scene.js';
 import { KeyPad } from './keys.js';
+import { DELIBERATE } from './touch.js';
 import { roomAt, roomLanding, alongAxis, clearOfWalls, headingOf } from './rooms.js';
 import { Label } from './panel.js';
 import { ease } from './tween.js';
+import { handAimRay } from './gestures.js';
+import { HAND } from './theme.js';
 
 const DOLLHOUSE_PERSON = 2.0; // metres
 const DOLLHOUSE_LIFT_START = 0.25; // used for the first frames, before the head height is known
@@ -37,6 +50,11 @@ export function nearestScale(ratio) {
 	return STANDARD_SCALES.find((s) => Math.abs(ratio - s) / s <= SETTLE_NEAR) ?? null;
 }
 const ROTATE_SPEED = 1.6; // rad/s at full stick
+const HOLD_REACH = 0.08; // a closed hand within this of the model's box holds it
+const AIM_CLEAR = 0.15; // ... and within this, the hand's teleport gesture is not read (a hand never does both)
+const DROP_NEAR = 0.15, DROP_TILT = 30; // let go this close to the plinth top, tilted less: it settles
+const RETURN_AWAY = 0.3, RETURN_WAIT = 4; // a floating model goes home once nothing is within 0.3 m for 4 s
+const GRAB_SMOOTH = 0.06; // seconds: a held model follows the hand smoothed this much
 const ZOOM_SPEED = 1.2; // e-folds/s at full stick
 // The doors at the scale model, metres (the user's Quest 2 tests): Walk in →
 // is the big one, ← Back about a third as long, the same height, on its left.
@@ -47,7 +65,10 @@ const ZOOM_SPEED = 1.2; // e-folds/s at full stick
 const DOOR_IN = [0.32, 0.09], DOOR_BACK = [0.1, 0.09];
 const DOOR_BELOW_EYES = 0.65; // waist height (the user's word), standing or seated (the lift keeps the eyes at the same height)
 const DOOR_AHEAD = 0.3; // in front of where you stand
-const DOOR_TILT = 35; // degrees from flat, like the scale plate: the face turned up towards your eyes
+// Nearly upright (70° from flat, facing you): a push from the front is a push forward;
+// a hand lowered onto it from above is far off its normal and never presses it.
+const DOOR_TILT = 70;
+const BACK_HOLD = 0.6; // ← Back (leave VR) is held this long, a ring filling (the Lead's decision)
 const DOOR_FOLLOW = 0.08; // the doors move to a new head height once it differs by this much
 const MARKER_HEIGHT = 1.7; // metres at the model's scale (the "stand here" figure)
 // A landing spot must be free of furniture from this height above the floor
@@ -61,7 +82,10 @@ export class Dollhouse {
 		this.xr = xr;
 		this.name = 'dollhouse';
 		// The model on the plinth, in stage space: position, turn and zoom.
-		this.doll = { pos: new THREE.Vector3(0, PLINTH_REST, -xr.plinthDistance), yaw: 0, zoom: 1 };
+		// (tilt: on top of the turn, in the stage's frame; level on the plinth, free while held or floating)
+		this.doll = { pos: new THREE.Vector3(0, PLINTH_REST, -xr.plinthDistance), yaw: 0, zoom: 1, tilt: new THREE.Quaternion() };
+		this.floating = null; // let go in the air: { wait (s with nothing near), going (the glide home) }
+		this.handAim = null; // a bare hand stepping inside: { c, spot }
 		this.dollLift = DOLLHOUSE_LIFT_START; // VR dollhouse lift, from the measured head height
 		this.grab = null; // grabbing the model: { c, p0, yaw0, aPos0, aYaw0 }
 		this.markers = buildMarkers(); // one "stand here" marker per controller
@@ -77,13 +101,37 @@ export class Dollhouse {
 		this.doorGroup = new THREE.Group();
 		this.doorGroup.name = 'plinth-doors';
 		this.doorGroup.add(this.doors.add('back', ...DOOR_BACK).group, this.doors.add('in', ...DOOR_IN).group);
-		this.doors.setSpec('back', { id: 'back', look: 'outline', icon: 'back', label: '\u2190 Back', caption: 'Leave VR' });
+		this.doors.setSpec('back', { id: 'back', look: 'outline', icon: 'back', label: '\u2190 Back', caption: 'Hold: leave VR', hold: BACK_HOLD });
 		this.doors.setSpec('in', { id: 'in', look: 'filled', icon: 'in', label: 'Walk in \u2192', caption: 'Inside the home' });
 		xr.stage.add(this.doorGroup);
 		xr.hideFromPhotos(this.doorGroup);
 		this.placeDoors();
 		this.clearRay = new THREE.Raycaster();
 		this.clearRay.firstHitOnly = true;
+		// A bare hand's pointing ray (orange, straight), one per hand.
+		this.handRays = xr.input.controllers.map(() => {
+			const l = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3(0, 0, -1)]),
+				new THREE.LineBasicMaterial({ color: HAND.ready, transparent: true, opacity: 0.9 }));
+			l.visible = false; l.frustumCulled = false; l.name = 'hand-aim';
+			xr.scene.add(l);
+			return l;
+		});
+		// Floating: a line down to the floor, and the ring on the plinth that fills before it goes home.
+		this.dropLine = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3(0, -1, 0)]),
+			new THREE.LineDashedMaterial({ color: 0xffffff, dashSize: 0.03, gapSize: 0.03, transparent: true, opacity: 0.6 }));
+		this.dropLine.visible = false; this.dropLine.frustumCulled = false; this.dropLine.name = 'drop-line';
+		this.homeRing = new THREE.Mesh(new THREE.RingGeometry(0.97, 1, 64, 1).rotateX(-Math.PI / 2),
+			new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.7, depthWrite: false, side: THREE.DoubleSide }));
+		this.homeRing.visible = false; this.homeRing.name = 'home-ring';
+		this.homeOutline = new THREE.Mesh(new THREE.RingGeometry(0.985, 1, 64, 1).rotateX(-Math.PI / 2),
+			new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.25, depthWrite: false, side: THREE.DoubleSide }));
+		this.homeOutline.visible = false;
+		this.holdBox = new THREE.Box3Helper(new THREE.Box3(), 0xffffff);
+		this.holdBox.material.transparent = true; this.holdBox.material.opacity = 0.35;
+		this.holdBox.visible = false;
+		xr.stage.add(this.homeRing, this.homeOutline);
+		xr.scene.add(this.dropLine, this.holdBox);
+		xr.hideFromPhotos(...this.handRays, this.dropLine, this.homeRing, this.homeOutline, this.holdBox);
 	}
 
 	/**
@@ -120,9 +168,11 @@ export class Dollhouse {
 
 	reset() {
 		if (this.settling) { this.xr.tweens.stop(this.settling); this.settling = null; }
+		this.stopFloating();
 		this.doll.pos.set(0, PLINTH_REST, -this.xr.plinthDistance);
 		this.doll.yaw = 0;
 		this.doll.zoom = 1;
+		this.doll.tilt.identity();
 	}
 
 	/** measure: take the head height now (false at session start, when there is no pose yet). */
@@ -143,6 +193,8 @@ export class Dollhouse {
 	/** Leaving the dollhouse (for walking, or the session ended). */
 	exit() {
 		this.grab = null;
+		this.cancelHandAim();
+		this.holdBox.visible = false;
 		this.doors.reset();
 		for (const m of this.markers) m.visible = false;
 		for (const l of this.labels) l.mesh.visible = false;
@@ -198,7 +250,7 @@ export class Dollhouse {
 		const xr = this.xr;
 		const p = xr.stage.localToWorld(this.doll.pos.clone());
 		xr.anchor.position.copy(p);
-		xr.anchor.rotation.set(0, xr.stage.rotation.y + this.doll.yaw, 0);
+		xr.anchor.quaternion.setFromAxisAngle(UP, xr.stage.rotation.y + this.doll.yaw).premultiply(this.doll.tilt);
 		xr.anchor.scale.setScalar(xr.baseScale * this.doll.zoom);
 		xr.anchor.updateMatrixWorld(true);
 		xr.plate.set(1 / (xr.baseScale * this.doll.zoom)); // e.g. 1:42 on the plinth
@@ -247,8 +299,11 @@ export class Dollhouse {
 		ui.faceWelcome();
 		if (ui.buttons()) return;
 		const point = ui.point();
-		// The doors (not while a menu is open in front of them).
-		const door = this.doors.update(dt, { active: !xr.menu });
+		// The doors (not while a menu is open in front of them). They sit where hands and
+		// controllers rest (the tester's finding; the Lead's rules): by touch only a
+		// deliberate push from the front (DELIBERATE); a laser only when the door is in
+		// front of the model, pressed and let go over it; ← Back is held 0.6 s.
+		const door = this.doors.update(dt, { active: !xr.menu, rules: DELIBERATE, blockers: xr.targets().pointable, laserOnRelease: true });
 		this.followDoors(door);
 		const action = point.action ?? door.action;
 		const { pointable } = xr.targets();
@@ -261,7 +316,7 @@ export class Dollhouse {
 				const modelHit = xr.raycaster.intersectObjects(pointable, false)[0];
 				if (modelHit) {
 					input.showHit(c, modelHit.distance);
-					const floor = xr.findFloor(modelHit.point, 0.01);
+					const floor = this.level() ? xr.findFloor(modelHit.point, 0.01) : null; // (a tilted model: no landing)
 					if (floor) {
 						spots[c.index] = this.landing(floor);
 						if (c.state.down.trigger) jumpTo = spots[c.index];
@@ -271,14 +326,13 @@ export class Dollhouse {
 				}
 			}
 
-			// Grip: grab and move the model, keeping it upright (yaw only).
-			if (c.state.down.grip && c.claim.grip === null && !this.grab) {
-				const p = new THREE.Vector3();
-				const yaw = input.pose(c, p);
-				this.grab = { c, p0: p, yaw0: yaw, aPos0: xr.anchor.position.clone(), aYaw0: xr.anchor.rotation.y };
-			}
-			if (this.grab?.c === c && c.state.up.grip) this.grab = null;
+			// Grip: hold the model (anywhere; no aiming needed).
+			if (c.state.down.grip && c.claim.grip === null && !this.grab) this.startGrab(c);
+			if (this.grab?.c === c && c.state.up.grip) this.release();
 		}
+		// Bare hands: hold with a closed hand, step inside with the teleport gesture.
+		const handJump = this.handMoves(dt, spots);
+		if (handJump) jumpTo = handJump;
 
 		// Actions that leave the dollhouse end this frame's dollhouse update.
 		if (jumpTo) { xr.goLayer('in', () => xr.setMode('walk', jumpTo.model, jumpTo.yaw)); return; }
@@ -304,22 +358,10 @@ export class Dollhouse {
 			}
 		});
 
-		// A controller that drops out mid-grab (battery, tracking) lets go.
-		if (this.grab && (!this.grab.c.source || !this.grab.c.state.grip)) this.grab = null;
-		if (this.grab) {
-			const p = new THREE.Vector3();
-			const yaw = input.pose(this.grab.c, p);
-			const dy = yaw - this.grab.yaw0;
-			const off = this.grab.aPos0.clone().sub(this.grab.p0).applyAxisAngle(UP, dy);
-			const world = p.add(off);
-			this.doll.pos.copy(xr.stage.worldToLocal(world));
-			this.doll.yaw = this.grab.aYaw0 + dy - xr.stage.rotation.y;
-			// Never push it into the plinth (or, off the plinth, below the floor:
-			// in passthrough, the real floor, which is as far down as the view is raised).
-			const { W, D } = xr.plinthSize;
-			const onPlinth = xr.vrView && Math.abs(this.doll.pos.x) < W / 2 && Math.abs(this.doll.pos.z + xr.plinthDistance) < D / 2;
-			this.doll.pos.y = Math.max(this.doll.pos.y, onPlinth ? PLINTH_REST : xr.vrView ? 0 : xr.lift + 0.004);
-		}
+		// A controller that drops out mid-grab (battery, tracking) lets go; the model stays where it is.
+		if (this.grab && (!this.grab.c.source || (this.grab.kind === 'controller' && !this.grab.c.state.grip))) this.release();
+		if (this.grab) this.updateGrab(dt);
+		this.updateFloating(dt);
 
 		// Thumbsticks: left/right rotates, up/down zooms (either controller).
 		// Letting go of a zoom near a standard scale settles on it.
@@ -335,6 +377,228 @@ export class Dollhouse {
 			this.zoomHand = null;
 		}
 		this.apply();
+	}
+
+	/** True while the model is level (on the plinth, or let go upright): pointing at it can step inside. */
+	level() { return 2 * Math.acos(Math.min(1, Math.abs(this.doll.tilt.w))) < THREE.MathUtils.degToRad(1); }
+
+	/** The model's box in the world (its bounds, as placed now). */
+	modelBox(out = new THREE.Box3()) {
+		const xr = this.xr;
+		xr.centerer.updateMatrixWorld(true);
+		return out.copy(xr.model.bounds).applyMatrix4(xr.centerer.matrixWorld);
+	}
+
+	/** Where a hand holds (world): a bare hand's palm, a controller's grip. Null when not tracked. */
+	holdPoint(c, out = new THREE.Vector3()) {
+		if (c.isHand) return this.xr.input.joint(c, 'middle-finger-phalanx-proximal', out);
+		c.grip.updateMatrixWorld(true);
+		return out.setFromMatrixPosition(c.grip.matrixWorld);
+	}
+
+	/** A hand's turn in the world (the wrist joint, or the controller's grip). */
+	holdTurn(c, out = new THREE.Quaternion()) {
+		const o = c.isHand ? c.hand.joints?.wrist : c.grip;
+		if (!o) return null;
+		o.updateMatrixWorld(true);
+		return o.getWorldQuaternion(out);
+	}
+
+	/** Takes hold of the model with c (a controller's grip or a closed bare hand). */
+	startGrab(c) {
+		const xr = this.xr, p = this.holdPoint(c), q = this.holdTurn(c);
+		if (!p || !q) return;
+		if (this.settling) { xr.tweens.stop(this.settling); this.settling = null; }
+		this.stopFloating();
+		this.cancelHandAim();
+		xr.anchor.updateMatrixWorld(true);
+		this.grab = { c, kind: c.isHand ? 'hand' : 'controller', p0: p, q0inv: q.clone().invert(),
+			aPos0: xr.anchor.position.clone(), aQ0: xr.anchor.quaternion.clone(), pos: xr.anchor.position.clone(), q: xr.anchor.quaternion.clone() };
+		xr.sound.play('grab');
+		if (!c.isHand) xr.haptics.play(c, 'click');
+	}
+
+	/** The held model follows the hand fully (position and turn), smoothed, never into the plinth or the floor. */
+	updateGrab(dt) {
+		const xr = this.xr, g = this.grab, p = this.holdPoint(g.c), q = this.holdTurn(g.c);
+		if (!p || !q) return; // (tracking lost for a moment: the model stays where it is)
+		const dq = q.multiply(g.q0inv); // the hand's turn since it took hold
+		const pos = g.aPos0.clone().sub(g.p0).applyQuaternion(dq).add(p);
+		const rot = dq.multiply(g.aQ0);
+		const k = 1 - Math.exp(-dt / GRAB_SMOOTH);
+		g.pos.lerp(pos, k);
+		g.q.slerp(rot, k);
+		this.setPose(g.pos, g.q);
+		this.keepAbove();
+	}
+
+	/** Sets the model's place from a world position and turn: doll.pos, and the turn split into yaw and tilt. */
+	setPose(pos, q) {
+		const xr = this.xr;
+		this.doll.pos.copy(xr.stage.worldToLocal(pos.clone()));
+		const yaw = 2 * Math.atan2(q.y, q.w); // (the turn about the vertical)
+		const twist = new THREE.Quaternion().setFromAxisAngle(UP, yaw);
+		this.doll.tilt.copy(q).multiply(twist.invert()).normalize();
+		this.doll.yaw = yaw - xr.stage.rotation.y;
+		this.apply();
+	}
+
+	/** Never into the plinth or the floor: the model's lowest point stays 4 mm above them. */
+	keepAbove() {
+		const xr = this.xr, box = this.modelBox();
+		const c = xr.stage.worldToLocal(box.getCenter(new THREE.Vector3()));
+		const { W, D } = xr.plinthSize;
+		const over = xr.vrView && Math.abs(c.x) < W / 2 && Math.abs(c.z + xr.plinthDistance) < D / 2;
+		const limit = (over ? PLINTH_HEIGHT : xr.vrView ? 0 : xr.lift) + 0.004;
+		if (box.min.y < limit) { this.doll.pos.y += limit - box.min.y; this.apply(); }
+		return { box, over };
+	}
+
+	/**
+	 * Lets go. Near the plinth (its base close to the top, over it, nearly
+	 * level) it settles there, level; anywhere else it floats (and goes home by
+	 * itself: updateFloating).
+	 */
+	release() {
+		const xr = this.xr, g = this.grab;
+		this.grab = null;
+		if (!g) return;
+		const { box, over } = this.keepAbove();
+		const tilt = THREE.MathUtils.radToDeg(2 * Math.acos(Math.min(1, Math.abs(this.doll.tilt.w))));
+		if (over && box.min.y - PLINTH_HEIGHT < DROP_NEAR && tilt < DROP_TILT) this.settleDown(0.35);
+		else this.floating = { wait: 0, going: null };
+	}
+
+	/** Glides down onto the plinth (keeping its place over it), levelling itself; sound settle. */
+	settleDown(duration) {
+		const xr = this.xr, from = this.doll.pos.clone(), tilt0 = this.doll.tilt.clone();
+		this.settling = xr.tweens.start({
+			duration, ease: ease.inOut,
+			step: (k) => { this.doll.pos.y = from.y + (PLINTH_REST - from.y) * k; this.doll.tilt.slerpQuaternions(tilt0, new THREE.Quaternion(), k); this.apply(); },
+			done: () => { this.settling = null; this.doll.tilt.identity(); this.apply(); xr.sound.play('settle'); },
+		});
+	}
+
+	/** No longer floating: the ring and the drop line go. */
+	stopFloating() {
+		if (this.floating?.going) this.xr.tweens.stop(this.floating.going);
+		this.floating = null;
+		this.dropLine.visible = this.homeRing.visible = this.homeOutline.visible = false;
+	}
+
+	/**
+	 * A floating model: the line down to the floor, and the countdown home.
+	 * It waits while a hand or a controller is within RETURN_AWAY of it, then
+	 * after RETURN_WAIT seconds glides home along a gentle arc and settles.
+	 */
+	updateFloating(dt) {
+		const xr = this.xr, f = this.floating;
+		// The faint box when a bare hand is close enough to hold the model.
+		const box = this.modelBox(), p = new THREE.Vector3();
+		let canHold = false, near = false;
+		for (const c of xr.input.controllers) {
+			if (!(c.isHand ? c.touch.tracked : c.isController) || !this.holdPoint(c, p)) continue;
+			const d = box.distanceToPoint(p);
+			if (c.isHand && d < HOLD_REACH && !this.grab) canHold = true;
+			if (d < RETURN_AWAY) near = true;
+		}
+		this.holdBox.box.copy(box);
+		this.holdBox.visible = canHold;
+		if (!f) return;
+		if (f.going) return; // (the glide home runs on its tween)
+		f.wait = near || this.grab ? 0 : f.wait + dt;
+		// The line down to the floor, from under the model's middle.
+		const c = box.getCenter(new THREE.Vector3());
+		const pos = this.dropLine.geometry.attributes.position;
+		pos.setXYZ(0, c.x, box.min.y, c.z); pos.setXYZ(1, c.x, xr.vrView ? 0 : xr.lift, c.z);
+		pos.needsUpdate = true;
+		this.dropLine.computeLineDistances();
+		this.dropLine.visible = true;
+		// Its place on the plinth: an outline, and a ring that fills over the wait.
+		const size = xr.model.bounds.getSize(new THREE.Vector3()).multiplyScalar(xr.anchor.scale.x);
+		const r = Math.max(0.1, Math.min(Math.max(size.x, size.z) / 2, xr.plinthSize.W / 2 - 0.02));
+		for (const m of [this.homeRing, this.homeOutline]) {
+			m.position.set(0, PLINTH_HEIGHT + 0.003, -xr.plinthDistance);
+			m.scale.setScalar(r);
+			m.visible = xr.vrView;
+		}
+		const n = this.homeRing.geometry.index.count;
+		this.homeRing.geometry.setDrawRange(0, Math.floor((n / 6) * Math.min(1, f.wait / RETURN_WAIT)) * 6);
+		if (f.wait >= RETURN_WAIT) this.goHome();
+	}
+
+	/** The glide home: 0.8 s along a gentle arc, levelling itself, then it settles (sound settle). */
+	goHome() {
+		const xr = this.xr, f = this.floating;
+		const from = this.doll.pos.clone(), to = new THREE.Vector3(0, PLINTH_REST, -xr.plinthDistance), tilt0 = this.doll.tilt.clone();
+		this.dropLine.visible = false;
+		f.going = xr.tweens.start({
+			duration: 0.8, ease: ease.inOut,
+			step: (k) => {
+				this.doll.pos.lerpVectors(from, to, k);
+				this.doll.pos.y += Math.sin(Math.PI * k) * 0.15;
+				this.doll.tilt.slerpQuaternions(tilt0, new THREE.Quaternion(), k);
+				this.apply();
+			},
+			done: () => { this.doll.tilt.identity(); this.apply(); this.floating = null; this.stopFloating(); xr.sound.play('settle'); },
+		});
+	}
+
+	/** Cancels a bare hand's pointing (its ray and marker go). */
+	cancelHandAim() {
+		if (!this.handAim) return;
+		this.handRays[this.handAim.c.index].visible = false;
+		this.handAim = null;
+	}
+
+	/**
+	 * Bare hands at the scale model: a closed hand on the model holds it; the
+	 * teleport gesture (tap, point, tap) steps inside. spots: this frame's
+	 * landing per input index (the hand's is added). Returns where to step
+	 * inside, or null.
+	 */
+	handMoves(dt, spots) {
+		const xr = this.xr, ui = xr.ui, input = xr.input;
+		const box = this.modelBox(), p = new THREE.Vector3();
+		const busy = !!xr.menu || ui.wrist.open;
+		let jump = null;
+		for (const c of input.gestureHands()) {
+			const palm = this.holdPoint(c, p);
+			const d = palm ? box.distanceToPoint(palm) : Infinity;
+			const keyNear = xr.handViews[c.index]?.near;
+			for (const e of c.gestures) {
+				if (e.type === 'fist' && !this.grab && d < HOLD_REACH && !busy) { this.cancelHandAim(); this.startGrab(c); }
+				else if ((e.type === 'fistEnd' || e.type === 'lost') && this.grab?.c === c) this.release();
+				else if ((e.type === 'open' || e.type === 'lost') && this.handAim?.c === c) { this.cancelHandAim(); xr.sound.play('release'); }
+				else if (e.type === 'tap' && !keyNear && d > AIM_CLEAR && this.grab?.c !== c) {
+					if (this.handAim?.c === c) {
+						if (this.handAim.spot) jump = this.handAim.spot;
+						else xr.sound.play('deny');
+					} else if (!this.handAim && !busy) {
+						this.handAim = { c, spot: null };
+						xr.sound.play('aim');
+					}
+				}
+			}
+		}
+		const a = this.handAim;
+		if (!a) return jump;
+		if (busy || !a.c.touch.tracked) { this.cancelHandAim(); return null; }
+		const wrist = input.joint(a.c, 'wrist');
+		if (!wrist) return jump;
+		const { origin, dir } = handAimRay(xr.headWorld(), xr.viewAxes().right, wrist, a.c.handedness);
+		xr.raycaster.set(origin, dir);
+		xr.raycaster.far = 5;
+		const hit = xr.raycaster.intersectObjects(xr.targets().pointable, false)[0];
+		const line = this.handRays[a.c.index], end = hit ? hit.point : origin.clone().addScaledVector(dir, 3);
+		const pos = line.geometry.attributes.position;
+		pos.setXYZ(0, origin.x, origin.y, origin.z); pos.setXYZ(1, end.x, end.y, end.z);
+		pos.needsUpdate = true;
+		line.visible = true;
+		const floor = hit && this.level() ? xr.findFloor(hit.point, 0.01) : null;
+		a.spot = floor ? this.landing(floor) : null;
+		if (a.spot) spots[a.c.index] = a.spot;
+		return jump;
 	}
 
 	/**

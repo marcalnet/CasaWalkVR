@@ -294,3 +294,85 @@ test('the wrist menu: Help opens beside it, and the menu stays', async () => {
 	x.ui.wrist.close();
 	assert.equal(x.ui.help, null, 'closing the menu takes Help with it');
 });
+
+test('holding the model: it follows the grip fully (tilt too); let go in the air it floats, then goes home by itself', async () => {
+	const { x, press, frame, hands } = await setup();
+	const d = x.modes.dollhouse;
+	const home = new THREE.Vector3(0, d.doll.pos.y, -x.plinthDistance); // (the middle of the plinth)
+	const grip = hands.right.grip;
+	grip.position.set(0.1, 1.0, -0.4);
+	frame();
+	press('right', 'grip'); frame();
+	assert.ok(d.grab && d.grab.kind === 'controller', 'a grip held anywhere holds it');
+	// Lift it 40 cm and tilt it 40° (the hand turns): the model follows, smoothed.
+	grip.position.y += 0.4;
+	grip.rotation.x = THREE.MathUtils.degToRad(40);
+	for (let i = 0; i < 60; i++) frame();
+	assert.ok(d.doll.pos.y > home.y + 0.3, 'lifted');
+	assert.ok(!d.level(), 'tilted');
+	assert.equal(d.markers.filter((m) => m.visible).length, 0, 'a tilted model offers no landing');
+	press('right', 'grip', false); frame();
+	assert.ok(!d.grab && d.floating, 'let go in the air: it floats');
+	// A controller near it (within 30 cm) keeps it waiting.
+	for (let i = 0; i < 72 * 5; i++) frame();
+	assert.ok(d.floating && !d.floating.going, 'a hand near it: it waits');
+	// Hands away: 4 s, then the glide home (0.8 s), level again.
+	grip.position.set(2, 0, 2);
+	hands.left.grip.position.set(-2, 0, 2);
+	for (let i = 0; i < 72 * 3.5; i++) frame();
+	assert.ok(d.floating && !d.floating.going, 'still counting down');
+	for (let i = 0; i < 72 * 2; i++) frame();
+	assert.equal(d.floating, null, 'home');
+	assert.ok(d.doll.pos.distanceTo(home) < 1e-6 && d.level(), 'back in its place, level');
+	// Taking hold again while it floats cancels the return.
+	grip.position.set(0.1, 1.0, -0.4); frame();
+	press('right', 'grip'); frame();
+	grip.position.y += 0.4;
+	for (let i = 0; i < 30; i++) frame();
+	press('right', 'grip', false); frame();
+	assert.ok(d.floating);
+	press('right', 'grip'); frame();
+	assert.ok(d.grab && !d.floating, 'touched again: the countdown stops');
+});
+
+test('the doors at the scale model: ← Back is held 0.6 s; let go early, nothing', async () => {
+	const { x, ended, press, frame, settle, hands } = await setup();
+	const d = x.modes.dollhouse;
+	frame();
+	// Points the right controller's laser at a door, from 40 cm in front of it.
+	const aimAt = (slot) => {
+		const k = d.doors.keys.get(slot);
+		x.scene.updateMatrixWorld(true);
+		const at = k.face.getWorldPosition(new THREE.Vector3());
+		const n = new THREE.Vector3(0, 0, 1).transformDirection(k.face.matrixWorld);
+		const from = at.clone().addScaledVector(n, 0.4);
+		const ray = hands.right.ray;
+		ray.position.copy(x.rig.worldToLocal(from.clone()));
+		ray.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, -1), at.clone().sub(from).normalize());
+		ray.updateMatrixWorld(true);
+	};
+	aimAt('back');
+	press('right', 'trigger'); for (let i = 0; i < 25; i++) frame(); // 0.35 s
+	press('right', 'trigger', false); for (let i = 0; i < 10; i++) frame();
+	assert.ok(x.mode === 'dollhouse' && ended() === 0 && !x.layerFx, 'let go early: nothing');
+	press('right', 'trigger'); for (let i = 0; i < 50; i++) frame(); // 0.7 s
+	assert.ok(x.layerFx?.dir === 'out', 'held 0.6 s: leaving VR');
+	press('right', 'trigger', false); settle();
+	assert.equal(ended(), 1);
+});
+
+test('Walk in on the plinth: the laser presses it on letting go over it', async () => {
+	const { x, press, frame, settle, hands } = await setup();
+	const d = x.modes.dollhouse;
+	frame();
+	const k = d.doors.keys.get('in');
+	x.scene.updateMatrixWorld(true);
+	const at = k.face.getWorldPosition(new THREE.Vector3()), n = new THREE.Vector3(0, 0, 1).transformDirection(k.face.matrixWorld);
+	const from = at.clone().addScaledVector(n, 0.4), ray = hands.right.ray;
+	ray.position.copy(x.rig.worldToLocal(from.clone()));
+	ray.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, -1), at.clone().sub(from).normalize());
+	press('right', 'trigger'); frame(); frame();
+	assert.equal(x.mode, 'dollhouse', 'not on the trigger going down');
+	press('right', 'trigger', false); frame(); settle();
+	assert.equal(x.mode, 'walk', 'on letting go over it');
+});

@@ -31,7 +31,10 @@ export class KeyPad {
 		this.atlas = sharedAtlas();
 		this.atlas?.addEventListener?.('load', () => this.redraw(true));
 		globalThis.document?.fonts?.load?.(`700 40px ${WRIST.labelFont}`).then(() => this.redraw(true)).catch(() => {});
-		this._v = new THREE.Vector3();
+		this._v = new THREE.Vector3(); this._s = new THREE.Vector3();
+		this.list = []; // the keys, as a list (no per-frame copies)
+		this._faces = []; this._hot = new Set(); this._hits = [];
+		this.armed = []; // per controller: the key its trigger went down on (laserOnRelease)
 	}
 
 	/** Adds a key of w x h metres; returns it (place its group yourself). */
@@ -39,10 +42,11 @@ export class KeyPad {
 		const k = makeKey(`${this.name}-${slot}`, w, h);
 		k.slot = slot;
 		this.keys.set(slot, k);
+		this.list = [...this.keys.values()];
 		return k;
 	}
 
-	/** What a key shows: { id (null: not pressable), look, icon, label, caption }. */
+	/** What a key shows: { id (null: not pressable), look, icon, label, caption, hold (seconds: pressed only when held this long, a ring filling) }. */
 	setSpec(slot, spec) {
 		const k = this.keys.get(slot);
 		if (k) { k.spec = spec; this.redrawKey(k); }
@@ -70,34 +74,66 @@ export class KeyPad {
 	 * Once a frame. active: the keys can be pressed now; exclude: an input
 	 * entry that may not press them (the hand wearing them). Lasers claim the
 	 * trigger of a controller pointing at a key. Returns { action: { id } | null, near }.
+	 * Options for keys that sit where hands rest (the doors at the scale model,
+	 * the tester's finding): rules (js/touch.js DELIBERATE: a push from the
+	 * front with some speed); tips 'hands' (a controller's tip never presses
+	 * them); blockers (meshes that, hit first, take the laser: the model behind);
+	 * laserOnRelease (a laser presses when the trigger goes down and is let go
+	 * over the same key). A key with spec.hold is pressed only once held that
+	 * long, by touch or laser (a ring fills; letting go early does nothing).
 	 */
-	update(dt, { active = true, exclude = null } = {}) {
+	update(dt, { active = true, exclude = null, tips = 'all', blockers = null, laserOnRelease = false, rules = TOUCH } = {}) {
 		const xr = this.xr, input = xr.input, now = performance.now() / 1000;
 		let action = null, laserHot = null;
-		const keys = [...this.keys.values()];
+		const keys = this.list;
+		for (const k of keys) k.progress = 0;
 		// Lasers: a controller pointing at a key; the trigger presses it.
 		if (active) {
-			const faces = keys.filter((k) => k.out && k.group.visible).map((k) => k.face);
+			const faces = this._faces;
+			faces.length = 0;
+			for (const k of keys) if (k.out && k.group.visible) faces.push(k.face);
 			for (const c of input.active()) {
-				if (c === exclude || c.claim.trigger || !faces.length) continue;
+				if (c === exclude || c.claim.trigger || !faces.length) { this.armed[c.index] = null; continue; }
 				input.setRaycaster(c, xr.raycaster);
-				const hit = xr.raycaster.intersectObjects(faces, false)[0];
-				if (!hit) continue;
+				const hits = this._hits;
+				hits.length = 0;
+				xr.raycaster.intersectObjects(faces, false, hits);
+				const hit = hits[0];
+				if (hit && blockers?.length) {
+					hits.length = 0;
+					xr.raycaster.intersectObjects(blockers, false, hits);
+					if (hits[0] && hits[0].distance < hit.distance) { this.armed[c.index] = null; continue; } // (the model is in front)
+				}
+				if (!hit) { if (!c.state.trigger) this.armed[c.index] = null; continue; }
 				c.claim.trigger = 'ui';
 				input.showHit(c, hit.distance);
 				const k = hit.object.userData.key;
 				laserHot = k;
-				if (c.state.down.trigger) action = this.press(k, c) ?? action;
+				if (k.spec?.hold) {
+					// Held: the trigger goes down over the key and stays down for spec.hold.
+					const a = this.armed[c.index];
+					if (c.state.down.trigger) this.armed[c.index] = { k, t: 0, done: false };
+					else if (a?.k === k && c.state.trigger && !a.done) {
+						a.t += dt;
+						k.progress = Math.max(k.progress, a.t / k.spec.hold);
+						if (a.t >= k.spec.hold) { a.done = true; action = this.press(k, c) ?? action; }
+					} else if (a && (a.k !== k || !c.state.trigger)) this.armed[c.index] = null;
+					continue;
+				}
+				if (!laserOnRelease) { if (c.state.down.trigger) action = this.press(k, c) ?? action; continue; }
+				if (c.state.down.trigger) this.armed[c.index] = k;
+				if (c.state.up.trigger) { if (this.armed[c.index] === k) action = this.press(k, c) ?? action; this.armed[c.index] = null; }
 			}
 		}
 		// Touch: every fingertip and controller tip but the excluded one.
 		let near = false;
-		const hot = new Set();
+		const hot = this._hot;
+		hot.clear();
 		for (const c of input.controllers) {
 			const row = this.touches[c.index] ||= {};
 			const ring = this.rings[c.index] ||= makeRing(xr);
 			ring.visible = false;
-			const can = active && c !== exclude && c.touch.tracked && c.claim.trigger !== 'tool';
+			const can = active && c !== exclude && c.touch.tracked && c.claim.trigger !== 'tool' && (tips !== 'hands' || c.isHand);
 			for (const k of keys) {
 				const st = row[k.slot] ||= Object.assign(touchState(), { lx: 0, ly: 0, seen: false });
 				if (!can || !k.out || !k.group.visible) { if (st.phase !== 'away') resetTouch(st); st.seen = false; continue; }
@@ -105,15 +141,25 @@ export class KeyPad {
 				const flat = k.spec?.look === 'flat';
 				const faceZ = flat ? 0.0045 : WRIST.raise;
 				const inside = Math.abs(L.x) <= k.w / 2 + TOUCH.MARGIN && Math.abs(L.y) <= k.h / 2 + TOUCH.MARGIN;
-				const depth = (L.z - faceZ) - TOUCH.RADIUS / k.group.getWorldScale(this._v.clone()).x;
+				const depth = (L.z - faceZ) - TOUCH.RADIUS / k.group.getWorldScale(this._s).x;
 				const lateral = st.seen ? Math.hypot(L.x - st.lx, L.y - st.ly) : 0;
 				st.lx = L.x; st.ly = L.y; st.seen = true;
-				for (const e of stepTouch(st, { depth, inside, lateral, dt })) {
+				for (const e of stepTouch(st, { depth, inside, lateral, dt }, rules)) {
 					if (e === 'contact') { if (flat) this.feel('deny', c, 'deny'); else this.feel('tick', c, 'tick', 0.5); }
+					else if (e === 'click' && !flat && k.spec?.hold) st.holdT = 0; // (held: counted below)
 					else if (e === 'click' && !flat && now - (this.lastClick[c.index] ?? -1) >= TOUCH.PANEL_GAP) {
 						this.lastClick[c.index] = now;
 						action = this.press(k, c) ?? action;
 					} else if (e === 'release') this.feel('release', null, null, 0.6);
+				}
+				// A held key: pressed once it has stayed pushed in for spec.hold.
+				if (st.holdT != null) {
+					if (st.phase !== 'pressed') st.holdT = null;
+					else if (st.holdT >= 0) {
+						st.holdT += dt;
+						k.progress = Math.max(k.progress, st.holdT / k.spec.hold);
+						if (st.holdT >= k.spec.hold) { st.holdT = -1; action = this.press(k, c) ?? action; } // (-1: done until released)
+					}
 				}
 				if (st.phase === 'hover' || st.phase === 'contact' || st.phase === 'pressed') {
 					hot.add(k);
@@ -134,8 +180,24 @@ export class KeyPad {
 			k.hot = hot.has(k) || laserHot === k;
 			k.flash = Math.max(0, k.flash - dt);
 			this.redrawKey(k);
+			if (k.spec?.hold) this.showProgress(k);
 		}
 		return { action, near: near || !!laserHot, hot };
+	}
+
+	/** A held key's ring, filling while it is held (k.progress 0..1). */
+	showProgress(k) {
+		if (!k.ring) {
+			const r = Math.min(k.w, k.h) * 0.42;
+			k.ring = new THREE.Mesh(new THREE.RingGeometry(r * 0.86, r, 48, 1, Math.PI / 2, -Math.PI * 2),
+				new THREE.MeshBasicMaterial({ color: COLOURS.accent, transparent: true, depthTest: false }));
+			k.ring.renderOrder = 13;
+			k.ring.position.z = WRIST.raise + 0.003;
+			k.group.add(k.ring);
+		}
+		const p = Math.min(1, k.progress);
+		k.ring.visible = p > 0;
+		k.ring.geometry.setDrawRange(0, Math.floor(48 * p) * 6);
 	}
 
 	/** A key pressed (by touch or laser): its action, with feedback. */
@@ -148,7 +210,8 @@ export class KeyPad {
 
 	/** Forgets every touch in progress (closing, leaving VR): nothing completes. */
 	reset() {
-		for (const row of this.touches) for (const st of Object.values(row ?? {})) { resetTouch(st); st.seen = false; }
+		for (const row of this.touches) for (const st of Object.values(row ?? {})) { resetTouch(st); st.seen = false; st.holdT = null; }
+		this.armed.length = 0;
 		for (const r of this.rings) if (r) r.visible = false;
 	}
 }

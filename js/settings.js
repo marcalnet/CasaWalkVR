@@ -28,6 +28,9 @@ export const SETTINGS = {
 	seeThrough: { key: 'casawalk.seeThrough', range: true, fallback: 0 }, // 0 = as modelled, 1 = glass house
 	toolFan: { key: 'casawalk.toolFan', options: ['left', 'right'], fallback: 'left' }, // the hand that holds the tool fan; the wrist menu is on the other
 	sound: { key: 'casawalk.sound', options: ['off', 'effects', 'all'], fallback: 'all' }, // all: effects and the ambience (milestone H)
+	// The guide beside the menu (C0.4): auto = open until your 5th teleport, then folded once;
+	// full / tab = as you last left it with its Hide guide key or its Guide tab.
+	guide: { key: 'casawalk.walkGuide', options: ['auto', 'full', 'tab'], fallback: 'auto' },
 };
 
 /** The value a stored string stands for (null or undefined: nothing stored). */
