@@ -504,3 +504,22 @@ test('the laser meter: two triggers measure a line in model space; A undoes, hol
 	assert.equal(meter.m.pending, null, 'pointing at nothing: no point');
 	x.tools.putBack();
 });
+
+test('the marker: hold the trigger and move to draw; the stick press changes colour; A undoes', async () => {
+	const { x, press, frame, hands } = await setup();
+	const marker = x.fan.marker, c = hands.right;
+	c.grip.position.set(0.2, 1.2, -0.4);
+	frame();
+	x.tools.take(marker, c);
+	frame();
+	press('right', 'trigger'); frame();
+	for (let i = 0; i < 30; i++) { c.grip.position.x -= 0.01; frame(); }
+	press('right', 'trigger', false); frame();
+	assert.equal(marker.strokes.length, 1, 'one stroke');
+	assert.ok(marker.strokes[0].n > 5, `drawn along the way: ${marker.strokes[0].n} points`);
+	press('right', 'stick'); frame(); press('right', 'stick', false); frame();
+	assert.equal(marker.ink, 1, 'the stick press: blue');
+	press('right', 'a'); frame(); press('right', 'a', false); frame();
+	assert.equal(marker.strokes.length, 0, 'A: undo');
+	x.tools.putBack();
+});

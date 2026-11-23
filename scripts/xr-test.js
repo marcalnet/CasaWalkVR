@@ -1235,6 +1235,21 @@ check('back from walking: eyes at 1.89 m again, gallery shown, lasers on', Math.
 		await shot('meter-line');
 		await page.evaluate(() => window.__casawalk.xr.fan.meter.clear());
 	}
+	// The marker (milestone F): take it, hold the trigger and move: a stroke; the stick press: the next colour.
+	{
+		await tipOn('marker');
+		await click('right', 'squeeze'); await frames(6);
+		const held = await page.evaluate(() => window.__casawalk.xr.tools.held?.tool.name);
+		await page.evaluate(() => { const d = window.__device.controllers.right; d.position.set(0.15, 1.3, -0.35); d.quaternion.set(0, 0, 0, 1); }); await frames(4);
+		await button('right', 'trigger', 1); await frames(3);
+		for (let i = 0; i < 12; i++) { await page.evaluate(() => { window.__device.controllers.right.position.x -= 0.02; }); await frames(2); }
+		await button('right', 'trigger', 0); await frames(4);
+		await click('right', 'thumbstick'); await frames(4);
+		const mk = await page.evaluate(() => { const m = window.__casawalk.xr.fan.marker; return { strokes: m.strokes.length, points: m.strokes[0]?.n ?? 0, ink: m.ink }; });
+		check('the marker: holding the trigger draws a stroke; the stick press changes colour', held === 'marker' && mk.strokes === 1 && mk.points > 5 && mk.ink === 1, JSON.stringify({ held, ...mk }));
+		await shot('marker-stroke');
+		await page.evaluate(() => window.__casawalk.xr.fan.marker.clear());
+	}
 	// The street camera (milestone D): taken like the others (it swaps the meter back); its back screen shows the view.
 	await tipOn('camera');
 	await click('right', 'squeeze'); await frames(6);

@@ -1,0 +1,48 @@
+// The marker (js/marker-tool.js): strokes grow as the nib moves, one draw call
+// each; colours; undo and clear; bare-hand taps start and end a stroke.
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import * as THREE from 'three';
+import { MarkerTool, INKS } from '../js/marker-tool.js';
+
+function fakeXR() {
+	const centerer = new THREE.Group(), anchor = new THREE.Group();
+	anchor.add(centerer);
+	const annotations = new THREE.Group();
+	centerer.add(annotations);
+	return { anchor, centerer, tools: { annotations }, soundLevel: 'off', sound: { play() {} }, haptics: { play() {} } };
+}
+
+test('drawing: a stroke grows from the nib, one mesh per stroke; undo and clear', () => {
+	const xr = fakeXR(), m = new MarkerTool(xr), c = { isController: true };
+	m.take(c);
+	const nib = m.object; // (moving the whole marker moves its nib)
+	m.trigger(c, 'down');
+	for (let i = 0; i <= 50; i++) { nib.position.set(i * 0.01, 1, 0); nib.updateMatrixWorld(true); m.update(1 / 72); }
+	m.trigger(c, 'up');
+	assert.equal(xr.tools.annotations.children.length, 1, 'one stroke, one mesh');
+	const s = m.strokes[0];
+	assert.ok(s.n > 40, `points along 50 cm: ${s.n}`);
+	assert.equal(s.geo.drawRange.count, (s.n - 1) * 6 * 6, 'only what was drawn is drawn');
+	m.nextInk();
+	assert.equal(INKS[m.ink], 'blue');
+	m.trigger(c, 'down'); nib.position.x += 0.1; nib.updateMatrixWorld(true); m.update(1 / 72); nib.position.y += 0.1; nib.updateMatrixWorld(true); m.update(1 / 72); m.trigger(c, 'up');
+	assert.equal(m.strokes.length, 2);
+	assert.equal(m.strokes[1].mesh.material.name, 'ink-blue');
+	assert.ok(m.undo());
+	assert.equal(m.strokes.length, 1);
+	assert.ok(m.clear());
+	assert.equal(xr.tools.annotations.children.length, 0);
+});
+
+test('bare hands: a tap starts a stroke, the next ends it; a swipe changes colour; a dot is no stroke', () => {
+	const xr = fakeXR(), m = new MarkerTool(xr), h = { isHand: true };
+	m.take(h);
+	m.trigger(h, 'down'); m.trigger(h, 'up');
+	assert.ok(m.drawing, 'drawing after one tap');
+	m.trigger(h, 'down'); m.trigger(h, 'up');
+	assert.equal(m.drawing, null, 'the next tap ends it');
+	assert.equal(m.strokes.length, 0, 'it never moved: no stroke left');
+	m.gesture(h, { type: 'turn', dir: -1 });
+	assert.equal(INKS[m.ink], 'red', 'a swipe back through the colours');
+});

@@ -35,6 +35,7 @@ js/xr-tools.js    hand-held tool system: claims, routing, annotations in model s
 js/tool-fan.js    the tool fan over the left hand: open on a look, touch and grip (or a closed hand) to take, swap, put back; the inactive camera
 js/tool-models.js the three tools' models (camera, meter, marker), plain theme colours
 js/laser-meter.js the laser meter tool: beam and dot, live reading, measured lines with labels in model space
+js/marker-tool.js the marker tool: strokes as growing tubes (one draw call each), colours, undo
 js/measure.js     the meter's measuring: snapping, labels, undo (pure, Node-testable)
 js/street-camera.js the street camera tool: shutter (photo from the lens, 3:2), viewfinder render target, lens setting, the print
 js/settings.js    every remembered setting: key, default, meaning (page and headset)

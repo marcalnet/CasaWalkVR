@@ -22,7 +22,7 @@
 // (fanBusy).
 
 import * as THREE from 'three';
-import { buildMarker } from './tool-models.js';
+import { MarkerTool } from './marker-tool.js';
 import { LaserMeter } from './laser-meter.js';
 import { StreetCamera } from './street-camera.js';
 import { ease } from './tween.js';
@@ -62,10 +62,11 @@ export class ToolFan {
 		// The street camera works from milestone D (js/street-camera.js).
 		this.camera = new StreetCamera(xr);
 		this.meter = new LaserMeter(xr); // (milestone E)
+		this.marker = new MarkerTool(xr); // (milestone F)
 		this.slots = [
 			make('camera', this.camera.object, true, this.camera),
 			make('meter', this.meter.object, true, this.meter),
-			make('marker', buildMarker({ ink: 'black' }), true),
+			make('marker', this.marker.object, true, this.marker),
 		];
 		for (const s of this.slots) s.object.scale.setScalar(s.object.userData.fanScale);
 		xr.scene.add(this.group);
