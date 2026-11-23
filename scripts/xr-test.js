@@ -779,7 +779,9 @@ check('B closes the board', (await state()).menu === null);
 	}
 	await handAimAt(floorAhead); await frames(2);
 	const settling = await page.evaluate(() => { const w = window.__casawalk.xr.modes.walk; return { via: w.tele?.via, dots: w.arc.dots.visible, colour: w.arc.dots.material.color.getHexString() }; });
-	await handAimAt(floorAhead); await frames(30);
+	await handAimAt(floorAhead); await frames(10);
+	// (Steady is 0.3 s of the app's own time: a slow emulator needs more real time.)
+	await page.waitForFunction(() => (window.__casawalk.xr.modes.walk.tele?.steady ?? 0) >= 0.3, null, { timeout: 8000, polling: 'raf' }).catch(() => {});
 	const steady = await page.evaluate(() => { const w = window.__casawalk.xr.modes.walk; return { steady: w.tele?.steady ?? 0, valid: !!w.tele?.result?.valid, colour: w.arc.dots.material.color.getHexString(), discs: w.discs.count }; });
 	check('bare hands walking: a tap shows the arc from the hand, white while it settles, blue once steady', settling.via === 'hand' && settling.dots && settling.colour === 'ffffff' && steady.valid && steady.colour === '3d8bfd', JSON.stringify({ settling, steady, targets: targets.length }));
 	await shot('hands-teleport-aim');
