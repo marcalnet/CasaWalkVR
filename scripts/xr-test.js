@@ -1597,7 +1597,7 @@ await pressWrist('down');
 // Photo: nothing of the interface in the picture, all of it back afterwards.
 await openBoard();
 await aimW('left', L, await modelTop()); await frames(6); // a marker under the left laser
-await page.evaluate(() => window.__casawalk.xr.ui.setWelcome(true));
+await page.evaluate(() => { const x = window.__casawalk.xr; x.lessons.stop(); x.toolsIntro.stop(); x.ui.setWelcome(true); }); // (Help replayed the lesson above: it would hide the welcome card)
 const seen = page.evaluate(() => new Promise((done) => {
 	const S = window.__casawalk, x = S.xr, r = S.renderer, render = r.render;
 	const ui = { menu: Object.values(x.menus).map((p) => p.mesh), welcome: [x.ui.welcome.mesh], feedback: [x.ui.flash, x.ui.photoNote.mesh, x.modes.walk.fadeMesh], arc: [x.modes.walk.arc.dots, x.modes.walk.arc.ring],
