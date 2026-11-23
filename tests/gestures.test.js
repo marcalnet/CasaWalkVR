@@ -135,3 +135,13 @@ test('a clenched fist is a closed hand, never the ready pose', () => {
 	const ev = run(g, 0.4, world(hand({ clench: true })));
 	assert.ok(ev.includes('fist') && !ev.includes('ready'), JSON.stringify(ev));
 });
+
+// Tracking jitter (about ±6 mm per joint, the tester's probe): a still hand in the ready pose does nothing.
+test('a still ready hand with ±6 mm jitter on every joint: no taps, turns or steps in 10 s', () => {
+	let seed = 42;
+	const rnd = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296 - 0.5) * 0.012;
+	const g = new HandGestures('right');
+	const base = world(hand());
+	const ev = run(g, 10, () => Object.fromEntries(Object.entries(base).map(([k, v]) => [k, v.clone().add(new THREE.Vector3(rnd(), rnd(), rnd()))])));
+	assert.deepEqual(ev.filter((e) => e !== 'ready'), [], JSON.stringify(ev));
+});

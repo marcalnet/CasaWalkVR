@@ -49,17 +49,44 @@ export function partList() {
 			byMat.get(material).push(g);
 			return g;
 		},
-		build(name) {
+		/**
+		 * The parts as meshes. The plain colours merge into ONE mesh with the colours
+		 * per vertex, on a material all the tools share (the tester's finding: the
+		 * fan cost 14 draw calls); a material with a texture, or one that must change
+		 * on its own (keep: the marker's ink), stays a mesh of its own.
+		 */
+		build(name, { keep = [] } = {}) {
 			const group = new THREE.Group();
 			group.name = name;
+			const plain = [];
 			for (const [mat, geos] of byMat) {
-				const mesh = new THREE.Mesh(mergeGeometries(geos, false), mat);
-				mesh.name = `${name}:${mat.name || mat.color.getHexString()}`;
+				if (mat.map || mat.transparent || keep.includes(mat.name)) {
+					const mesh = new THREE.Mesh(mergeGeometries(geos, false), mat);
+					mesh.name = `${name}:${mat.name || mat.color.getHexString()}`;
+					group.add(mesh);
+					continue;
+				}
+				for (const g of geos) {
+					const n = g.attributes.position.count, c = new Float32Array(n * 3);
+					for (let i = 0; i < n; i++) { c[i * 3] = mat.color.r; c[i * 3 + 1] = mat.color.g; c[i * 3 + 2] = mat.color.b; }
+					g.setAttribute('color', new THREE.BufferAttribute(c, 3));
+					plain.push(g);
+				}
+			}
+			if (plain.length) {
+				const mesh = new THREE.Mesh(mergeGeometries(plain, false), sharedMaterial());
+				mesh.name = `${name}:body`;
 				group.add(mesh);
 			}
 			return group;
 		},
 	};
+}
+
+let shared = null;
+/** The one material of the tools' plain parts (their colours are per vertex). */
+function sharedMaterial() {
+	return (shared ??= new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide, name: 'tools' })); // (double-sided: the meter's blade)
 }
 
 /** A transform from position, Euler rotation (radians) and scale. */
@@ -285,7 +312,7 @@ export function buildMarker({ ink = 'blue' } = {}) {
 	const cap = (pts) => P.add(M.ink, new THREE.LatheGeometry(pts.map(([r, z]) => new THREE.Vector2(r, z)), 18), at(0, 0, 0.051, Math.PI / 2));
 	cap([[0.0119, 0.0], [0.0122, 0.001], [0.0122, 0.026], [0.0105, 0.0295], [0.0060, 0.0313], [0, 0.0318]]);
 
-	const g = P.build('marker');
+	const g = P.build('marker', { keep: ['ink'] });
 	point(g, 'grip', 0, 0, -0.018);
 	point(g, 'tip', 0, 0, -0.0695, [0, 0, -1]);
 	g.userData.fanScale = MARKER_FAN_SCALE;

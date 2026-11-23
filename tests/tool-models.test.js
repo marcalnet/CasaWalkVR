@@ -10,7 +10,7 @@ const size = (g) => new THREE.Box3().setFromObject(g).getSize(new THREE.Vector3(
 
 test('the three tools: real size, one draw call per colour, their named points', () => {
 	const camera = buildCamera(), inactive = buildCamera({ inactive: true }), meter = buildMeter(), marker = buildMarker();
-	assert.ok(calls(camera) <= 4 && calls(meter) <= 5 && calls(marker) <= 2, 'one mesh per material');
+	assert.ok(calls(camera) === 1 && calls(meter) === 1 && calls(marker) === 2, 'one mesh per tool (the marker\'s ink apart): the fan costs few draw calls');
 	assert.ok(calls(inactive) <= 7, 'the inactive camera: its tag and string on top');
 	assert.ok(Math.abs(size(camera).x - 0.12) < 0.01, 'the camera is 12 cm across');
 	assert.ok(Math.abs(size(marker).z - 0.15) < 0.01, 'the marker is about 15 cm long');
