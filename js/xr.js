@@ -41,6 +41,7 @@
 import * as THREE from 'three';
 import { XRInput } from './xr-input.js';
 import { HandView } from './hands.js';
+import { Lessons } from './lessons.js';
 import { SeeThrough, SEE_THROUGH_MAX } from './walls.js';
 import { takePhoto, photoName, saveFile, withHidden } from './photo.js';
 import { readSetting } from './settings.js';
@@ -125,6 +126,7 @@ export class XRExperience {
 		this.hideFromPhotos(this.curtain, this.arrival.mesh);
 		this.modes = { dollhouse: new Dollhouse(this), walk: new Walk(this) };
 		this.ui = new XRUI(this);
+		this.lessons = new Lessons(this); // the first-time lessons (C0.5)
 		for (const c of Object.values(this.help)) this.ui.wrist.cross.add(c.mesh); // (Help opens beside the wrist menu, on its right)
 		this.tools = new ToolSystem(this);
 		this.tweens = new Tweens();
@@ -251,6 +253,7 @@ export class XRExperience {
 		this.mode = null;
 		this.pendingRecentre = false;
 		this.ui.reset(); // menus, welcome card, notes, the wrist menu
+		this.lessons.stop();
 		this.layerFx = null;
 		this.curtain.visible = false;
 		this.arrival.mesh.visible = false;
@@ -282,10 +285,16 @@ export class XRExperience {
 	 * point and heading).
 	 */
 	setMode(name, ...args) {
+		const was = this.mode;
 		if (this.mode && this.mode !== name) this.modes[this.mode].exit();
 		this.mode = name; // (set first: applyStoreys() and applyView() read it)
 		this.ui.closeAll();
 		this.modes[name].enter(...args);
+		// The first-time lessons: stepping inside ends the scale model's; each place starts its own (until done).
+		if (was === 'dollhouse' && name === 'walk') this.lessons.note('inside');
+		this.lessons.stop();
+		if (this.session) this.lessons.start(name === 'walk' ? 'walk' : 'scale');
+		this.ui.setWelcome(this.ui.welcomeOn);
 	}
 
 	// -----------------------------------------------------------------------
@@ -486,6 +495,14 @@ export class XRExperience {
 		return new THREE.Vector3().setFromMatrixPosition(this.camera.matrix).applyMatrix4(this.rig.matrixWorld);
 	}
 
+	/** Tells the lessons when a bare hand has held the ready pose for 0.5 s. */
+	noteReady(dt) {
+		for (const c of this.input.gestureHands()) {
+			c.readyFor = c.gesture?.ready ? (c.readyFor ?? 0) + dt : 0;
+			if (c.readyFor >= 0.5) this.lessons.note('ready');
+		}
+	}
+
 	/** The viewer's horizontal right and forward axes (world, unit). */
 	viewAxes() {
 		this.rig.updateMatrixWorld(true);
@@ -552,8 +569,11 @@ export class XRExperience {
 				this.pendingRecentre = false;
 				this.modes.dollhouse.measureLift(head); // the tall view, from where the head really is
 				this.modes.dollhouse.recentre(head.clone().premultiply(this.rig.matrix));
+				if (this.lessons.place) this.lessons.place3d(); // (in front of you, now that the head is known)
 			}
 		}
+		this.noteReady(dt);
+		if (!this.layerFx) this.lessons.update(dt); // (its keys before the mode's lasers)
 		if (this.layerFx) this.runLayerFx(dt); // moving between layers: the modes wait
 		else this.modes[this.mode]?.update(dt);
 		this.runArrival(dt);

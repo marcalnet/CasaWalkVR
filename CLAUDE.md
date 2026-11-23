@@ -7,7 +7,7 @@ WebXR viewer for Meta Quest (Quest 3, 3S, 2 and Pro; Quest 3/3S first; Quest 1 n
 ## Hard constraints
 
 - three.js + WebXR in the Meta Quest Browser. No Unity/native app, no frameworks beyond three.js. Keep it portable: the same web app may later be packaged as an installable app (PWA), so readers and geometry code stay free of the page, and browser-only code (file pickers, IndexedDB, downloads, pairing) stays in few, clearly named modules.
-- Plain ES modules + import map, **no build step**. All runtime dependencies vendored in `vendor/` (three.js + used addons, the Draco and meshopt glTF decoders, fflate, three-mesh-bvh, PeerJS, the Kalam font of the welcome notes) with their licences. Nothing loads from a CDN at runtime. Apart from the storage service of a link the user loads (for Google Drive and OneDrive links, that service's API: see SPEC.md, "Links from storage services"), the one outside service is the PeerJS pairing server, contacted only when Send to my Quest sends a file (`connect-src` in `index.html` must match `CONFIG.pairing`; `npm test` checks it).
+- Plain ES modules + import map, **no build step**. All runtime dependencies vendored in `vendor/` (three.js + used addons, the Draco and meshopt glTF decoders, fflate, three-mesh-bvh, PeerJS, the Kalam font of the welcome notes, the WebXR generic hand model) with their licences. Nothing loads from a CDN at runtime. Apart from the storage service of a link the user loads (for Google Drive and OneDrive links, that service's API: see SPEC.md, "Links from storage services"), the one outside service is the PeerJS pairing server, contacted only when Send to my Quest sends a file (`connect-src` in `index.html` must match `CONFIG.pairing`; `npm test` checks it).
 - Hosted on GitHub Pages at https://www.casawalkvr.com/ (repo marcalnet/CasaWalkVR; `CNAME` holds the address; casawalkvr.app and casawalkvr.pro forward to it from their own small Pages repos). HTTPS is required for WebXR. The same URL works on desktop Chrome/Safari as a 2D orbit preview.
 - Quest Browser file picker: read picked files with `await file.arrayBuffer()` immediately; never create a blob URL from a picked `File`; no restrictive `accept` attribute; accept `.zip` wherever `.sh3d` is accepted.
 - Quest 2 is the performance floor (a phone GPU): merged geometry by material (< ~150 draw calls), BVH for every raycast, Lambert materials. Shadows only as the optional on-demand map in lighting.js (never per-frame); no post-process or temporal anti-aliasing (flickers).
@@ -47,6 +47,9 @@ js/hands.js       bare hands drawn from the WebXR joints (translucent capsules, 
 js/gestures.js    bare-hand gestures from the joints: ready, thumb tap and swipes, closed hand, the aim ray (pure, Node-testable)
 js/hotspots.js    teleport hotspots: room middles and doorways, and snapping to them (pure, Node-testable)
 js/guide.js       the guide beside the menu: how to move, for hands or controllers; Hide folds it into a tab
+js/lessons.js     the first-time lessons: a card of steps that tick off, the looping 3D hand, the first target
+js/hand-model.js  the hand model: the generic hand (vendor/generic-hand/) dressed in the hand look, posed from joints or presets
+js/hand-poses.js  preset hand poses (from IWER, MIT) for the lessons' demonstration hand
 js/panel.js       canvas-texture board (switches, options, stepper, Close key), controls and welcome cards, labels
 js/walls.js       solid walls while walking and see-through walls and furniture (headset only)
 js/photo.js       the menu's Photo button: renders the view without the menu and saves a JPEG

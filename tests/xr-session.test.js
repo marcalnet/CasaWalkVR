@@ -376,3 +376,27 @@ test('Walk in on the plinth: the laser presses it on letting go over it', async 
 	press('right', 'trigger', false); frame(); settle();
 	assert.equal(x.mode, 'walk', 'on letting go over it');
 });
+
+test('the first-time lessons: steps tick off in order; stepping inside starts the next; controllers skip the hand-only step', async () => {
+	const { x, go } = await setup();
+	const L = x.lessons;
+	assert.equal(L.place, 'scale', 'shown at the scale model on entry');
+	assert.equal(L.kind, 'controllers');
+	assert.deepEqual(L.steps().map((s) => s.id), ['start', 'menu', 'hold', 'inside'], 'the ready pose is for bare hands only');
+	assert.ok(!x.ui.welcome.mesh.visible, 'it replaces the welcome card');
+	assert.equal(L.current().id, 'start');
+	L.note('held'); // done early: counts, but Start is still the step to do
+	assert.equal(L.current().id, 'start');
+	assert.ok(!L.canClose(), 'Got it waits for the steps that must not be missed');
+	L.note('start'); L.note('wrist');
+	assert.ok(L.canClose());
+	assert.equal(L.current().id, 'inside');
+	go('in');
+	assert.equal(L.place, 'walk', 'inside: the next lesson');
+	assert.equal(L.current().id, 'arc');
+	L.note('arc'); L.note('teleport'); L.note('turn');
+	assert.equal(L.place, 'walk', 'the last step has no gesture: it waits for Got it');
+	assert.ok(L.canClose());
+	L.finish();
+	assert.equal(L.place, null);
+});

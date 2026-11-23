@@ -373,6 +373,10 @@ check('one Enter VR button', await enterVR.count() === 1 && await page.locator('
 }
 
 // Head 1.6 m up, looking slightly down at the plinth.
+// The first-time lessons (C0.5) are marked done for the whole run (they would stand
+// in front of the other checks); their own checks clear them below.
+const LESSON_KEYS = ['casawalk.welcome.scale.hands', 'casawalk.welcome.scale.controllers', 'casawalk.welcome.walk.hands', 'casawalk.welcome.walk.controllers'];
+await page.evaluate((keys) => { for (const k of keys) localStorage.setItem(k, '1'); }, LESSON_KEYS);
 await page.evaluate(() => window.__device.position.set(0, 1.6, 0));
 await lookDown();
 await restRight();
@@ -637,7 +641,7 @@ check('B closes the board', (await state()).menu === null);
 	await shot('hands-note');
 	check('bare hands: a pinch reaches the app as a select', h.selects >= 2, JSON.stringify(h));
 	check('bare hands: pinches do nothing (no step inside, no menu, no laser)', !before && h.mode === 'dollhouse' && !h.menu && h.active === 0 && h.hands === 2 && !h.lasers && !h.bodies && !h.marker, JSON.stringify(h));
-	const drawn = await page.evaluate(() => { const x = window.__casawalk.xr; return { views: x.handViews.map((v) => v.group.visible && v.colourMesh.visible && v.alpha === 1), orb: [x.ui.wrist.orb.holder?.handedness, x.ui.wrist.orb.holder?.isHand && x.ui.wrist.orb.group.parent === x.ui.wrist.orb.holder.wrist] }; });
+	const drawn = await page.evaluate(() => { const x = window.__casawalk.xr; return { views: x.handViews.map((v) => v.group.visible && (v.model ? v.model.userData.colour.visible : v.colourMesh.visible) && v.alpha === 1), orb: [x.ui.wrist.orb.holder?.handedness, x.ui.wrist.orb.holder?.isHand && x.ui.wrist.orb.group.parent === x.ui.wrist.orb.holder.wrist] }; });
 	check('bare hands with joints: drawn, the orb on the right wrist, no "Pick up your controllers" note', !h.note && drawn.views.every(Boolean) && drawn.orb[0] === 'right' && drawn.orb[1], JSON.stringify(drawn));
 	// Touch groundwork (C0): the hands' poke points and pinches are read (nothing uses them yet).
 	const touch = () => page.evaluate(() => window.__casawalk.xr.input.controllers.map((c) => ({ side: c.handedness, kind: c.touch.kind, tracked: c.touch.tracked,
@@ -826,8 +830,21 @@ check('B closes the board', (await state()).menu === null);
 	await page.evaluate(() => { window.__device.hands.right.position.set(0.5, 1.0, 0.3); window.__device.hands.left.position.set(-0.5, 1.0, 0.3); });
 	// (4 s of the app's own time, then the glide: a heavy home runs the emulator slowly, so allow plenty of real time.)
 	await page.waitForFunction(() => !window.__casawalk.xr.modes.dollhouse.floating, null, { timeout: 30000, polling: 'raf' }).catch(() => {});
-	const homeAgain = await page.evaluate(() => { const x = window.__casawalk.xr, d = x.modes.dollhouse; return { floating: !!d.floating, level: d.level(), y: +d.doll.pos.y.toFixed(3) }; });
+	const homeAgain = await page.evaluate(() => { const x = window.__casawalk.xr, d = x.modes.dollhouse, V = x.rig.position.constructor, b = d.modelBox();
+		return { floating: !!d.floating, wait: d.floating?.wait, going: !!d.floating?.going, grab: !!d.grab, level: d.level(), y: +d.doll.pos.y.toFixed(3),
+			near: x.input.controllers.map((c) => { const p = d.holdPoint(c, new V()); return [c.handedness, c.isHand, c.isController, c.touch.tracked, p ? +b.distanceToPoint(p).toFixed(2) : null]; }) }; });
 	check('with hands away, the floating model goes home by itself and settles, level', !homeAgain.floating && homeAgain.level && Math.abs(homeAgain.y - 0.604) < 0.002, JSON.stringify(homeAgain));
+	// The lesson with bare hands: the looping 3D hand shows the gesture of the current step (here: holding the model).
+	await page.evaluate(() => { localStorage.removeItem('casawalk.welcome.scale.hands'); const L = window.__casawalk.xr.lessons; L.start('scale'); L.note('start'); L.note('wrist'); });
+	await page.waitForFunction(() => !!window.__casawalk.xr.lessons.demo, null, { timeout: 5000 }).catch(() => {});
+	await frames(6);
+	const demo = await page.evaluate(() => { const L = window.__casawalk.xr.lessons; return { kind: L.kind, step: L.current()?.id, demo: !!L.demo && Object.values(L.demo).some((d) => d.visible), loaded: !!L.demo }; });
+	check('the lesson with bare hands: a looping 3D hand shows the step\'s gesture', demo.kind === 'hands' && demo.step === 'hold' && demo.demo, JSON.stringify(demo));
+	await shot('lesson-hands-demo');
+	await page.evaluate(() => window.__casawalk.xr.lessons.finish()); await frames(2);
+	// The hands are drawn with the hand model (the generic hand), once loaded.
+	const model = await page.evaluate(() => window.__casawalk.xr.handViews.map((v) => ({ side: v.c.handedness, model: !!v.model, capsules: v.colourMesh.visible })));
+	check('bare hands are drawn with the hand model (the capsules are the fallback)', model.every((m) => m.model && !m.capsules), JSON.stringify(model));
 	// Real gestures again for the rest of the run.
 	await page.evaluate(() => { const x = window.__casawalk.xr; for (const c of x.input.controllers) if (c.gesture) delete c.gesture.step; });
 	await page.evaluate(() => { window.__device.primaryInputMode = 'controller'; });
@@ -905,8 +922,9 @@ check('at the scale model, B never leaves VR', (await state()).presenting && (aw
 	// Seated: the doors stay at waist height (65 cm below the eyes).
 	await page.evaluate(() => window.__device.position.set(0, 1.1, 0)); await frames(10);
 	await page.waitForFunction(() => { const x = window.__casawalk.xr, d = x.modes.dollhouse; return Math.abs(x.stage.worldToLocal(x.headWorld()).y - d.doorEyes) < 0.08; }, null, { timeout: 5000, polling: 'raf' }).catch(() => {});
-	const seated = await page.evaluate(() => { const x = window.__casawalk.xr, V = x.rig.position.constructor; return +(x.headWorld().y - x.modes.dollhouse.doors.keys.get('in').face.getWorldPosition(new V()).y).toFixed(2); });
-	check('seated, the doors are still at waist height', seated > 0.55 && seated < 0.75, JSON.stringify({ seated }));
+	const seatedInfo = await page.evaluate(() => { const x = window.__casawalk.xr, V = x.rig.position.constructor, d = x.modes.dollhouse; return { seated: +(x.headWorld().y - d.doors.keys.get('in').face.getWorldPosition(new V()).y).toFixed(2), eye: +x.stage.worldToLocal(x.headWorld()).y.toFixed(2), doorEyes: +d.doorEyes.toFixed(2), hot: d.doors.list.filter((k) => k.hot).map((k) => k.slot), rings: d.doors.rings.map((r) => !!r?.visible) }; });
+	const seated = seatedInfo.seated;
+	check('seated, the doors are still at waist height', seated > 0.55 && seated < 0.75, JSON.stringify(seatedInfo));
 	await page.evaluate(() => window.__device.position.set(0, 1.6, 0)); await frames(10);
 	await lookDown(-0.85); await frames(3);
 	await shot('plinth-doors');
@@ -1156,6 +1174,38 @@ await pressWrist('left');
 s = await state();
 check('← Back on the wrist menu returns to the scale model', s.mode === 'dollhouse' && s.rig[0] === 0 && s.rig[2] === 0 && s.menu === null);
 check('back from walking: eyes at 1.89 m again, gallery shown, lasers on', Math.abs(s.head[1] - 1.89) < 0.005 && s.showroom && !s.walkSky && (await lasers()) === 'left:on right:on', `eyes ${s.head[1].toFixed(3)}, lasers ${await lasers()}`);
+
+// The first-time lessons (C0.5), with controllers: the scale model's, then inside.
+{
+	await page.evaluate((keys) => { for (const k of keys) localStorage.removeItem(k); }, LESSON_KEYS.filter((k) => k.endsWith('controllers')));
+	const lesson = () => page.evaluate(() => { const L = window.__casawalk.xr.lessons; return { place: L.place, kind: L.kind, shown: L.group.visible, step: L.current()?.id ?? null, got: L.canClose(), target: L.target.visible, welcome: window.__casawalk.xr.ui.welcome.mesh.visible }; });
+	await page.evaluate(() => { const x = window.__casawalk.xr; x.lessons.start('scale'); x.ui.setWelcome(x.ui.welcomeOn); });
+	await frames(3);
+	const l0 = await lesson();
+	check('the scale model\'s lesson: a card of steps in front of you, Start first, the welcome card gone', l0.place === 'scale' && l0.kind === 'controllers' && l0.shown && l0.step === 'start' && !l0.got && !l0.welcome, JSON.stringify(l0));
+	await shot('lesson-scale');
+	// Start (pressed with the laser), then the wrist menu with A, then holding the model with a grip.
+	const startKey = await page.evaluate(() => { const k = window.__casawalk.xr.lessons.keys.keys.get('start'); k.face.updateMatrixWorld(true); return k.face.getWorldPosition(new (k.face.position.constructor)()).toArray(); });
+	await aimW('right', R, startKey); await frames(4);
+	await click('right', 'trigger'); await frames(4);
+	const l1 = await lesson();
+	await click('right', 'a-button'); await frames(4); await click('right', 'a-button'); await frames(4);
+	const l2 = await lesson();
+	await restRight(); await frames(3);
+	await button('right', 'squeeze', 1); await frames(6); await button('right', 'squeeze', 0); await frames(6);
+	const l3 = await lesson();
+	check('steps tick off as you do them: Start, the wrist menu, holding the model (Got it once the musts are done)', l1.step === 'menu' && l2.step === 'hold' && l2.got && l3.step === 'inside', JSON.stringify({ l1: l1.step, l2: l2.step, got: l2.got, l3: l3.step }));
+	// Stepping inside ends it (remembered) and starts the lesson inside, with the orange target.
+	await page.evaluate(() => { window.__casawalk.xr.menuAction('in'); }); await settled(); await frames(6);
+	const l4 = await lesson();
+	const remembered = await page.evaluate(() => localStorage.getItem('casawalk.welcome.scale.controllers'));
+	check('stepping inside finishes the scale model\'s lesson (remembered) and starts the one inside, with a target ring ahead', remembered === '1' && l4.place === 'walk' && l4.step === 'arc' && l4.shown && l4.target, JSON.stringify({ remembered, ...l4 }));
+	await shot('lesson-walk');
+	await page.evaluate(() => window.__casawalk.xr.lessons.finish()); await frames(2);
+	check('Got it (or the last step) puts it away for good', (await lesson()).place === null && await page.evaluate(() => localStorage.getItem('casawalk.welcome.walk.controllers')) === '1');
+	await page.evaluate(() => window.__casawalk.xr.menuAction('back')); await settled(); await frames(6);
+	await restRight(); await restLeft(); await lookDown(); await frames(4);
+}
 
 // ← Back at the scale model leaves VR (a fade to white, then the page).
 await lookDown();

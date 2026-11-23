@@ -180,6 +180,7 @@ export class Walk {
 	/** Teleports to a world floor point, with the short fade (and the step sound). */
 	go(target) {
 		this.xr.sound.play('step');
+		this.xr.lessons?.note('teleport');
 		this.fade = { t: 0, action: () => this.placeUser(target, null) };
 	}
 
@@ -233,10 +234,12 @@ export class Walk {
 					} else if (!this.tele && !busy) {
 						this.tele = { c, via: 'hand', steady: 0, anchor: null };
 						xr.sound.play('aim');
+						xr.lessons?.note('arc');
 					}
 				} else if (e.type === 'turn' && !busy && !near) {
 					xr.turn(-e.dir * THREE.MathUtils.degToRad(xr.snapAngle));
 					xr.sound.play('tick');
+					xr.lessons?.note('turn');
 				} else if (e.type === 'step' && !busy && !near) {
 					if (!this.stepBy(e.dir)) xr.sound.play('deny');
 				}
@@ -371,6 +374,7 @@ export class Walk {
 				const c = input.active().find((c) => c.state.down.trigger && c.claim.trigger === null);
 				if (c) this.tele = { c, via: 'trigger' };
 			}
+			if (this.tele) xr.lessons?.note('arc');
 		}
 		if (this.tele && this.tele.via !== 'hand') {
 			const { c, via } = this.tele;
@@ -397,6 +401,7 @@ export class Walk {
 			if (this.snapReady && Math.abs(x) > 0.7 && Math.abs(x) > Math.abs(right.state.stick.y)) {
 				xr.turn(-Math.sign(x) * THREE.MathUtils.degToRad(xr.snapAngle));
 				this.snapReady = false;
+				xr.lessons?.note('turn');
 			} else if (Math.abs(x) < 0.3) {
 				this.snapReady = true;
 			}

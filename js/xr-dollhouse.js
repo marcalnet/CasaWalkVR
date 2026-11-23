@@ -416,6 +416,7 @@ export class Dollhouse {
 			aPos0: xr.anchor.position.clone(), aQ0: xr.anchor.quaternion.clone(), pos: xr.anchor.position.clone(), q: xr.anchor.quaternion.clone() };
 		xr.sound.play('grab');
 		if (!c.isHand) xr.haptics.play(c, 'click');
+		xr.lessons?.note('held');
 	}
 
 	/** The held model follows the hand fully (position and turn), smoothed, never into the plinth or the floor. */

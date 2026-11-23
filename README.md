@@ -86,7 +86,7 @@ Press **Enter VR →** once a model is open: it starts at the scale model. The a
 
 **Help** opens a card beside the menu, on its right, and the menu stays. **Settings** opens a board within reach: a little to your left at the scale model, straight ahead inside. Tabs **View**, **Walk** and **General**, the same at both layers, and a **×** key to close it (B / Y too). Settings are **switches** for what is on or off (Shadows, Depth shading, Ceilings, Passthrough, Transparent walls, Solid walls), a row of **options** with the current one in blue (Time of day, Height, Tool fan, Sound) and a **‹ ›** stepper for Levels (homes can have many). A setting that belongs to the scale model is greyed out inside. Settings, and the tab you last used, are remembered. A controller's grip on the bar on top moves the board.
 
-**Bare hands** (being built, milestone C0): put the controllers down and your hands appear. The wrist menu and the board work by touch. Pinching does nothing, on purpose. To move, use Meta's own hand gesture: hold a hand sideways, fingers curled, thumb resting on your index (an orange dot shows on the thumb), and **tap your thumb**: an arc shows where you'll land; when its ring turns blue, **tap again** to go. **Open your hand** to cancel. Swipe your thumb left or right to turn, forward or back for a small step. At the scale model the same tap aims at a room: tap again to step inside. **Close your hand on the model** to hold it: lift it, tilt it, look underneath. Let it go over the plinth and it settles; let it go in the air and it floats, then goes back to its plinth by itself 4 seconds after your hands move away (that works with the controllers' grips too). A **guide** beside the menu shows all this; its Hide key folds it away.
+**Bare hands** (being built, milestone C0): put the controllers down and your hands appear. The wrist menu and the board work by touch. Pinching does nothing, on purpose. To move, use Meta's own hand gesture: hold a hand sideways, fingers curled, thumb resting on your index (an orange dot shows on the thumb), and **tap your thumb**: an arc shows where you'll land; when its ring turns blue, **tap again** to go. **Open your hand** to cancel. Swipe your thumb left or right to turn, forward or back for a small step. At the scale model the same tap aims at a room: tap again to step inside. **Close your hand on the model** to hold it: lift it, tilt it, look underneath. Let it go over the plinth and it settles; let it go in the air and it floats, then goes back to its plinth by itself 4 seconds after your hands move away (that works with the controllers' grips too). A **guide** beside the menu shows all this; its Hide key folds it away. The first time in each place, a short **lesson** card in front of you teaches the gestures step by step (a 3D hand shows each one); it ticks steps off as you do them and goes when you're done or press Got it. It's remembered separately for bare hands and for controllers.
 
 While aiming a teleport (hands or controllers), faint rings on the floor mark the middle of each room and both sides of each doorway; the landing ring snaps to one when you aim near it.
 
@@ -229,6 +229,9 @@ js/hands.js       bare hands, drawn
 js/gestures.js    bare-hand gestures: the thumb tap and swipes, the closed hand
 js/hotspots.js    teleport hotspots (room middles, doorways)
 js/guide.js       the guide beside the menu
+js/lessons.js     the first-time lessons
+js/hand-model.js  the hand model (the WebXR generic hand, restyled)
+js/hand-poses.js  preset hand poses for the lessons
 js/settings.js    every remembered setting, its key and meaning
 js/tween.js, js/haptics.js, js/sound.js   feedback: motion, vibration, synthesised sounds
 js/panel.js       canvas-texture board (switches, options, stepper, Close key), cards and labels
@@ -249,7 +252,7 @@ js/formats.js     zip / OBJ / GLB / DAE / 3DS loading, unit detection
 sw.js             service worker: offline use, and no mix of old and new files after an update
 examples/         sample homes (Pond House, Apartment: scripts/make-*.js, one palette in scripts/sample-palette.js) and the tests' small example home (scripts/make-example.js); original content
 js/samples.js     the sample homes the page offers (one entry per home)
-vendor/           three.js, three-mesh-bvh, fflate, PeerJS and the Kalam font (with licences)
+vendor/           three.js, three-mesh-bvh, fflate, PeerJS, the Kalam font and the WebXR generic hand model (with licences)
 scripts/          vendoring, fixtures, example home, local server, screenshots, emulated headset test
 tests/            Node tests
 docs/             pictures for this README

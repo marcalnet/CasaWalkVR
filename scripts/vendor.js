@@ -86,7 +86,16 @@ copy(path.join(nm, '@fontsource/kalam/LICENSE'), path.join(vendor, 'kalam/LICENS
 copy(path.join(nm, 'peerjs/dist/peerjs.min.js'), path.join(vendor, 'peerjs/peerjs.min.js'));
 copy(path.join(nm, 'peerjs/LICENSE'), path.join(vendor, 'peerjs/LICENSE'));
 
+// The generic hand (MIT, © 2019 Amazon): the WebXR Input Profiles' hand model,
+// dressed in CasaWalk's look by js/hand-model.js. Copied once by hand from
+// @webxr-input-profiles/assets 1.0.20 (dist/profiles/generic-hand: left.glb,
+// right.glb, profile.json, and its LICENSE as LICENSE.md) into
+// vendor/generic-hand/; not a dev dependency, so this script leaves it alone.
+// Never loaded from the CDN path three.js's XRHandMeshModel uses by default.
+const GENERIC_HAND = '1.0.20';
+
 const versions = Object.fromEntries(['three', 'three-mesh-bvh', 'fflate', '@fontsource/kalam', 'peerjs'].map(
 	(p) => [p, JSON.parse(fs.readFileSync(path.join(nm, p, 'package.json'), 'utf8')).version]));
+versions['@webxr-input-profiles/assets (generic-hand)'] = GENERIC_HAND;
 fs.writeFileSync(path.join(vendor, 'VERSIONS.json'), JSON.stringify(versions, null, 2) + '\n');
 console.log('Vendored', versions, `(${seen.size} three.js addon files)`);

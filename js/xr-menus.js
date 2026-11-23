@@ -96,6 +96,26 @@ function controlsCards() {
  * controllers. Each: a title, four frames (row of the sheet image, a word
  * each), and the lines under them.
  */
+export const LESSONS = {
+	// Each step: its words for bare hands and for controllers (none: skipped
+	// for that input), what completes it (done: an event js/lessons.js is told;
+	// none: the step ends with Got it), must (Got it waits for it), demo (the
+	// looping hand: tap, hold, ready, turn).
+	scale: { title: 'Welcome to CasaWalk', steps: [
+		{ id: 'start', done: 'start', must: true, hands: 'Press the Start key with your fingertip.', controllers: 'Press Start: touch it, or point and pull.' },
+		{ id: 'menu', done: 'wrist', must: true, hands: 'Touch your right wrist with your left hand: your menu.', controllers: 'Press A (or touch the orb on your right controller): your menu.' },
+		{ id: 'hold', done: 'held', demo: 'hold', hands: 'Close your hand on the home to hold it. Let go: it goes home.', controllers: 'Squeeze a grip to hold the home. Let go in the air: it goes home.' },
+		{ id: 'ready', done: 'ready', demo: 'ready', hands: 'Hold your hand sideways, fingers curled, thumb on your index.' },
+		{ id: 'inside', done: 'inside', demo: 'tap', hands: 'Tap your thumb and point at a room. Tap again: step inside.', controllers: 'Point at a room and pull the trigger: step inside.' },
+	] },
+	walk: { title: 'Moving around', steps: [
+		{ id: 'arc', done: 'arc', demo: 'tap', hands: 'Same as outside: tap your thumb. An arc shows where you\'ll land.', controllers: 'Right stick forward, or hold a trigger: aim.' },
+		{ id: 'go', done: 'teleport', must: true, demo: 'tap', hands: 'Aim at the orange ring. When it turns blue, tap again: go.', controllers: 'Aim at the orange ring. Let go: go.' },
+		{ id: 'turn', done: 'turn', demo: 'turn', hands: 'Swipe your thumb along your finger: turn.', controllers: 'Right stick left or right: turn.' },
+		{ id: 'end', hands: 'Open your hand to cancel. Your menu has a guide beside it.', controllers: 'Left stick: walk. Grip and pull: slide.' },
+	] },
+};
+
 export const GUIDES = {
 	'walk-hands': { title: 'How to move', row: 0,
 		frames: ['Hand sideways, fingers curled', 'Tap your thumb: aim', 'Point at the floor', 'Tap again on blue: go'],

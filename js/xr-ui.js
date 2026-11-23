@@ -97,7 +97,8 @@ export class XRUI {
 	setWelcome(on) {
 		if (on) { this.welcome.lines = this.welcomeLines(); this.welcome.draw(); }
 		this.welcomeOn = on;
-		this.welcome.mesh.visible = on && this.xr.mode === 'dollhouse';
+		// (A first-time lesson replaces it: js/lessons.js.)
+		this.welcome.mesh.visible = on && this.xr.mode === 'dollhouse' && !this.xr.lessons?.place;
 	}
 
 	/**
@@ -300,7 +301,7 @@ export class XRUI {
 			g.action = null;
 		}
 		action ??= g.action;
-		if (this.wrist.open) this.setWelcome(false); // found it: the welcome card has done its job
+		if (this.wrist.open) { this.setWelcome(false); this.xr.lessons?.note('wrist'); } // found it: the welcome card has done its job
 		const active = input.active();
 		if (this.drag && (!this.menu || !this.drag.c.source || !this.drag.c.state.trigger)) this.drag = null; // let go
 		this.moveBoard();
@@ -454,7 +455,7 @@ export class XRUI {
 	buttons() {
 		const wearer = this.wrist.wearer;
 		for (const c of this.xr.input.active()) {
-			if (c.state.down.a && !c.claim.a && c === wearer) { this.wrist.toggle({ pinned: true }); if (this.wrist.open) this.setWelcome(false); return true; }
+			if (c.state.down.a && !c.claim.a && c === wearer) { this.wrist.toggle({ pinned: true }); if (this.wrist.open) { this.setWelcome(false); this.xr.lessons?.note('wrist'); } return true; }
 			if (c.state.down.b && !c.claim.b && this.anyOpen) { this.closeMenu(); this.hideHelp(); this.wrist.close(true); return true; }
 		}
 		return false;

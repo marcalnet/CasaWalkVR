@@ -11,6 +11,7 @@
 
 import * as THREE from 'three';
 import { HAND } from './theme.js';
+import { loadHands, dressHand } from './hand-model.js';
 
 const FINGERS = ['index-finger', 'middle-finger', 'ring-finger', 'pinky-finger'];
 const CHAIN = ['metacarpal', 'phalanx-proximal', 'phalanx-intermediate', 'phalanx-distal', 'tip'];
@@ -76,18 +77,34 @@ export class HandView {
 		// The joints are in the hand group's space, which is the rig's: the view sits there too.
 		c.hand.parent?.add(this.group);
 		this._a = new THREE.Vector3(); this._b = new THREE.Vector3(); this._q = new THREE.Quaternion(); this._v = new THREE.Vector3();
+		// The hand model (C0.5): once loaded, it replaces the capsules (theme.HAND.model).
+		this.models = null; // { left, right }: dressed hand models, made once loaded
+		this.model = null; // the one shown (this hand's side)
+		if (HAND.model === 'generic') loadHands().then((h) => { if (h) this.models = { left: dressHand(h.left, 'left'), right: dressHand(h.right, 'right') }; });
 	}
 
 	/** Once a frame. passthrough: only the fingertip and a faint outline. */
 	update(dt, { passthrough = false, show = true } = {}) {
 		const c = this.c;
 		const tracked = show && c.isHand && c.touch.tracked;
-		if (tracked) this.rebuild();
+		// The hand model for this side, once loaded (else the capsules).
+		const want = this.models && (c.handedness === 'left' || c.handedness === 'right') ? this.models[c.handedness] : null;
+		if (want !== this.model) {
+			this.model?.removeFromParent();
+			this.model = want;
+			if (want) this.group.add(want);
+			this.depthMesh.visible = this.colourMesh.visible = this.tip.visible = !want;
+		}
+		if (tracked) this.model ? this.model.userData.pose(c.hand.joints) : this.rebuild();
+		if (tracked && this.model) this.placeDots();
 		this.alpha = tracked ? 1 : Math.max(0, this.alpha - dt / HAND.fade);
 		this.group.visible = this.alpha > 0;
 		if (!this.group.visible) return;
 		this.colourMat.opacity = (passthrough ? HAND.passthroughOpacity : HAND.opacity) * this.alpha;
-		this.depthMesh.visible = this.colourMesh.visible = this.alpha > 0.01;
+		if (this.model) {
+			this.model.userData.setOpacity((passthrough ? HAND.passthroughOpacity : HAND.opacity) * this.alpha);
+			this.model.userData.setTip(this.near ? 1 : 0);
+		} else this.depthMesh.visible = this.colourMesh.visible = this.alpha > 0.01;
 		this.tipMat.opacity = (this.near ? 1 : HAND.tipIdle) * this.alpha;
 		this.readyDot.visible = tracked && !!c.gesture?.ready;
 		this.readyDot.material.opacity = this.alpha;
@@ -122,6 +139,12 @@ export class HandView {
 		const tip = joints['index-finger-tip'];
 		if (tip?.visible) this.tip.position.copy(tip.position);
 		const thumb = joints['thumb-tip'];
+		if (thumb?.visible) this.readyDot.position.copy(thumb.position);
+	}
+
+	/** The ready dot on the thumb (the model has no capsule pass to place it). */
+	placeDots() {
+		const thumb = this.c.hand.joints['thumb-tip'];
 		if (thumb?.visible) this.readyDot.position.copy(thumb.position);
 	}
 
