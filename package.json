@@ -18,7 +18,8 @@
     "ui-assets": "node scripts/make-ui-assets.js",
     "pond-house": "node scripts/make-pond-house.js",
     "apartment": "node scripts/make-apartment.js",
-    "samples": "node scripts/make-pond-house.js && node scripts/make-apartment.js"
+    "samples": "node scripts/make-pond-house.js && node scripts/make-apartment.js",
+    "stamp": "node scripts/stamp.js"
   },
   "devDependencies": {
     "@fontsource/kalam": "5.3.0",

@@ -68,6 +68,8 @@ js/links.js       which links may be downloaded, storage-service links (Dropbox,
 js/transfer.js    computer-to-headset file transfer protocol and its checks (pure, Node-testable)
 js/pairing.js     the direct computer-to-headset link (PeerJS, loaded only when used)
 sw.js             service worker: offline use and clean updates (network-first, cache fallback)
+js/version.js     the build stamp (number, date), written by scripts/stamp.js (npm run stamp) before each push
+js/build-label.js how the build reads ("Build 213 · 23 Nov 2026 14:05"), and the newer-build check
 assets/ui/        replaceable interface artwork (drafts by scripts/make-ui-assets.js; listed in its README)
 examples/         sample homes (pond-house, apartment: .sh3d + card picture, listed in js/samples.js; colours from scripts/sample-palette.js) and example-home.sh3d (the tests' small fixture), each made by its generator in scripts/ (original content; commit the output)
 js/samples.js     the sample homes the page offers, as data (one entry per home)

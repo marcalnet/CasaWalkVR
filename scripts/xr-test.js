@@ -361,6 +361,11 @@ check('welcome notes sit under the two cards on the empty page', wl.shown && wl.
 await shot('welcome');
 await page.goto(`http://localhost:${PORT}/?test&model=${encodeURIComponent(fixture)}`);
 check('model loads', await page.evaluate(() => window.__casawalk.ready));
+{
+	await frames(10);
+	const b = await page.evaluate(() => { const el = document.getElementById('build'), r = el.getBoundingClientRect(); return { text: el.textContent, left: r.left, bottom: innerHeight - r.bottom, button: !!el.querySelector('button') }; });
+	check('the page shows its build, small, in the bottom-left corner (no Reload: it is the latest)', /^Build \d+ · \d{1,2} [A-Z][a-z]{2} \d{4} \d\d:\d\d$/.test(b.text) && b.left < 40 && b.bottom < 40 && !b.button, JSON.stringify(b));
+}
 await frames(5);
 check('welcome notes go once a model is open', (await welcome()).shown === false);
 const enterVR = page.locator('#xr-buttons button', { hasText: 'Enter VR' });
@@ -1590,6 +1595,8 @@ await pressWrist('down');
 {
 	const hp = await page.evaluate(() => { const x = window.__casawalk.xr; return { card: x.ui.help === x.help.dollhouse && x.help.dollhouse.mesh.visible, beside: x.help.dollhouse.mesh.parent === x.ui.wrist.cross && x.help.dollhouse.mesh.position.x > 0.15, menu: x.ui.wrist.open, meta: x.help.dollhouse.footer.lines.some((l) => /Meta button/.test(l)) }; });
 	await shot('dollhouse-help');
+	const tag = await page.evaluate(() => { const t = window.__casawalk.xr.ui.buildTag; return { shown: !!t?.mesh.visible, text: t?.text ?? '' }; });
+	check('Help shows the build under its card', tag.shown && /^Build \d+/.test(tag.text), JSON.stringify(tag));
 	await click('right', 'b-button');
 	check('Help: the controls card beside the wrist menu (on its right; the menu stays), with "the Meta button"; B closes both', hp.card && hp.beside && hp.menu && hp.meta && !(await state()).wrist && !(await page.evaluate(() => window.__casawalk.xr.ui.help)), JSON.stringify(hp));
 }

@@ -170,6 +170,10 @@ A model file and a pasted link are untrusted input: the viewer will be shared, a
 - **A** (X when swapped), or the orb: the wrist menu, as at the scale model, with a flat **Inside** plate on the right (the room's name: you are as deep as it goes) and **← Back** ("Scale model") on the left; no Exit VR inside (the Meta button, or Back twice). Settings opens the inside board straight ahead, within reach (Levels greyed out "Scale model only").
 - **Photo**: no Photo key between milestones C0 and D (the user's decision); the street camera brings photos back in D. The capture code stays (`js/photo.js`, `XRExperience.capturePhoto()`): the view rendered once more from the head (roll removed), without the interface (the photo-hiding list), kept in the page's photo roll and saved from the page after VR. 
 
+## Which build is running
+
+The page shows its build in the bottom-left corner, small and quiet: "Build 213 · 23 Nov 2026 14:05" (the user beta-tests every build and must tell the latest from a cached copy). `js/version.js` holds a build number (the commit count once committed: a commit can't hold its own hash) and the time it was stamped; `scripts/stamp.js` (`npm run stamp`) writes it right before committing what is pushed. No build step, nothing from an outside service. The page asks the site for `js/version.js` (never from the cache) on load and whenever it comes back into view; when the site's number is higher, a small orange **A newer version is available · Reload** button appears beside the label. In the headset, Help shows the same stamp under its card.
+
 ## Design principles (the user's rule for every interface)
 
 The user asked that every interface follow Dieter Rams' ten principles of good design (number 8 is read as "consistent in every detail"). Here is what each means in this app, with "Experience and controls" and phase 17 as the cases:

@@ -22,7 +22,9 @@
 // 'ui'), so the mode leaves those alone.
 
 import * as THREE from 'three';
-import { WelcomeCard } from './panel.js';
+import { WelcomeCard, Label } from './panel.js';
+import { BUILD } from './version.js';
+import { buildLabel } from './build-label.js';
 import { yawOf } from './xr-input.js';
 import { TOUCH, touchState, stepTouch, reset as resetTouch, ringSize } from './touch.js';
 import { KEY, BOARD, GUIDE } from './theme.js';
@@ -243,6 +245,7 @@ export class XRUI {
 	hideHelp() {
 		if (this.help) this.help.mesh.visible = false;
 		this.help = null;
+		if (this.buildTag) this.buildTag.mesh.visible = false;
 	}
 
 	/** Closes everything: board, help, the wrist menu (moving between layers). */
@@ -275,6 +278,11 @@ export class XRUI {
 		card.mesh.rotation.set(0, 0, 0);
 		card.mesh.visible = true;
 		this.help = card;
+		// Which build is running, small, under the card (the same as the page's, bottom left).
+		if (!this.buildTag) { this.buildTag = new Label({ height: 0.018 }); this.buildTag.set(buildLabel(BUILD)); this.buildTag.mesh.name = 'build'; this.wrist.cross.add(this.buildTag.mesh); this.xr.hideFromPhotos(this.buildTag.mesh); }
+		const h = card.mesh.geometry.parameters.height * card.mesh.scale.y;
+		this.buildTag.mesh.position.copy(card.mesh.position).y -= h / 2 + 0.016;
+		this.buildTag.mesh.visible = true;
 		this.feel(null, 'open');
 	}
 

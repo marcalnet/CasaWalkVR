@@ -156,6 +156,13 @@
 		body.dark-sky #stats { color: #f1f4f7; text-shadow: 0 0 3px rgba(0,0,0,.9), 0 0 8px rgba(0,0,0,.6); }
 		body.dark-sky #stats .warn { color: #ff9a90; }
 
+		/* ---- The build (js/version.js), small and quiet in the bottom-left corner:
+		   which one is running, and a Reload button when a newer one is live. ---- */
+		#build { position: fixed; bottom: 6px; left: calc(var(--gap) + 2px); font-size: 11px; color: #5d6873; font-variant-numeric: tabular-nums;
+			text-shadow: 0 0 3px rgba(255,255,255,.9); z-index: 1; }
+		#build button { margin-left: 8px; font: inherit; font-weight: 600; color: #fff; background: #e07a1f; border: 0; border-radius: 10px; padding: 3px 10px; cursor: pointer; }
+		body.dark-sky #build { color: #c9d0d6; text-shadow: 0 0 3px rgba(0,0,0,.9); }
+
 		/* Narrow windows (a phone, or a small Quest Browser window): there is
 		   no room for two cards side by side, so the display card goes to the
 		   bottom, where Enter VR stays on screen, and the files card stops above it. */
@@ -163,6 +170,7 @@
 			#view { top: auto; bottom: var(--gap); left: var(--gap); width: auto; }
 			#panel { max-height: calc(100vh - var(--view-h) - 3 * var(--gap)); }
 			#stats { bottom: calc(var(--view-h) + 2 * var(--gap)); max-width: calc(100vw - 2 * var(--gap)); }
+			#build { bottom: calc(var(--view-h) + 2 * var(--gap)); }
 			#panel:not(.collapsed) ~ #stats { display: none; } /* no room while the files card is open */
 			button.xr { min-height: 56px; }
 		}
@@ -326,6 +334,9 @@
 		</div>
 		<div id="xr-buttons"></div>
 	</aside>
+
+	<!-- Which build is running (bottom left). -->
+	<div id="build"></div>
 
 	<!-- Technical details of the open model, over the bottom right of the view. -->
 	<div id="stats" aria-live="polite"></div>

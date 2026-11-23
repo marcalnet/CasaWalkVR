@@ -198,6 +198,7 @@ Optional extras:
 ```bash
 npm run fixtures       # download two public Sweet Home 3D example homes as more test files
 npm run example        # rebuild examples/example-home.sh3d, the tests' small fixture (after editing scripts/make-example.js)
+npm run stamp          # stamp the build (js/version.js) before committing what you push: the page shows it bottom left
 npm run samples        # rebuild the sample homes in examples/ (scripts/make-pond-house.js, make-apartment.js; colours from scripts/sample-palette.js)
 npm run ui-assets      # redraw the draft interface artwork in assets/ui/
 npm run vendor         # copy three.js, three-mesh-bvh, fflate and the font into vendor/ (after changing versions)
@@ -260,6 +261,7 @@ js/pairing.js     the direct computer-to-headset link (PeerJS)
 js/sh3d.js        SH3D parser and scene builder (no DOM; Node-testable)
 js/formats.js     zip / OBJ / GLB / DAE / 3DS loading, unit detection
 sw.js             service worker: offline use, and no mix of old and new files after an update
+js/version.js     the build stamp shown bottom left (scripts/stamp.js)
 examples/         sample homes (Pond House, Apartment: scripts/make-*.js, one palette in scripts/sample-palette.js) and the tests' small example home (scripts/make-example.js); original content
 js/samples.js     the sample homes the page offers (one entry per home)
 vendor/           three.js, three-mesh-bvh, fflate, PeerJS, the Kalam font and the WebXR generic hand model (with licences)

@@ -17,6 +17,8 @@ import { readSetting, writeSetting } from './settings.js';
 import { listRecents, getRecent, addRecent, removeRecent, getLastLink, setLastLink, addPhoto, listPhotos, getPhoto, removePhoto, markPhotoSaved } from './storage.js';
 import { saveFile } from './photo.js';
 import { SAMPLES, sampleById } from './samples.js';
+import { BUILD } from './version.js';
+import { buildLabel, buildNumberIn } from './build-label.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -934,6 +936,29 @@ window.addEventListener('drop', async (e) => {
 	if (!files) { setStatus('Those files could not be read.', true); return; }
 	load(files, picked.length === 1 ? picked[0].name : `${picked.length} files`, { type: 'file' }).catch(() => {});
 });
+
+// Which build is running, bottom left (js/version.js, stamped before each push),
+// and a Reload button when the site has a newer one than this page (a cached
+// copy): asked for on load and whenever the page comes back into view.
+{
+	const el = $('build');
+	el.textContent = buildLabel(BUILD);
+	el.title = 'The build of CasaWalk this page is running';
+	const check = async () => {
+		try {
+			const text = await (await fetch('js/version.js', { cache: 'no-store' })).text();
+			const live = buildNumberIn(text);
+			if (live === null || live <= BUILD.number || el.querySelector('button')) return;
+			const b = document.createElement('button');
+			b.type = 'button';
+			b.textContent = 'A newer version is available · Reload';
+			b.addEventListener('click', () => location.reload());
+			el.append(b);
+		} catch { /* offline: nothing to say */ }
+	};
+	check();
+	document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') check(); });
+}
 
 // Offline use and clean updates (sw.js). Only on the real site (https), or
 // with ?sw while developing, so local tests always see the files on disk.
