@@ -824,7 +824,8 @@ check('B closes the board', (await state()).menu === null);
 	check('bare hands: a closed hand on the model holds it; let go in the air it floats', held === 'hand' && floating.floating && floating.line && floating.lifted, JSON.stringify({ held, ...floating, at: grabAt.map((v) => +v.toFixed(2)) }));
 	await shot('hands-floating');
 	await page.evaluate(() => { window.__device.hands.right.position.set(0.5, 1.0, 0.3); window.__device.hands.left.position.set(-0.5, 1.0, 0.3); });
-	await page.waitForFunction(() => !window.__casawalk.xr.modes.dollhouse.floating, null, { timeout: 9000, polling: 'raf' }).catch(() => {});
+	// (4 s of the app's own time, then the glide: a heavy home runs the emulator slowly, so allow plenty of real time.)
+	await page.waitForFunction(() => !window.__casawalk.xr.modes.dollhouse.floating, null, { timeout: 30000, polling: 'raf' }).catch(() => {});
 	const homeAgain = await page.evaluate(() => { const x = window.__casawalk.xr, d = x.modes.dollhouse; return { floating: !!d.floating, level: d.level(), y: +d.doll.pos.y.toFixed(3) }; });
 	check('with hands away, the floating model goes home by itself and settles, level', !homeAgain.floating && homeAgain.level && Math.abs(homeAgain.y - 0.604) < 0.002, JSON.stringify(homeAgain));
 	// Real gestures again for the rest of the run.
@@ -903,6 +904,7 @@ check('at the scale model, B never leaves VR', (await state()).presenting && (aw
 		doors.shown && doors.iw > 0.25 && doors.bw <= doors.iw / 2 && doors.gap >= 0.02 && doors.ahead < 0.45 && doors.below > 0.55 && doors.below < 0.75 && doors.topDown > doors.modelDown, JSON.stringify(doors));
 	// Seated: the doors stay at waist height (65 cm below the eyes).
 	await page.evaluate(() => window.__device.position.set(0, 1.1, 0)); await frames(10);
+	await page.waitForFunction(() => { const x = window.__casawalk.xr, d = x.modes.dollhouse; return Math.abs(x.stage.worldToLocal(x.headWorld()).y - d.doorEyes) < 0.08; }, null, { timeout: 5000, polling: 'raf' }).catch(() => {});
 	const seated = await page.evaluate(() => { const x = window.__casawalk.xr, V = x.rig.position.constructor; return +(x.headWorld().y - x.modes.dollhouse.doors.keys.get('in').face.getWorldPosition(new V()).y).toFixed(2); });
 	check('seated, the doors are still at waist height', seated > 0.55 && seated < 0.75, JSON.stringify({ seated }));
 	await page.evaluate(() => window.__device.position.set(0, 1.6, 0)); await frames(10);
