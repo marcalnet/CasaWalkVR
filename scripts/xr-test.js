@@ -364,6 +364,13 @@ check('model loads', await page.evaluate(() => window.__casawalk.ready));
 {
 	await frames(10);
 	const b = await page.evaluate(() => { const el = document.getElementById('build'), r = el.getBoundingClientRect(); return { text: el.textContent, left: r.left, bottom: innerHeight - r.bottom, button: !!el.querySelector('button') }; });
+	// A newer build on the site (the check asks the site, never the cache): the Reload button appears; nothing reloads by itself.
+	await page.route('**/js/version.js', (route) => route.fulfill({ contentType: 'text/javascript', body: 'export const BUILD = { number: 999999, date: \'2030-01-01T00:00:00Z\' };' }));
+	await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+	await page.waitForFunction(() => !!document.querySelector('#build button'), null, { timeout: 5000 }).catch(() => {});
+	const nb = await page.evaluate(() => ({ button: document.querySelector('#build button')?.textContent ?? null, xr: window.__casawalk.xr.newerBuild ?? null }));
+	await page.unroute('**/js/version.js');
+	check('a newer build on the site: "A newer version is available · Reload", and the headset knows', nb.button === 'A newer version is available · Reload' && nb.xr === 999999, JSON.stringify(nb));
 	check('the page shows its build, small, in the bottom-left corner (no Reload: it is the latest)', /^Build \d+ · \d{1,2} [A-Z][a-z]{2} \d{4} \d\d:\d\d$/.test(b.text) && b.left < 40 && b.bottom < 40 && !b.button, JSON.stringify(b));
 }
 await frames(5);
@@ -1596,7 +1603,7 @@ await pressWrist('down');
 	const hp = await page.evaluate(() => { const x = window.__casawalk.xr; return { card: x.ui.help === x.help.dollhouse && x.help.dollhouse.mesh.visible, beside: x.help.dollhouse.mesh.parent === x.ui.wrist.cross && x.help.dollhouse.mesh.position.x > 0.15, menu: x.ui.wrist.open, meta: x.help.dollhouse.footer.lines.some((l) => /Meta button/.test(l)) }; });
 	await shot('dollhouse-help');
 	const tag = await page.evaluate(() => { const t = window.__casawalk.xr.ui.buildTag; return { shown: !!t?.mesh.visible, text: t?.text ?? '' }; });
-	check('Help shows the build under its card', tag.shown && /^Build \d+/.test(tag.text), JSON.stringify(tag));
+	check('Help shows the build under its card, and that a newer version waits (reload after VR)', tag.shown && /^Build \d+/.test(tag.text) && /Newer version: reload after VR$/.test(tag.text), JSON.stringify(tag));
 	await click('right', 'b-button');
 	check('Help: the controls card beside the wrist menu (on its right; the menu stays), with "the Meta button"; B closes both', hp.card && hp.beside && hp.menu && hp.meta && !(await state()).wrist && !(await page.evaluate(() => window.__casawalk.xr.ui.help)), JSON.stringify(hp));
 }

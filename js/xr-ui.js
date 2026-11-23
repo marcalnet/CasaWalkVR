@@ -279,7 +279,9 @@ export class XRUI {
 		card.mesh.visible = true;
 		this.help = card;
 		// Which build is running, small, under the card (the same as the page's, bottom left).
-		if (!this.buildTag) { this.buildTag = new Label({ height: 0.018 }); this.buildTag.set(buildLabel(BUILD)); this.buildTag.mesh.name = 'build'; this.wrist.cross.add(this.buildTag.mesh); this.xr.hideFromPhotos(this.buildTag.mesh); }
+		// (A newer build live on the site: one calm line, here only; reloading is yours to choose, after VR.)
+		if (!this.buildTag) { this.buildTag = new Label({ height: 0.018 }); this.buildTag.mesh.name = 'build'; this.wrist.cross.add(this.buildTag.mesh); this.xr.hideFromPhotos(this.buildTag.mesh); }
+		this.buildTag.set(buildLabel(BUILD) + (this.xr.newerBuild > BUILD.number ? ' · Newer version: reload after VR' : ''));
 		const h = card.mesh.geometry.parameters.height * card.mesh.scale.y;
 		this.buildTag.mesh.position.copy(card.mesh.position).y -= h / 2 + 0.016;
 		this.buildTag.mesh.visible = true;

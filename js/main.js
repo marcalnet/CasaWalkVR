@@ -949,6 +949,7 @@ window.addEventListener('drop', async (e) => {
 			const text = await (await fetch('js/version.js', { cache: 'no-store' })).text();
 			const live = buildNumberIn(text);
 			if (live === null || live <= BUILD.number || el.querySelector('button')) return;
+			xr.newerBuild = live; // (Help in the headset says so too: never a reload by itself)
 			const b = document.createElement('button');
 			b.type = 'button';
 			b.textContent = 'A newer version is available · Reload';
