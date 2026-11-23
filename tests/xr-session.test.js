@@ -513,7 +513,7 @@ test('the marker: hold the trigger and move to draw; the stick press changes col
 	x.tools.take(marker, c);
 	frame();
 	press('right', 'trigger'); frame();
-	for (let i = 0; i < 30; i++) { c.grip.position.x -= 0.01; frame(); }
+	for (let i = 0; i < 30; i++) { c.ray.position.x -= 0.01; frame(); } // (a controller carries its tool along its pointing ray)
 	press('right', 'trigger', false); frame();
 	assert.equal(marker.strokes.length, 1, 'one stroke');
 	assert.ok(marker.strokes[0].n > 5, `drawn along the way: ${marker.strokes[0].n} points`);

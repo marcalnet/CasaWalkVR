@@ -193,16 +193,20 @@ export class ToolFan {
 
 	/** A tool springs into hand c: at the hand, its grip point in the palm. */
 	attach(slot, c) {
-		const xr = this.xr, o = slot.object, at = xr.input.wristOf(c);
+		// A controller carries its tool along its pointing ray (target-ray space), not its grip:
+		// the grip tilts up from where the controller points, and the meter's beam, the
+		// camera's lens and the marker's nib must point where you aim. A bare hand: its wrist.
+		const xr = this.xr, o = slot.object, at = c.isHand ? c.wrist : c.ray;
 		slot.held = true;
 		slot.settled = false;
 		at.add(o);
 		const grip = o.getObjectByName('grip');
 		o.scale.setScalar(1);
 		o.rotation.set(0, 0, 0);
-		// (Controllers: the grip space. Bare hands: the wrist, a little towards the fingers and the palm.)
+		// (Controllers: a little back from the ray's start, at the front of the controller, and below it.
+		// Bare hands: the wrist, a little towards the fingers and the palm.)
 		o.position.copy(grip ? grip.position.clone().negate() : new THREE.Vector3());
-		if (c.isHand) o.position.add(new THREE.Vector3(0, -0.03, -0.07));
+		o.position.add(c.isHand ? new THREE.Vector3(0, -0.03, -0.07) : new THREE.Vector3(0, -0.025, 0.04));
 		o.visible = true;
 		const s0 = slot.object.userData.fanScale;
 		xr.tweens.start({ duration: 0.3, ease: ease.spring, step: (k) => o.scale.setScalar(s0 + (1 - s0) * k), done: () => { slot.settled = true; } });
