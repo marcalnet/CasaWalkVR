@@ -493,7 +493,7 @@ test('the laser meter: two triggers measure a line in model space; A undoes, hol
 	assert.equal(meter.m.lines.length, 1);
 	assert.equal(meter.m.lines[0].label, '1.60 m', 'real metres, whatever the zoom');
 	assert.ok(s < 0.2, 'the scale model is small');
-	assert.equal(x.tools.annotations.children.filter((o) => o.name === 'measurement').length, 1, 'drawn in model space');
+	assert.ok(x.tools.annotations.getObjectByName('measurements'), 'drawn in model space');
 	meter.secondary(c, 'press');
 	assert.equal(meter.m.lines.length, 0, 'A: undo');
 	meter.hit = at(0); meter.trigger(c, 'down'); meter.hit = at(1); meter.trigger(c, 'down');
@@ -543,4 +543,26 @@ test('Vision Pro look-and-pinch: a pinch on a room steps inside; inside, on the 
 	const h2 = x.headWorld();
 	assert.equal(act(x, h2, new THREE.Vector3(0, -1, -0.25)), 'teleport', 'the floor just ahead');
 	assert.equal(act(x, h2, new THREE.Vector3(0, 1, 0)), null, 'the ceiling: nothing');
+});
+
+test('20 measurements and 20 strokes cost a handful of draw calls', async () => {
+	const { x, frame } = await setup();
+	const meter = x.fan.meter, marker = x.fan.marker, c = x.input.hands.right;
+	frame();
+	const at = (mx, my) => x.centerer.localToWorld(new THREE.Vector3(mx, my, 0));
+	for (let i = 0; i < 20; i++) { meter.hit = at(0, i * 0.1); meter.trigger(c, 'down'); meter.hit = at(1 + i * 0.05, i * 0.1 + 0.3); meter.trigger(c, 'down'); }
+	x.tools.take(marker, c);
+	for (let k = 0; k < 20; k++) {
+		if (k % 5 === 0) marker.nextInk();
+		marker.trigger(c, 'down');
+		for (let i = 0; i <= 8; i++) { marker.object.position.set(i * 0.01, k * 0.02, 0); marker.object.updateMatrixWorld(true); marker.update(1 / 72); }
+		marker.trigger(c, 'up');
+	}
+	x.tools.putBack();
+	frame();
+	let meshes = 0;
+	x.tools.annotations.traverse((o) => { if (o.isMesh && o.visible) meshes++; });
+	assert.equal(meter.m.lines.length, 20);
+	assert.equal(marker.strokes.length, 20);
+	assert.ok(meshes <= 6, `all of it in ${meshes} meshes (lines, labels, one per ink)`);
 });

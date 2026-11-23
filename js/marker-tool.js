@@ -20,6 +20,9 @@ const RADIUS = 0.004; // metres, to the eye when drawn
 const STEP = 0.004; // metres, to the eye: a new point every this much movement
 const SIDES = 6; // the tube's sides
 const MAX_POINTS = 1500; // per stroke (a long stroke ends and a new one begins)
+const START_POINTS = 64; // a stroke's buffers start this big and double when full
+const JUMP = 0.3; // metres: the nib moving more than this in a frame ends the stroke
+const RIG_JUMP = 0.1; // metres: the rig moving more than this in a frame (a teleport, a step) ends it
 
 export class MarkerTool {
 	/** xr: the XRExperience. */
@@ -35,7 +38,8 @@ export class MarkerTool {
 		this.drawing = null; // the stroke being drawn
 		this.held = null;
 		this.materials = INKS.map((k) => new THREE.MeshLambertMaterial({ color: MARKER_INKS[k], name: `ink-${k}` }));
-		this._p = new THREE.Vector3();
+		this._p = new THREE.Vector3(); this._q = new THREE.Vector3(); this._d = new THREE.Vector3(); this._u = new THREE.Vector3(); this._v = new THREE.Vector3(); this._up = new THREE.Vector3();
+		this.merged = INKS.map(() => null); // the finished strokes, one mesh per colour
 	}
 
 	take(c) { this.held = c; }
@@ -77,53 +81,93 @@ export class MarkerTool {
 
 	startStroke() {
 		this.endStroke();
-		const n = MAX_POINTS * SIDES;
 		const geo = new THREE.BufferGeometry();
-		geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(n * 3), 3).setUsage(THREE.DynamicDrawUsage));
-		geo.setAttribute('normal', new THREE.BufferAttribute(new Float32Array(n * 3), 3).setUsage(THREE.DynamicDrawUsage));
-		const idx = new Uint32Array((MAX_POINTS - 1) * SIDES * 6);
-		let k = 0;
-		for (let i = 0; i < MAX_POINTS - 1; i++) for (let s = 0; s < SIDES; s++) {
-			const a = i * SIDES + s, b = i * SIDES + (s + 1) % SIDES, c = a + SIDES, d = b + SIDES;
-			idx[k++] = a; idx[k++] = c; idx[k++] = b; idx[k++] = b; idx[k++] = c; idx[k++] = d;
-		}
-		geo.setIndex(new THREE.BufferAttribute(idx, 1));
-		geo.setDrawRange(0, 0);
 		const mesh = new THREE.Mesh(geo, this.materials[this.ink]);
 		mesh.name = 'stroke';
 		mesh.frustumCulled = false;
 		this.xr.tools.annotations.add(mesh);
-		this.drawing = { mesh, geo, n: 0, last: null, r: this.radius(), prevDir: null };
-		this.strokes.push(this.drawing);
+		this.drawing = { mesh, geo, ink: this.ink, n: 0, cap: 0, last: null, r: this.radius() };
+		this.grow(this.drawing, START_POINTS);
 		if (this.xr.soundLevel !== 'off') this.xr.sound.play('squeak', 0.6);
 	}
 
+	/**
+	 * The stroke being drawn grows in place: its buffers start small and double
+	 * when full (no large preallocation; the tester's measurement: 430 KB a
+	 * stroke), and each new ring uploads only itself.
+	 */
+	grow(s, cap) {
+		const pos = new Float32Array(cap * SIDES * 3), nor = new Float32Array(cap * SIDES * 3);
+		if (s.cap) { pos.set(s.geo.attributes.position.array.subarray(0, s.n * SIDES * 3)); nor.set(s.geo.attributes.normal.array.subarray(0, s.n * SIDES * 3)); }
+		s.geo.setAttribute('position', new THREE.BufferAttribute(pos, 3).setUsage(THREE.DynamicDrawUsage));
+		s.geo.setAttribute('normal', new THREE.BufferAttribute(nor, 3).setUsage(THREE.DynamicDrawUsage));
+		s.geo.setIndex(new THREE.BufferAttribute(tubeIndex(cap), 1));
+		s.geo.setDrawRange(0, Math.max(0, s.n - 1) * SIDES * 6);
+		s.cap = cap;
+	}
+
+	/** The stroke being drawn is finished: it joins its colour's one mesh (a dot too small to see is dropped). */
 	endStroke() {
 		const s = this.drawing;
 		this.drawing = null;
-		if (s && s.n < 2) this.removeStroke(s); // (a dot too small to see: no stroke)
+		if (!s) return;
+		s.mesh.removeFromParent();
+		if (s.n >= 2) {
+			const n = s.n * SIDES * 3;
+			this.strokes.push({ ink: s.ink, n: s.n, pos: s.geo.attributes.position.array.slice(0, n), nor: s.geo.attributes.normal.array.slice(0, n) });
+			this.rebuild(s.ink);
+		}
+		s.geo.dispose();
 	}
 
-	/** Adds a ring of the tube at model point p. */
+	/** Rebuilds one colour's mesh from its finished strokes: one draw call per colour. */
+	rebuild(ink) {
+		const mine = this.strokes.filter((t) => t.ink === ink);
+		let old = this.merged[ink];
+		if (old) { old.removeFromParent(); old.geometry.dispose(); this.merged[ink] = null; }
+		if (!mine.length) return;
+		const points = mine.reduce((a, t) => a + t.n, 0);
+		const pos = new Float32Array(points * SIDES * 3), nor = new Float32Array(points * SIDES * 3);
+		const idx = [];
+		let at = 0;
+		for (const t of mine) {
+			pos.set(t.pos, at * SIDES * 3); nor.set(t.nor, at * SIDES * 3);
+			const base = at * SIDES;
+			for (let i = 0; i < t.n - 1; i++) for (let k = 0; k < SIDES; k++) {
+				const a = base + i * SIDES + k, b = base + i * SIDES + (k + 1) % SIDES, c = a + SIDES, d = b + SIDES;
+				idx.push(a, c, b, b, c, d);
+			}
+			at += t.n;
+		}
+		const geo = new THREE.BufferGeometry();
+		geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+		geo.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
+		geo.setIndex(points * SIDES > 65535 ? new THREE.Uint32BufferAttribute(idx, 1) : new THREE.Uint16BufferAttribute(idx, 1));
+		geo.computeBoundingSphere();
+		const mesh = new THREE.Mesh(geo, this.materials[ink]);
+		mesh.name = `strokes-${INKS[ink]}`;
+		this.xr.tools.annotations.add(mesh);
+		this.merged[ink] = mesh;
+	}
+
+	/** Adds a ring of the tube at model point p (reused vectors: nothing allocated). */
 	addPoint(s, p) {
-		if (s.n >= MAX_POINTS) { this.startStroke(); return; }
-		const dir = s.last ? p.clone().sub(s.last).normalize() : new THREE.Vector3(0, 0, 1);
+		if (s.n >= MAX_POINTS) { const ink = this.ink; this.endStroke(); this.ink = ink; this.startStroke(); return; }
+		if (s.n >= s.cap) this.grow(s, Math.min(MAX_POINTS, s.cap * 2));
+		const dir = this._d.copy(p).sub(s.last).normalize();
 		if (s.n === 1) this.ring(s, 0, s.last, dir); // (the first ring, now its direction is known)
-		const up = Math.abs(dir.y) < 0.9 ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(1, 0, 0);
-		const u = new THREE.Vector3().crossVectors(dir, up).normalize(), v = new THREE.Vector3().crossVectors(dir, u);
-		s.u = u; s.v = v;
 		this.ring(s, s.n, p, dir);
+		const from = (s.n === 1 ? 0 : s.n) * SIDES * 3, count = (s.n === 1 ? 2 : 1) * SIDES * 3;
 		s.n++;
-		s.last = p.clone();
-		if (s.n >= 2) s.geo.setDrawRange(0, (s.n - 1) * SIDES * 6);
-		s.geo.attributes.position.needsUpdate = s.geo.attributes.normal.needsUpdate = true;
-		s.geo.computeBoundingSphere();
+		s.last.copy(p);
+		s.geo.setDrawRange(0, (s.n - 1) * SIDES * 6);
+		for (const a of [s.geo.attributes.position, s.geo.attributes.normal]) { a.clearUpdateRanges?.(); a.addUpdateRange?.(from, count); a.needsUpdate = true; }
 	}
 
 	ring(s, i, p, dir) {
 		const pos = s.geo.attributes.position.array, nor = s.geo.attributes.normal.array;
-		const up = Math.abs(dir.y) < 0.9 ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(1, 0, 0);
-		const u = new THREE.Vector3().crossVectors(dir, up).normalize(), v = new THREE.Vector3().crossVectors(dir, u);
+		const up = Math.abs(dir.y) < 0.9 ? this._up.set(0, 1, 0) : this._up.set(1, 0, 0);
+		const u = this._u.crossVectors(dir, up).normalize(), v = this._v.crossVectors(dir, u);
 		for (let k = 0; k < SIDES; k++) {
 			const a = (k / SIDES) * Math.PI * 2, cx = Math.cos(a), cy = Math.sin(a);
 			const nx = u.x * cx + v.x * cy, ny = u.y * cx + v.y * cy, nz = u.z * cx + v.z * cy;
@@ -133,44 +177,55 @@ export class MarkerTool {
 		}
 	}
 
-	removeStroke(s) {
-		s.mesh.removeFromParent();
-		s.geo.dispose();
-		const i = this.strokes.indexOf(s);
-		if (i >= 0) this.strokes.splice(i, 1);
-	}
-
+	/** Undo: the stroke being drawn, else the last finished one. */
 	undo() {
-		if (this.drawing) this.endStroke();
-		const s = this.strokes.pop();
-		if (!s) return false;
-		this.strokes.push(s);
-		this.removeStroke(s);
+		if (this.drawing) { const s = this.drawing; this.drawing = null; s.mesh.removeFromParent(); s.geo.dispose(); return true; }
+		const t = this.strokes.pop();
+		if (!t) return false;
+		this.rebuild(t.ink);
 		return true;
 	}
 
 	clear() {
-		this.drawing = null;
+		if (this.drawing) { this.drawing.mesh.removeFromParent(); this.drawing.geo.dispose(); this.drawing = null; }
 		const had = this.strokes.length > 0;
-		while (this.strokes.length) this.removeStroke(this.strokes[this.strokes.length - 1]);
+		this.strokes.length = 0;
+		for (let i = 0; i < INKS.length; i++) this.rebuild(i);
 		return had;
 	}
 
 	/** Once a frame while held: the nib draws. */
 	update(dt) {
-		const s = this.drawing;
+		const s = this.drawing, xr = this.xr;
+		// A jump ends the stroke, so it never draws a line across it (the tester's review): a
+		// teleport's fade, stepping inside or back, a snap turn or a thumb step (the rig turns or
+		// moves at once), the nib jumping more than JUMP in a frame, or a bare hand no longer tracked.
+		const rig = xr.rig;
+		const moved = rig && this._rig && (Math.abs(rig.rotation.y - this._rig.yaw) > 0.01 || rig.position.distanceTo(this._rig.pos) > RIG_JUMP);
+		if (rig) { this._rig ??= { yaw: 0, pos: new THREE.Vector3() }; this._rig.yaw = rig.rotation.y; this._rig.pos.copy(rig.position); }
 		if (!s || !this.held) return;
-		// A jump (a teleport's fade, stepping inside or back) or a hand no longer tracked ends the
-		// stroke: it never draws a line across the jump (the tester's finding).
-		const xr = this.xr;
-		if (xr.layerFx || xr.modes?.walk?.fade || (this.held.isHand && !this.held.touch?.tracked)) { this.endStroke(); return; }
+		if (xr.layerFx || xr.modes?.walk?.fade || moved || (this.held.isHand && !this.held.touch?.tracked)) { this.endStroke(); return; }
 		this.object.updateMatrixWorld(true);
-		const p = this.xr.centerer.worldToLocal(this.tip.getWorldPosition(this._p).clone());
-		const step = STEP / Math.max(1e-6, this.xr.anchor.scale.x);
-		if (!s.last || p.distanceTo(s.last) >= step) {
-			if (s.n === 0) { s.last = p.clone(); s.n = 1; return; }
+		const world = this.tip.getWorldPosition(this._p);
+		if (this._nib && world.distanceTo(this._nib) > JUMP) { this._nib.copy(world); this.endStroke(); return; }
+		(this._nib ??= new THREE.Vector3()).copy(world);
+		const p = xr.centerer.worldToLocal(this._q.copy(world));
+		const step = STEP / Math.max(1e-6, xr.anchor.scale.x);
+		if (!s.last) { s.last = p.clone(); s.n = 1; return; }
+		if (p.distanceTo(s.last) >= step) {
 			this.addPoint(s, p);
-			if (this.held?.isController && s.n % 6 === 0) this.xr.haptics.play(this.held, 'tick');
+			if (this.held?.isController && s.n % 6 === 0) xr.haptics.play(this.held, 'tick');
 		}
 	}
+}
+
+/** The triangle list of a tube of `points` rings (SIDES each). */
+function tubeIndex(points) {
+	const idx = new Uint32Array(Math.max(0, points - 1) * SIDES * 6);
+	let k = 0;
+	for (let i = 0; i < points - 1; i++) for (let s = 0; s < SIDES; s++) {
+		const a = i * SIDES + s, b = i * SIDES + (s + 1) % SIDES, c = a + SIDES, d = b + SIDES;
+		idx[k++] = a; idx[k++] = c; idx[k++] = b; idx[k++] = b; idx[k++] = c; idx[k++] = d;
+	}
+	return idx;
 }
