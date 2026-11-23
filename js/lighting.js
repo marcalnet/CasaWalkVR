@@ -63,6 +63,8 @@ export function sunDirection(compass, time) {
 		.multiplyScalar(Math.cos(elevation)).add(new THREE.Vector3(0, Math.sin(elevation), 0)).normalize();
 }
 
+const CEILING_LIFT = 0.22; // ceilings: this much of their own colour added as emission (lifts the muddy taupe)
+
 export class Lighting {
 	constructor(scene, renderer) {
 		this.scene = scene;
@@ -103,14 +105,22 @@ export class Lighting {
 		const group = new THREE.Group();
 		group.name = 'lamps';
 		const core = new THREE.MeshBasicMaterial({ color: 0xfff3d6 });
-		const halo = new THREE.MeshBasicMaterial({ color: 0xffb968, transparent: true, opacity: 0.2, blending: THREE.AdditiveBlending, depthWrite: false });
+		// The halo: a soft glow, brightest at its middle and fading to nothing at its edge (no
+		// hard-edged ball), smaller than before (at eye level the glows read too large: the
+		// user's Quest 2 note), and gone from inside it (front faces only).
+		const halo = new THREE.ShaderMaterial({
+			uniforms: { color: { value: new THREE.Color(0xffb968) }, strength: { value: 0.55 } },
+			vertexShader: 'varying vec3 vN; varying vec3 vV; void main() { vec4 p = modelViewMatrix * vec4(position, 1.0); vN = normalize(normalMatrix * normal); vV = normalize(-p.xyz); gl_Position = projectionMatrix * p; }',
+			fragmentShader: 'uniform vec3 color; uniform float strength; varying vec3 vN; varying vec3 vV; void main() { float f = max(dot(normalize(vN), normalize(vV)), 0.0); gl_FragColor = vec4(color * pow(f, 3.0) * strength, 1.0); }',
+			transparent: true, blending: THREE.AdditiveBlending, depthWrite: false,
+		});
 		for (const storey of new Set(lamps.map((l) => l.storey))) {
 			const mine = lamps.filter((l) => l.storey === storey);
 			const spheres = (scale, min) => mergeGeometries(mine.map((l) => {
 				const r = Math.max(l.radius * scale, min);
 				return new THREE.SphereGeometry(r, 14, 10).translate(l.position.x, l.position.y, l.position.z);
 			}));
-			for (const [geo, mat, order] of [[spheres(1, 0.02), core, 0], [spheres(4, 0.12), halo, 2]]) {
+			for (const [geo, mat, order] of [[spheres(1, 0.02), core, 0], [spheres(2.5, 0.07), halo, 2]]) {
 				const m = new THREE.Mesh(geo, mat);
 				m.userData.storey = storey;
 				m.renderOrder = order;
@@ -123,6 +133,32 @@ export class Lighting {
 	}
 
 	showLamps() { if (this.lamps) this.lamps.visible = this.time === 'night' || this.time === 'sunset'; }
+
+	/**
+	 * Ceilings face down, so the sky light gives them its dull ground colour: at
+	 * eye level they read a muddy taupe (the user's Quest 2 note). A small lift
+	 * of their own (a little emission of their colour), on their own copy of
+	 * the material, so walls and floors that share it don't change.
+	 */
+	liftCeilings(layer, amount = CEILING_LIFT) {
+		if (!layer) return;
+		const copies = new Map();
+		layer.traverse((m) => {
+			if (!m.isMesh) return;
+			const lift = (mat) => {
+				if (!mat?.emissive) return mat;
+				if (!copies.has(mat)) {
+					const c = mat.clone();
+					c.emissive.copy(mat.color).multiplyScalar(amount);
+					if (mat.map) c.emissiveMap = mat.map;
+					c.userData = { ...mat.userData, ceilingLift: amount };
+					copies.set(mat, c);
+				}
+				return copies.get(mat);
+			};
+			m.material = Array.isArray(m.material) ? m.material.map(lift) : lift(m.material);
+		});
+	}
 
 	/** Something that casts shadows was shown or hidden: render the shadow map again. */
 	refresh() {

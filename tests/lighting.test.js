@@ -31,3 +31,16 @@ test('sun direction follows the compass north', () => {
 	assert.ok(sunDirection(c, 'morning').z > 0.3);
 	assert.ok(Math.abs(sunDirection(c, 'night').length() - 1) < 1e-9);
 });
+
+test('ceilings get a small lift of their own; walls sharing the material keep theirs', async () => {
+	const THREE = await import('three');
+	const { Lighting } = await import('../js/lighting.js');
+	const shared = new THREE.MeshLambertMaterial({ color: 0xbbaa99 });
+	const wall = new THREE.Mesh(new THREE.BoxGeometry(), shared);
+	const ceiling = new THREE.Mesh(new THREE.BoxGeometry(), shared);
+	const layer = new THREE.Group(); layer.add(ceiling);
+	Lighting.prototype.liftCeilings.call({}, layer, 0.2);
+	assert.notEqual(ceiling.material, shared, 'the ceiling has its own copy');
+	assert.equal(wall.material.emissive.getHex(), 0x000000, 'the wall is unchanged');
+	assert.ok(ceiling.material.emissive.r > 0.05, 'the ceiling glows a little in its own colour');
+});

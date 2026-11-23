@@ -15,6 +15,7 @@
 //               the model exactly.
 
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 const RADIUS = 0.2; // body radius, metres: a doorway needs 0.4 m clear
 const LOW = 0.4; // lowest sphere, above the feet: steps and thresholds don't block
@@ -164,14 +165,26 @@ export class SeeThrough {
 			colorWrite: false, depthWrite: true, transparent: true, // transparent: in the transparent list, ordered by renderOrder
 			polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1, // a hair behind, so the wall's own colour passes LessEqual
 		});
-		for (const d of this.depthMeshes ?? []) d.removeFromParent();
-		this.depthMeshes = walls.map((m) => {
-			const d = new THREE.Mesh(m.geometry, this.depthMat); // a child sharing the geometry: storey hiding and transforms follow
+		for (const d of this.depthMeshes ?? []) { d.removeFromParent(); if (d.userData.merged) d.geometry.dispose(); }
+		// One depth mesh per storey (the walls' shapes merged, positions only): one draw call
+		// per storey instead of one per wall mesh. A child of one of that storey's walls, so
+		// hiding a storey hides it; the merged walls share one frame (the model's).
+		const byStorey = new Map();
+		for (const m of walls) {
+			const k = m.userData.storey ?? 0;
+			if (!byStorey.has(k)) byStorey.set(k, []);
+			byStorey.get(k).push(m);
+		}
+		this.depthMeshes = [...byStorey.values()].map((list) => {
+			const shapes = list.map((m) => { const g = new THREE.BufferGeometry(); g.setAttribute('position', m.geometry.attributes.position); if (m.geometry.index) g.setIndex(m.geometry.index); return g; });
+			const merged = shapes.length === 1 ? null : mergeGeometries(shapes.every((g) => g.index) || shapes.every((g) => !g.index) ? shapes : shapes.map((g) => g.index ? g.toNonIndexed() : g), false);
+			const d = new THREE.Mesh(merged ?? list[0].geometry, this.depthMat);
+			d.userData.merged = !!merged;
 			d.name = 'see-through-depth';
 			d.renderOrder = 2;
 			d.visible = false;
 			d.raycast = () => {}; // never a target, a wall to the collider, or a floor
-			m.add(d);
+			list[0].add(d);
 			return d;
 		});
 		for (const m of fade) m.renderOrder = this.walls.has(m) ? 3 : 1;

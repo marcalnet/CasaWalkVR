@@ -245,6 +245,7 @@ async function load(files, label, source = { type: 'file' }) {
 		// Bulbs of the home's lamps: they glow at sunset and at night.
 		const lamps = merged.stats ? lighting.setLamps(result.lamps) : lighting.setLamps(null);
 		if (lamps) current.root.add(lamps);
+		if (merged.stats) lighting.liftCeilings(current.layers.ceilings); // (ceilings read muddy at eye level: a small lift of their own)
 		xr.setModel({ group: current.root, layers: current.layers, lamps, storeys: result.storeys ?? 1, storeyNames: result.storeyNames ?? [], bounds: current.bounds, observer: current.observer, skyColor: result.home?.skyColor, multiLevel: elevations.size > 1, plan: result.plan ?? null });
 		depth.setModel(merged.stats ? current.layers : null); // (not in the ?nomerge debug view)
 		prepareTextures(current.root);

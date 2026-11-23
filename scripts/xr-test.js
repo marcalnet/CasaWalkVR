@@ -575,7 +575,7 @@ await shot('dollhouse-see-through');
 	dc.off = await calls();
 	await seeThrough(true); await restRight(); await frames(5); // (back on for the next steps)
 	const example = /example-home/.test(fixture);
-	check('see-through on: the walls\' depth pass is on (one draw call per wall mesh), furniture keeps its depth', dc.depth > 0 && dc.shown && dc.sofa && dc.on - dc.off <= 2 * dc.depth + 4 && /* (the on-demand shadow map may redraw in that frame too) */ (!example || dc.on < 150), JSON.stringify(dc));
+	check('see-through on: the walls\' depth pass is on (one draw call per storey), furniture keeps its depth', dc.depth > 0 && dc.shown && dc.sofa && dc.on - dc.off <= 2 * dc.depth + 4 && /* (the on-demand shadow map may redraw in that frame too) */ (!example || dc.on < 150), JSON.stringify(dc));
 }
 await seeThrough(false);
 g = await glass();
