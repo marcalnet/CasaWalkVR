@@ -17,7 +17,13 @@ import { buildCamera } from './tool-models.js';
 import { COLOURS, FONT } from './theme.js';
 
 const SCREEN = [192, 128]; // viewfinder pixels
-const SCREEN_EVERY = 0.25; // seconds between viewfinder frames (4 a second)
+// Viewfinder frames: 4 a second, 2 on Quest 2 (a phone GPU); a frame after a slow one is skipped;
+// it draws only out to VIEW_FAR (the tester's measurement: the whole home every 18th frame was a hitch).
+const SLOW_GPU = typeof navigator !== 'undefined' && /Quest 2/.test(navigator.userAgent ?? '');
+const SCREEN_EVERY = SLOW_GPU ? 0.5 : 0.25;
+const VIEW_FAR = 15; // metres
+const SLOW_FRAME = 1 / 60; // seconds: the last frame took longer, skip this viewfinder frame
+const PRINT_PX = [240, 160]; // the print's picture (a 6 x 4 cm card needs no more)
 const LEVEL = THREE.MathUtils.degToRad(4); // held within this of level: the photo is levelled
 const PHOTO = [1920, 1280]; // 3:2
 const FILM_H = 24; // 35 mm film height (mm): vertical field of view from the focal length
@@ -36,7 +42,7 @@ export class StreetCamera {
 		this.screenPoint = this.object.getObjectByName('screen');
 		// The viewfinder: a render target on a plane over the back screen.
 		this.target = typeof document !== 'undefined' ? new THREE.WebGLRenderTarget(...SCREEN) : null;
-		this.view = new THREE.PerspectiveCamera(lensFov(xr.cameraLens ?? 28), SCREEN[0] / SCREEN[1], 0.05, 300);
+		this.view = new THREE.PerspectiveCamera(lensFov(xr.cameraLens ?? 28), SCREEN[0] / SCREEN[1], 0.05, VIEW_FAR);
 		this.screen = new THREE.Mesh(new THREE.PlaneGeometry(0.048, 0.032),
 			new THREE.MeshBasicMaterial({ map: this.target?.texture ?? null, color: this.target ? 0xffffff : 0x5d6873, toneMapped: false }));
 		this.screen.position.copy(this.screenPoint.position).z += 0.0006;
@@ -84,7 +90,7 @@ export class StreetCamera {
 	/** A small print pops out of the camera's top, floats a moment, then drifts back in. */
 	print(blob) {
 		if (typeof createImageBitmap === 'undefined') return;
-		createImageBitmap(blob).then((bmp) => {
+		createImageBitmap(blob, { resizeWidth: PRINT_PX[0], resizeHeight: PRINT_PX[1], resizeQuality: 'medium' }).then((bmp) => {
 			const tex = new THREE.CanvasTexture(bmp);
 			tex.colorSpace = THREE.SRGBColorSpace;
 			const m = new THREE.Mesh(new THREE.PlaneGeometry(0.06, 0.04), new THREE.MeshBasicMaterial({ map: tex, toneMapped: false, side: THREE.DoubleSide }));
@@ -101,7 +107,11 @@ export class StreetCamera {
 		const xr = this.xr;
 		this.t += dt;
 		// The viewfinder: only while held and facing you, a few times a second.
-		if (this.target && this.held && this.t >= SCREEN_EVERY) {
+		// (After a slow frame, wait one more frame; never more than once in a row, or a slow device would never see it.)
+		const slow = (xr.frameDt ?? 0) > SLOW_FRAME && !this.skipped;
+		if (this.target && this.held && this.t >= SCREEN_EVERY && slow) this.skipped = true;
+		else if (this.target && this.held && this.t >= SCREEN_EVERY) {
+			this.skipped = false;
 			this.t = 0;
 			this.object.updateMatrixWorld(true);
 			const back = new THREE.Vector3(0, 0, 1).transformDirection(this.screenPoint.matrixWorld);
@@ -115,6 +125,33 @@ export class StreetCamera {
 			p.m.position.y = 0.035 + 0.05 * up * (1 - back);
 			p.m.scale.setScalar(Math.max(0.01, 1 - back));
 			if (back >= 1) { p.m.removeFromParent(); p.m.geometry.dispose(); p.m.material.dispose(); p.tex.dispose(); p.bmp.close?.(); this.prints.splice(this.prints.indexOf(p), 1); }
+		}
+	}
+
+	/** Removes the prints (the camera went back to the fan: they never stay floating there). */
+	clearPrints() {
+		for (const p of this.prints) { p.m.removeFromParent(); p.m.geometry.dispose(); p.m.material.dispose(); p.tex.dispose(); p.bmp.close?.(); }
+		this.prints.length = 0;
+	}
+
+	/**
+	 * Builds the drawing programs the viewfinder and the photo need, once, behind
+	 * the fade when VR starts: drawing into an image uses other program variants
+	 * than the headset's view, and building them on the first shot froze for
+	 * about 0.2 s (the tester's measurement).
+	 */
+	warm() {
+		const r = this.xr.renderer;
+		if (!this.target || !r.compile || this.warmed) return;
+		this.warmed = true;
+		const halfFloat = r.extensions?.has?.('EXT_color_buffer_half_float') || r.extensions?.has?.('EXT_color_buffer_float');
+		const photo = new THREE.WebGLRenderTarget(4, 4, { type: halfFloat ? THREE.HalfFloatType : THREE.UnsignedByteType, samples: 4 });
+		const previous = r.getRenderTarget();
+		try {
+			for (const t of [this.target, photo]) { r.setRenderTarget(t); r.compile(this.xr.scene, this.view); }
+		} catch (e) { console.warn('Camera warm-up skipped', e); } finally {
+			r.setRenderTarget(previous);
+			photo.dispose();
 		}
 	}
 

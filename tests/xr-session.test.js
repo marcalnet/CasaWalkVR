@@ -458,3 +458,24 @@ test('the tool fan: opens over the raised left hand in view; the right tip touch
 	for (let i = 0; i < 30; i++) frame();
 	assert.ok(!fan.group.visible, 'closed: the hand lowered');
 });
+
+test('bare hands: a thumb tap of the hand holding a tool is its trigger; that hand never teleports', async () => {
+	const { x, go } = await setup();
+	go('in');
+	const c = x.input.hands.right;
+	c.isHand = true; c.isController = false; // (this entry plays a bare hand)
+	const got = [];
+	const tool = { name: 'test', object: new THREE.Group(), trigger: (cc, e) => got.push(e) };
+	x.tools.take(tool, c);
+	c.gestures = [{ type: 'tap' }];
+	x.tools.update(1 / 72);
+	assert.deepEqual(got, ['down', 'up'], 'the tap presses the tool\'s trigger');
+	x.input._gh = [c]; // (this frame's bare hands)
+	c.touch.tracked = true;
+	x.modes.walk.handMoves(1 / 72);
+	assert.equal(x.modes.walk.tele, null, 'the same tap never aims a teleport');
+	x.tools.putBack();
+	c.gestures = [{ type: 'tap' }];
+	x.modes.walk.handMoves(1 / 72);
+	assert.equal(x.modes.walk.tele?.via, 'hand', 'with no tool in that hand, the tap aims');
+});

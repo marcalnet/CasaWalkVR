@@ -1231,7 +1231,10 @@ check('back from walking: eyes at 1.89 m again, gallery shown, lasers on', Math.
 	await page.waitForFunction(() => window.__shot, null, { timeout: 30000 }).catch(() => {});
 	const shot3 = await page.evaluate(() => window.__shot);
 	check('the shutter takes a 3:2 photo (1920 x 1280) from the lens (kept for the page: checked after VR)', Array.isArray(shot3) && shot3[0] === 1920 && shot3[1] === 1280, JSON.stringify(shot3));
-	await frames(20);
+	await frames(6);
+	const pr = await page.evaluate(() => { const c = window.__casawalk.xr.fan.camera; return { warmed: !!c.warmed, far: c.view.far, print: c.prints[0] ? [c.prints[0].bmp.width, c.prints[0].bmp.height] : null }; });
+	check('the camera is warmed up behind the start; the viewfinder sees 15 m; the print is a small picture (240 x 160)', pr.warmed && pr.far === 15 && (!pr.print || (pr.print[0] === 240 && pr.print[1] === 160)), JSON.stringify(pr));
+	await frames(14);
 	await shot('camera-print');
 	await restRight(); await frames(4);
 	await click('right', 'squeeze'); await frames(6);

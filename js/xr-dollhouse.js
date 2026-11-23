@@ -32,6 +32,7 @@ import { roomAt, roomLanding, alongAxis, clearOfWalls, headingOf } from './rooms
 import { Label } from './panel.js';
 import { ease } from './tween.js';
 import { handAimRay } from './gestures.js';
+import { handHoldsTool } from './xr-tools.js';
 import { HAND } from './theme.js';
 
 const DOLLHOUSE_PERSON = 2.0; // metres
@@ -568,11 +569,12 @@ export class Dollhouse {
 			const palm = this.holdPoint(c, p);
 			const d = palm ? box.distanceToPoint(palm) : Infinity;
 			const keyNear = xr.handViews[c.index]?.near;
+			const toolHand = handHoldsTool(xr, c); // (its tap is the tool's trigger: it never aims)
 			for (const e of c.gestures) {
 				if (e.type === 'fist' && !this.grab && d < HOLD_REACH && !busy && !c.fistClaimed) { this.cancelHandAim(); this.startGrab(c); } // (a fist on a fan tool takes the tool)
 				else if ((e.type === 'fistEnd' || e.type === 'lost') && this.grab?.c === c) this.release();
 				else if ((e.type === 'open' || e.type === 'lost') && this.handAim?.c === c) { this.cancelHandAim(); xr.sound.play('release'); }
-				else if (e.type === 'tap' && !keyNear && d > AIM_CLEAR && this.grab?.c !== c) {
+				else if (e.type === 'tap' && !keyNear && !toolHand && d > AIM_CLEAR && this.grab?.c !== c) {
 					if (this.handAim?.c === c) {
 						// (Only on a landing held steady 0.3 s, as inside: the tester's finding.)
 						if (this.handAim.spot && this.handAim.steady >= AIM_STEADY) jump = this.handAim.spot;

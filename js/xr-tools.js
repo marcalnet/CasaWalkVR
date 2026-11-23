@@ -27,6 +27,15 @@
 import * as THREE from 'three';
 
 export const HOLD = 1; // seconds: "hold A for a second"
+// Bare hands (pending the user's decision, one switch): a thumb tap of the hand holding a
+// tool is that tool's trigger (the camera's shutter; later the meter's point, the marker's
+// stroke), and that hand's teleport gesture is off while it holds the tool.
+export const HAND_TAP_IS_TRIGGER = true;
+
+/** True when bare hand c holds a tool whose trigger its thumb tap fires (its teleport is off). */
+export function handHoldsTool(xr, c) {
+	return HAND_TAP_IS_TRIGGER && !!c?.isHand && xr.tools?.held?.c === c;
+}
 const EXTRA = ['stickPress']; // buttons a tool may also own (besides trigger, grip and its second button)
 const NONE = [];
 
@@ -94,6 +103,12 @@ export class ToolSystem {
 		const h = this.held;
 		if (!h?.c.source) return;
 		const { tool, c } = h, s = c.state, key = ToolSystem.secondKey(c);
+		// A bare hand: its thumb tap is the tool's trigger (a press: down, then up).
+		if (c.isHand) {
+			if (HAND_TAP_IS_TRIGGER) for (const e of c.gestures ?? []) if (e.type === 'tap') { tool.trigger?.(c, 'down'); tool.trigger?.(c, 'up'); }
+			tool.update?.(dt, c);
+			return;
+		}
 		if (s.down.trigger) tool.trigger?.(c, 'down');
 		if (s.up.trigger) tool.trigger?.(c, 'up');
 		if (s.down[key]) { h.hold = 0; h.fired = false; }

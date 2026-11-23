@@ -239,6 +239,7 @@ export class XRExperience {
 		this.updateLabels();
 		this.modes.dollhouse.begin();
 		this.setMode('dollhouse', { measure: false }); // no head pose yet: measured below, with the first one
+		this.fan.camera.warm(); // the camera's drawing programs, before anyone takes it (behind the start)
 		this.ui.setWelcome(true); // until the menu is first opened
 		// The floor origin is not necessarily where you stand (it can be
 		// anywhere in your play area), so place the plinth in front of the

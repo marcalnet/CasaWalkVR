@@ -208,6 +208,7 @@ export class ToolFan {
 	detach(slot) {
 		const o = slot.object;
 		slot.held = false;
+		if (slot.tool === this.camera) this.camera.clearPrints(); // (no print left floating over the fan)
 		slot.home.add(o);
 		o.position.set(0, 0, 0);
 		o.rotation.set(0, 0, 0);

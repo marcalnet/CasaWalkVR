@@ -21,6 +21,7 @@ import { WallCollider } from './walls.js';
 import { UP, DOWN, worldNormal, hitSegment } from './xr-targets.js';
 import { EYE_BELOW_TOP, buildFade } from './xr-scene.js';
 import { handAimRay } from './gestures.js';
+import { handHoldsTool } from './xr-tools.js';
 import { hotspots, snapTo, HOTSPOT } from './hotspots.js';
 import { Label } from './panel.js';
 
@@ -227,6 +228,7 @@ export class Walk {
 		const xr = this.xr, ui = xr.ui, input = xr.input;
 		const busy = !!xr.menu || ui.wrist.open || this.fade;
 		for (const c of input.gestureHands()) {
+			if (handHoldsTool(xr, c)) continue; // (its tap is the tool's trigger: no teleport from that hand)
 			const near = xr.handViews[c.index]?.near;
 			for (const e of c.gestures) {
 				const mine = this.tele?.c === c;
