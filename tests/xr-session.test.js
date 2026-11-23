@@ -382,13 +382,16 @@ test('the first-time lessons: steps tick off in order; stepping inside starts th
 	const L = x.lessons;
 	assert.equal(L.place, 'scale', 'shown at the scale model on entry');
 	assert.equal(L.kind, 'controllers');
-	assert.deepEqual(L.steps().map((s) => s.id), ['start', 'menu', 'hold', 'inside'], 'the ready pose is for bare hands only');
+	assert.deepEqual(L.steps().map((s) => s.id), ['start', 'menu', 'tools', 'hold', 'inside'], 'the ready pose is for bare hands only');
+	assert.ok(L.words(L.steps()[2]).includes('left controller'), 'the sides filled in: the fan on the left');
 	assert.ok(!x.ui.welcome.mesh.visible, 'it replaces the welcome card');
 	assert.equal(L.current().id, 'start');
 	L.note('held'); // done early: counts, but Start is still the step to do
 	assert.equal(L.current().id, 'start');
 	assert.ok(!L.canClose(), 'Got it waits for the steps that must not be missed');
 	L.note('start'); L.note('wrist');
+	assert.ok(!L.canClose(), 'the tools step must be done too');
+	L.note('fan');
 	assert.ok(L.canClose());
 	assert.equal(L.current().id, 'inside');
 	go('in');
@@ -399,4 +402,49 @@ test('the first-time lessons: steps tick off in order; stepping inside starts th
 	assert.ok(L.canClose());
 	L.finish();
 	assert.equal(L.place, null);
+});
+
+test('the tool fan: opens over the raised left hand in view; the right tip touches a tool, the grip takes it, swaps, puts back; the camera refuses', async () => {
+	const { x, press, frame, hands } = await setup();
+	const fan = x.fan;
+	x.lessons.stop();
+	// The left controller held up in front of you, the right one down at your side.
+	hands.left.grip.visible = hands.right.grip.visible = true; // (tracked)
+	hands.left.grip.position.set(-0.1, 1.3, -0.45);
+	hands.right.grip.position.set(0.3, 0.8, 0);
+	for (let i = 0; i < 20; i++) frame();
+	assert.ok(fan.group.visible && fan.alpha === 1, 'open: the left hand raised, in view');
+	// The right controller's tip on the meter.
+	const tipTo = (name) => {
+		const s = fan.slots.find((s) => s.name === name);
+		const at = s.home.getWorldPosition(new THREE.Vector3());
+		// (the tip is 4.5 cm in front of the grip, in its own space: put the grip so the tip lands on the tool)
+		hands.right.grip.position.copy(x.rig.worldToLocal(at.clone().add(new THREE.Vector3(0, 0.01, 0.045))));
+		hands.right.grip.rotation.set(0, 0, 0);
+	};
+	tipTo('meter'); frame(); frame();
+	assert.equal(fan.hot?.name, 'meter', 'touched: it lifts');
+	const doll = x.modes.dollhouse;
+	press('right', 'grip'); frame();
+	press('right', 'grip', false); frame();
+	assert.equal(x.tools.held?.tool.name, 'meter', 'the grip takes it');
+	assert.ok(!doll.grab, 'a squeeze that takes a tool never grabs the model');
+	// Swap: the marker, the same way.
+	tipTo('marker'); frame(); frame();
+	press('right', 'grip'); frame(); press('right', 'grip', false); frame();
+	assert.equal(x.tools.held?.tool.name, 'marker', 'taking another swaps them');
+	assert.equal(fan.slots.find((s) => s.name === 'meter').held, false, 'the meter is back in its place');
+	// The camera: inactive, it shakes its head.
+	tipTo('camera'); frame(); frame();
+	press('right', 'grip'); frame(); press('right', 'grip', false); frame();
+	assert.equal(x.tools.held?.tool.name, 'marker', 'the camera is never taken');
+	assert.ok(fan.slots[0].wobble > 0 || fan.slots[0].tagGrow > 0, 'it wobbles and its tag grows');
+	// A squeeze away from the fan puts the held tool back.
+	hands.right.grip.position.set(0.3, 0.8, 0); frame(); frame();
+	press('right', 'grip'); frame(); press('right', 'grip', false); frame();
+	assert.equal(x.tools.held, null, 'put back');
+	// Hand lowered: the fan fades out.
+	hands.left.grip.position.set(-0.3, 0.7, 0);
+	for (let i = 0; i < 30; i++) frame();
+	assert.ok(!fan.group.visible, 'closed: the hand lowered');
 });

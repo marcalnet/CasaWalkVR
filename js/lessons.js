@@ -22,7 +22,7 @@ import { readSetting, writeSetting } from './settings.js';
 import { loadHands, dressHand, presetJoints, mirrorPose } from './hand-model.js';
 import { HAND_POSES } from './hand-poses.js';
 
-const PX_W = 1000, ROW = 92, HEAD = 120, FOOT = 140, MAX_STEPS = 5; // canvas pixels
+const PX_W = 1000, ROW = 92, HEAD = 120, FOOT = 140, MAX_STEPS = 6; // canvas pixels
 const PX_H = HEAD + MAX_STEPS * ROW + FOOT; // (one fixed size: a GPU texture can't change size once made)
 const CARD_W = 0.34; // metres
 const AHEAD = 0.5, BELOW = 0.2, SIDE = 0.12; // where the card goes, from the eyes (metres)
@@ -198,6 +198,12 @@ export class Lessons {
 		if (step.demo === 'turn') d.rotateY(0.25 * Math.sin(2 * Math.PI * t));
 	}
 
+	/** A step's words, with the sides filled in ({fan}: the tool fan's hand, {take}: the other). */
+	words(s) {
+		const fan = this.xr.toolFan === 'right' ? 'right' : 'left', take = fan === 'left' ? 'right' : 'left';
+		return s[this.kind].replaceAll('{fan}', fan).replaceAll('{take}', take);
+	}
+
 	/** Draws the card: the title, each step (the current one lit, done ones ticked). */
 	draw() {
 		if (!this.canvas || !this.place) return;
@@ -218,8 +224,9 @@ export class Lessons {
 			ctx.fillStyle = done ? COLOURS.accent : lit ? COLOURS.text : COLOURS.soft;
 			ctx.font = `700 38px ${FONT}`;
 			ctx.fillText(done ? '✓' : `${i + 1}`, 50, y);
-			fit(ctx, s[this.kind], PX_W - 140 - (s.id === 'start' && lit ? 280 : 0), `${lit ? 600 : 400} %px ${FONT}`, 32); // (room for the Start key)
-			ctx.fillText(s[this.kind], 100, y);
+			const words = this.words(s);
+			fit(ctx, words, PX_W - 140 - (s.id === 'start' && lit ? 280 : 0), `${lit ? 600 : 400} %px ${FONT}`, 32); // (room for the Start key)
+			ctx.fillText(words, 100, y);
 		});
 		this.texture.needsUpdate = true;
 		// The keys: Start on the lit first step's row, right; Got it at the bottom right.

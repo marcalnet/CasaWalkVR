@@ -842,7 +842,7 @@ check('B closes the board', (await state()).menu === null);
 			near: x.input.controllers.map((c) => { const p = d.holdPoint(c, new V()); return [c.handedness, c.isHand, c.isController, c.touch.tracked, p ? +b.distanceToPoint(p).toFixed(2) : null]; }) }; });
 	check('with hands away, the floating model goes home by itself and settles, level', !homeAgain.floating && homeAgain.level && Math.abs(homeAgain.y - 0.604) < 0.002, JSON.stringify(homeAgain));
 	// The lesson with bare hands: the looping 3D hand shows the gesture of the current step (here: holding the model).
-	await page.evaluate(() => { localStorage.removeItem('casawalk.welcome.scale.hands'); const L = window.__casawalk.xr.lessons; L.start('scale'); L.note('start'); L.note('wrist'); });
+	await page.evaluate(() => { localStorage.removeItem('casawalk.welcome.scale.hands'); const L = window.__casawalk.xr.lessons; L.start('scale'); L.note('start'); L.note('wrist'); L.note('fan'); });
 	await page.waitForFunction(() => !!window.__casawalk.xr.lessons.demo, null, { timeout: 5000 }).catch(() => {});
 	await frames(6);
 	const demo = await page.evaluate(() => { const L = window.__casawalk.xr.lessons; return { kind: L.kind, step: L.current()?.id, demo: !!L.demo && Object.values(L.demo).some((d) => d.visible), loaded: !!L.demo }; });
@@ -1182,6 +1182,46 @@ s = await state();
 check('← Back on the wrist menu returns to the scale model', s.mode === 'dollhouse' && s.rig[0] === 0 && s.rig[2] === 0 && s.menu === null);
 check('back from walking: eyes at 1.89 m again, gallery shown, lasers on', Math.abs(s.head[1] - 1.89) < 0.005 && s.showroom && !s.walkSky && (await lasers()) === 'left:on right:on', `eyes ${s.head[1].toFixed(3)}, lasers ${await lasers()}`);
 
+// The tool fan (milestone C): raise the left controller in front of you, look at it: the tools.
+{
+	await page.evaluate(() => { const d = window.__device; d.controllers.left.position.set(-0.08, 1.35, -0.42); d.controllers.left.quaternion.set(0, 0, 0, 1); });
+	await page.evaluate(() => window.__device.quaternion.set(Math.sin(-0.3 / 2), 0, 0, Math.cos(-0.3 / 2)));
+	await frames(20);
+	const f0 = await page.evaluate(() => { const f = window.__casawalk.xr.fan; return { shown: f.group.visible, alpha: f.alpha, tools: f.slots.map((s) => s.name) }; });
+	check('the tool fan opens over the raised left controller, in view: camera, meter, marker', f0.shown && f0.alpha === 1 && f0.tools.join() === 'camera,meter,marker', JSON.stringify(f0));
+	await shot('tool-fan');
+	/** Puts the right controller's tip on a tool in the fan (corrected for where its tip really is). */
+	const tipOn = async (name) => {
+		for (let i = 0; i < 3; i++) {
+			await page.evaluate((name) => {
+				const x = window.__casawalk.xr, d = window.__device, V = x.rig.position.constructor, f = x.fan, c = x.input.hands.right;
+				const at = f.slots.find((s) => s.name === name).home.getWorldPosition(new V());
+				const p = d.controllers.right.position;
+				const off = c.touch.tip.clone().sub(x.rig.localToWorld(new V(p.x, p.y, p.z)));
+				const to = x.rig.worldToLocal(at.sub(off));
+				d.controllers.right.quaternion.set(0, 0, 0, 1);
+				p.set(to.x, to.y, to.z);
+			}, name);
+			await frames(4);
+		}
+	};
+	await tipOn('meter');
+	const hot = await page.evaluate(() => window.__casawalk.xr.fan.hot?.name ?? null);
+	await click('right', 'squeeze'); await frames(10);
+	const held = await page.evaluate(() => { const x = window.__casawalk.xr; return { tool: x.tools.held?.tool.name ?? null, grab: !!x.modes.dollhouse.grab, laser: x.input.hands.right.line.visible }; });
+	check('the right tip touches the meter, the grip takes it (not the model); its laser goes', hot === 'meter' && held.tool === 'meter' && !held.grab && !held.laser, JSON.stringify({ hot, ...held }));
+	await shot('tool-held');
+	await tipOn('camera');
+	await click('right', 'squeeze'); await frames(6);
+	const cam = await page.evaluate(() => { const x = window.__casawalk.xr, s = x.fan.slots[0]; return { tool: x.tools.held?.tool.name, wobble: s.wobble > 0 || s.tagGrow > 0 }; });
+	check('the camera is "Coming soon": it shakes its head, the meter stays in hand', cam.tool === 'meter' && cam.wobble, JSON.stringify(cam));
+	await restRight(); await frames(4);
+	await click('right', 'squeeze'); await frames(6);
+	check('a squeeze away from the fan puts the tool back', await page.evaluate(() => window.__casawalk.xr.tools.held === null));
+	await restLeft(); await lookDown(); await frames(20);
+	check('the fan closes when the hand is lowered', await page.evaluate(() => !window.__casawalk.xr.fan.group.visible));
+}
+
 // The first-time lessons (C0.5), with controllers: the scale model's, then inside.
 {
 	await page.evaluate((keys) => { for (const k of keys) localStorage.removeItem(k); }, LESSON_KEYS.filter((k) => k.endsWith('controllers')));
@@ -1198,10 +1238,12 @@ check('back from walking: eyes at 1.89 m again, gallery shown, lasers on', Math.
 	const l1 = await lesson();
 	await click('right', 'a-button'); await frames(4); await click('right', 'a-button'); await frames(4);
 	const l2 = await lesson();
+	await page.evaluate(() => window.__casawalk.xr.lessons.note('fan')); await frames(2); // (the fan itself is checked below)
+	const l2b = await lesson();
 	await restRight(); await frames(3);
 	await button('right', 'squeeze', 1); await frames(6); await button('right', 'squeeze', 0); await frames(6);
 	const l3 = await lesson();
-	check('steps tick off as you do them: Start, the wrist menu, holding the model (Got it once the musts are done)', l1.step === 'menu' && l2.step === 'hold' && l2.got && l3.step === 'inside', JSON.stringify({ l1: l1.step, l2: l2.step, got: l2.got, l3: l3.step }));
+	check('steps tick off as you do them: Start, the wrist menu, the tools, holding the model (Got it once the musts are done)', l1.step === 'menu' && l2.step === 'tools' && !l2.got && l2b.step === 'hold' && l2b.got && l3.step === 'inside', JSON.stringify({ l1: l1.step, l2: l2.step, l2b: l2b.step, got: l2b.got, l3: l3.step }));
 	// Stepping inside ends it (remembered) and starts the lesson inside, with the orange target.
 	await page.evaluate(() => { window.__casawalk.xr.menuAction('in'); }); await settled(); await frames(6);
 	const l4 = await lesson();

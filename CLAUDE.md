@@ -32,6 +32,8 @@ js/xr-menus.js    the boards as data (cells by id; tabs as rows of ids), help ca
 js/xr-scene.js    scenery builders: gallery room, plinth, skies, markers
 js/xr-targets.js  what lasers, the teleport arc and the feet may hit (pure, Node-testable)
 js/xr-tools.js    hand-held tool system: claims, routing, annotations in model space (tools from milestone C)
+js/tool-fan.js    the tool fan over the left hand: open on a look, touch and grip (or a closed hand) to take, swap, put back; the inactive camera
+js/tool-models.js the three tools' models (camera, meter, marker), plain theme colours
 js/settings.js    every remembered setting: key, default, meaning (page and headset)
 js/rooms.js       where stepping inside lands: a room's clear middle and long direction (pure, Node-testable)
 js/theme.js       fonts, colours, corner radii of everything drawn in the headset (restyle here)

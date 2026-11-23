@@ -54,6 +54,7 @@ import { XRUI } from './xr-ui.js';
 import { Dollhouse } from './xr-dollhouse.js';
 import { Walk } from './xr-walk.js';
 import { ToolSystem } from './xr-tools.js';
+import { ToolFan } from './tool-fan.js';
 import { Tweens, ease } from './tween.js';
 import { Haptics } from './haptics.js';
 import { Sound } from './sound.js';
@@ -129,6 +130,7 @@ export class XRExperience {
 		this.lessons = new Lessons(this); // the first-time lessons (C0.5)
 		for (const c of Object.values(this.help)) this.ui.wrist.cross.add(c.mesh); // (Help opens beside the wrist menu, on its right)
 		this.tools = new ToolSystem(this);
+		this.fan = new ToolFan(this); // the tool fan over the left hand (milestone C)
 		this.tweens = new Tweens();
 		this.haptics = new Haptics();
 		this.sound = new Sound();
@@ -260,6 +262,7 @@ export class XRExperience {
 		for (const v of this.handViews) v.hide();
 		this.photoPending = false;
 		this.tools.end(); // tools back in the fan; measurements and drawings cleared
+		this.fan.reset();
 		this.tweens.clear();
 		this.haptics.stop();
 		this.sound.suspend();
@@ -563,6 +566,7 @@ export class XRExperience {
 		for (const v of this.handViews) v.near = false; // (a key or the board near a fingertip lights it up again this frame)
 		this.ui.showHandsNote(); // bare hands: "Pick up your controllers" (their pinches are never read)
 		this.tools.claim(); // a held tool's buttons are its own, before the menu and the mode
+		this.fan.claim(); // (a squeeze on a tool in the fan takes it: never the model)
 		if (this.pendingRecentre && this.mode === 'dollhouse') {
 			const head = this.viewerMatrix();
 			if (head) {
@@ -578,6 +582,7 @@ export class XRExperience {
 		else this.modes[this.mode]?.update(dt);
 		this.runArrival(dt);
 		for (const v of this.handViews) v.update(dt, { passthrough: !this.vrView });
+		this.fan.update(dt); // the tool fan: open, touch, take, swap, put back (milestone C)
 		this.tools.update(dt);
 		this.tweens.update(dt);
 		this.haptics.update(dt);

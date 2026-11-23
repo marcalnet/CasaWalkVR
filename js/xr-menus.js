@@ -104,6 +104,7 @@ export const LESSONS = {
 	scale: { title: 'Welcome to CasaWalk', steps: [
 		{ id: 'start', done: 'start', must: true, hands: 'Press the Start key with your fingertip.', controllers: 'Press Start: touch it, or point and pull.' },
 		{ id: 'menu', done: 'wrist', must: true, hands: 'Touch your right wrist with your left hand: your menu.', controllers: 'Press A (or touch the orb on your right controller): your menu.' },
+		{ id: 'tools', done: 'fan', must: true, hands: 'Look at your {fan} hand: your tools. Touch one with your {take} hand.', controllers: 'Look at your {fan} controller: your tools. Touch one with your {take} controller.' },
 		{ id: 'hold', done: 'held', demo: 'hold', hands: 'Close your hand on the home to hold it. Let go: it goes home.', controllers: 'Squeeze a grip to hold the home. Let go in the air: it goes home.' },
 		{ id: 'ready', done: 'ready', demo: 'ready', hands: 'Hold your hand sideways, fingers curled, thumb on your index.' },
 		{ id: 'inside', done: 'inside', demo: 'tap', hands: 'Tap your thumb and point at a room. Tap again: step inside.', controllers: 'Point at a room and pull the trigger: step inside.' },

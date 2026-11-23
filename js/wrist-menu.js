@@ -145,7 +145,8 @@ export class WristMenu {
 			if (tip < ORB_TIP_TOUCH || grip < ORB_GRIP_TOUCH) { touching = true; byController ||= c.isController; }
 			if (tip < ORB_TIP_RELEASE || grip < ORB_GRIP_RELEASE) clear = false;
 		}
-		if (touching && o.armed && !this.keysHot) { toggle = true; o.armed = false; }
+		// (Not while the other hand is busy at the tool fan: the fans' hands cross over each other's wrists.)
+		if (touching && o.armed && !this.keysHot && !this.xr.fan?.fanBusy) { toggle = true; o.armed = false; }
 		if (clear) o.armed = true;
 		if (!clear) hot = true;
 
