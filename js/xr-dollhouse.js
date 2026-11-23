@@ -569,7 +569,7 @@ export class Dollhouse {
 			const d = palm ? box.distanceToPoint(palm) : Infinity;
 			const keyNear = xr.handViews[c.index]?.near;
 			for (const e of c.gestures) {
-				if (e.type === 'fist' && !this.grab && d < HOLD_REACH && !busy) { this.cancelHandAim(); this.startGrab(c); }
+				if (e.type === 'fist' && !this.grab && d < HOLD_REACH && !busy && !c.fistClaimed) { this.cancelHandAim(); this.startGrab(c); } // (a fist on a fan tool takes the tool)
 				else if ((e.type === 'fistEnd' || e.type === 'lost') && this.grab?.c === c) this.release();
 				else if ((e.type === 'open' || e.type === 'lost') && this.handAim?.c === c) { this.cancelHandAim(); xr.sound.play('release'); }
 				else if (e.type === 'tap' && !keyNear && d > AIM_CLEAR && this.grab?.c !== c) {

@@ -78,6 +78,9 @@ export class ToolFan {
 	claim() {
 		const take = this.hands().take;
 		if (this.hot && take?.isController && take.claim.grip === null) take.claim.grip = 'tool';
+		// (A bare hand closing on a tool takes the tool, never the model too: the tester's finding.)
+		this.fistTaken = !!(this.hot && take?.isHand);
+		if (this.fistTaken) take.fistClaimed = true; else if (take) take.fistClaimed = false;
 	}
 
 	/** The fan hand and the taking hand (input entries, or null). */
@@ -93,20 +96,22 @@ export class ToolFan {
 		this.t += dt;
 		const { fan, take } = this.hands();
 		const held = xr.tools.held;
-		// Where the fan floats: above the fan hand, facing you.
+		// Where the fan floats: above the fan hand, facing you. (Reused vectors: nothing allocated per frame.)
 		const head = xr.headWorld();
 		let open = false;
-		const anchor = new THREE.Vector3();
+		const anchor = this._anchor ??= new THREE.Vector3(), look = this._look ??= new THREE.Vector3(), to = this._to ??= new THREE.Vector3(), orb = this._orb ??= new THREE.Vector3(), at = this._at ??= new THREE.Vector3();
 		if (fan && xr.session) {
 			input.wristOf(fan).getWorldPosition(anchor);
 			anchor.y += ABOVE;
 			const { forward } = xr.viewAxes();
-			const look = new THREE.Vector3().setFromMatrixColumn(xr.camera.matrixWorld, 2).negate();
-			const to = anchor.clone().sub(head).normalize();
+			look.setFromMatrixColumn(xr.camera.matrixWorld, 2).negate();
+			to.copy(anchor).sub(head).normalize();
 			const raised = anchor.y > head.y - 0.55;
-			const orb = xr.ui.wrist.orb.group.getWorldPosition(new THREE.Vector3());
+			xr.ui.wrist.orb.group.getWorldPosition(orb);
 			const indexNear = fan.touch.tracked && fan.touch.tip.distanceTo(orb) < KEEP_CLEAR;
-			open = raised && look.angleTo(to) < IN_VIEW && !xr.ui.wrist.open && !indexNear && forward.lengthSq() > 0;
+			// (Closed over a bare hand in the ready pose or aiming: it would sit in the arc's way; the tester's finding.)
+			const aiming = !!fan.gesture?.ready || xr.modes.walk?.tele?.c === fan || xr.modes.dollhouse?.handAim?.c === fan;
+			open = raised && look.angleTo(to) < IN_VIEW && !xr.ui.wrist.open && !indexNear && !aiming && forward.lengthSq() > 0;
 		}
 		this.alpha = THREE.MathUtils.clamp(this.alpha + (open ? dt : -dt) / FADE, 0, 1);
 		this.group.visible = this.alpha > 0;
@@ -117,7 +122,7 @@ export class ToolFan {
 			let best = REACH;
 			for (const s of this.slots) {
 				if (s.held) continue;
-				const d = s.home.getWorldPosition(new THREE.Vector3()).distanceTo(take.touch.tip);
+				const d = s.home.getWorldPosition(at).distanceTo(take.touch.tip);
 				if (d < best) { best = d; hot = s; }
 			}
 		}
@@ -142,8 +147,8 @@ export class ToolFan {
 		// A bare hand brings its tool back to its place: it goes back.
 		if (held?.c?.isHand && this.alpha > 0.5) {
 			const slot = this.slots.find((s) => s.tool === held.tool);
-			const tip = held.tool.object.getWorldPosition(new THREE.Vector3());
-			if (slot && tip.distanceTo(slot.home.getWorldPosition(new THREE.Vector3())) < RETURN && slot.settled) xr.tools.putBack();
+			const tip = held.tool.object.getWorldPosition(at);
+			if (slot && tip.distanceTo(slot.home.getWorldPosition(this._at2 ??= new THREE.Vector3())) < RETURN && slot.settled) xr.tools.putBack();
 		}
 		this.animate(dt);
 	}

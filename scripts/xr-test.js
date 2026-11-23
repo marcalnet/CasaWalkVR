@@ -792,7 +792,8 @@ check('B closes the board', (await state()).menu === null);
 	check('bare hands walking: a tap shows the arc from the hand, white while it settles, blue once steady', settling.via === 'hand' && settling.dots && settling.colour === 'ffffff' && steady.valid && steady.colour === '3d8bfd', JSON.stringify({ settling, steady, targets: targets.length }));
 	await shot('hands-teleport-aim');
 	const head0 = await page.evaluate(() => window.__casawalk.xr.headWorld().toArray());
-	await gesture('right', { type: 'tap' }); await frames(20);
+	await gesture('right', { type: 'tap' }); await frames(4);
+	await page.waitForFunction(() => { const w = window.__casawalk.xr.modes.walk; return !w.fade && !w.tele; }, null, { timeout: 8000, polling: 'raf' }).catch(() => {}); // (the fade does the move: a slow emulator needs time)
 	const after = await page.evaluate(() => ({ head: window.__casawalk.xr.headWorld().toArray(), tele: !!window.__casawalk.xr.modes.walk.tele }));
 	const jumped = Math.hypot(after.head[0] - head0[0], after.head[2] - head0[2]);
 	check('bare hands walking: tap again on blue teleports', !after.tele && jumped > 0.5, JSON.stringify({ jumped: +jumped.toFixed(2) }));
