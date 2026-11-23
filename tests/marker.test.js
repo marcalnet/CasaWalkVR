@@ -46,3 +46,25 @@ test('bare hands: a tap starts a stroke, the next ends it; a swipe changes colou
 	m.gesture(h, { type: 'turn', dir: -1 });
 	assert.equal(INKS[m.ink], 'red', 'a swipe back through the colours');
 });
+
+test('a stroke ends on a jump (a fade, a layer change) and when a bare hand opens or is lost', () => {
+	const xr = fakeXR(), m = new MarkerTool(xr), c = { isController: true };
+	m.take(c);
+	m.trigger(c, 'down');
+	m.object.position.set(0, 1, 0); m.object.updateMatrixWorld(true); m.update(1 / 72);
+	m.object.position.x += 0.05; m.object.updateMatrixWorld(true); m.update(1 / 72);
+	xr.modes = { walk: { fade: { t: 0 } } }; // a teleport starts
+	m.update(1 / 72);
+	assert.equal(m.drawing, null, 'the teleport ended the stroke');
+	xr.modes = { walk: { fade: null } };
+	const h = { isHand: true, touch: { tracked: true } };
+	m.putBack(); m.take(h);
+	m.trigger(h, 'down');
+	assert.ok(m.drawing);
+	m.gesture(h, { type: 'open' });
+	assert.equal(m.drawing, null, 'an open hand ends it');
+	m.trigger(h, 'down');
+	h.touch.tracked = false;
+	m.update(1 / 72);
+	assert.equal(m.drawing, null, 'a lost hand ends it');
+});

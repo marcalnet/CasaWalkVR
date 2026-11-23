@@ -55,9 +55,10 @@ export class MarkerTool {
 		if (xr.soundLevel !== 'off') xr.sound.play(went ? 'release' : 'deny');
 	}
 
-	/** Bare-hand gestures of the holding hand: a swipe left/right changes colour, back undoes. */
+	/** Bare-hand gestures of the holding hand: a swipe left/right changes colour, back undoes; an open or lost hand ends a stroke. */
 	gesture(c, e) {
-		if (e.type === 'turn') this.nextInk(e.dir);
+		if (e.type === 'open' || e.type === 'lost') this.endStroke(); // (like a pinch that is lost: nothing keeps drawing)
+		else if (e.type === 'turn') this.nextInk(e.dir);
 		else if (e.type === 'step' && e.dir < 0) this.secondary(c, 'press');
 	}
 
@@ -159,6 +160,10 @@ export class MarkerTool {
 	update(dt) {
 		const s = this.drawing;
 		if (!s || !this.held) return;
+		// A jump (a teleport's fade, stepping inside or back) or a hand no longer tracked ends the
+		// stroke: it never draws a line across the jump (the tester's finding).
+		const xr = this.xr;
+		if (xr.layerFx || xr.modes?.walk?.fade || (this.held.isHand && !this.held.touch?.tracked)) { this.endStroke(); return; }
 		this.object.updateMatrixWorld(true);
 		const p = this.xr.centerer.worldToLocal(this.tip.getWorldPosition(this._p).clone());
 		const step = STEP / Math.max(1e-6, this.xr.anchor.scale.x);

@@ -107,7 +107,7 @@ export class ToolSystem {
 		if (c.isHand) {
 			for (const e of c.gestures ?? []) {
 				if (e.type === 'tap' && HAND_TAP_IS_TRIGGER) { tool.trigger?.(c, 'down'); tool.trigger?.(c, 'up'); }
-				else if (e.type === 'turn' || e.type === 'step') tool.gesture?.(c, e); // (the marker's colour and undo)
+				else if (e.type === 'turn' || e.type === 'step' || e.type === 'open' || e.type === 'lost') tool.gesture?.(c, e); // (the marker's colour, undo, and ending a stroke)
 			}
 			tool.update?.(dt, c);
 			return;
