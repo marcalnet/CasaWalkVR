@@ -52,6 +52,7 @@ import { HandGestures, JOINTS } from './gestures.js';
 
 const DEADZONE = 0.2;
 const RAY_LENGTH = 5;
+const NO_EVENTS = Object.freeze([]);
 export const PINCH_ON = 0.015; // metres between thumb and index tips: a pinch starts
 export const PINCH_OFF = 0.03; // and ends (more than PINCH_ON: hysteresis)
 const PINCH_OPEN = 0.07; // select.value is 0 from here, 1 at PINCH_ON
@@ -219,23 +220,28 @@ export class XRInput {
 	 * thumb swipe reads as you see it.
 	 */
 	readGestures(dt, axes) {
+		this._gh = this._gh ?? [];
+		this._gh.length = 0;
 		for (const c of this.controllers) {
-			if (!c.gesture) { c.gestures = []; continue; }
+			if (!c.gesture) { c.gestures = NO_EVENTS; continue; }
+			this._gh.push(c);
 			let joints = null;
-			if (c.touch.tracked) {
-				joints = {};
+			if (c.touch.tracked && c.hand.visible) {
+				// (The hand's matrices once, then each joint into a reused vector: nothing allocated per frame.)
+				c.hand.updateMatrixWorld(true);
+				joints = c._joints ??= {};
 				for (const n of JOINTS) {
-					const p = this.joint(c, n);
-					if (!p) { joints = null; break; }
-					joints[n] = p;
+					const j = c.hand.joints[n];
+					if (!j?.visible) { joints = null; break; }
+					(joints[n] ??= new THREE.Vector3()).setFromMatrixPosition(j.matrixWorld);
 				}
 			}
 			c.gestures = c.gesture.step(joints, dt, axes);
 		}
 	}
 
-	/** Bare hands with gesture readers (tracked or not). */
-	gestureHands() { return this.controllers.filter((c) => c.gesture); }
+	/** Bare hands with gesture readers (tracked or not), as of this frame's readGestures(). */
+	gestureHands() { return this._gh ?? this.controllers.filter((c) => c.gesture); }
 
 	/** Active controllers (connected, with a gamepad). */
 	active() { return this.controllers.filter((c) => c.source && c.isController); }

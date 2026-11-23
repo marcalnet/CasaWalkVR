@@ -42,15 +42,15 @@ export function hotspots(plan, isClear = () => true) {
 /**
  * The hotspot the ring snaps to, or null: the nearest one within SNAP of the
  * pointed floor point p ({ x, y, z }), on its floor, and within REACH of you
- * (from { x, z }).
+ * (from { x, z }); ok(spot), if given, can refuse one (a wall in between).
  */
-export function snapTo(spots, p, from) {
+export function snapTo(spots, p, from, ok = null) {
 	let best = null, bestD = HOTSPOT.SNAP;
 	for (const s of spots) {
 		if (Math.abs(s.y - p.y) > HOTSPOT.LEVEL) continue;
 		if (Math.hypot(s.x - from.x, s.z - from.z) > HOTSPOT.REACH) continue;
 		const d = Math.hypot(s.x - p.x, s.z - p.z);
-		if (d < bestD) { best = s; bestD = d; }
+		if (d < bestD && (!ok || ok(s))) { best = s; bestD = d; }
 	}
 	return best;
 }

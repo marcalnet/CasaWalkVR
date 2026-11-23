@@ -371,6 +371,10 @@ test('Walk in on the plinth: the laser presses it on letting go over it', async 
 	const from = at.clone().addScaledVector(n, 0.4), ray = hands.right.ray;
 	ray.position.copy(x.rig.worldToLocal(from.clone()));
 	ray.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, -1), at.clone().sub(from).normalize());
+	// A pull straight away (the laser just arrived, aimed through the door at the model): nothing.
+	press('right', 'trigger'); frame(); press('right', 'trigger', false); frame();
+	assert.equal(x.mode, 'dollhouse', 'a laser that only passes over the door never presses it');
+	for (let i = 0; i < 15; i++) frame(); // (resting on it 0.2 s)
 	press('right', 'trigger'); frame(); frame();
 	assert.equal(x.mode, 'dollhouse', 'not on the trigger going down');
 	press('right', 'trigger', false); frame(); settle();

@@ -509,8 +509,11 @@ export class XRExperience {
 	/** The viewer's horizontal right and forward axes (world, unit). */
 	viewAxes() {
 		this.rig.updateMatrixWorld(true);
-		const yaw = yawOfMatrix(this.camera.matrix.clone().premultiply(this.rig.matrixWorld));
-		return { right: new THREE.Vector3(Math.cos(yaw), 0, -Math.sin(yaw)), forward: new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw)) };
+		const yaw = yawOfMatrix((this._viewM ??= new THREE.Matrix4()).copy(this.camera.matrix).premultiply(this.rig.matrixWorld));
+		const a = this._axes ??= { right: new THREE.Vector3(), forward: new THREE.Vector3() }; // (reused: callers copy what they keep)
+		a.right.set(Math.cos(yaw), 0, -Math.sin(yaw));
+		a.forward.set(-Math.sin(yaw), 0, -Math.cos(yaw));
+		return a;
 	}
 
 	/** Turns the user by `angle` (radians, + = left) about their head. */

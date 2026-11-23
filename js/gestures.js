@@ -61,18 +61,27 @@ export function segmentDistance(p, a, b) {
  * What a hand is doing this frame, from its joints ({ name: Vector3 }, world
  * positions). handedness 'left' | 'right'. Returns null when a joint is missing.
  *   normal   palm normal (out of the palm)
+ *   along    the hand's length (wrist to the middle knuckle), unit
  *   tips     each finger's tip-to-knuckle distance (index, middle, ring, little)
  *   thumbGap the thumb tip's distance from the side of the index (its middle phalanx)
+ *   rel      the thumb tip from the index's middle joint: moves only when the
+ *            thumb moves on the finger, never when the whole hand moves (the
+ *            tester's finding: swipes are read from this)
  *   pinch    thumb tip to index tip
+ * out: an object to fill (reused each frame: nothing allocated).
  */
-export function handShape(j, handedness) {
+export function handShape(j, handedness, out = { normal: new THREE.Vector3(), along: new THREE.Vector3(), rel: new THREE.Vector3(), thumb: new THREE.Vector3(), tips: [0, 0, 0, 0] }) {
 	for (const n of JOINTS) if (!j[n]) return null;
 	const w = j.wrist, ip = j['index-finger-phalanx-proximal'], lp = j['pinky-finger-phalanx-proximal'];
-	const normal = new THREE.Vector3().crossVectors(_a.subVectors(ip, w), _b.subVectors(lp, w)).normalize();
-	if (handedness === 'left') normal.negate();
-	const tips = FINGERS.map((f) => j[`${f}-tip`].distanceTo(j[`${f}-phalanx-proximal`]));
-	const thumbGap = segmentDistance(j['thumb-tip'], j['index-finger-phalanx-intermediate'], j['index-finger-phalanx-distal']);
-	return { normal, tips, thumbGap, pinch: j['thumb-tip'].distanceTo(j['index-finger-tip']), thumb: j['thumb-tip'].clone() };
+	out.normal.crossVectors(_a.subVectors(ip, w), _b.subVectors(lp, w)).normalize();
+	if (handedness === 'left') out.normal.negate();
+	out.along.subVectors(j['middle-finger-phalanx-proximal'], w).normalize();
+	FINGERS.forEach((f, i) => { out.tips[i] = j[`${f}-tip`].distanceTo(j[`${f}-phalanx-proximal`]); });
+	out.thumbGap = segmentDistance(j['thumb-tip'], j['index-finger-phalanx-intermediate'], j['index-finger-phalanx-distal']);
+	out.rel.subVectors(j['thumb-tip'], j['index-finger-phalanx-intermediate']);
+	out.thumb.copy(j['thumb-tip']);
+	out.pinch = j['thumb-tip'].distanceTo(j['index-finger-tip']);
+	return out;
 }
 
 /**
@@ -93,7 +102,10 @@ export class HandGestures {
 		this.ready = false; this.readyTime = 0;
 		this.rest = null; // the thumb's gap from the index at rest (while ready)
 		this.lift = null; // a tap in progress: { t }
-		this.slide = []; // recent thumb positions on the index: [{ p, t }]
+		this.slide = []; // recent thumb positions on the index (relative to it): [{ x, y, z, t }], from a pool
+		this.pool ??= Array.from({ length: 64 }, () => ({ x: 0, y: 0, z: 0, t: 0 }));
+		this.poolAt = 0;
+		this._shape ??= undefined;
 		this.fist = false; this.fistTime = 0;
 		this.pinch = false; this.pinchTime = 0; this.pinchHeld = false;
 		this.clock = 0;
@@ -116,17 +128,19 @@ export class HandGestures {
 			if (!this.smooth[n]) this.smooth[n] = joints[n].clone();
 			else this.smooth[n].lerp(joints[n], k);
 		}
-		const s = this.shape = handShape(this.smooth, this.handedness);
+		const s = this.shape = this._shape ? handShape(this.smooth, this.handedness, this._shape) : (this._shape = handShape(this.smooth, this.handedness));
 		this.tracked++;
 		if (this.tracked < G.TRACKED) return out;
-		const curled = s.tips.filter((d) => d < G.CURLED).length, open = s.tips.filter((d) => d > G.OPEN).length;
+		let curled = 0, open = 0, clenched = 0, loose = 0;
+		for (const d of s.tips) { if (d < G.CURLED) curled++; if (d > G.OPEN) open++; if (d < G.FIST_ON) clenched++; if (d > G.FIST_OFF) loose++; }
+		this.clenched = clenched;
 
 		// A closed hand (holding the model).
-		const closed = s.tips.filter((d) => d < G.FIST_ON).length >= 3;
+		const closed = clenched >= 3;
 		if (!this.fist) {
 			this.fistTime = closed ? this.fistTime + dt : 0;
 			if (this.fistTime >= G.FIST_HOLD) { this.fist = true; out.push({ type: 'fist' }); }
-		} else if (s.tips.filter((d) => d > G.FIST_OFF).length >= 2) {
+		} else if (loose >= 2) {
 			this.fist = false; this.fistTime = 0; out.push({ type: 'fistEnd' });
 		}
 
@@ -140,36 +154,49 @@ export class HandGestures {
 		const G = GESTURE;
 		const sideways = Math.abs(s.normal.y) < G.SIDEWAYS;
 		if (!this.ready) {
-			this.readyTime = curled === 4 && sideways && s.thumbGap < G.THUMB_REST ? this.readyTime + dt : 0;
+			// (Curled, not clenched: a fist is a closed hand, never the ready pose; the tester's finding.)
+			this.readyTime = curled === 4 && this.clenched < 3 && sideways && s.thumbGap < G.THUMB_REST ? this.readyTime + dt : 0;
 			if (this.readyTime >= G.READY_HOLD) {
-				this.ready = true; this.rest = s.thumbGap; this.slide = []; this.lift = null;
+				this.ready = true; this.rest = s.thumbGap; this.slide.length = 0; this.lift = null;
 				out.push({ type: 'ready' });
 			}
 			return;
 		}
-		const unready = () => { this.ready = false; this.readyTime = 0; this.lift = null; this.slide = []; out.push({ type: 'open' }); };
-		// Ready: the fingers opening, or the hand turning palm up or down, ends it (and cancels an aim).
-		if (open >= 2 || !sideways) return unready();
+		const unready = () => { this.ready = false; this.readyTime = 0; this.lift = null; this.slide.length = 0; out.push({ type: 'open' }); };
+		// Ready: the fingers opening, the hand clenching into a fist, or turning palm up or down, ends it (and cancels an aim).
+		if (open >= 2 || !sideways || this.clenched >= 3) return unready();
 		const gap = s.thumbGap - this.rest;
 		if (this.lift) {
 			// A tap: lifted, then back on the index in time. Lifted too long: the hand left the pose.
 			if (gap < G.TAP_BACK) {
 				if (this.clock - this.lift.t <= G.TAP_TIME) out.push({ type: 'tap' });
-				this.lift = null; this.slide = [];
+				this.lift = null; this.slide.length = 0;
 			} else if (this.clock - this.lift.t > G.TAP_TIME) unready();
 			return;
 		}
-		if (gap > G.TAP_LIFT) { this.lift = { t: this.clock }; this.slide = []; return; }
+		if (gap > G.TAP_LIFT) { this.lift = { t: this.clock }; this.slide.length = 0; return; }
 		this.rest += (s.thumbGap - this.rest) * Math.min(1, dt / 0.5); // (the rest drifts with the hand)
-		// A swipe: the thumb slides on the index, as you see it: left / right turns, forward / back steps.
-		this.slide.push({ p: s.thumb.clone(), t: this.clock });
+		// A swipe: the thumb slides on the index. Read in the hand's own frame (the
+		// thumb relative to the index, so moving the whole hand is never a swipe):
+		// across the hand (along the palm normal: left or right as you see a
+		// sideways hand) turns, along it (towards the fingers or the wrist) steps.
+		// The view axes only give the sign, as you see it.
+		const e = this.pool[this.poolAt++ % this.pool.length];
+		e.x = s.rel.x; e.y = s.rel.y; e.z = s.rel.z; e.t = this.clock;
+		this.slide.push(e);
 		while (this.slide.length && this.clock - this.slide[0].t > G.SWIPE_TIME) this.slide.shift();
 		if (this.slide.length < 2 || !axes) return;
-		const d = _a.subVectors(s.thumb, this.slide[0].p);
-		const x = d.dot(axes.right), z = d.dot(axes.forward);
-		if (Math.max(Math.abs(x), Math.abs(z)) < G.SWIPE) return;
-		out.push(Math.abs(x) >= Math.abs(z) ? { type: 'turn', dir: Math.sign(x) } : { type: 'step', dir: Math.sign(z) });
-		this.slide = [];
+		const f = this.slide[0], d = _a.set(s.rel.x - f.x, s.rel.y - f.y, s.rel.z - f.z);
+		const across = d.dot(s.normal), along = d.dot(s.along);
+		if (Math.max(Math.abs(across), Math.abs(along)) < G.SWIPE) return;
+		if (Math.abs(across) >= Math.abs(along)) {
+			const dir = Math.sign(across * s.normal.dot(axes.right));
+			if (dir) out.push({ type: 'turn', dir });
+		} else {
+			const dir = Math.sign(along * s.along.dot(axes.forward));
+			if (dir) out.push({ type: 'step', dir });
+		}
+		this.slide.length = 0;
 	}
 
 	/** The fallback: palm down, pinch and hold; letting go ends it. */

@@ -766,6 +766,7 @@ check('B closes the board', (await state()).menu === null);
 	const cancelled = await page.evaluate(() => { const d = window.__casawalk.xr.modes.dollhouse; return !d.handAim && d.handRays.every((l) => !l.visible); });
 	check('bare hands: opening the hand cancels the aim', cancelled);
 	await gesture('right', { type: 'tap' }); await frames(4); await handAimAt(roomPt); await frames(8);
+	await page.waitForFunction(() => (window.__casawalk.xr.modes.dollhouse.handAim?.steady ?? 0) >= 0.3, null, { timeout: 8000, polling: 'raf' }).catch(() => {});
 	await gesture('right', { type: 'tap' }); await frames(4); await settled(); await frames(4);
 	const inside = await state();
 	check('bare hands: tap again steps inside', inside.mode === 'walk' && inside.anchorScale === 1, JSON.stringify({ mode: inside.mode }));
@@ -936,7 +937,7 @@ check('at the scale model, B never leaves VR', (await state()).presenting && (aw
 	await lookDown(-0.85); await frames(3);
 	await shot('plinth-doors');
 	await lookDown(); await frames(3);
-	await aimW('right', R, doors.in); await frames(5);
+	await aimW('right', R, doors.in); await frames(20); // (the laser rests on it first)
 	await click('right', 'trigger'); await settled();
 	s = await state();
 	check('Walk in → on the plinth goes inside', s.mode === 'walk' && s.anchorScale === 1, JSON.stringify({ mode: s.mode }));

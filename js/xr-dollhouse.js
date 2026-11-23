@@ -55,6 +55,7 @@ const AIM_CLEAR = 0.15; // ... and within this, the hand's teleport gesture is n
 const DROP_NEAR = 0.15, DROP_TILT = 30; // let go this close to the plinth top, tilted less: it settles
 const RETURN_AWAY = 0.3, RETURN_WAIT = 4; // a floating model goes home once nothing is within 0.3 m for 4 s
 const GRAB_SMOOTH = 0.06; // seconds: a held model follows the hand smoothed this much
+const AIM_STEADY = 0.3; // a bare hand's second tap steps inside once its landing has held still this long
 const ZOOM_SPEED = 1.2; // e-folds/s at full stick
 // The doors at the scale model, metres (the user's Quest 2 tests): Walk in →
 // is the big one, ← Back about a third as long, the same height, on its left.
@@ -495,7 +496,7 @@ export class Dollhouse {
 	updateFloating(dt) {
 		const xr = this.xr, f = this.floating;
 		// The faint box when a bare hand is close enough to hold the model.
-		const box = this.modelBox(), p = new THREE.Vector3();
+		const box = this.modelBox(this._box ??= new THREE.Box3()), p = this._p ??= new THREE.Vector3();
 		let canHold = false, near = false;
 		for (const c of xr.input.controllers) {
 			if (!(c.isHand ? c.touch.tracked : c.isController) || !this.holdPoint(c, p)) continue;
@@ -560,7 +561,7 @@ export class Dollhouse {
 	 */
 	handMoves(dt, spots) {
 		const xr = this.xr, ui = xr.ui, input = xr.input;
-		const box = this.modelBox(), p = new THREE.Vector3();
+		const box = this.modelBox(this._box2 ??= new THREE.Box3()), p = this._p2 ??= new THREE.Vector3();
 		const busy = !!xr.menu || ui.wrist.open;
 		let jump = null;
 		for (const c of input.gestureHands()) {
@@ -573,10 +574,11 @@ export class Dollhouse {
 				else if ((e.type === 'open' || e.type === 'lost') && this.handAim?.c === c) { this.cancelHandAim(); xr.sound.play('release'); }
 				else if (e.type === 'tap' && !keyNear && d > AIM_CLEAR && this.grab?.c !== c) {
 					if (this.handAim?.c === c) {
-						if (this.handAim.spot) jump = this.handAim.spot;
+						// (Only on a landing held steady 0.3 s, as inside: the tester's finding.)
+						if (this.handAim.spot && this.handAim.steady >= AIM_STEADY) jump = this.handAim.spot;
 						else xr.sound.play('deny');
 					} else if (!this.handAim && !busy) {
-						this.handAim = { c, spot: null };
+						this.handAim = { c, spot: null, steady: 0, at: new THREE.Vector3(), has: false };
 						xr.sound.play('aim');
 					}
 				}
@@ -599,6 +601,10 @@ export class Dollhouse {
 		const floor = hit && this.level() ? xr.findFloor(hit.point, 0.01) : null;
 		a.spot = floor ? this.landing(floor) : null;
 		if (a.spot) spots[a.c.index] = a.spot;
+		// Steady: the landing (in the model) stays put.
+		if (a.spot && a.has && a.spot.model.distanceTo(a.at) < 0.15 / Math.max(1e-3, xr.anchor.scale.x * 10)) a.steady += dt;
+		else a.steady = 0;
+		if (a.spot) { a.at.copy(a.spot.model); a.has = true; } else a.has = false;
 		return jump;
 	}
 

@@ -19,6 +19,8 @@ import { WRIST, DOOR, COLOURS, KEY, FONT } from './theme.js';
 const PX_H = 256; // canvas height of a key face; the width follows its proportions
 const RING_GEO = new THREE.RingGeometry(0.4, 0.5, 32); // the hover ring: 1 m across, scaled to ringSize()
 
+const LASER_REST = 0.15; // seconds a laser rests on a key before its trigger can arm it (laserOnRelease keys)
+
 export class KeyPad {
 	/** xr: the XRExperience; name: for the scene graph. */
 	constructor(xr, name = 'keys') {
@@ -35,6 +37,7 @@ export class KeyPad {
 		this.list = []; // the keys, as a list (no per-frame copies)
 		this._faces = []; this._hot = new Set(); this._hits = [];
 		this.armed = []; // per controller: the key its trigger went down on (laserOnRelease)
+		this.hover = []; // per controller: { k, t }: the key its laser rests on, and for how long
 	}
 
 	/** Adds a key of w x h metres; returns it (place its group yourself). */
@@ -104,11 +107,13 @@ export class KeyPad {
 					xr.raycaster.intersectObjects(blockers, false, hits);
 					if (hits[0] && hits[0].distance < hit.distance) { this.armed[c.index] = null; continue; } // (the model is in front)
 				}
-				if (!hit) { if (!c.state.trigger) this.armed[c.index] = null; continue; }
+				if (!hit) { if (!c.state.trigger) this.armed[c.index] = null; if (this.hover[c.index]) this.hover[c.index].k = null; continue; }
 				c.claim.trigger = 'ui';
 				input.showHit(c, hit.distance);
 				const k = hit.object.userData.key;
 				laserHot = k;
+				const hv = this.hover[c.index] ??= { k: null, t: 0 };
+				if (hv.k === k) hv.t += dt; else { hv.k = k; hv.t = 0; }
 				if (k.spec?.hold) {
 					// Held: the trigger goes down over the key and stays down for spec.hold.
 					const a = this.armed[c.index];
@@ -121,7 +126,9 @@ export class KeyPad {
 					continue;
 				}
 				if (!laserOnRelease) { if (c.state.down.trigger) action = this.press(k, c) ?? action; continue; }
-				if (c.state.down.trigger) this.armed[c.index] = k;
+				// (Armed only if the laser rested on the key before the trigger went down: a pull
+				// aimed through the doors at the model never presses one; the tester's finding.)
+				if (c.state.down.trigger) this.armed[c.index] = hv.t >= LASER_REST ? k : null;
 				if (c.state.up.trigger) { if (this.armed[c.index] === k) action = this.press(k, c) ?? action; this.armed[c.index] = null; }
 			}
 		}

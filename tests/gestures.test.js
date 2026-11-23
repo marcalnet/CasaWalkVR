@@ -9,14 +9,15 @@ import { HandGestures, GESTURE, handShape, handAimRay } from '../js/gestures.js'
 // hand, z along the fingers. Curled fingers, the thumb on the side of the
 // index's middle phalanx (the ready pose).
 const PROX = { index: [2.5, 0, 9], middle: [0.8, 0, 9.5], ring: [-0.9, 0, 9], pinky: [-2.5, 0, 8] };
-function hand({ curled = true, thumb = [4, -3.8, 10.5] } = {}) {
+function hand({ curled = true, thumb = [4, -3.8, 10.5], clench = false } = {}) {
 	const j = { wrist: [0, 0, 0], 'thumb-tip': thumb };
 	for (const [f, p] of Object.entries(PROX)) {
 		const name = f === 'pinky' ? 'pinky-finger' : `${f}-finger`;
 		j[`${name}-phalanx-proximal`] = p;
-		j[`${name}-tip`] = curled ? [p[0], -3.5, p[2] - 1] : [p[0], 0, p[2] + 8];
+		// (Curled loosely for the ready pose, about 5 cm from the knuckle; clenched for a fist, about 3.6 cm.)
+		j[`${name}-tip`] = !curled ? [p[0], 0, p[2] + 8] : clench ? [p[0], -3.5, p[2] - 1] : [p[0], -4.6, p[2] - 1.8];
 	}
-	if (curled) Object.assign(j, { 'index-finger-phalanx-intermediate': [2.5, -3, 11.5], 'index-finger-phalanx-distal': [2.5, -4.5, 9.5], 'index-finger-tip': [2.5, -4, 7.8] });
+	if (curled) Object.assign(j, { 'index-finger-phalanx-intermediate': [2.5, -3, 11.5], 'index-finger-phalanx-distal': [2.5, -4.5, 9.5], 'index-finger-tip': clench ? [2.5, -4, 7.8] : [2.5, -4.6, 7.4] });
 	else Object.assign(j, { 'index-finger-phalanx-intermediate': [2.5, 0, 13], 'index-finger-phalanx-distal': [2.5, 0, 15.5], 'index-finger-tip': [2.5, 0, 17.5] });
 	return j;
 }
@@ -81,7 +82,7 @@ test('nothing by chance: palm down, open fingers or a quick flash of the pose is
 
 test('a closed hand holds; opening lets go; a lost hand cancels', () => {
 	const g = new HandGestures('right');
-	const ev = run(g, 0.3, world(hand({ thumb: [3, -2, 6] })));
+	const ev = run(g, 0.3, world(hand({ thumb: [3, -2, 6], clench: true })));
 	assert.ok(ev.includes('fist'), 'three fingertips by their knuckles, 0.15 s');
 	assert.deepEqual(run(g, 0.1, world(hand({ curled: false }))), ['fistEnd']);
 	run(g, 0.3, world(hand()));
@@ -117,4 +118,20 @@ test('the aim ray runs from the shoulder through the wrist', () => {
 	const head = new THREE.Vector3(0, 1.6, 0), right = new THREE.Vector3(1, 0, 0);
 	const r = handAimRay(head, right, new THREE.Vector3(0.18, 1.2, -0.4), 'right');
 	assert.ok(r.dir.z < -0.8 && r.dir.y < 0 && Math.abs(r.dir.x) < 1e-6, 'a relaxed hand at chest level aims ahead and down');
+});
+
+// The tester's finding: moving the whole hand in the ready pose is never a swipe.
+test('a hand moving in the ready pose (thumb still on the index) turns and steps nothing', () => {
+	const g = new HandGestures('right');
+	assert.deepEqual(moves(g, 0.3, world(hand())), ['ready']);
+	const shifted = (dx, dz) => (t) => Object.fromEntries(Object.entries(world(hand())).map(([k, v]) => [k, v.clone().add(new THREE.Vector3(dx * t, 0, dz * t))]));
+	assert.deepEqual(moves(g, 0.3, shifted(0.05, 0)), [], 'drifting 5 cm to the right in 0.3 s');
+	assert.deepEqual(moves(g, 0.3, shifted(0, -0.1)), [], 'moving 10 cm forward');
+	assert.ok(g.ready, 'still ready');
+});
+
+test('a clenched fist is a closed hand, never the ready pose', () => {
+	const g = new HandGestures('right');
+	const ev = run(g, 0.4, world(hand({ clench: true })));
+	assert.ok(ev.includes('fist') && !ev.includes('ready'), JSON.stringify(ev));
 });

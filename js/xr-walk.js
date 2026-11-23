@@ -145,9 +145,20 @@ export class Walk {
 		const spots = this.spots();
 		const head = xr.centerer.worldToLocal(xr.headWorld());
 		let snappedTo = null;
+		const walls = (xr.model.layers.walls?.children ?? []).filter((w) => w.visible), knee = new THREE.Vector3(), to = new THREE.Vector3();
+		// (Never through a wall: pointing beside a door must not land you in the next room; the tester's finding.)
+		const clear = (p, s) => {
+			knee.copy(p); knee.y += 0.4;
+			xr.centerer.localToWorld(to.set(s.x, s.y + 0.4, s.z));
+			const len = knee.distanceTo(to);
+			if (len < 1e-3) return true;
+			xr.raycaster.set(knee, to.sub(knee).divideScalar(len));
+			xr.raycaster.far = len;
+			return !xr.raycaster.intersectObjects(walls, false).length;
+		};
 		const snap = (p) => {
 			const m = xr.centerer.worldToLocal(p.clone());
-			snappedTo = snapTo(spots, m, head);
+			snappedTo = snapTo(spots, m, head, (s) => clear(p, s));
 			return snappedTo ? xr.centerer.localToWorld(new THREE.Vector3(snappedTo.x, snappedTo.y, snappedTo.z)) : null;
 		};
 		// The arc stays low enough to pass through doorways (ARC_CEILING above your feet).
@@ -236,11 +247,11 @@ export class Walk {
 						xr.sound.play('aim');
 						xr.lessons?.note('arc');
 					}
-				} else if (e.type === 'turn' && !busy && !near) {
+				} else if (e.type === 'turn' && !busy && !near && !this.tele) { // (never while aiming: the tester's finding)
 					xr.turn(-e.dir * THREE.MathUtils.degToRad(xr.snapAngle));
 					xr.sound.play('tick');
 					xr.lessons?.note('turn');
-				} else if (e.type === 'step' && !busy && !near) {
+				} else if (e.type === 'step' && !busy && !near && !this.tele) {
 					if (!this.stepBy(e.dir)) xr.sound.play('deny');
 				}
 			}

@@ -33,4 +33,5 @@ test('the ring snaps to a hotspot near where you point, on your floor, within re
 	assert.equal(snapTo(s, { x: door.x + 0.7, y: 0, z: door.z + 0.7 }, { x: 3, z: 1.5 }), null, 'further: lands where you point');
 	assert.equal(snapTo(s, { x: door.x, y: 3, z: door.z }, { x: 3, z: 1.5 }), null, 'another floor');
 	assert.equal(snapTo(s, { x: door.x, y: 0, z: door.z }, { x: door.x + 5, z: 1.5 }), null, 'more than 4 m from you');
+	assert.equal(snapTo(s, { x: door.x + 0.3, y: 0, z: door.z }, { x: 3, z: 1.5 }, () => false), null, 'a wall in between: no snap');
 });
