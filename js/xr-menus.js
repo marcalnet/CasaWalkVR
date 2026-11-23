@@ -40,6 +40,7 @@ const CELLS = {
 	levels: { type: 'choice', stepper: true, id: 'levels', label: 'Levels', options: [], disabled: true, note: 'One level' },
 	view: sw('view', 'Passthrough'), // on: the room around you; off: the VR world
 	toolFan: { type: 'choice', id: 'toolFan', label: 'Tool fan', options: [{ value: 'left', label: 'Left hand' }, { value: 'right', label: 'Right hand' }], value: 'left' },
+	lens: { type: 'choice', id: 'lens', label: 'Camera lens', options: [24, 28, 35, 50].map((mm) => ({ value: mm, label: `${mm} mm` })), value: 28 },
 	sound: { type: 'choice', id: 'sound', label: 'Sound', options: [{ value: 'off', label: 'Off' }, { value: 'effects', label: 'Effects' }], value: 'effects' },
 	height: { type: 'choice', id: 'height', label: 'Height', options: HEIGHTS.map((h) => ({ value: h, label: h ? `${h.toFixed(1)} m` : 'Yours' })), value: 0 },
 };
@@ -48,6 +49,7 @@ const CELLS = {
 export const TABS = [
 	{ id: 'view', label: 'View', rows: [['light'], ['shadows', 'depth'], ['ceilings', 'view'], ['seethrough'], ['levels']] },
 	{ id: 'walk', label: 'Walk', rows: [['height'], ['solid']] }, // (Turn left the board: 30° stays, the user's call)
+	{ id: 'tools', label: 'Tools', rows: [['lens']] }, // (the street camera's lens: wide for interiors; to get closer, walk closer)
 	{ id: 'general', label: 'General', rows: [['toolFan'], ['sound']] },
 ];
 
@@ -198,6 +200,7 @@ export function updateLabels(xr) {
 			p.set('depth', { value: xr.depth.enabled, label: preparing ? `Depth shading ${xr.depth.label()}` : 'Depth shading' });
 		}
 		p.set('sound', { value: xr.soundLevel === 'off' ? 'off' : 'effects' });
+		p.set('lens', { value: xr.cameraLens });
 	}
 	const walk = xr.menus.walk, doll = xr.menus.dollhouse;
 	walk.set('height', { value: xr.personHeight });
@@ -284,6 +287,12 @@ export function menuAction(xr, target) {
 			updateLabels(xr);
 			break;
 		case 'shadows': xr.lighting?.setShadows(!xr.lighting.shadows); updateLabels(xr); break;
+		case 'lens':
+			xr.cameraLens = SETTINGS.cameraLens.options.includes(value) ? value : 28;
+			writeSetting('cameraLens', xr.cameraLens);
+			xr.fan?.camera?.setLens(xr.cameraLens);
+			updateLabels(xr);
+			break;
 		case 'sound':
 			xr.soundLevel = value === 'off' ? 'off' : value === 'effects' ? 'effects' : xr.soundLevel === 'off' ? 'effects' : 'off';
 			writeSetting('sound', xr.soundLevel);

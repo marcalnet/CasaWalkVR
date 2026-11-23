@@ -28,14 +28,16 @@ void main() { gl_FragColor = vec4(toSRGB(texture2D(map, vUv).rgb), 1.0); }`;
 /**
  * Renders `scene` from `eye` (a world matrix: position and direction; its
  * roll is removed so the horizon is level) and returns a JPEG Blob.
+ * level: remove the roll only when it is within this many radians (the street
+ * camera: a tilted shot stays tilted); Infinity (the default) always levels.
  * Call between frames; the renderer's XR state and render target are restored.
  */
-export async function takePhoto(renderer, scene, eye, { width = 1920, height = 1080, fov = 60, near = 0.05, far = 300, quality = 0.92 } = {}) {
+export async function takePhoto(renderer, scene, eye, { width = 1920, height = 1080, fov = 60, near = 0.05, far = 300, quality = 0.92, level = Infinity } = {}) {
 	// The camera: the eye's position, yaw and pitch.
 	const pos = new THREE.Vector3(), quat = new THREE.Quaternion(), scale = new THREE.Vector3();
 	eye.decompose(pos, quat, scale);
 	const e = new THREE.Euler().setFromQuaternion(quat, 'YXZ');
-	e.z = 0;
+	if (Math.abs(e.z) <= level) e.z = 0;
 	const camera = new THREE.PerspectiveCamera(fov, width / height, near, far);
 	camera.position.copy(pos);
 	camera.quaternion.setFromEuler(e);

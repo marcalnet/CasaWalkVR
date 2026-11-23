@@ -60,11 +60,12 @@ const shape = (rows) => rows.map((r) => r.map((c) => [c.id, c.type, c.label, ...
 test('the settings boards: the same tabs at both layers, a Close key, every target big enough to touch', async () => {
 	const { x } = await setup();
 	for (const p of Object.values(x.menus)) {
-		assert.deepEqual(p.tabs.map((t) => t.label), ['View', 'Walk', 'General']);
+		assert.deepEqual(p.tabs.map((t) => t.label), ['View', 'Walk', 'Tools', 'General']);
 		assert.deepEqual(shape(p.tabs[0].rows), ['light:choice:Time of day:Morning:Noon:Sunset:Night', 'shadows:switch:Shadows | depth:switch:Depth shading',
 			'ceilings:switch:Ceilings | view:switch:Passthrough', 'seethrough:switch:Transparent walls', `levels:choice:Levels${p === x.menus.dollhouse ? ':All levels (2):Up to Ground floor' : ''}`]);
 		assert.deepEqual(shape(p.tabs[1].rows), ['height:choice:Height:Yours:1.4 m:1.7 m:2.0 m', 'solid:switch:Solid walls']);
-		assert.deepEqual(shape(p.tabs[2].rows), ['toolFan:choice:Tool fan:Left hand:Right hand', 'sound:choice:Sound:Off:Effects']);
+		assert.deepEqual(shape(p.tabs[2].rows), ['lens:choice:Camera lens:24 mm:28 mm:35 mm:50 mm']);
+		assert.deepEqual(shape(p.tabs[3].rows), ['toolFan:choice:Tool fan:Left hand:Right hand', 'sound:choice:Sound:Off:Effects']);
 		assert.equal(p.actions.length, 0, 'no actions on the board: the doors are on the wrist');
 		assert.ok(p.rects().some((r) => r.id === 'close'), 'a Close key');
 		assert.ok(p.get('levels').stepper, 'Levels is a ‹ › stepper');
@@ -408,7 +409,7 @@ test('the first-time lessons: steps tick off in order; stepping inside starts th
 	assert.equal(L.place, null);
 });
 
-test('the tool fan: opens over the raised left hand in view; the right tip touches a tool, the grip takes it, swaps, puts back; the camera refuses', async () => {
+test('the tool fan: opens over the raised left hand in view; the right tip touches a tool, the grip takes it, swaps, puts back', async () => {
 	const { x, press, frame, hands } = await setup();
 	const fan = x.fan;
 	x.lessons.stop();
@@ -438,11 +439,16 @@ test('the tool fan: opens over the raised left hand in view; the right tip touch
 	press('right', 'grip'); frame(); press('right', 'grip', false); frame();
 	assert.equal(x.tools.held?.tool.name, 'marker', 'taking another swaps them');
 	assert.equal(fan.slots.find((s) => s.name === 'meter').held, false, 'the meter is back in its place');
-	// The camera: inactive, it shakes its head.
+	// The street camera (milestone D): taken like the others; its trigger is the shutter.
 	tipTo('camera'); frame(); frame();
 	press('right', 'grip'); frame(); press('right', 'grip', false); frame();
-	assert.equal(x.tools.held?.tool.name, 'marker', 'the camera is never taken');
-	assert.ok(fan.slots[0].wobble > 0 || fan.slots[0].tagGrow > 0, 'it wobbles and its tag grows');
+	assert.equal(x.tools.held?.tool.name, 'camera', 'the camera is taken too');
+	let shots = 0;
+	x.capturePhoto = (o) => { shots++; assert.ok(o.width / o.height === 1.5 && Math.abs(o.fov - 46.4) < 0.1, '3:2, 28 mm'); };
+	press('right', 'trigger'); frame(); press('right', 'trigger', false); frame();
+	assert.equal(shots, 1, 'the trigger is the shutter');
+	x.menuAction({ id: 'lens', value: 50 });
+	assert.ok(Math.abs(x.fan.camera.view.fov - 27) < 0.1, 'the lens setting: 50 mm');
 	// A squeeze away from the fan puts the held tool back.
 	hands.right.grip.position.set(0.3, 0.8, 0); frame(); frame();
 	press('right', 'grip'); frame(); press('right', 'grip', false); frame();

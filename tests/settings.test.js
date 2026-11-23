@@ -10,7 +10,7 @@ test('the storage keys never change', () => {
 	const keys = Object.fromEntries(Object.entries(SETTINGS).map(([name, s]) => [name, s.key]));
 	assert.deepEqual(keys, {
 		light: 'casawalk.light', shadows: 'casawalk.shadows', depth: 'casawalk.depth', view: 'casawalk.view',
-		height: 'casawalk.height', solid: 'casawalk.solidWalls', seeThrough: 'casawalk.seeThrough', toolFan: 'casawalk.toolFan', sound: 'casawalk.sound', guide: 'casawalk.walkGuide',
+		height: 'casawalk.height', solid: 'casawalk.solidWalls', seeThrough: 'casawalk.seeThrough', toolFan: 'casawalk.toolFan', sound: 'casawalk.sound', guide: 'casawalk.walkGuide', cameraLens: 'casawalk.cameraLens',
 		lessonScaleHands: 'casawalk.welcome.scale.hands', lessonScaleControllers: 'casawalk.welcome.scale.controllers',
 		lessonWalkHands: 'casawalk.welcome.walk.hands', lessonWalkControllers: 'casawalk.welcome.walk.controllers',
 	});

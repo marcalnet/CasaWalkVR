@@ -31,6 +31,7 @@ export const SETTINGS = {
 	// The guide beside the menu (C0.4): auto = open until your 5th teleport, then folded once;
 	// full / tab = as you last left it with its Hide guide key or its Guide tab.
 	guide: { key: 'casawalk.walkGuide', options: ['auto', 'full', 'tab'], fallback: 'auto' },
+	cameraLens: { key: 'casawalk.cameraLens', options: [24, 28, 35, 50], fallback: 28 }, // the street camera's lens, mm (milestone D)
 	// The first-time lessons (C0.5): done, per place and input kind (js/lessons.js).
 	lessonScaleHands: { key: 'casawalk.welcome.scale.hands', flag: true, fallback: false },
 	lessonScaleControllers: { key: 'casawalk.welcome.scale.controllers', flag: true, fallback: false },

@@ -34,6 +34,7 @@ js/xr-targets.js  what lasers, the teleport arc and the feet may hit (pure, Node
 js/xr-tools.js    hand-held tool system: claims, routing, annotations in model space (tools from milestone C)
 js/tool-fan.js    the tool fan over the left hand: open on a look, touch and grip (or a closed hand) to take, swap, put back; the inactive camera
 js/tool-models.js the three tools' models (camera, meter, marker), plain theme colours
+js/street-camera.js the street camera tool: shutter (photo from the lens, 3:2), viewfinder render target, lens setting, the print
 js/settings.js    every remembered setting: key, default, meaning (page and headset)
 js/rooms.js       where stepping inside lands: a room's clear middle and long direction (pure, Node-testable)
 js/theme.js       fonts, colours, corner radii of everything drawn in the headset (restyle here)

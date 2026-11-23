@@ -22,7 +22,8 @@
 // (fanBusy).
 
 import * as THREE from 'three';
-import { buildCamera, buildMeter, buildMarker } from './tool-models.js';
+import { buildMeter, buildMarker } from './tool-models.js';
+import { StreetCamera } from './street-camera.js';
 import { ease } from './tween.js';
 
 const ABOVE = 0.15; // the fan's middle, above the fan hand (metres)
@@ -45,23 +46,22 @@ export class ToolFan {
 		this.t = 0;
 		this.hot = null; // the slot a tip is touching
 		this.fanBusy = false;
-		const make = (name, object, live) => {
+		const make = (name, object, live, tool = null) => {
 			const slot = { name, object, live, home: new THREE.Group(), wobble: 0, tagGrow: 0, held: false };
 			slot.home.add(object);
 			this.group.add(slot.home);
-			const tool = {
-				name, object, live,
-				take: (c) => this.attach(slot, c),
-				putBack: () => this.detach(slot),
-				trigger: () => {}, // (the meter in milestone E, the marker in F)
-				secondary: () => {},
-			};
+			tool = tool ?? { name, object, live, trigger: () => {}, secondary: () => {} }; // (the meter in milestone E, the marker in F)
+			const own = { take: tool.take?.bind(tool), putBack: tool.putBack?.bind(tool) };
+			tool.take = (c) => { this.attach(slot, c); own.take?.(c); };
+			tool.putBack = () => { this.detach(slot); own.putBack?.(); };
 			slot.tool = tool;
 			if (live) xr.tools.add(tool);
 			return slot;
 		};
+		// The street camera works from milestone D (js/street-camera.js).
+		this.camera = new StreetCamera(xr);
 		this.slots = [
-			make('camera', buildCamera({ inactive: true }), false),
+			make('camera', this.camera.object, true, this.camera),
 			make('meter', buildMeter(), true),
 			make('marker', buildMarker({ ink: 'black' }), true),
 		];

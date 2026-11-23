@@ -92,6 +92,7 @@ export class XRExperience {
 		this.seeThrough = new SeeThrough();
 		this.soundLevel = readSetting('sound'); // off | effects | all (effects and ambience)
 		this.toolFan = readSetting('toolFan'); // the hand that holds the tool fan; the wrist menu is on the other
+		this.cameraLens = readSetting('cameraLens'); // the street camera's lens, mm (milestone D)
 		this.layerFx = null; // a move between layers in progress (goLayer())
 		this.frameDt = 1 / 72;
 		this.maxStorey = null; // dollhouse: highest storey shown (null = all)
@@ -531,18 +532,20 @@ export class XRExperience {
 	 * controllers, orbs or arc (everything in photoHidden), as a JPEG
 	 * (js/photo.js), kept in the page's photo roll (onPhoto).
 	 */
-	async capturePhoto() {
+	async capturePhoto({ eye = null, width, height, fov, level, onBlob } = {}) {
 		this.photoPending = false;
 		if (this.photoBusy) return;
 		this.photoBusy = true;
-		// (Drawn at once; only reading the image back waits.)
+		// (Drawn at once; only reading the image back waits.) From your head, or the
+		// street camera's lens (eye: its world matrix; 3:2, its field of view).
 		const job = withHidden(this.photoHidden, () => {
 			this.rig.updateMatrixWorld(true);
-			return takePhoto(this.renderer, this.scene, this.camera.matrixWorld.clone(), { near: XR_NEAR, far: XR_FAR });
+			return takePhoto(this.renderer, this.scene, eye ?? this.camera.matrixWorld.clone(), { near: XR_NEAR, far: XR_FAR, width, height, fov, level });
 		});
 		let error = null, kept = null;
 		try {
 			const blob = await job;
+			onBlob?.(blob);
 			if (this.onPhoto) {
 				kept = await this.onPhoto(blob, photoName());
 				if (!kept) throw new Error('The photo could not be kept');

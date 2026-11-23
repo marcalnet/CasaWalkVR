@@ -88,7 +88,7 @@ Press **Enter VR →** once a model is open: it starts at the scale model. The a
 
 **Bare hands** (being built, milestone C0): put the controllers down and your hands appear. The wrist menu and the board work by touch. Pinching does nothing, on purpose. To move, use Meta's own hand gesture: hold a hand sideways, fingers curled, thumb resting on your index (an orange dot shows on the thumb), and **tap your thumb**: an arc shows where you'll land; when its ring turns blue, **tap again** to go. **Open your hand** to cancel. Swipe your thumb left or right to turn, forward or back for a small step. At the scale model the same tap aims at a room: tap again to step inside. **Close your hand on the model** to hold it: lift it, tilt it, look underneath. Let it go over the plinth and it settles; let it go in the air and it floats, then goes back to its plinth by itself 4 seconds after your hands move away (that works with the controllers' grips too). A **guide** beside the menu shows all this; its Hide key folds it away. The first time in each place, a short **lesson** card in front of you teaches the gestures step by step (a 3D hand shows each one); it ticks steps off as you do them and goes when you're done or press Got it. It's remembered separately for bare hands and for controllers.
 
-**Tools** (being built, milestone C): raise your left hand (or left controller) in front of you and look at it: three tools float above it, a street camera, a meter and a marker. Touch one with your right hand and squeeze the grip (or close your hand) to take it; take another to swap; squeeze away from the fan (or bring it back) to put it back. The camera says "Coming soon" for now, and the meter and the marker start working in later updates.
+**Tools** (being built, milestone C): raise your left hand (or left controller) in front of you and look at it: three tools float above it, a street camera, a meter and a marker. Touch one with your right hand and squeeze the grip (or close your hand) to take it; take another to swap; squeeze away from the fan (or bring it back) to put it back. The **street camera** works: its trigger takes a photo through its lens (3:2), its back screen shows what it sees, and a little print pops out after each shot; photos wait on the page for when you leave VR. Choose its lens (24, 28, 35 or 50 mm) in Settings, Tools tab. The meter and the marker start working in later updates.
 
 While aiming a teleport (hands or controllers), faint rings on the floor mark the middle of each room and both sides of each doorway; the landing ring snaps to one when you aim near it.
 
@@ -227,6 +227,7 @@ js/xr-targets.js  what the lasers, the teleport arc and your feet can hit (no DO
 js/xr-tools.js    the hand-held tool system
 js/tool-fan.js    the tool fan (take, swap, put back)
 js/tool-models.js the tools' models
+js/street-camera.js the street camera: shutter, viewfinder, lens, the print
 js/xr-input.js    controllers, lasers, buttons, thumbsticks, teleport arc, bare hands' touch state
 js/touch.js       touch keys pressed by a fingertip or a controller's tip
 js/hands.js       bare hands, drawn
