@@ -30,7 +30,10 @@ const c = (cx, cz, r, y0, y1, mat, seg = 12, r1 = r) => ({ cyl: [cx, cz, r, r1, 
 
 // Fewer distinct materials = fewer draw calls (one per material per storey after the merge).
 // These roles fold into a near neighbour in this home.
-const ALIAS = { bark: 'walnut', foliage: 'green', linen: 'wool', leather: 'graphite', steelWhite: 'ceiling', terracotta: 'oak', brass: 'oak', concrete: 'wool' };
+// Roles that look the same under the app's light share one material (each material is a draw call per storey;
+// Quest 2 budget ~150 at the scale model with see-through walls): oatmeal ~ pale ash, stone ~ warm stone,
+// wool, linen and concrete ~ the light off-white.
+const ALIAS = { bark: 'walnut', foliage: 'green', linen: 'ceiling', leather: 'graphite', steelWhite: 'ceiling', terracotta: 'oak', brass: 'oak', concrete: 'ceiling', wool: 'ceiling', oatmeal: 'oak', stone: 'masonry' };
 
 function toObj(name, solids) {
 	const lines = [`# ${name}: generated for CasaWalk (Pond House)`, `mtllib ${name}.mtl`];
@@ -73,8 +76,8 @@ const MODELS = {
 	glassPanelNarrow: [b(0, 0, 0, 4, 240, 10, 'steelWhite'), b(256, 0, 0, 260, 240, 10, 'steelWhite'), b(4, 0, 4.5, 256, 240, 5.5, 'glass')],
 	glassDoor: [b(0, 0, 0, 4, 270, 10, 'steelWhite'), b(296, 0, 0, 300, 270, 10, 'steelWhite'), b(4, 0, 4.5, 296, 270, 5.5, 'glass'), b(150, 90, 10, 153, 180, 13, 'steelWhite'), b(150, 90, -3, 153, 180, 0, 'steelWhite')],
 	ribbon: [b(0, 0, 0, 240, 4, 30, 'steelWhite'), b(0, 56, 0, 240, 60, 30, 'steelWhite'), b(0, 4, 0, 4, 56, 30, 'steelWhite'), b(236, 4, 0, 240, 56, 30, 'steelWhite'), b(4, 4, 14, 236, 56, 16, 'glass')],
-	door: [b(0, 0, 0, 5, 212, 20, 'walnut'), b(85, 0, 0, 90, 212, 20, 'walnut'), b(5, 207, 0, 85, 212, 20, 'walnut'), b(5, 0, 8, 85, 207, 12, 'oak'), b(74, 98, 5, 78, 102, 15, 'brass')],
-	frontDoor: [b(0, 0, 0, 5, 230, 30, 'walnut'), b(115, 0, 0, 120, 230, 30, 'walnut'), b(5, 225, 0, 115, 230, 30, 'walnut'), b(5, 0, 13, 115, 225, 17, 'walnut'), b(95, 80, 8, 98, 160, 22, 'brass')],
+	door: [b(0, 0, 0, 5, 212, 20, 'oak'), b(85, 0, 0, 90, 212, 20, 'oak'), b(5, 207, 0, 85, 212, 20, 'oak'), b(5, 0, 8, 85, 207, 12, 'oak'), b(74, 98, 5, 78, 102, 15, 'brass')], // one material: openings merge apart
+	frontDoor: [b(0, 0, 0, 5, 230, 30, 'oak'), b(115, 0, 0, 120, 230, 30, 'oak'), b(5, 225, 0, 115, 230, 30, 'oak'), b(5, 0, 13, 115, 225, 17, 'oak'), b(95, 80, 8, 98, 160, 22, 'brass')],
 	// Structure and site
 	column: [b(0, 0, 0, 20, 288, 20, 'steelWhite')], // one storey each: the garden level part and the pavilion part are separate pieces
 	columnP: [b(0, 0, 0, 20, 300, 20, 'steelWhite')],
@@ -96,7 +99,8 @@ const MODELS = {
 	rodRail: [...Array.from({ length: 23 }, (_, i) => c(5 + i * 10.9, 2, 1.5, 0, 97, 'oak', 6)), b(0, 97, -1, 250, 101, 5, 'oak')],
 	// Outdoor stair in the west wall's slot: 16 solid stone steps (model z 0 = the top)
 	stairsOut: Array.from({ length: 16 }, (_, i) => b(0, 0, 416 - (i + 1) * 26, 110, +((i + 1) * 300 / 17).toFixed(2), 416 - i * 26, 'masonry')),
-	shower: [b(0, 0, 0, 90, 6, 90, 'stone'), b(0, 6, 88, 90, 200, 90, 'glass'), c(70, 12, 10, 196, 198, 'brass', 10), c(70, 6, 1, 160, 198, 'brass', 6)],
+	shower: [b(0, 0, 0, 90, 6, 90, 'stone'), b(0, 6, 84, 90, 200, 90, 'stone'), // a stone screen wall (no glass: one material fewer)
+		 c(70, 12, 10, 196, 198, 'brass', 10), c(70, 6, 1, 160, 198, 'brass', 6)],
 	tallWindow: [b(0, 0, 0, 4, 200, 30, 'steelWhite'), b(146, 0, 0, 150, 200, 30, 'steelWhite'), b(4, 0, 0, 146, 4, 30, 'steelWhite'), b(4, 196, 0, 146, 200, 30, 'steelWhite'), b(4, 4, 14, 146, 196, 16, 'glass')],
 	railing: [b(0, 96, 0, 300, 100, 4, 'graphite'), ...Array.from({ length: 11 }, (_, i) => b(i * 29.6, 0, 1, i * 29.6 + 3, 96, 3, 'graphite'))],
 	waterA: [b(0, 0, 0, 950, 1, 620, 'water')],
@@ -196,7 +200,8 @@ const light = (...a) => piece('light', ...a);
 // ===========================================================================
 
 const G = 'level-ground', P = 'level-upper';
-const STONE = argb('masonry'), FRAME = argb('steelWhite'), RENDER = argb('putty'), PLASTER = argb('walls'), OCHRE = argb('concrete');
+const STONE = argb('masonry'), FRAME = argb('walls'), // (the white steel frame reads as the plaster: one colour)
+	 RENDER = argb('putty'), PLASTER = argb('walls'), OCHRE = argb('concrete');
 
 // --- Site: trees, shrubs, the pond (south and south-west, under the terrace), ledges and boulders
 furniture('Tree', 'tree', G, -420, 450);
@@ -213,9 +218,9 @@ furniture('Boulder', 'boulder', G, 1050, 1000, { angle: -0.3 });
 // The pond: flat water pieces (not a room, so nobody steps inside onto the water); it runs under the terrace
 furniture('Pond', 'waterA', G, 125, 1110);
 furniture('Pond', 'waterB', G, 950, 1160);
-furniture('Water lilies', 'lily', G, 300, 1250, { elevation: 1 });
-furniture('Water lilies', 'lily', G, 420, 1180, { elevation: 1 });
-furniture('Water lilies', 'lily', G, 900, 1270, { elevation: 1 });
+furniture('Lily pads', 'lily', G, 300, 1250, { elevation: 1 });
+furniture('Lily pads', 'lily', G, 420, 1180, { elevation: 1 });
+furniture('Lily pads', 'lily', G, 900, 1270, { elevation: 1 });
 
 // --- Ground floor
 // Living room: round the fireplace in the west stone wall
@@ -225,7 +230,7 @@ furniture('Coffee table', 'coffeeTable', G, 250, 400, { angle: PI / 2 });
 furniture('Sofa', 'sofa', G, 420, 400, { angle: PI / 2 });
 furniture('Lounge chair', 'loungeChair', G, 200, 200, { angle: -0.5 });
 furniture('Lounge chair', 'loungeChair', G, 200, 600, { angle: PI + 0.5 });
-furniture('Floor lamp', 'floorLamp', G, 480, 620);
+light('Floor lamp', 'floorLamp', G, 480, 620, { bulbs: [{ z: 0.88, diameter: 0.6 }] });
 furniture('Plant', 'plant', G, 40, 140);
 // Dining by the glass, between the sofa and the bar
 furniture('Dining table', 'diningTable', G, 650, 520);
@@ -357,7 +362,7 @@ const room = (name, level, floorColor, points, extra = {}) => {
 	xml.push(`<room${attrs({ id: `room-${nextId++}`, level, name: name || undefined, floorColor, ceilingColor: argb('ceiling'), ...extra })}>`, ...points.map(([x, y]) => `  <point x='${x}' y='${y}'/>`), '</room>');
 };
 const rect = (x0, y0, x1, y1) => [[x0, y0], [x1, y0], [x1, y1], [x0, y1]];
-const OAK = argb('floor'), LIMESTONE = argb('paleStone'), PAVING = argb('paving'), SLATE = argb('stone');
+const OAK = argb('floor'), LIMESTONE = argb('paleStone'), PAVING = argb('paving'), SLATE = PAVING; // (bathroom floors as the paving: one colour fewer)
 const open = { ceilingVisible: 'false' };
 // Ground floor
 room('Living room and kitchen', G, LIMESTONE, [[0, 100], [784, 100], [784, 211], [1200, 211], [1200, 700], [0, 700]]);

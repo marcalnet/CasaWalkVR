@@ -72,9 +72,9 @@ test('Pond House: 2 levels, 17 rooms (14 named; the pond is water, not a room), 
 	const t = targetSets({ layers, multiLevel: true });
 	const water = layers.main.children.filter((m) => m.userData.water);
 	assert.ok(water.length > 0 && water.every((m) => !t.walkable.has(m)) && t.walkableList.some((m) => layers.main.children.includes(m)));
-	// The stair's glass balustrade (and the shower's glass) is never stood on either.
+	// Glass (the shower's screens; the stair has an oak rod rail now) is never stood on either.
 	const glass = layers.main.children.filter((m) => m.userData.glass);
-	assert.ok(glass.length > 0 && glass.every((m) => !t.walkable.has(m)), 'glass is never a landing');
+	assert.ok(glass.every((m) => !t.walkable.has(m)), 'glass is never a landing');
 });
 
 test('Apartment: one level without <level> elements, named zones in one open room, lamps, nothing missing', async () => {

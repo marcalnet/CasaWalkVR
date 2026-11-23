@@ -750,7 +750,12 @@ check('B closes the board', (await state()).menu === null);
 	const dotShown = await page.evaluate(() => window.__casawalk.xr.handViews.find((v) => v.c.handedness === 'right').readyDot.visible);
 	check('bare hands: the ready pose shows the orange dot on the thumb', dotShown);
 	// Stepping inside by pointing: tap, point at a room, tap again.
-	const roomPt = await page.evaluate(() => { const x = window.__casawalk.xr, b = x.modes.dollhouse.modelBox(); return b.getCenter(new (x.rig.position.constructor)()).setY(b.min.y + 0.02).toArray(); });
+	// Aim at a room's middle (a room hotspot), or the box's middle for a model without rooms (not the pond: water is no landing).
+	const roomPt = await page.evaluate(() => {
+		const x = window.__casawalk.xr, V = x.rig.position.constructor, room = x.modes.walk.spots().find((s) => s.kind === 'room');
+		if (room) return x.centerer.localToWorld(new V(room.x, room.y + 0.01, room.z)).toArray();
+		const b = x.modes.dollhouse.modelBox(); return b.getCenter(new V()).setY(b.min.y + 0.02).toArray();
+	});
 	await handAimAt(roomPt); await frames(4); await handAimAt(roomPt); await frames(4);
 	await gesture('right', { type: 'tap' }); await frames(8);
 	await handAimAt(roomPt); await frames(8);
