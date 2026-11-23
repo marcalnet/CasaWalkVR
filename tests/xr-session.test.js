@@ -523,3 +523,24 @@ test('the marker: hold the trigger and move to draw; the stick press changes col
 	assert.equal(marker.strokes.length, 0, 'A: undo');
 	x.tools.putBack();
 });
+
+test('Vision Pro look-and-pinch: a pinch on a room steps inside; inside, on the floor, teleports; never leaves VR by the held door', async () => {
+	const { act } = await import('../js/transient-pointer.js');
+	const { x, ended, frame, settle } = await setup();
+	frame();
+	const head = x.headWorld();
+	// ← Back on the plinth needs a hold: a single pinch on it does nothing.
+	const back = x.modes.dollhouse.doors.keys.get('back').face.getWorldPosition(new THREE.Vector3());
+	assert.equal(act(x, head, back.clone().sub(head)), null);
+	assert.equal(ended(), 0);
+	// A room of the scale model.
+	const room = x.modes.walk.spots().find((s) => s.kind === 'room');
+	const at = x.centerer.localToWorld(new THREE.Vector3(room.x, room.y, room.z));
+	assert.equal(act(x, head, at.clone().sub(head)), 'inside');
+	settle();
+	assert.equal(x.mode, 'walk');
+	// Inside: the floor a little ahead.
+	const h2 = x.headWorld();
+	assert.equal(act(x, h2, new THREE.Vector3(0, -1, -0.25)), 'teleport', 'the floor just ahead');
+	assert.equal(act(x, h2, new THREE.Vector3(0, 1, 0)), null, 'the ceiling: nothing');
+});

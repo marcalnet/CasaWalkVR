@@ -375,7 +375,7 @@ check('one Enter VR button', await enterVR.count() === 1 && await page.locator('
 // Head 1.6 m up, looking slightly down at the plinth.
 // The first-time lessons (C0.5) are marked done for the whole run (they would stand
 // in front of the other checks); their own checks clear them below.
-const LESSON_KEYS = ['casawalk.welcome.scale.hands', 'casawalk.welcome.scale.controllers', 'casawalk.welcome.walk.hands', 'casawalk.welcome.walk.controllers'];
+const LESSON_KEYS = ['casawalk.welcome.scale.hands', 'casawalk.welcome.scale.controllers', 'casawalk.welcome.walk.hands', 'casawalk.welcome.walk.controllers', 'casawalk.toolsIntro'];
 await page.evaluate((keys) => { for (const k of keys) localStorage.setItem(k, '1'); }, LESSON_KEYS);
 await page.evaluate(() => window.__device.position.set(0, 1.6, 0));
 await lookDown();
@@ -1278,6 +1278,18 @@ check('back from walking: eyes at 1.89 m again, gallery shown, lasers on', Math.
 	check('a squeeze away from the fan puts the tool back', await page.evaluate(() => window.__casawalk.xr.tools.held === null));
 	await restLeft(); await lookDown(); await frames(20);
 	check('the fan closes when the hand is lowered', await page.evaluate(() => !window.__casawalk.xr.fan.group.visible));
+}
+
+// The tools' first-time introduction (C3): large in front of you, then they fly to the fan's wrist; the lesson follows.
+{
+	await page.evaluate(() => { localStorage.removeItem('casawalk.toolsIntro'); const x = window.__casawalk.xr; x.lessons.stop(); x.toolsIntro.start(); });
+	await frames(10);
+	const i0 = await page.evaluate(() => { const t = window.__casawalk.xr.toolsIntro, V = window.__casawalk.xr.rig.position.constructor, h = window.__casawalk.xr.headWorld(); return { playing: t.playing, shown: t.group.visible, away: +t.group.getWorldPosition(new V()).distanceTo(h).toFixed(2), names: t.items.map((i) => i.name) }; });
+	check('the tools\' introduction: the three tools large, about 1.5 m in front of you, named', i0.playing && i0.shown && Math.abs(i0.away - 1.5) < 0.1 && i0.names.join() === 'Street camera,Meter,Marker', JSON.stringify(i0));
+	await shot('tools-intro');
+	await page.waitForFunction(() => !window.__casawalk.xr.toolsIntro.playing, null, { timeout: 30000, polling: 'raf' }).catch(() => {});
+	const i1 = await page.evaluate(() => ({ playing: window.__casawalk.xr.toolsIntro.playing, remembered: localStorage.getItem('casawalk.toolsIntro') }));
+	check('after a few seconds they fly to the wrist and it is remembered', !i1.playing && i1.remembered === '1', JSON.stringify(i1));
 }
 
 // The first-time lessons (C0.5), with controllers: the scale model's, then inside.

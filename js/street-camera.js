@@ -14,7 +14,7 @@
 
 import * as THREE from 'three';
 import { buildCamera } from './tool-models.js';
-import { COLOURS, FONT } from './theme.js';
+import { COLOURS, FONT, GUIDE } from './theme.js';
 
 const SCREEN = [192, 128]; // viewfinder pixels
 // Viewfinder frames: 4 a second, 2 on Quest 2 (a phone GPU); a frame after a slow one is skipped;
@@ -52,6 +52,11 @@ export class StreetCamera {
 		this.lensLabel = makeLabel();
 		this.lensLabel.mesh.position.copy(this.screenPoint.position).add(new THREE.Vector3(0.016, -0.012, 0.001));
 		this.object.add(this.lensLabel.mesh);
+		// Its instruction, hand-lettered on the back under the screen (the user: simple, almost no printing).
+		this.hint = makeHint();
+		this.hint.mesh.position.copy(this.screenPoint.position).add(new THREE.Vector3(0, -0.0225, 0.001));
+		this.object.add(this.hint.mesh);
+		this.hint.set('Trigger: take a photo');
 		this.held = null; // the hand holding it
 		this.t = 0;
 		this.prints = [];
@@ -65,7 +70,7 @@ export class StreetCamera {
 		this.lensLabel.set(`${mm} mm`);
 	}
 
-	take(c) { this.held = c; }
+	take(c) { this.held = c; this.hint.set(c?.isHand ? 'Tap your thumb: photo' : 'Trigger: take a photo'); }
 	putBack() { this.held = null; }
 
 	/** The shutter. */
@@ -177,6 +182,27 @@ export class StreetCamera {
 			for (const o of hidden) o.visible = true;
 		}
 	}
+}
+
+/** The camera's instruction: one short hand-lettered line in the orange of the thing to press. */
+function makeHint() {
+	const canvas = typeof document !== 'undefined' ? document.createElement('canvas') : null;
+	if (canvas) { canvas.width = 512; canvas.height = 64; }
+	const texture = canvas ? new THREE.CanvasTexture(canvas) : null;
+	if (texture) { texture.colorSpace = THREE.SRGBColorSpace; texture.anisotropy = 4; }
+	const mesh = new THREE.Mesh(new THREE.PlaneGeometry(0.05, 0.00625), new THREE.MeshBasicMaterial({ map: texture, transparent: true, toneMapped: false }));
+	mesh.name = 'camera-hint';
+	return {
+		mesh,
+		set(text) {
+			if (!canvas) return;
+			const ctx = canvas.getContext('2d');
+			ctx.clearRect(0, 0, 512, 64);
+			ctx.fillStyle = COLOURS.primary; ctx.font = `700 46px ${GUIDE.font}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+			ctx.fillText(text, 256, 34);
+			texture.needsUpdate = true;
+		},
+	};
 }
 
 /** A small canvas label (the lens, on the viewfinder). */

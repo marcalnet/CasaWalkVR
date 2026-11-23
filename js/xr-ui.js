@@ -262,6 +262,9 @@ export class XRUI {
 		if (this.help) { this.hideHelp(); this.feel(null, 'close'); return; }
 		this.closeMenu();
 		const xr = this.xr;
+		// Help replays this place's lesson (and, at the scale model, the tools' introduction first).
+		if (xr.mode === 'dollhouse' && xr.toolsIntro?.start({ again: true })) { xr.lessons.stop(); xr.introAgain = true; }
+		else xr.lessons?.start(xr.mode === 'walk' ? 'walk' : 'scale', { again: true });
 		const card = xr.input.active().length ? xr.help[xr.mode] : xr.help.hands;
 		if (!card || !this.wrist.open) return;
 		if (card === xr.help.hands) { card.lines = handsHelp(this.wrist.side); card.draw(); }

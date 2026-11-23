@@ -37,6 +37,7 @@ export const SETTINGS = {
 	lessonScaleControllers: { key: 'casawalk.welcome.scale.controllers', flag: true, fallback: false },
 	lessonWalkHands: { key: 'casawalk.welcome.walk.hands', flag: true, fallback: false },
 	lessonWalkControllers: { key: 'casawalk.welcome.walk.controllers', flag: true, fallback: false },
+	toolsIntro: { key: 'casawalk.toolsIntro', flag: true, fallback: false }, // the tools' first-time introduction was shown (milestone C3)
 };
 
 /** The value a stored string stands for (null or undefined: nothing stored). */

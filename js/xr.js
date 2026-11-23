@@ -42,6 +42,8 @@ import * as THREE from 'three';
 import { XRInput } from './xr-input.js';
 import { HandView } from './hands.js';
 import { Lessons } from './lessons.js';
+import { ToolsIntro } from './tools-intro.js';
+import { attachTransientPointer } from './transient-pointer.js';
 import { SeeThrough, SEE_THROUGH_MAX } from './walls.js';
 import { takePhoto, photoName, saveFile, withHidden } from './photo.js';
 import { readSetting } from './settings.js';
@@ -129,6 +131,7 @@ export class XRExperience {
 		this.modes = { dollhouse: new Dollhouse(this), walk: new Walk(this) };
 		this.ui = new XRUI(this);
 		this.lessons = new Lessons(this); // the first-time lessons (C0.5)
+		this.toolsIntro = new ToolsIntro(this); // the tools' first-time introduction (C3)
 		for (const c of Object.values(this.help)) this.ui.wrist.cross.add(c.mesh); // (Help opens beside the wrist menu, on its right)
 		this.tools = new ToolSystem(this);
 		this.fan = new ToolFan(this); // the tool fan over the left hand (milestone C)
@@ -229,6 +232,7 @@ export class XRExperience {
 		this.camera.updateProjectionMatrix();
 		this.scene.background = null; // the sky spheres draw the VR view; null shows passthrough
 		session.addEventListener('end', () => this.handleEnd());
+		attachTransientPointer(this, session); // (Apple Vision Pro's look-and-pinch; nothing on a Quest)
 		// Holding the Meta button re-centres the headset: follow it.
 		this.renderer.xr.getReferenceSpace()?.addEventListener?.('reset', () => {
 			if (this.mode === 'dollhouse') this.pendingRecentre = true;
@@ -240,6 +244,7 @@ export class XRExperience {
 		this.modes.dollhouse.begin();
 		this.setMode('dollhouse', { measure: false }); // no head pose yet: measured below, with the first one
 		this.fan.camera.warm(); // the camera's drawing programs, before anyone takes it (behind the start)
+		this.introPending = true; // the tools' introduction, the first time, once the head is known (then the lesson)
 		this.ui.setWelcome(true); // until the menu is first opened
 		// The floor origin is not necessarily where you stand (it can be
 		// anywhere in your play area), so place the plinth in front of the
@@ -258,6 +263,7 @@ export class XRExperience {
 		this.pendingRecentre = false;
 		this.ui.reset(); // menus, welcome card, notes, the wrist menu
 		this.lessons.stop();
+		this.toolsIntro.stop();
 		this.layerFx = null;
 		this.curtain.visible = false;
 		this.arrival.mesh.visible = false;
@@ -298,7 +304,8 @@ export class XRExperience {
 		// The first-time lessons: stepping inside ends the scale model's; each place starts its own (until done).
 		if (was === 'dollhouse' && name === 'walk') this.lessons.note('inside');
 		this.lessons.stop();
-		if (this.session) this.lessons.start(name === 'walk' ? 'walk' : 'scale');
+		if (this.session && !(name === 'dollhouse' && this.toolsIntro?.playing)) this.lessons.start(name === 'walk' ? 'walk' : 'scale'); // (the tools' introduction first)
+		if (name !== 'dollhouse') this.toolsIntro?.stop();
 		this.ui.setWelcome(this.ui.welcomeOn);
 	}
 
@@ -580,11 +587,13 @@ export class XRExperience {
 				this.pendingRecentre = false;
 				this.modes.dollhouse.measureLift(head); // the tall view, from where the head really is
 				this.modes.dollhouse.recentre(head.clone().premultiply(this.rig.matrix));
+				if (this.introPending) { this.introPending = false; if (this.toolsIntro.start()) this.lessons.stop(); }
 				if (this.lessons.place) this.lessons.place3d(); // (in front of you, now that the head is known)
 			}
 		}
 		this.noteReady(dt);
 		if (!this.layerFx) this.lessons.update(dt); // (its keys before the mode's lasers)
+		this.toolsIntro.update(dt, () => { if (this.mode === 'dollhouse') this.lessons.start('scale', { again: !!this.introAgain }); this.introAgain = false; });
 		if (this.layerFx) this.runLayerFx(dt); // moving between layers: the modes wait
 		else this.modes[this.mode]?.update(dt);
 		this.runArrival(dt);

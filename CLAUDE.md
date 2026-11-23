@@ -53,6 +53,8 @@ js/hands.js       bare hands drawn from the WebXR joints (translucent capsules, 
 js/gestures.js    bare-hand gestures from the joints: ready, thumb tap and swipes, closed hand, the aim ray (pure, Node-testable)
 js/hotspots.js    teleport hotspots: room middles and doorways, and snapping to them (pure, Node-testable)
 js/guide.js       the guide beside the menu: how to move, for hands or controllers; Hide folds it into a tab
+js/tools-intro.js the tools' first-time introduction: large in front of you, then flying to the wrist
+js/transient-pointer.js Apple Vision Pro's look-and-pinch: one pinch acts along its ray (isolated)
 js/lessons.js     the first-time lessons: a card of steps that tick off, the looping 3D hand, the first target
 js/hand-model.js  the hand model: the generic hand (vendor/generic-hand/) dressed in the hand look, posed from joints or presets
 js/hand-poses.js  preset hand poses (from IWER, MIT) for the lessons' demonstration hand

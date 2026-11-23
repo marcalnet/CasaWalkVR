@@ -84,10 +84,10 @@ export class Lessons {
 	/** The step to do now (the first not done), or null. */
 	current() { return this.steps().find((s) => s.done && !this.done.has(s.id)) ?? null; }
 
-	/** Starts this place's lesson unless it was done before with this input kind. */
-	start(place) {
+	/** Starts this place's lesson unless it was done before with this input kind (again: always, for Help). */
+	start(place, { again = false } = {}) {
 		const kind = this.inputKind();
-		if (readSetting(lessonSetting(place, kind))) { if (this.place === place) this.stop(); return false; }
+		if (!again && readSetting(lessonSetting(place, kind))) { if (this.place === place) this.stop(); return false; }
 		this.place = place; this.kind = kind; this.done.clear();
 		this.place3d();
 		this.draw();
