@@ -479,3 +479,28 @@ test('bare hands: a thumb tap of the hand holding a tool is its trigger; that ha
 	x.modes.walk.handMoves(1 / 72);
 	assert.equal(x.modes.walk.tele?.via, 'hand', 'with no tool in that hand, the tap aims');
 });
+
+test('the laser meter: two triggers measure a line in model space; A undoes, holding A clears', async () => {
+	const { x, frame } = await setup();
+	const meter = x.fan.meter, c = x.input.hands.right;
+	x.tools.take(meter, c);
+	frame();
+	// Where the dot is (in the world), at the scale model's zoom: 1.6 m apart in the home.
+	const s = x.anchor.scale.x;
+	const at = (mx) => x.centerer.localToWorld(new THREE.Vector3(mx, 0.75, 0));
+	meter.hit = at(0); meter.trigger(c, 'down');
+	meter.hit = at(1.6); meter.trigger(c, 'down');
+	assert.equal(meter.m.lines.length, 1);
+	assert.equal(meter.m.lines[0].label, '1.60 m', 'real metres, whatever the zoom');
+	assert.ok(s < 0.2, 'the scale model is small');
+	assert.equal(x.tools.annotations.children.filter((o) => o.name === 'measurement').length, 1, 'drawn in model space');
+	meter.secondary(c, 'press');
+	assert.equal(meter.m.lines.length, 0, 'A: undo');
+	meter.hit = at(0); meter.trigger(c, 'down'); meter.hit = at(1); meter.trigger(c, 'down');
+	meter.hit = at(2); meter.trigger(c, 'down'); meter.hit = at(3); meter.trigger(c, 'down');
+	meter.secondary(c, 'hold');
+	assert.equal(meter.m.lines.length + meter.marks.length, 0, 'hold A: clear all');
+	meter.hit = null; meter.trigger(c, 'down');
+	assert.equal(meter.m.pending, null, 'pointing at nothing: no point');
+	x.tools.putBack();
+});

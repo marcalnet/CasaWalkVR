@@ -1213,6 +1213,28 @@ check('back from walking: eyes at 1.89 m again, gallery shown, lasers on', Math.
 	const held = await page.evaluate(() => { const x = window.__casawalk.xr; return { tool: x.tools.held?.tool.name ?? null, grab: !!x.modes.dollhouse.grab, laser: x.input.hands.right.line.visible }; });
 	check('the right tip touches the meter, the grip takes it (not the model); its laser goes', hot === 'meter' && held.tool === 'meter' && !held.grab && !held.laser, JSON.stringify({ hot, ...held }));
 	await shot('tool-held');
+	// The laser meter (milestone E): its beam and dot on the model, the reading on its screen; two triggers: a line.
+	{
+		const aimMeter = (to) => page.evaluate((to) => {
+			const x = window.__casawalk.xr, d = window.__device.controllers.right, V = x.rig.position.constructor;
+			const p = d.position, from = x.rig.localToWorld(new V(p.x, p.y, p.z));
+			// (The meter's laser runs along its tip's +Z; the controller's -Z points the same way in its hand.)
+			const dir = new V(...to).sub(from).normalize();
+			const q = new (x.rig.quaternion.constructor)().setFromUnitVectors(new V(0, 0, -1), dir);
+			d.quaternion.set(q.x, q.y, q.z, q.w);
+		}, to);
+		const box = await page.evaluate(() => { const b = window.__casawalk.xr.modes.dollhouse.modelBox(); return [b.min.toArray(), b.max.toArray()]; });
+		const mid = (fx, fz) => [box[0][0] + (box[1][0] - box[0][0]) * fx, box[1][1], box[0][2] + (box[1][2] - box[0][2]) * fz];
+		await aimMeter(mid(0.3, 0.5)); await frames(8);
+		const m0 = await page.evaluate(() => { const m = window.__casawalk.xr.fan.meter; return { beam: m.beam.visible, dot: m.dot.visible, hit: !!m.hit }; });
+		await click('right', 'trigger'); await frames(4);
+		await aimMeter(mid(0.7, 0.5)); await frames(8);
+		await click('right', 'trigger'); await frames(6);
+		const m1 = await page.evaluate(() => { const m = window.__casawalk.xr.fan.meter; return { lines: m.m.lines.length, label: m.m.lines[0]?.label ?? null, marks: m.marks.length }; });
+		check('the laser meter: a beam and dot on the model; two triggers measure a line with its label', m0.beam && m0.dot && m0.hit && m1.lines === 1 && m1.marks === 1 && /\d/.test(m1.label ?? ''), JSON.stringify({ m0, m1 }));
+		await shot('meter-line');
+		await page.evaluate(() => window.__casawalk.xr.fan.meter.clear());
+	}
 	// The street camera (milestone D): taken like the others (it swaps the meter back); its back screen shows the view.
 	await tipOn('camera');
 	await click('right', 'squeeze'); await frames(6);

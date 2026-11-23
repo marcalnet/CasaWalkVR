@@ -22,7 +22,8 @@
 // (fanBusy).
 
 import * as THREE from 'three';
-import { buildMeter, buildMarker } from './tool-models.js';
+import { buildMarker } from './tool-models.js';
+import { LaserMeter } from './laser-meter.js';
 import { StreetCamera } from './street-camera.js';
 import { ease } from './tween.js';
 
@@ -60,9 +61,10 @@ export class ToolFan {
 		};
 		// The street camera works from milestone D (js/street-camera.js).
 		this.camera = new StreetCamera(xr);
+		this.meter = new LaserMeter(xr); // (milestone E)
 		this.slots = [
 			make('camera', this.camera.object, true, this.camera),
-			make('meter', buildMeter(), true),
+			make('meter', this.meter.object, true, this.meter),
 			make('marker', buildMarker({ ink: 'black' }), true),
 		];
 		for (const s of this.slots) s.object.scale.setScalar(s.object.userData.fanScale);
@@ -109,8 +111,9 @@ export class ToolFan {
 			const raised = anchor.y > head.y - 0.55;
 			xr.ui.wrist.orb.group.getWorldPosition(orb);
 			const indexNear = fan.touch.tracked && fan.touch.tip.distanceTo(orb) < KEEP_CLEAR;
-			// (Closed over a bare hand in the ready pose or aiming: it would sit in the arc's way; the tester's finding.)
-			const aiming = !!fan.gesture?.ready || xr.modes.walk?.tele?.c === fan || xr.modes.dollhouse?.handAim?.c === fan;
+			// (Closed over a bare hand that is aiming: it would sit in the arc's way; the tester's finding. Not
+			// merely in the ready pose: a curled hand raised to look at the fan reads as ready.)
+			const aiming = xr.modes.walk?.tele?.c === fan || xr.modes.dollhouse?.handAim?.c === fan;
 			open = raised && look.angleTo(to) < IN_VIEW && !xr.ui.wrist.open && !indexNear && !aiming && forward.lengthSq() > 0;
 		}
 		this.alpha = THREE.MathUtils.clamp(this.alpha + (open ? dt : -dt) / FADE, 0, 1);
@@ -150,6 +153,7 @@ export class ToolFan {
 			const tip = held.tool.object.getWorldPosition(at);
 			if (slot && tip.distanceTo(slot.home.getWorldPosition(this._at2 ??= new THREE.Vector3())) < RETURN && slot.settled) xr.tools.putBack();
 		}
+		this.meter.fit(); // (the measured lines keep their size to the eye whatever the zoom)
 		this.animate(dt);
 	}
 

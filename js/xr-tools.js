@@ -105,7 +105,10 @@ export class ToolSystem {
 		const { tool, c } = h, s = c.state, key = ToolSystem.secondKey(c);
 		// A bare hand: its thumb tap is the tool's trigger (a press: down, then up).
 		if (c.isHand) {
-			if (HAND_TAP_IS_TRIGGER) for (const e of c.gestures ?? []) if (e.type === 'tap') { tool.trigger?.(c, 'down'); tool.trigger?.(c, 'up'); }
+			for (const e of c.gestures ?? []) {
+				if (e.type === 'tap' && HAND_TAP_IS_TRIGGER) { tool.trigger?.(c, 'down'); tool.trigger?.(c, 'up'); }
+				else if (e.type === 'turn' || e.type === 'step') tool.gesture?.(c, e); // (the marker's colour and undo)
+			}
 			tool.update?.(dt, c);
 			return;
 		}
@@ -117,6 +120,7 @@ export class ToolSystem {
 			if (h.hold >= HOLD) { h.fired = true; tool.secondary?.(c, 'hold'); }
 		}
 		if (s.up[key] && !h.fired) tool.secondary?.(c, 'press');
+		for (const name of h.controls) if (s.down[name]) tool.control?.(c, name); // (the marker's stick press: colour)
 		tool.update?.(dt, c);
 	}
 
