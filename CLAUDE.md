@@ -89,6 +89,7 @@ docs/             README pictures (from the example home only, never a personal 
 - Before finishing a parser/scene change: run `npm test`, run `npm run shots`, and look at the screenshots against what Sweet Home 3D shows.
 - Before finishing an XR change: run `npm run xr-test` (Meta's IWER emulator drives a fake Quest 2 in headless Chromium) and `XR_DEVICE=metaQuest3 npm run xr-test`, and look at the `test-output/xr-*.png` screenshots. It cannot judge comfort or frame rate: give the user an on-headset checklist. For a change that must look the same (a refactor), compare a before and an after run: `XR_STEADY=1 XR_OUT=… XR_BASELINE=…` and `node scripts/xr-compare.js` (see the top of `scripts/xr-test.js`).
 - `?nomerge` on the page URL skips the geometry merge, to tell merge bugs from loader bugs.
+- Run `npm run stamp` right before committing what you will push: it writes `js/version.js` (the build number and time the page shows bottom left, and that tells a cached copy a newer build is live). Stage `js/version.js` with the commit.
 - Don't commit files the user drops in the folder (e.g. `.rtf`, `.webloc`); stage paths explicitly.
 - This folder lives in Dropbox: keep `node_modules/` and Playwright output excluded from Dropbox sync and from git.
 - Never commit personal home files or the Dropbox app secret (the Chooser only needs the public app key).
