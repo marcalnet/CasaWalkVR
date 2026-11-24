@@ -223,6 +223,12 @@ export class Dollhouse {
 		this.xr.stage.visible = false;
 	}
 
+	/** Meta's menu covered the app: a held model is let go (it floats, then goes home), an aim is dropped. */
+	drop() {
+		if (this.grab) this.release();
+		this.cancelHandAim();
+	}
+
 	/** Where you are looking, as a heading in the model's own frame (it is turned on the plinth). */
 	modelHeading() {
 		return yawOf(this.xr.camera.matrixWorld) - this.xr.anchor.rotation.y;

@@ -564,6 +564,35 @@ test('a pinch within 15 cm of a door\'s face is the door\'s, not a teleport; fur
 	assert.equal(x.aimBlock({ index: 1 }, at(0.1)), 'key');
 });
 
+test('the safety net: an error in a frame shows the card; errors every frame end the session', async () => {
+	const { x, ended } = await setup();
+	x.safety.begin(); x.safety.log = () => {};
+	const real = x.modes.dollhouse.update;
+	x.modes.dollhouse.update = () => { throw new Error('boom'); };
+	x.frame(1 / 72);
+	assert.ok(x.ui.errorNote.mesh.visible, 'the card shows');
+	for (let i = 0; i < 300 && !ended(); i++) x.frame(1 / 72);
+	assert.equal(ended(), 1, 'the session ended');
+	assert.ok(x.safety.failed && x.safety.lastError.message === 'boom');
+	assert.ok(!x.ui.errorNote.mesh.visible, 'nothing left showing after the end');
+	x.modes.dollhouse.update = real;
+});
+
+test('Meta\'s menu over the app: no input is read, a held model is let go', async () => {
+	const { x, press, frame, hands } = await setup();
+	const d = x.modes.dollhouse;
+	hands.right.grip.position.set(0.1, 1.0, -0.4);
+	frame(); press('right', 'grip'); frame();
+	assert.ok(d.grab);
+	x.setHidden(true);
+	assert.ok(!d.grab, 'let go (over the plinth: it settles)');
+	press('right', 'grip', false); frame(); press('right', 'grip'); frame();
+	assert.ok(!d.grab, 'a grip behind the menu holds nothing');
+	x.setHidden(false);
+	press('right', 'grip', false); frame(); press('right', 'grip'); frame();
+	assert.ok(d.grab, 'shown again: input works');
+});
+
 test('the ?hands readout: only with ?hands; palm angle, pinch, and ready, aiming or what blocks it', async () => {
 	assert.ok(readoutWanted('?hands') && readoutWanted('?x=1&hands&plinth=10') && !readoutWanted('') && !readoutWanted('?nomerge'));
 	const { x, go } = await setup();

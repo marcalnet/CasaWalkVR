@@ -85,9 +85,13 @@ const xr = new XRExperience({ renderer, scene, camera, rig, anchor, centerer, li
 	lighting.fit();
 	frame('iso');
 	invalidate();
+	// The safety net (js/safety.js): what went wrong in VR, said on the page.
+	const failed = vrTrouble();
+	if (failed) setStatus(failed, true);
 	// Photos taken in VR wait here, to be saved to Downloads.
 	renderPhotos().then(() => {
 		if (!newPhotos) return;
+		if (failed) { $('panel').classList.remove('collapsed'); newPhotos = 0; return; } // (the error stays in the status line; the photos are below)
 		setStatus(newPhotos === 1 ? 'You took a photo in VR. Save it below.' : `You took ${newPhotos} photos in VR. Save them below.`);
 		$('panel').classList.remove('collapsed');
 		$('photos-section').scrollIntoView({ block: 'nearest' });
@@ -135,13 +139,37 @@ window.addEventListener('resize', () => {
 	invalidate();
 });
 
+// The safety net, on the page's side (js/safety.js).
+// The headset can take the graphics memory back (the graphics context is
+// lost): three.js then draws nothing, so VR ends with a message.
+let contextLost = false;
+renderer.domElement.addEventListener('webglcontextlost', (e) => {
+	e.preventDefault(); // (lets the browser give the context back; three.js then restores its state)
+	contextLost = true;
+	console.warn('The graphics context was lost');
+	if (xr.session) xr.end();
+	else setStatus('The headset took back the graphics memory. Reload the page to go on.', true);
+});
+// Errors anywhere in the page while in VR count as the headset's errors (the card, then the way out).
+window.addEventListener('error', (e) => { if (xr.session) xr.safety.fail(e.error ?? e.message, 'page'); });
+window.addEventListener('unhandledrejection', (e) => { if (xr.session) xr.safety.fail(e.reason, 'page'); });
+
+/** What went wrong in the VR session that just ended, as a status line, or ''. */
+function vrTrouble() {
+	if (contextLost) { contextLost = false; return 'VR closed: the headset took back the graphics memory. Reload the page to go on.'; }
+	const s = xr.safety;
+	if (s.failed) return `VR closed after an error (${s.lastError.message}). Reload the page to try again.`;
+	if (s.errors) return `Something went wrong in VR (${s.lastError.message}). It went on; if anything looks wrong, reload the page.`;
+	return '';
+}
+
 const timer = new THREE.Timer();
 renderer.setAnimationLoop((time) => {
 	timer.update(time);
 	const dt = Math.min(timer.getDelta(), 0.1);
 	if (renderer.xr.isPresenting) {
-		xr.update(dt);
-		depth.tick(4); // a little per frame, so the headset stays smooth
+		// (Inside the safety net: an error shows a calm card instead of freezing the view.)
+		xr.frame(dt, () => depth.tick(4)); // (a little depth bake per frame, so the headset stays smooth)
 		renderer.render(scene, camera);
 		return;
 	}

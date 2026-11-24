@@ -1,3 +1,3 @@
 // Written by scripts/stamp.js (npm run stamp) before each push: which build this is.
 // number: the commit count once committed; date: when it was stamped (UTC).
-export const BUILD = { number: 93, date: '2026-11-24T21:26:21Z' };
+export const BUILD = { number: 94, date: '2026-11-24T22:48:59Z' };

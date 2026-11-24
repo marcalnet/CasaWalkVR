@@ -42,6 +42,7 @@ import * as THREE from 'three';
 import { XRInput } from './xr-input.js';
 import { HandView } from './hands.js';
 import { Lessons } from './lessons.js';
+import { SafetyNet } from './safety.js';
 import { HandReadout, readoutWanted } from './hand-readout.js';
 import { ToolsIntro } from './tools-intro.js';
 import { attachTransientPointer } from './transient-pointer.js';
@@ -110,6 +111,13 @@ export class XRExperience {
 		this.hideFromPhotos(...this.input.controllers.flatMap((c) => [c.ray, c.grip, c.wrist])); // lasers, controllers, and what they carry (orbs, tools)
 		this.handViews = this.input.controllers.map((c) => new HandView(c)); // bare hands, drawn (milestone C0.2)
 		this.readout = readoutWanted() ? new HandReadout(this) : null; // (?hands: the bare-hand tuning readout, for development)
+		// The safety net (js/safety.js): errors show a calm card; repeated ones end the session.
+		this.safety = new SafetyNet({
+			showCard: (ending) => this.ui?.showError(ending),
+			hideCard: () => this.ui?.hideError(),
+			endSession: () => this.end(),
+		});
+		this.hidden = false; // the session is covered by Meta's menu (visibilityState not 'visible'): input and sound pause
 		this.hideFromPhotos(...this.handViews.map((v) => v.group));
 		// Scenery: the gallery and its sky, the stage with the plinth, the walk sky.
 		Object.assign(this, buildShowroom(scene)); // showroom, showroomSky
@@ -234,6 +242,10 @@ export class XRExperience {
 		this.camera.updateProjectionMatrix();
 		this.scene.background = null; // the sky spheres draw the VR view; null shows passthrough
 		session.addEventListener('end', () => this.handleEnd());
+		this.safety.begin();
+		// Meta's menu over the app: hands and lasers must not act behind it, and the sound pauses.
+		session.addEventListener('visibilitychange', () => this.setHidden(session.visibilityState !== 'visible'));
+		this.hidden = false;
 		attachTransientPointer(this, session); // (Apple Vision Pro's look-and-pinch; nothing on a Quest)
 		// Holding the Meta button re-centres the headset: follow it.
 		this.renderer.xr.getReferenceSpace()?.addEventListener?.('reset', () => {
@@ -254,11 +266,33 @@ export class XRExperience {
 		this.pendingRecentre = true;
 	}
 
-	end() { this.session?.end(); }
+	end() { this.session?.end()?.catch?.(() => {}); } // (ending twice, or a session already gone, is not an error)
+
+	/**
+	 * The session is covered (Meta's menu) or shown again. While covered, no
+	 * input is read (XRExperience.update returns early) and the sound pauses;
+	 * an aim or a hold in progress is dropped, so nothing happens on return.
+	 */
+	setHidden(hidden) {
+		if (hidden === this.hidden) return;
+		this.hidden = hidden;
+		if (hidden) {
+			this.sound.suspend();
+			for (const m of Object.values(this.modes)) m.drop?.();
+		} else {
+			this.sound.wake();
+		}
+	}
+
+	/** One headset frame, inside the safety net: errors show the card instead of freezing the view. */
+	frame(dt, more) {
+		this.safety.frame(dt, () => { this.update(dt); more?.(); });
+	}
 
 	handleEnd() {
 		for (const m of Object.values(this.modes)) m.exit(); // (drops grabs, aims, pulls and any teleport)
 		this.session = null;
+		this.hidden = false;
 		this.depth?.setActive(false);
 		this.applySeeThrough(); // the 2D page shows the model as modelled
 		this.mode = null;
@@ -613,6 +647,7 @@ export class XRExperience {
 
 	update(dt) {
 		if (!this.session || !this.model) return;
+		if (this.hidden) return; // (Meta's menu covers the app: nothing reads input behind it)
 		this.frameDt = dt;
 		this.input.update(); // (also clears every controller's claims)
 		this.input.readGestures(dt, this.viewAxes()); // bare hands: the teleport gesture, the closed hand (C0.4)

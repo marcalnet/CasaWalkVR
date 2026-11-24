@@ -126,6 +126,13 @@ export class Walk {
 		for (const c of this.xr.input.controllers) c.pull = null;
 	}
 
+	/** Meta's menu covered the app: an aim or a pull in progress is dropped (nothing happens on return). */
+	drop() {
+		this.tele = null;
+		this.hideAim();
+		for (const c of this.xr.input.controllers) c.pull = null;
+	}
+
 	/** Hides the arc, the hotspot discs and the hotspot's name. */
 	hideAim() {
 		this.arc.hide();

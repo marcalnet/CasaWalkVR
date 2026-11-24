@@ -887,6 +887,17 @@ check('B closes the board', (await state()).menu === null);
 	const demo = await page.evaluate(() => { const L = window.__casawalk.xr.lessons; return { kind: L.kind, step: L.current()?.id, demo: !!L.demo && Object.values(L.demo).some((d) => d.visible), loaded: !!L.demo }; });
 	check('the lesson with bare hands: a looping 3D hand shows the step\'s gesture', demo.kind === 'hands' && demo.step === 'hold' && demo.demo, JSON.stringify(demo));
 	await shot('lesson-hands-demo');
+	// The safety net (A1): an error shows the calm card in front of you; the app goes on.
+	const safe = await page.evaluate(() => {
+		const x = window.__casawalk.xr;
+		x.safety.log = () => {};
+		x.safety.fail(new Error('a test error'), 'page');
+		return { card: x.ui.errorNote.mesh.visible, session: !!x.session, message: x.safety.lastError.message };
+	});
+	await frames(3);
+	check('the safety net: an error shows the calm card, and VR goes on', safe.card && safe.session && safe.message === 'a test error', JSON.stringify(safe));
+	await shot('safety-card');
+	await page.evaluate(() => { const x = window.__casawalk.xr; x.ui.hideError(); x.safety.begin(); delete x.safety.lastError; x.safety.log = (e) => console.error(e); });
 	await page.evaluate(() => window.__casawalk.xr.lessons.finish()); await frames(2);
 	// The hands are drawn with the hand model (the generic hand), once loaded.
 	const model = await page.evaluate(() => window.__casawalk.xr.handViews.map((v) => ({ side: v.c.handedness, model: !!v.model, capsules: v.colourMesh.visible })));

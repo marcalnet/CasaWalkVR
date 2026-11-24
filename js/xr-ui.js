@@ -51,6 +51,13 @@ const PHOTO_TEXT = {
 // do nothing until hands are supported (C0), so it says what will work.
 const HANDS_TEXT = { title: 'Pick up your controllers', line: 'This headset gives no hand tracking to CasaWalk.' };
 
+// The safety net's card (js/safety.js): calm, honest, and always a way out.
+const ERROR_TEXT = {
+	title: 'Something went wrong',
+	line: '\u2190 Back returns to the page. The Meta button always leaves VR.',
+	ending: 'Returning to the page\u2026',
+};
+
 export class XRUI {
 	/** xr: the XRExperience (rig, camera, input, menus, mode, model, stage, ...). */
 	constructor(xr) {
@@ -68,7 +75,8 @@ export class XRUI {
 		this.buildWelcome();
 		this.buildPhotoFeedback();
 		this.buildHandsNote();
-		xr.hideFromPhotos(this.welcome.mesh, this.flash, this.photoNote.mesh, this.handsNote.mesh);
+		this.buildErrorNote();
+		xr.hideFromPhotos(this.welcome.mesh, this.flash, this.photoNote.mesh, this.handsNote.mesh, this.errorNote.mesh);
 	}
 
 	// -----------------------------------------------------------------------
@@ -130,6 +138,25 @@ export class XRUI {
 		this.handsNote.mesh.visible = false;
 		this.xr.camera.add(this.handsNote.mesh);
 	}
+
+	/** The safety net's card, in front of you at eye level, over everything (it must show even when the world is broken). */
+	buildErrorNote() {
+		this.errorNote = new WelcomeCard(ERROR_TEXT.title, [{ small: true, text: ERROR_TEXT.line }], { width: 0.6 });
+		this.errorNote.mesh.name = 'error-note';
+		this.errorNote.mesh.position.set(0, -0.05, -0.8);
+		this.errorNote.mesh.renderOrder = 1002;
+		this.errorNote.mesh.visible = false;
+		this.xr.camera.add(this.errorNote.mesh);
+	}
+
+	/** Shows the error card; ending: the session is about to end. */
+	showError(ending = false) {
+		this.errorNote.lines = [{ small: true, text: ending ? ERROR_TEXT.ending : ERROR_TEXT.line }];
+		this.errorNote.draw();
+		this.errorNote.mesh.visible = true;
+	}
+
+	hideError() { this.errorNote.mesh.visible = false; }
 
 	/** Shows the hands note while only bare hands are reported (called every frame). */
 	showHandsNote() {
@@ -483,6 +510,7 @@ export class XRUI {
 		this.flash.visible = false;
 		this.photoNote.mesh.visible = false;
 		this.handsNote.mesh.visible = false;
+		this.errorNote.mesh.visible = false;
 		this.wrist.reset();
 		this.guide.hide();
 		for (const st of this.touches) { if (!st) continue; resetTouch(st.s); st.ring.visible = false; st.panel = null; st.slider = null; }
