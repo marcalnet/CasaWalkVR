@@ -118,6 +118,7 @@ export class XRExperience {
 			showCard: (ending) => this.ui?.showError(ending),
 			hideCard: () => this.ui?.hideError(),
 			endSession: () => this.end(),
+			critical: () => !!this.layerFx, // (an error halfway through a move between layers: end cleanly rather than leave a half state)
 		});
 		this.hidden = false; // the session is covered by Meta's menu (visibilityState not 'visible'): input and sound pause
 		this.hideFromPhotos(...this.handViews.map((v) => v.group));
@@ -248,6 +249,7 @@ export class XRExperience {
 		// Meta's menu over the app: hands and lasers must not act behind it, and the sound pauses.
 		session.addEventListener('visibilitychange', () => this.setHidden(session.visibilityState !== 'visible'));
 		this.hidden = false;
+		this.setHidden(!!session.visibilityState && session.visibilityState !== 'visible'); // (it may start covered)
 		attachTransientPointer(this, session); // (Apple Vision Pro's look-and-pinch; nothing on a Quest)
 		// Holding the Meta button re-centres the headset: follow it.
 		this.renderer.xr.getReferenceSpace()?.addEventListener?.('reset', () => {
@@ -272,17 +274,29 @@ export class XRExperience {
 
 	/**
 	 * The session is covered (Meta's menu) or shown again. While covered, no
-	 * input is read (XRExperience.update returns early) and the sound pauses;
-	 * an aim or a hold in progress is dropped, so nothing happens on return.
+	 * input is read (XRExperience.update returns early), an aim or a hold in
+	 * progress is dropped (nothing happens on return), the sound and the
+	 * vibration stop, and nothing of yours stays drawn frozen in the world:
+	 * hands, controllers and what they carry (the orb, a held tool), the
+	 * wrist menu and the tool fan (a store check, Input.4). Shown again, the
+	 * controllers come back here and the rest with the next frame's update.
 	 */
 	setHidden(hidden) {
 		if (hidden === this.hidden) return;
 		this.hidden = hidden;
 		if (hidden) {
 			this.sound.suspend();
+			this.haptics.stop();
 			for (const m of Object.values(this.modes)) m.drop?.();
+			this.ui.wrist.close();
+			this.input.setVisible(false);
+			for (const c of this.input.controllers) c.wrist.visible = false; // (a bare hand's orb and held tool)
+			for (const v of this.handViews) v.hide();
+			if (this.fan) this.fan.group.visible = false;
 		} else {
 			this.sound.wake();
+			this.input.setVisible(true);
+			for (const c of this.input.controllers) c.wrist.visible = true;
 		}
 	}
 

@@ -144,7 +144,7 @@ export class XRUI {
 		this.errorNote = new WelcomeCard(ERROR_TEXT.title, [{ small: true, text: ERROR_TEXT.line }], { width: 0.6 });
 		this.errorNote.mesh.name = 'error-note';
 		this.errorNote.mesh.position.set(0, -0.05, -0.8);
-		this.errorNote.mesh.renderOrder = 1002;
+		this.errorNote.mesh.renderOrder = 1004; // (over the layer curtain, 1002, and the ?stats line, 1003)
 		this.errorNote.mesh.visible = false;
 		this.xr.camera.add(this.errorNote.mesh);
 	}

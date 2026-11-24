@@ -569,7 +569,9 @@ export const UNIT_SCALE = { cm: 0.01, m: 1, mm: 0.001, in: 0.0254 };
 /**
  * Opens one or more files.
  * @param files  [{ name, bytes: Uint8Array }]
- * @param opts   { units: 'auto'|'cm'|'m'|'mm'|'in', onProgress(text) }
+ * @param opts   { units: 'auto'|'cm'|'m'|'mm'|'in', onProgress(text),
+ *                 makeTexture(ref) (a Sweet Home 3D texture image; default: decoded
+ *                 by the browser. Node, which decodes no images, passes a stand-in) }
  * @returns { kind: 'sh3d'|'model', root, bounds, observer, stats, store }
  */
 export async function openFiles(files, opts = {}) {
@@ -582,7 +584,7 @@ export async function openFiles(files, opts = {}) {
 		if (files.length === 1 && sniff(files[0].bytes) === 'zip') {
 			progress('Unzipping…');
 			store = EntryStore.fromZip(files[0].bytes);
-			if (store.entries.has('Home.xml')) return await openSh3d(store, progress);
+			if (store.entries.has('Home.xml')) return await openSh3d(store, progress, opts.makeTexture);
 			if (store.entries.has('Home')) throw new UserError('Re-save this file in Sweet Home 3D 5.3 or later.');
 			mainPath = findMainModel([...store.entries.keys()], store);
 			if (!mainPath) throw new UserError('No 3D model (.sh3d, .obj, .glb, .dae, .3ds) found inside this ZIP.');
@@ -614,15 +616,16 @@ async function breathe() {
 	lastPause = Date.now();
 }
 
-async function openSh3d(store, progress) {
+async function openSh3d(store, progress, makeTexture = null) {
 	progress('Reading Home.xml…');
 	const home = parseHome(new TextDecoder().decode(store.entries.get('Home.xml')));
 	const texLoader = new THREE.TextureLoader(store.manager);
+	makeTexture ??= (ref) => texLoader.load(`mem:${ref}`);
 	const built = await buildHome(home, {
 		// Pause between models so the "Loading furniture" count is actually
 		// painted instead of the page freezing until the end.
 		loadModel: async (ref) => { await breathe(); return loadModelEntry(store, ref); },
-		loadTexture: (ref) => (store.find(ref) ? texLoader.load(`mem:${ref}`) : null),
+		loadTexture: (ref) => (store.find(ref) ? makeTexture(ref) : null),
 		onProgress: (done, total) => progress(`Loading furniture ${done}/${total}…`),
 	});
 	return { kind: 'sh3d', ...built, home, store };

@@ -2,7 +2,8 @@
 # the Node tests, as on a fresh clone (no install: the app's dependencies are
 # vendored, and npm test needs none of the dev tools). It also warns when the
 # pushed commit was not stamped (npm run stamp writes js/version.js with the
-# commit count it will have once committed).
+# commit count it will have once committed). The actions are pinned to the
+# commit of a release (a moved tag can't change what runs here).
 
 name: test
 
@@ -18,15 +19,16 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           fetch-depth: 0 # (the whole history: the build number is the commit count)
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version-file: .nvmrc
       - name: Node tests
         run: npm test
       - name: Build stamp
+        if: github.event_name == 'push' # (a pull request's merge commit never matches the stamp)
         run: |
           count=$(git rev-list --count HEAD)
           build=$(grep -o 'number: [0-9][0-9]*' js/version.js | grep -o '[0-9][0-9]*')

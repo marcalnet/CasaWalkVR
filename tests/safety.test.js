@@ -39,7 +39,7 @@ test('errors far apart never end the session', () => {
 	const { n, log } = net();
 	for (let k = 0; k < 10; k++) {
 		n.frame(DT, () => { throw new Error('now and then'); });
-		for (let t = 0; t < SAFETY.WINDOW; t += DT) n.frame(DT, () => {});
+		for (let t = 0; t < 5; t += DT) n.frame(DT, () => {}); // (one every 5 s: never 10 within 30 s)
 	}
 	assert.ok(!n.failed && !log.includes('end'), JSON.stringify(log));
 });
@@ -52,4 +52,23 @@ test('errors from the page count too; anything thrown reads as a short line', ()
 	assert.equal(describeError(undefined), 'undefined');
 	assert.equal(describeError(new Error('a'.repeat(400))).length, 160);
 	assert.deepEqual(log, ['card']);
+});
+
+test('a slow loop of errors (one a second) ends the session at the tenth', () => {
+	const { n, log } = net();
+	let k = 0;
+	for (let t = 0; t < 15 && !n.failed; t += DT) n.frame(DT, () => { if (Math.floor(t + DT) > Math.floor(t)) { k++; throw new Error(`slow ${k}`); } });
+	assert.ok(n.failed, JSON.stringify(log));
+	assert.equal(k, SAFETY.SLOW_MAX, 'ended at the tenth error');
+});
+
+test('an error while a half-done change is under way (critical) ends the session at once', () => {
+	let critical = true;
+	const log = [];
+	const n = new SafetyNet({ showCard: (e) => log.push(e ? 'card:ending' : 'card'), endSession: () => log.push('end'), critical: () => critical, log: () => {} });
+	n.begin();
+	n.frame(DT, () => { throw new Error('mid-dive'); });
+	for (let t = 0; t < SAFETY.END_DELAY + 0.1; t += DT) n.frame(DT, () => {});
+	assert.deepEqual(log, ['card:ending', 'end']);
+	critical = false;
 });

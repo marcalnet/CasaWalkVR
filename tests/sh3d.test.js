@@ -21,10 +21,12 @@ const EXPECTED = {
 
 const fixtures = [
 	// Always there: the example home in the repository. Optional: the public
-	// Sweet Home 3D examples (npm run fixtures) and your own files in private/.
+	// Sweet Home 3D examples (npm run fixtures). Your own files in private/ only
+	// when asked for (CASAWALK_PRIVATE=1 npm test): the default output never
+	// names or parses a private home (code audit, A2).
 	path.resolve(import.meta.dirname, '../examples/example-home.sh3d'),
 	...(fs.existsSync(FIX) ? fs.readdirSync(FIX).filter((f) => f.endsWith('.sh3d')).map((f) => path.join(FIX, f)) : []),
-	...(fs.existsSync(path.join(FIX, 'private')) ? fs.readdirSync(path.join(FIX, 'private')).filter((f) => f.endsWith('.sh3d')).map((f) => path.join(FIX, 'private', f)) : []),
+	...(process.env.CASAWALK_PRIVATE === '1' && fs.existsSync(path.join(FIX, 'private')) ? fs.readdirSync(path.join(FIX, 'private')).filter((f) => f.endsWith('.sh3d')).map((f) => path.join(FIX, 'private', f)) : []),
 ];
 
 /** Loads OBJ geometry only (no materials/textures, which need a browser). */

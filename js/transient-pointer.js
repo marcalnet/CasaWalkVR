@@ -19,6 +19,7 @@ export function attachTransientPointer(xr, session) {
 	session.addEventListener('select', (e) => {
 		const src = e.inputSource;
 		if (src?.targetRayMode !== 'transient-pointer') return;
+		if (xr.hidden || xr.layerFx) return; // (the system's menu covers the app, or a move between layers is under way: a pinch acts on nothing)
 		const ref = xr.renderer.xr.getReferenceSpace?.();
 		const pose = ref && e.frame?.getPose?.(src.targetRaySpace, ref);
 		if (!pose) return;

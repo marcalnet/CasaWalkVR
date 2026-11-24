@@ -10,36 +10,26 @@ import fs from 'node:fs';
 import path from 'node:path';
 import * as THREE from 'three';
 import { unzipSync } from 'fflate';
-import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
-import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
-import { parseHome, buildHome } from '../js/sh3d.js';
-import { prepareObjText } from '../js/formats.js';
+import { openFiles } from '../js/formats.js';
 import { optimiseModel, modelStats } from '../js/optimise.js';
 import { CONFIG } from '../config.js';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
 
-/** Opens a .sh3d as the app does (models with their colours), merges it, and measures it. */
+/**
+ * Opens a .sh3d exactly as the app does (js/formats.js openFiles: the models'
+ * own colours, Sweet Home 3D's built-in materials and see-through window
+ * panes), merges it, and measures it.
+ */
 async function measure(file) {
-	const entries = unzipSync(new Uint8Array(fs.readFileSync(path.join(ROOT, file))));
-	const home = parseHome(new TextDecoder().decode(entries['Home.xml']));
-	const built = await buildHome(home, {
+	const bytes = new Uint8Array(fs.readFileSync(path.join(ROOT, file)));
+	const entries = unzipSync(bytes);
+	const built = await openFiles([{ name: path.basename(file), bytes }], {
 		// (Node decodes no images: a stand-in texture per image, so materials that differ only by their image stay apart, as in the app.)
-		loadTexture: (ref) => (entries[ref] ? Object.assign(new THREE.Texture(), { name: ref }) : null),
-		loadModel: async (ref) => {
-			const text = prepareObjText(new TextDecoder().decode(entries[ref]));
-			const loader = new OBJLoader();
-			const lib = text.match(/^\s*mtllib\s+(.+?)\s*$/m)?.[1];
-			const folder = ref.includes('/') ? ref.slice(0, ref.lastIndexOf('/') + 1) : '';
-			if (lib && entries[folder + lib]) {
-				const creator = new MTLLoader().parse(new TextDecoder().decode(entries[folder + lib]), '');
-				creator.preload();
-				loader.setMaterials(creator);
-			}
-			return loader.parse(text.replace(/^\s*mtllib.*$/gm, ''));
-		},
+		makeTexture: (ref) => Object.assign(new THREE.Texture(), { name: ref }),
 	});
 	const { group } = optimiseModel(built.root);
+	built.store.dispose();
 	return { ...modelStats(group), storeys: built.storeys, missing: built.stats.missingModels, textures: textureMemory(entries) };
 }
 
@@ -85,6 +75,8 @@ test('the heavy test home: three storeys, about a million triangles, six texture
 	t.diagnostic(line(s));
 	assert.equal(s.storeys, 3);
 	assert.equal(s.textures.count, 6);
+	// (No regression while the budget is a todo below: today's count, lowered as stage B3 lands.)
+	assert.ok(s.drawCalls <= 200, `${s.drawCalls} draw calls: more than today's 200`);
 	assert.equal(s.missing, 0);
 	assert.ok(s.triangles > 900_000 && s.triangles <= CONFIG.budget.triangles, `${s.triangles} triangles`);
 });

@@ -593,6 +593,35 @@ test('Meta\'s menu over the app: no input is read, a held model is let go', asyn
 	assert.ok(d.grab, 'shown again: input works');
 });
 
+test('Meta\'s menu over the app: nothing of yours stays drawn frozen (hands, controllers, orb, tools, wrist menu, fan), vibration stops', async () => {
+	const { x, frame } = await setup();
+	let stopped = 0;
+	const stop = x.haptics.stop.bind(x.haptics);
+	x.haptics.stop = () => { stopped++; stop(); };
+	frame();
+	x.ui.wrist.open = true; x.fan.group.visible = true;
+	for (const v of x.handViews) v.group.visible = true;
+	x.setHidden(true);
+	frame();
+	assert.ok(stopped > 0, 'the vibration stopped');
+	assert.ok(!x.ui.wrist.open, 'the wrist menu closed');
+	assert.ok(!x.fan.group.visible, 'the fan hidden');
+	assert.ok(x.handViews.every((v) => !v.group.visible), 'hands hidden');
+	assert.ok(x.input.controllers.every((c) => !c.ray.visible && !c.grip.visible && !c.wrist.visible), 'controllers, their orb and tools hidden');
+	x.setHidden(false);
+	frame();
+	assert.ok(x.input.controllers.every((c) => c.ray.visible && c.grip.visible && c.wrist.visible), 'back again');
+});
+
+test('the safety net: an error during a move between layers ends the session cleanly', async () => {
+	const { x, ended } = await setup();
+	x.safety.begin(); x.safety.log = () => {};
+	x.goLayer('in', () => { throw new Error('half-way in'); });
+	for (let i = 0; i < 300 && !ended(); i++) x.frame(1 / 72);
+	assert.equal(ended(), 1, 'the session ended');
+	assert.equal(x.safety.lastError.message, 'half-way in');
+});
+
 test('the ?hands readout: only with ?hands; palm angle, pinch, and ready, aiming or what blocks it', async () => {
 	assert.ok(readoutWanted('?hands') && readoutWanted('?x=1&hands&plinth=10') && !readoutWanted('') && !readoutWanted('?nomerge'));
 	const { x, go } = await setup();

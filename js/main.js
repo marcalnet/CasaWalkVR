@@ -148,7 +148,13 @@ renderer.domElement.addEventListener('webglcontextlost', (e) => {
 	contextLost = true;
 	console.warn('The graphics context was lost');
 	if (xr.session) xr.end();
-	else setStatus('The headset took back the graphics memory. Reload the page to go on.', true);
+	else setStatus('The headset took back the graphics memory for a moment. If the view stays empty, reload the page.', true);
+});
+// The browser gives it back: three.js restores its state and the page draws again (tested in
+// headless Chromium: the model comes back with its colours, no reload needed).
+renderer.domElement.addEventListener('webglcontextrestored', () => {
+	if ($('status').textContent.includes('graphics memory')) setStatus('');
+	invalidate();
 });
 // Errors anywhere in the page while in VR count as the headset's errors (the card, then the way out).
 window.addEventListener('error', (e) => { if (xr.session) xr.safety.fail(e.error ?? e.message, 'page'); });
@@ -156,7 +162,7 @@ window.addEventListener('unhandledrejection', (e) => { if (xr.session) xr.safety
 
 /** What went wrong in the VR session that just ended, as a status line, or ''. */
 function vrTrouble() {
-	if (contextLost) { contextLost = false; return 'VR closed: the headset took back the graphics memory. Reload the page to go on.'; }
+	if (contextLost) { contextLost = false; return 'VR closed: the headset took back the graphics memory. Enter VR again (reload the page if the view stays empty).'; }
 	const s = xr.safety;
 	if (s.failed) return `VR closed after an error (${s.lastError.message}). Reload the page to try again.`;
 	if (s.errors) return `Something went wrong in VR (${s.lastError.message}). It went on; if anything looks wrong, reload the page.`;

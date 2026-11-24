@@ -171,9 +171,9 @@ test('the page allows only its own scripts, and the import map hash is right', (
 test('no personal files or secrets are tracked by git', async () => {
 	const { execFileSync } = await import('node:child_process');
 	const tracked = execFileSync('git', ['ls-files'], { cwd: ROOT, encoding: 'utf8' }).split('\n').filter(Boolean);
-	// (The .sh3d files in the repository are the generated example home and the listed sample homes, all original.)
+	// (The .sh3d files in the repository are the generated example and heavy test homes and the listed sample homes, all original.)
 	const { SAMPLES } = await import('../js/samples.js');
-	const ours = new Set(['examples/example-home.sh3d', ...SAMPLES.map((s) => s.file)]);
+	const ours = new Set(['examples/example-home.sh3d', 'examples/heavy-home.sh3d', ...SAMPLES.map((s) => s.file)]);
 	assert.deepEqual(tracked.filter((f) => (/\.(sh3d|rtf|webloc|env|pem|key)$/i.test(f) && !ours.has(f)) || f.includes('fixtures/private')), []);
 	const config = fs.readFileSync(path.join(ROOT, 'config.js'), 'utf8');
 	assert.ok(!/secret\s*:/i.test(config), 'config.js must never hold the Dropbox app secret');

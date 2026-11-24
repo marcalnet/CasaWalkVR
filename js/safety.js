@@ -5,9 +5,13 @@
 //   frame(fn)   runs one frame's work (XRExperience.update) and catches what
 //               it throws. A first error shows the card ("Something went
 //               wrong", ← Back returns to the page) for CARD_TIME seconds and
-//               the app goes on. MAX_ERRORS errors within WINDOW seconds: the
-//               frame's work stops, the card says it is returning to the
-//               page, and the session ends END_DELAY seconds later.
+//               the app goes on. MAX_ERRORS errors within WINDOW seconds (an
+//               error every frame), or SLOW_MAX within SLOW_WINDOW (a slow
+//               loop, about one a second), or any error while critical()
+//               says a half-done change must not be left (a move between
+//               layers): the frame's work stops, the card says it is
+//               returning to the page, and the session ends END_DELAY
+//               seconds later.
 //   fail(e)     an error from elsewhere (the page's uncaught errors and
 //               rejected promises while in VR): counted the same way.
 //   lastError   { message, where } of the last one, for the page's status
@@ -21,6 +25,7 @@ export const SAFETY = {
 	CARD_TIME: 6, // seconds the card stays after a lone error
 	WINDOW: 2, // errors counted over this many seconds ...
 	MAX_ERRORS: 5, // ... this many, and the session ends
+	SLOW_WINDOW: 30, SLOW_MAX: 10, // ... or this many over this many seconds (a slow loop of errors)
 	END_DELAY: 1.5, // seconds the "returning to the page" card shows before the session ends
 };
 
@@ -33,17 +38,18 @@ export function describeError(e) {
 export class SafetyNet {
 	/**
 	 * hooks: showCard(ending) (ending: true when the session is about to end),
-	 * hideCard(), endSession(); log(e) (default console.error).
+	 * hideCard(), endSession(); critical() (true while an error must end the
+	 * session at once); log(e) (default console.error).
 	 */
-	constructor({ showCard = () => {}, hideCard = () => {}, endSession = () => {}, log = (e) => console.error(e) } = {}) {
-		Object.assign(this, { showCard, hideCard, endSession, log });
+	constructor({ showCard = () => {}, hideCard = () => {}, endSession = () => {}, critical = () => false, log = (e) => console.error(e) } = {}) {
+		Object.assign(this, { showCard, hideCard, endSession, critical, log });
 		this.reset();
 	}
 
 	/** A new session: nothing counted, nothing showing. (lastError stays for the page.) */
 	reset() {
 		this.clock = 0;
-		this.times = []; // when recent errors happened (clock seconds)
+		this.times = []; // when recent errors happened (clock seconds), over SLOW_WINDOW
 		this.cardFor = 0; // seconds the card still shows (0: hidden)
 		this.ending = null; // seconds until the session ends, once it is ending
 		this.errors = 0; // errors this session
@@ -65,8 +71,11 @@ export class SafetyNet {
 		this.lastError = { message: describeError(e), where };
 		if (this.ending !== null) return;
 		this.times.push(this.clock);
-		while (this.times.length && this.clock - this.times[0] > SAFETY.WINDOW) this.times.shift();
-		if (this.times.length >= SAFETY.MAX_ERRORS) {
+		while (this.times.length && this.clock - this.times[0] > SAFETY.SLOW_WINDOW) this.times.shift();
+		const recent = this.times.filter((t) => this.clock - t <= SAFETY.WINDOW).length;
+		let critical = false;
+		try { critical = !!this.critical(); } catch { critical = true; }
+		if (critical || recent >= SAFETY.MAX_ERRORS || this.times.length >= SAFETY.SLOW_MAX) {
 			this.ending = SAFETY.END_DELAY;
 			this.cardFor = Infinity;
 			this.showCard(true);
