@@ -260,6 +260,7 @@ js/transfer.js    sending a file to the headset: the protocol and its checks (no
 js/pairing.js     the direct computer-to-headset link (PeerJS)
 js/sh3d.js        SH3D parser and scene builder (no DOM; Node-testable)
 js/formats.js     zip / OBJ / GLB / DAE / 3DS loading, unit detection
+js/obj-defaults.js Sweet Home 3D's built-in OBJ materials, see-through window panes
 sw.js             service worker: offline use, and no mix of old and new files after an update
 js/version.js     the build stamp shown bottom left (scripts/stamp.js)
 examples/         sample homes (Pond House, Apartment: scripts/make-*.js, one palette in scripts/sample-palette.js) and the tests' small example home (scripts/make-example.js); original content

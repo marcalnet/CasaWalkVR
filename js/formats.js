@@ -14,6 +14,7 @@ import * as THREE from 'three';
 import { unzipSync } from 'fflate';
 import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
+import { defaultMtlFor, usedMaterialNames, definedMaterialNames, isWindowPaneName, WINDOW_PANE_OPACITY } from './obj-defaults.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { ColladaLoader } from 'three/addons/loaders/ColladaLoader.js';
 import { TDSLoader } from 'three/addons/loaders/TDSLoader.js';
@@ -227,6 +228,36 @@ function simplifyMaterials(obj) {
 		if (!o.isMesh) return;
 		o.material = Array.isArray(o.material) ? o.material.map(conv) : conv(o.material || new THREE.MeshLambertMaterial());
 		o.castShadow = o.receiveShadow = false;
+	});
+	return seeThroughPanes(obj);
+}
+
+/**
+ * Sweet Home 3D's window panes (js/obj-defaults.js): a part named
+ * "sweethome3d_window_pane…" (its own name or a group's above it, whatever
+ * the format) whose material is opaque is shown at half opacity. A material
+ * the pane shares with an opaque part (a frame) is copied for the pane only,
+ * one copy per material, so panes still merge into few draw calls. A
+ * material that is already transparent keeps its own opacity.
+ */
+function seeThroughPanes(obj) {
+	const copies = new Map();
+	const glass = (m) => {
+		if (m.transparent || m.opacity < 1) return m;
+		if (!copies.has(m)) {
+			const c = m.clone();
+			c.opacity = WINDOW_PANE_OPACITY;
+			c.transparent = true;
+			c.depthWrite = false; // as simplifyMaterial does for any transparent material
+			copies.set(m, c);
+		}
+		return copies.get(m);
+	};
+	obj.traverse((o) => {
+		if (!o.isMesh) return;
+		let pane = false;
+		for (let n = o; n && !pane; n = n === obj ? null : n.parent) pane = isWindowPaneName(n.name);
+		if (pane) o.material = Array.isArray(o.material) ? o.material.map(glass) : glass(o.material);
 	});
 	return obj;
 }
@@ -502,15 +533,21 @@ function triangulateFace(toks, verts, a, b, c) {
 async function loadObj(store, text, folder) {
 	text = prepareObjText(text);
 	const objLoader = new OBJLoader(store.manager);
-	const mtlNames = [...text.matchAll(/^\s*mtllib\s+(.+?)\s*$/gm)].map((m) => m[1]);
-	for (const name of mtlNames) {
+	// The model's own .mtl (OBJLoader supports a single material library),
+	// then Sweet Home 3D's built-in materials for the names it doesn't define
+	// (js/obj-defaults.js): a name the .mtl defines always wins.
+	let mtlText = '';
+	for (const name of [...text.matchAll(/^\s*mtllib\s+(.+?)\s*$/gm)].map((m) => m[1])) {
 		const mtlBytes = store.get(folder + name);
 		if (!mtlBytes) continue;
-		const mtl = new MTLLoader(store.manager);
-		const creator = mtl.parse(new TextDecoder().decode(mtlBytes), `mem:${folder}`);
+		mtlText = new TextDecoder().decode(mtlBytes);
+		break;
+	}
+	mtlText += '\n' + defaultMtlFor(usedMaterialNames(text), definedMaterialNames(mtlText));
+	if (mtlText.trim()) {
+		const creator = new MTLLoader(store.manager).parse(mtlText, `mem:${folder}`);
 		creator.preload();
 		objLoader.setMaterials(creator);
-		break; // OBJLoader supports a single material library
 	}
 	return simplifyMaterials(objLoader.parse(text));
 }

@@ -51,6 +51,10 @@ All lengths are in **centimetres** and all angles in **radians**. Plan coordinat
 
 Resolve MTL and texture paths relative to the model's folder through a `LoadingManager.setURLModifier` that serves in-memory blobs. If a model is missing or broken, draw a unit box in its place.
 
+**Sweet Home 3D's model defaults** (added 24 Nov 2026; `js/obj-defaults.js`; facts read from Sweet Home 3D 7, cited, no code copied):
+- **Built-in materials.** An OBJ that names a material no `.mtl` defines gets it from Sweet Home 3D's built-in table (134 names, in its `OBJLoader`, after Java 3D's `DefaultMaterials`): its catalogue windows, with no `.mtl`, use `white` for the frame and `flltgrey` for the glass. A `.mtl` that defines the name always wins. `d` is the opacity; illum 1 or less means no highlight.
+- **Window panes.** Sweet Home 3D makes glass see-through by the part's name, not its material: a part whose name starts with `sweethome3d_window_pane` (with `_on_hinge_` and `_on_rail_` panes) is shown at half opacity when its material is opaque (`ModelManager`, `updateShapeNamesAndWindowPanesTransparency`). A material that already has its own opacity keeps it; a material the pane shares with the frame is copied for the pane only; `sweethome3d_window_mirror` stays opaque. This holds for every format (the name of the part or a group above it). The panes are transparent like any glass (no depth writing) and merge into one material per colour.
+
 **Elements to read:** `home` (has `wallHeight`), `environment` (`groundColor`, `skyColor`), `observerCamera`, `level`, `pieceOfFurniture`, `doorOrWindow`, `furnitureGroup` (recurse; children hold absolute coordinates), `light` (render as furniture and ignore the light sources), `wall`, `room` (with `point` children), `texture`, and `material`. Ignore labels, dimension lines, polylines and the compass.
 
 **Visibility:**
