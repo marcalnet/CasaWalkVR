@@ -20,7 +20,7 @@ WebXR viewer for Meta Quest (Quest 3, 3S, 2 and Pro; Quest 3/3S first; Quest 1 n
 
 ```
 index.html        2D UI and import map
-config.js         Dropbox app key, Google API key, defaults
+config.js         Google API key, defaults
 js/main.js        2D page, renderer, loading, Enter VR/AR buttons
 js/xr.js          XR session: the parts below, the frame order, setMode, layers (goLayer: dive, surface), photo capture, shared state
 js/safety.js      the safety net in the headset: errors show a calm card, repeated errors end the session (pure, Node-testable)
@@ -52,7 +52,9 @@ js/optimise.js    merge-by-material and BVH
 js/xr-input.js    controllers, rays, thumbsticks, teleport arc, per-frame button claims; bare hands told apart (a pinch never clicks); touch state for hands and controllers (poke point, pinch); controller tip nub
 js/touch.js       touch keys: hover, contact, click, release, front-only (pure, Node-testable)
 js/hands.js       bare hands drawn from the WebXR joints (translucent capsules, orange fingertip)
-js/gestures.js    bare-hand gestures from the joints: the pinch-and-hold teleport and wrist flick (Quest 2), the closed hand, the aim ray; the thumb tap behind a switch, off (pure, Node-testable)
+js/gestures.js    bare-hand gestures from the joints: the pinch-and-hold teleport and wrist flick, the closed hand, the aim ray (pure, Node-testable)
+js/dev.js         the development switches in the page address (?test, ?hands, ?stats, ?nomerge, ?sw), read in one place
+js/device.js      which device: the headset's own browser, a Quest 2 (the one place that reads the browser's name)
 js/hand-readout.js the bare-hand tuning readout over each wrist, only with ?hands on the page URL (development)
 js/frame-stats.js the headset's fps and draw-call counter, only with ?stats on the page URL (measuring)
 js/hotspots.js    teleport hotspots: room middles and doorways, and snapping to them (pure, Node-testable)
@@ -92,10 +94,10 @@ docs/             README pictures (from the example home only, never a personal 
 - When unsure about a Sweet Home 3D detail, check the official sources (`HomeXMLExporter`, `ModelManager`, `Wall3D`, `Room3D`) rather than guessing.
 - Before finishing a parser/scene change: run `npm test`, run `npm run shots`, and look at the screenshots against what Sweet Home 3D shows.
 - Before finishing an XR change: run `npm run xr-test` (Meta's IWER emulator drives a fake Quest 2 in headless Chromium) and `XR_DEVICE=metaQuest3 npm run xr-test`, and look at the `test-output/xr-*.png` screenshots. It cannot judge comfort or frame rate: give the user an on-headset checklist. For a change that must look the same (a refactor), compare a before and an after run: `XR_STEADY=1 XR_OUT=… XR_BASELINE=…` and `node scripts/xr-compare.js` (see the top of `scripts/xr-test.js`).
-- `?nomerge` on the page URL skips the geometry merge, to tell merge bugs from loader bugs.
+- `?nomerge` on the page URL skips the geometry merge, to tell merge bugs from loader bugs. All such switches live in `js/dev.js`; `window.__casawalk` (the test hooks) exists only with `?test`.
 - Run `npm run stamp` right before committing what you will push: it writes `js/version.js` (the build number and time the page shows bottom left, and that tells a cached copy a newer build is live). Stage `js/version.js` with the commit.
 - Don't commit files the user drops in the folder (e.g. `.rtf`, `.webloc`); stage paths explicitly.
 - This folder lives in Dropbox: keep `node_modules/` and Playwright output excluded from Dropbox sync and from git.
-- Never commit personal home files or the Dropbox app secret (the Chooser only needs the public app key).
+- Never commit personal home files or any secret (config.js holds only public keys).
 - `planning/` (ignored by git, may be absent in a clone) holds private product notes. When it exists, read `planning/architecture-decisions.md` before architecture work. Never copy from it into tracked files, commit messages or outside services.
 - The repository is public and shared with other developers: everything must work from a fresh clone (`npm test` with no install and no downloaded fixtures; the browser tests fall back to `examples/example-home.sh3d`). Keep file names, comments and pictures free of personal details.

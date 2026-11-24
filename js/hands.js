@@ -67,12 +67,8 @@ export class HandView {
 		this.tip.renderOrder = 32;
 		this.group = new THREE.Group();
 		this.group.name = 'hand-view';
-		// The teleport "ready" dot (C0.4): on the thumb tip while the hand holds the ready pose.
-		this.readyDot = new THREE.Mesh(new THREE.SphereGeometry(0.006, 12, 8), new THREE.MeshBasicMaterial({ color: HAND.ready, transparent: true, depthWrite: false }));
-		this.readyDot.renderOrder = 32;
-		this.readyDot.visible = false;
-		this.group.add(this.depthMesh, this.colourMesh, this.tip, this.readyDot);
-		for (const m of [this.depthMesh, this.colourMesh, this.tip, this.readyDot]) m.frustumCulled = false;
+		this.group.add(this.depthMesh, this.colourMesh, this.tip);
+		for (const m of [this.depthMesh, this.colourMesh, this.tip]) m.frustumCulled = false;
 		this.group.visible = false;
 		// The joints are in the hand group's space, which is the rig's: the view sits there too.
 		c.hand.parent?.add(this.group);
@@ -96,7 +92,6 @@ export class HandView {
 			this.depthMesh.visible = this.colourMesh.visible = this.tip.visible = !want;
 		}
 		if (tracked) this.model ? this.model.userData.pose(c.hand.joints) : this.rebuild();
-		if (tracked && this.model) this.placeDots();
 		this.alpha = tracked ? 1 : Math.max(0, this.alpha - dt / HAND.fade);
 		this.group.visible = this.alpha > 0;
 		if (!this.group.visible) return;
@@ -106,8 +101,6 @@ export class HandView {
 			this.model.userData.setTip(this.near ? 1 : 0);
 		} else this.depthMesh.visible = this.colourMesh.visible = this.alpha > 0.01;
 		this.tipMat.opacity = (this.near ? 1 : HAND.tipIdle) * this.alpha;
-		this.readyDot.visible = tracked && !!c.gesture?.ready;
-		this.readyDot.material.opacity = this.alpha;
 	}
 
 	/** The capsules from this frame's joints. */
@@ -138,14 +131,6 @@ export class HandView {
 		this.geometry.attributes.normal.needsUpdate = true;
 		const tip = joints['index-finger-tip'];
 		if (tip?.visible) this.tip.position.copy(tip.position);
-		const thumb = joints['thumb-tip'];
-		if (thumb?.visible) this.readyDot.position.copy(thumb.position);
-	}
-
-	/** The ready dot on the thumb (the model has no capsule pass to place it). */
-	placeDots() {
-		const thumb = this.c.hand.joints['thumb-tip'];
-		if (thumb?.visible) this.readyDot.position.copy(thumb.position);
 	}
 
 	/** Leaving VR. */

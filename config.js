@@ -1,12 +1,9 @@
-// App configuration. Safe to commit: the Dropbox app key is public by design
-// (the Chooser runs in the browser). Never put the Dropbox app *secret* here.
+// App configuration. Safe to commit: only public keys go here (the Google API
+// key below works only from this site's address). Never put a secret here.
 export const CONFIG = {
-	// Filled in during phase 4 (Dropbox Chooser).
-	dropboxAppKey: '',
-
 	// Google Drive links (js/links.js): Google only serves shared files to other
 	// websites through its Drive API, which needs an API key. Public by design,
-	// like the Dropbox app key: in Google Cloud, limit it to the "Google Drive
+	// in Google Cloud, limit it to the "Google Drive
 	// API" and to this site's address (README, "Google Drive links"). Empty:
 	// Google Drive links explain how to open the file another way.
 	// (Project "sweet-home-vr"; key limited to https://www.casawalkvr.com/* and the Drive API.)

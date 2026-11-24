@@ -7,6 +7,8 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { CONFIG } from '../config.js';
 import { openFiles, UserError, checkDecoders } from './formats.js';
 import { optimiseModel, modelStats } from './optimise.js';
+import { DEV } from './dev.js';
+import { DEVICE } from './device.js';
 import { XRExperience } from './xr.js';
 import { Lighting } from './lighting.js';
 import { DepthShading } from './depth.js';
@@ -27,7 +29,7 @@ const $ = (id) => document.getElementById(id);
 // ---------------------------------------------------------------------------
 
 // alpha: AR shows the camera passthrough behind the model.
-const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: new URLSearchParams(location.search).has('test') });
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: DEV.test });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.xr.enabled = true;
@@ -250,7 +252,7 @@ async function load(files, label, source = { type: 'file' }) {
 		await new Promise((r) => setTimeout(r, 0)); // let the status paint
 		if (superseded(result)) return;
 		// ?nomerge (debugging only): show the scene exactly as loaded.
-		const merged = new URLSearchParams(location.search).has('nomerge')
+		const merged = DEV.nomerge
 			? { group: result.root, layers: Object.fromEntries(['main', 'walls', 'floors', 'ceilings', 'ground'].map((n) => [n, result.root.getObjectByName(n === 'main' ? 'furniture' : n) || new THREE.Group()])), stats: null }
 			: optimiseModel(result.root);
 		disposeCurrent();
@@ -457,55 +459,6 @@ async function loadUrl(url, { remember = true } = {}) {
 }
 
 // ---------------------------------------------------------------------------
-// Dropbox Chooser (official drop-in, https://www.dropbox.com/developers/chooser)
-// ---------------------------------------------------------------------------
-// The Chooser script must come from dropbox.com (it is Dropbox's own UI), so
-// it is the one script not vendored. It is only loaded when an app key is set
-// in config.js. Direct links are CORS-enabled and expire after 4 hours, which
-// is fine: what we open is cached under Recent.
-
-const MODEL_EXTENSIONS = ['.sh3d', '.zip', '.obj', '.mtl', '.glb', '.gltf', '.bin', '.dae', '.3ds', '.jpg', '.jpeg', '.png'];
-
-function setupDropbox() {
-	const key = CONFIG.dropboxAppKey;
-	if (!key) return;
-	const s = document.createElement('script');
-	s.src = 'https://www.dropbox.com/static/api/2/dropins.js';
-	s.id = 'dropboxjs';
-	s.dataset.appKey = key;
-	s.onload = () => {
-		if (window.Dropbox?.isBrowserSupported?.() === false) return;
-		$('open-dropbox').hidden = false;
-		$('open-file').classList.remove('primary'); // Dropbox becomes the main way in
-	};
-	s.onerror = () => console.warn('Dropbox Chooser could not be loaded');
-	document.head.appendChild(s);
-}
-
-function openFromDropbox() {
-	if (!window.Dropbox) { setStatus('Dropbox is not available right now. Paste a link and press Load instead.', true); return; }
-	// Must run directly in the click handler, or the browser blocks the popup.
-	window.Dropbox.choose({
-		linkType: 'direct',
-		multiselect: true, // an OBJ can come with its .mtl and textures
-		extensions: MODEL_EXTENSIONS,
-		success: async (picked) => {
-			const label = picked.length === 1 ? picked[0].name : `${picked.length} files`;
-			let files;
-			try {
-				files = [];
-				for (const f of picked) files.push({ name: f.name, bytes: await download(f.link, f.name, f.bytes) });
-			} catch (e) {
-				setStatus(`Could not download from Dropbox (${e.message}).`, true);
-				return;
-			}
-			load(files, label, { type: 'dropbox' }).catch(() => {});
-		},
-		cancel: () => {},
-	});
-}
-
-// ---------------------------------------------------------------------------
 // Recent models
 // ---------------------------------------------------------------------------
 
@@ -527,7 +480,7 @@ async function renderRecents() {
 		const open = document.createElement('button');
 		open.className = 'recent-open';
 		const mb = (r.size / 1048576).toFixed(r.size < 10485760 ? 1 : 0);
-		const kind = { link: 'Link', dropbox: 'Dropbox', file: 'File', sent: 'From computer' }[r.source.type] || 'File';
+		const kind = { link: 'Link', dropbox: 'Dropbox', file: 'File', sent: 'From computer' }[r.source.type] || 'File'; // (dropbox: models opened with the Dropbox Chooser, removed in Nov 2026, may still be under Recent)
 		const span = (cls, text) => { const e = document.createElement('span'); e.className = cls; e.textContent = text; return e; };
 		open.title = `${r.name}: ${kind.toLowerCase()}, ${mb} MB, ${ago(r.date)}. Opens the saved copy.`;
 		open.append(span('recent-name', r.name), span('recent-meta', ago(r.date)));
@@ -683,7 +636,7 @@ function updateXRButtons() {
 }
 
 /** True in a headset's own browser (Meta Quest Browser), where "Send to my Quest" and dropping files make no sense. */
-const ON_HEADSET = /OculusBrowser|\bQuest\b/i.test(navigator.userAgent);
+const ON_HEADSET = DEVICE.headset;
 
 // ---------------------------------------------------------------------------
 // Send to my Quest (computers and phones) and Receive (headset)
@@ -751,7 +704,7 @@ function sendToQuest() {
 			const local = new URL(location.href);
 			local.searchParams.delete('model');
 			local.searchParams.set('pair', sh.id);
-			window.__casawalk.pairUrl = local.toString();
+			if (window.__casawalk) window.__casawalk.pairUrl = local.toString(); // (?test only)
 			setStatus(`Testing locally: open ${local} on the other device and press Receive there.`);
 		}
 		sharer = sh;
@@ -778,8 +731,6 @@ XRExperience.supported().then((s) => { xrSupport = s; xrChecked = true; updateXR
 // ---------------------------------------------------------------------------
 
 $('open-file').addEventListener('click', () => $('file-input').click());
-$('open-dropbox').addEventListener('click', openFromDropbox);
-setupDropbox();
 $('file-input').addEventListener('change', async (ev) => {
 	const picked = [...ev.target.files];
 	ev.target.value = '';
@@ -905,7 +856,7 @@ function layoutWelcome() {
 	w.hidden = bottom > H - 6; // a very short window: no room at all
 }
 /** True where files can be dragged in with a mouse: computers, not headsets or phones. */
-const CAN_DROP = !/OculusBrowser|\bQuest\b/i.test(navigator.userAgent) && window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+const CAN_DROP = !DEVICE.headset && window.matchMedia('(hover: hover) and (pointer: fine)').matches;
 let welcomeQueued = false;
 /** Lays the welcome out after the page has settled (several changes in one frame cost one layout). */
 function layoutWelcomeSoon() {
@@ -985,7 +936,7 @@ window.addEventListener('drop', async (e) => {
 
 // Offline use and clean updates (sw.js). Only on the real site (https), or
 // with ?sw while developing, so local tests always see the files on disk.
-if ('serviceWorker' in navigator && (location.protocol === 'https:' || new URLSearchParams(location.search).has('sw'))) {
+if ('serviceWorker' in navigator && (location.protocol === 'https:' || DEV.sw)) {
 	const firstVisit = !navigator.serviceWorker.controller;
 	navigator.serviceWorker.register('./sw.js').then(async () => {
 		const reg = await navigator.serviceWorker.ready;
@@ -1059,8 +1010,8 @@ if (sample && !initial) {
 	setStatus('Open a Sweet Home 3D file to start.');
 }
 
-// Test hooks for scripts/screenshots.js
-window.__casawalk = {
+// Test hooks for the browser tests (scripts/screenshots.js, scripts/xr-test.js): only with ?test.
+if (DEV.test) window.__casawalk = {
 	lighting,
 	open: (url) => loadUrl(url, { remember: false }), // (opens a model on this site: the example home for the headset test)
 	get sharer() { return sharer; },

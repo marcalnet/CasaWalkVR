@@ -60,7 +60,7 @@ export function act(xr, origin, dir) {
 			return 'door';
 		}
 		const hit = ray.intersectObjects(xr.targets().pointable, false)[0];
-		const floor = hit && d.level() ? xr.findFloor(hit.point, 0.01) : null;
+		const floor = hit ? xr.findFloor(hit.point, 0.01) : null;
 		if (!floor) return null;
 		const spot = d.landing(floor);
 		xr.goLayer('in', () => xr.setMode('walk', spot.model, spot.yaw));

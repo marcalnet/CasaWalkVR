@@ -6,8 +6,8 @@
 // its real length, turned towards you; lines within 3° of vertical or level
 // snap straight (js/measure.js), with a small mark at the end. Several at
 // once. Second button (A, or Y mirrored): undo the last; hold it a second:
-// clear all. With bare hands, a thumb tap of the holding hand is the trigger
-// (js/xr-tools.js); undo and clear wait for a hand gesture.
+// clear all. Bare hands: not yet (its own measure and undo buttons, pressed by
+// the other index, come with item 11 of the Quest 2 fixes).
 //
 // Lines and labels live in the tools' annotations, in model space: they move
 // with the scale model and stay put while walking; their thickness and the
@@ -92,11 +92,6 @@ export class LaserMeter {
 		if (this.pendingMark.parent !== a) a.add(this.pendingMark);
 		this.pendingMark.position.copy(p);
 		this.pendingMark.visible = true;
-	}
-
-	/** Bare hands (the holding hand's thumb swipe back): undo, as the marker. */
-	gesture(c, e) {
-		if (e.type === 'step' && e.dir < 0) this.secondary(c, 'press');
 	}
 
 	/** A measured line: drawn with the others in one mesh, its label with the others in one mesh. */

@@ -737,21 +737,19 @@ check('B closes the board', (await state()).menu === null);
 
 	// Moving with bare hands (C0.4). The gestures themselves are read from the joints
 	// (js/gestures.js, its Node tests); here scripted gesture events drive the app:
-	// each hand's reader is replaced by a queue (events, and whether it is "ready").
+	// each hand's reader is replaced by a queue of events.
 	// The Quest 2 gesture (pinch held, palm down) aims through the pinch point: here,
 	// the wrist joint stands in for it (handAimAt places the wrist on the aim line).
 	await page.evaluate(() => {
 		const x = window.__casawalk.xr;
-		window.__gq = { left: { ready: false, events: [] }, right: { ready: false, events: [] } };
+		window.__gq = { left: { events: [] }, right: { events: [] } };
 		for (const c of x.input.controllers) if (c.gesture) c.gesture.step = () => {
 			const q = window.__gq[c.handedness], w = x.input.joint(c, 'wrist');
-			c.gesture.ready = q.ready;
 			c.gesture.shape = w ? { pinchAt: w, normal: new (w.constructor)(0, -1, 0), pinch: 0.01 } : null;
 			return q.events.splice(0);
 		};
 	});
 	const gesture = (side, ...events) => page.evaluate(({ side, events }) => { window.__gq[side].events.push(...events); }, { side, events });
-	const ready = (side, v) => page.evaluate(({ side, v }) => { window.__gq[side].ready = v; }, { side, v });
 	/** Puts the right hand where its aim (shoulder through wrist) points at a world point. */
 	const handAimAt = (target) => page.evaluate((t) => {
 		const x = window.__casawalk.xr, V = x.rig.position.constructor, d = window.__device;
@@ -767,9 +765,6 @@ check('B closes the board', (await state()).menu === null);
 		const to = x.rig.worldToLocal(wrist.clone().sub(off));
 		hp.set(to.x, to.y, to.z);
 	}, target);
-	await ready('right', true); await frames(4);
-	const dotShown = await page.evaluate(() => window.__casawalk.xr.handViews.find((v) => v.c.handedness === 'right').readyDot.visible);
-	check('bare hands: the ready pose shows the orange dot on the thumb', dotShown);
 	// Stepping inside by pointing: pinch and hold, point at a room, let go.
 	// Aim at a room's middle (a room hotspot), or the box's middle for a model without rooms (not the pond: water is no landing).
 	const roomPt = await page.evaluate(() => {
@@ -855,7 +850,6 @@ check('B closes the board', (await state()).menu === null);
 		await page.evaluate((q) => window.__device.quaternion.set(...q), q0); await frames(2); // (the head as it was)
 		await page.evaluate(() => window.__casawalk.xr.recentreHere()); await frames(4); // (the plinth in front of it again, for what follows)
 	}
-	await ready('right', false);
 	const grabAt = await page.evaluate(() => {
 		const x = window.__casawalk.xr, d = window.__device, b = x.modes.dollhouse.modelBox(), V = x.rig.position.constructor;
 		const top = b.getCenter(new V()).setY(b.max.y + 0.02);

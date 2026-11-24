@@ -52,7 +52,7 @@ The OneDrive route uses the same anonymous steps as OneDrive's own page for visi
 
 #### Google Drive links: the API key (once per site)
 
-Google only gives shared files to other websites through its Drive API, which needs a browser API key. The key is public by design, like the Dropbox app key, and it's free (no billing account).
+Google only gives shared files to other websites through its Drive API, which needs a browser API key. The key is public by design (it only works from your site's address), and it's free (no billing account).
 
 1. In the [Google Cloud console](https://console.cloud.google.com/), create a project (any name).
 2. **APIs & Services → Library**: find **Google Drive API** and press **Enable**.
@@ -135,18 +135,6 @@ Walls (including sloping and round walls, colours and textures per side), door a
 
 The site is plain static files with no build step: GitHub Pages serves the repository root at [www.casawalkvr.com](https://www.casawalkvr.com/) (the `CNAME` file; a fork that hosts its own copy deletes it and uses its own GitHub Pages address). WebXR only works over HTTPS, so on the Quest use that address, not a local `http://` one.
 
-### Dropbox Chooser (for your own copy)
-
-The **Open from Dropbox** button uses Dropbox's official [Chooser](https://www.dropbox.com/developers/chooser). If you host your own copy, register your own key:
-
-1. At [dropbox.com/developers/apps](https://www.dropbox.com/developers/apps) choose **Create app**, *Scoped access*, *App folder*, and a unique name.
-2. In the app's **Settings**, add your site's domain (e.g. `yourname.github.io`) under **Chooser / Saver / Embedder domains**.
-3. Put the **App key** (not the secret) in `config.js` as `dropboxAppKey`.
-
-4. In `index.html`, add `https://www.dropbox.com` to `script-src` in the Content Security Policy, and add `frame-src https://www.dropbox.com`. Without this the page refuses to load Dropbox's script.
-
-Without a key the button is simply hidden. The Chooser script is the only file loaded from another site (dropbox.com), and only when a key is set.
-
 ## Safety and privacy
 
 - **Your home stays on your device.** Models are read in the browser. Nothing is uploaded, and there is no analytics or tracking. Recent models are kept in the browser's own storage (IndexedDB) on that device; remove them with the × beside each one.
@@ -215,7 +203,7 @@ Where to start reading: [SPEC.md](SPEC.md) is the brief the project was built fr
 
 ```
 index.html        2D UI and import map
-config.js         Dropbox app key, Google API key, defaults
+config.js         Google API key, defaults
 js/main.js        2D page, renderer, loading, UI
 js/xr.js          VR/AR session: the frame order and the parts below
 js/xr-dollhouse.js  the scale model on its plinth: turn, zoom, move, scale plate, where stepping inside lands

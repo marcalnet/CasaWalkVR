@@ -13,14 +13,14 @@
 // the board's Tools tab (remembered; js/settings.js cameraLens).
 
 import * as THREE from 'three';
-import { GESTURE } from './gestures.js';
+import { DEVICE } from './device.js';
 import { buildCamera } from './tool-models.js';
 import { COLOURS, FONT, GUIDE } from './theme.js';
 
 const SCREEN = [192, 128]; // viewfinder pixels
 // Viewfinder frames: 4 a second, 2 on Quest 2 (a phone GPU); a frame after a slow one is skipped;
 // it draws only out to VIEW_FAR (the tester's measurement: the whole home every 18th frame was a hitch).
-const SLOW_GPU = typeof navigator !== 'undefined' && /Quest 2/.test(navigator.userAgent ?? '');
+const SLOW_GPU = DEVICE.quest2;
 const SCREEN_EVERY = SLOW_GPU ? 0.5 : 0.25;
 const VIEW_FAR = 15; // metres
 const SLOW_FRAME = 1 / 60; // seconds: the last frame took longer, skip this viewfinder frame
@@ -73,8 +73,8 @@ export class StreetCamera {
 
 	take(c) {
 		this.held = c;
-		// (Bare hands: the thumb tap is off on the Quest 2; the shutter button comes with item 11. Until then, say so.)
-		this.hint.set(!c?.isHand ? 'Trigger: take a photo' : GESTURE.THUMB_TAP ? 'Tap your thumb: photo' : 'Photos: with a controller, for now');
+		// (Bare hands: no shutter yet; the button on the camera comes with item 11 of the Quest 2 fixes. Until then, say so.)
+		this.hint.set(c?.isHand ? 'Photos: with a controller, for now' : 'Trigger: take a photo');
 	}
 	putBack() { this.held = null; }
 

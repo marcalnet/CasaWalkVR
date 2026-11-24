@@ -7,13 +7,9 @@
 
 import * as THREE from 'three';
 import { Label } from './panel.js';
+// (Turned on by ?stats: DEV.stats, js/dev.js.)
 
 const EVERY = 0.5; // seconds between updates (a canvas redraw each frame would cost frames itself)
-
-/** True when the page URL asks for the counter (?stats). */
-export function statsWanted(search = globalThis.location?.search ?? '') {
-	return new URLSearchParams(search).has('stats');
-}
 
 /** The counter's line: fps from frames over seconds; info: renderer.info.render of the last frame. */
 export function statsText(frames, seconds, info) {

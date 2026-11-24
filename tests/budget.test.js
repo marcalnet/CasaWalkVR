@@ -89,8 +89,26 @@ test('the heavy test home fits the Quest 2 budget', { todo: 'over budget until s
 });
 
 test('the ?stats counter: only with ?stats; fps, draw calls and triangles in one short line', async () => {
-	const { statsWanted, statsText } = await import('../js/frame-stats.js');
-	assert.ok(statsWanted('?stats') && statsWanted('?model=examples/heavy-home.sh3d&stats') && !statsWanted('') && !statsWanted('?hands'));
+	const { statsText } = await import('../js/frame-stats.js');
 	assert.equal(statsText(36, 0.5, { calls: 142, triangles: 1_934_000 }), '72 fps · 142 draw calls · 1.93M triangles (both eyes)');
 	assert.equal(statsText(30, 0.5, { calls: 60, triangles: 41_200 }), '60 fps · 60 draw calls · 41k triangles (both eyes)');
+});
+
+test('one place for the development switches and the device (code audit, A4)', async () => {
+	const { devFlags } = await import('../js/dev.js');
+	const { isHeadsetBrowser, isQuest2 } = await import('../js/device.js');
+	assert.deepEqual(devFlags('?test&model=examples/heavy-home.sh3d&stats'), { test: true, hands: false, stats: true, nomerge: false, sw: false });
+	assert.deepEqual(devFlags(''), { test: false, hands: false, stats: false, nomerge: false, sw: false });
+	const q2 = 'Mozilla/5.0 (X11; Linux x86_64; Quest 2) AppleWebKit/537.36 (KHTML, like Gecko) OculusBrowser/38.0 Chrome/132 VR Safari/537.36';
+	const q3 = 'Mozilla/5.0 (X11; Linux x86_64; Quest 3) AppleWebKit/537.36 (KHTML, like Gecko) OculusBrowser/38.0 Chrome/132 VR Safari/537.36';
+	const mac = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132 Safari/537.36';
+	assert.ok(isHeadsetBrowser(q2) && isHeadsetBrowser(q3) && !isHeadsetBrowser(mac));
+	assert.ok(isQuest2(q2) && !isQuest2(q3) && !isQuest2(mac));
+	// Nothing else reads the address's switches or the browser's name.
+	const js = fs.readdirSync(path.join(ROOT, 'js')).filter((f) => f.endsWith('.js') && f !== 'dev.js' && f !== 'device.js');
+	for (const f of js) {
+		const src = fs.readFileSync(path.join(ROOT, 'js', f), 'utf8');
+		assert.ok(!/\.has\('(test|hands|stats|nomerge|sw)'\)/.test(src), `${f} reads a development switch itself`);
+		assert.ok(!/userAgent/.test(src), `${f} reads the browser's name itself`);
+	}
 });

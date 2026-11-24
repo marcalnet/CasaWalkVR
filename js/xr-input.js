@@ -41,7 +41,7 @@
 // names, such as 'wrist' or 'index-finger-tip').
 //
 // Gestures (C0.4): readGestures() runs each bare hand's gesture reader
-// (js/gestures.js: the ready pose, thumb tap and swipes, the closed hand) and
+// (js/gestures.js: the pinch-and-hold teleport, the wrist flick, the closed hand) and
 // leaves this frame's events on c.gestures (an array) and the reader on
 // c.gesture. Controllers have c.gestures = [].
 
@@ -215,12 +215,8 @@ export class XRInput {
 		return out.setFromMatrixPosition(j.matrixWorld);
 	}
 
-	/**
-	 * Runs each bare hand's gesture reader for this frame (see the top of the
-	 * file). axes: the viewer's horizontal { right, forward } (world), so a
-	 * thumb swipe reads as you see it.
-	 */
-	readGestures(dt, axes) {
+	/** Runs each bare hand's gesture reader for this frame (see the top of the file). */
+	readGestures(dt) {
 		this._gh = this._gh ?? [];
 		this._gh.length = 0;
 		for (const c of this.controllers) {
@@ -237,7 +233,7 @@ export class XRInput {
 					(joints[n] ??= new THREE.Vector3()).setFromMatrixPosition(j.matrixWorld);
 				}
 			}
-			c.gestures = c.gesture.step(joints, dt, axes);
+			c.gestures = c.gesture.step(joints, dt);
 		}
 	}
 

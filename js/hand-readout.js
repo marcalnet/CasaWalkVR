@@ -10,15 +10,11 @@
 import * as THREE from 'three';
 import { Label } from './panel.js';
 import { GESTURE } from './gestures.js';
+// (Turned on by ?hands: DEV.hands, js/dev.js.)
 
 const ABOVE = 0.06; // the card this far above the wrist (m)
 const HEIGHT = 0.018; // the card's height (m): about 12 cm wide, small enough to keep the view clear
 const WAIST = 0.8, CHEST = 0.2; // "ready" between these distances below the eyes (m)
-
-/** True when the page URL asks for the readout (?hands). */
-export function readoutWanted(search = globalThis.location?.search ?? '') {
-	return new URLSearchParams(search).has('hands');
-}
 
 /** What the readout says for bare hand c (pure enough to test: xr supplies the rest). */
 export function readoutText(xr, c) {

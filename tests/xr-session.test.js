@@ -12,8 +12,8 @@ import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 import { parseHome, buildHome } from '../js/sh3d.js';
 import { prepareObjText } from '../js/formats.js';
 import { optimiseModel } from '../js/optimise.js';
-import { GESTURE } from '../js/gestures.js';
-import { readoutWanted, readoutText } from '../js/hand-readout.js';
+import { readoutText } from '../js/hand-readout.js';
+import { devFlags } from '../js/dev.js';
 import { XRExperience } from '../js/xr.js';
 import { HOLD } from '../js/xr-tools.js';
 
@@ -622,8 +622,9 @@ test('the safety net: an error during a move between layers ends the session cle
 	assert.equal(x.safety.lastError.message, 'half-way in');
 });
 
-test('the ?hands readout: only with ?hands; palm angle, pinch, and ready, aiming or what blocks it', async () => {
-	assert.ok(readoutWanted('?hands') && readoutWanted('?x=1&hands&plinth=10') && !readoutWanted('') && !readoutWanted('?nomerge'));
+test('the development switches (js/dev.js) and the ?hands readout: only with ?hands; palm angle, pinch, and ready, aiming or what blocks it', async () => {
+	const f = devFlags('?x=1&hands&plinth=10');
+	assert.ok(f.hands && !f.stats && !f.test && !devFlags('').hands && !devFlags('?nomerge').hands);
 	const { x, go } = await setup();
 	go('in');
 	const c = x.input.hands.right;
@@ -640,30 +641,6 @@ test('the ?hands readout: only with ?hands; palm angle, pinch, and ready, aiming
 	x.modes.walk.tele = { c, via: 'hand' };
 	assert.match(readoutText(x, c), /aiming$/);
 	x.modes.walk.tele = null;
-});
-
-test('bare hands (thumb tap, off on Quest 2): a thumb tap of the hand holding a tool is its trigger; that hand never teleports', async (t) => {
-	const was = GESTURE.THUMB_TAP;
-	GESTURE.THUMB_TAP = true;
-	t.after(() => { GESTURE.THUMB_TAP = was; });
-	const { x, go } = await setup();
-	go('in');
-	const c = x.input.hands.right;
-	c.isHand = true; c.isController = false; // (this entry plays a bare hand)
-	const got = [];
-	const tool = { name: 'test', object: new THREE.Group(), trigger: (cc, e) => got.push(e) };
-	x.tools.take(tool, c);
-	c.gestures = [{ type: 'tap' }];
-	x.tools.update(1 / 72);
-	assert.deepEqual(got, ['down', 'up'], 'the tap presses the tool\'s trigger');
-	x.input._gh = [c]; // (this frame's bare hands)
-	c.touch.tracked = true;
-	x.modes.walk.handMoves(1 / 72);
-	assert.equal(x.modes.walk.tele, null, 'the same tap never aims a teleport');
-	x.tools.putBack();
-	c.gestures = [{ type: 'tap' }];
-	x.modes.walk.handMoves(1 / 72);
-	assert.equal(x.modes.walk.tele?.via, 'hand', 'with no tool in that hand, the tap aims');
 });
 
 test('the laser meter: two triggers measure a line in model space; A undoes, holding A clears', async () => {

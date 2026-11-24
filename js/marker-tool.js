@@ -5,9 +5,8 @@
 // (the default), blue, green, red, all free; press the stick of the hand
 // holding it to change colour (its cap shows the colour). A = undo the last
 // stroke; hold A = clear all (Y when mirrored).
-// With bare hands (js/xr-tools.js): a thumb tap starts a stroke and the next
-// tap ends it; a thumb swipe left or right changes colour; a swipe back
-// undoes the last stroke.
+// Bare hands: not yet (the marker held like a pen, drawing where its nib
+// touches, comes with item 11 of the Quest 2 fixes).
 //
 // Strokes live in the tools' annotations, in model space: they move with the
 // scale model and stay put while walking. Photos keep them.
@@ -45,9 +44,8 @@ export class MarkerTool {
 	take(c) { this.held = c; }
 	putBack() { this.endStroke(); this.held = null; }
 
-	/** Controllers: down starts a stroke, up ends it. Bare hands: each tap starts or ends one. */
+	/** Controllers: down starts a stroke, up ends it. */
 	trigger(c, phase) {
-		if (c?.isHand) { if (phase === 'down') (this.drawing ? this.endStroke() : this.startStroke()); return; }
 		if (phase === 'down') this.startStroke();
 		else this.endStroke();
 	}
@@ -59,11 +57,9 @@ export class MarkerTool {
 		if (xr.soundLevel !== 'off') xr.sound.play(went ? 'release' : 'deny');
 	}
 
-	/** Bare-hand gestures of the holding hand: a swipe left/right changes colour, back undoes; an open or lost hand ends a stroke. */
+	/** The holding hand lost: a stroke in progress ends (nothing keeps drawing). */
 	gesture(c, e) {
-		if (e.type === 'open' || e.type === 'lost') this.endStroke(); // (like a pinch that is lost: nothing keeps drawing)
-		else if (e.type === 'turn') this.nextInk(e.dir);
-		else if (e.type === 'step' && e.dir < 0) this.secondary(c, 'press');
+		if (e.type === 'lost') this.endStroke();
 	}
 
 	/** The stick press of the holding controller: the next colour. */

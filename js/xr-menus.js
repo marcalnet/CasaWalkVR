@@ -102,13 +102,12 @@ export const LESSONS = {
 	// Each step: its words for bare hands and for controllers (none: skipped
 	// for that input), what completes it (done: an event js/lessons.js is told;
 	// none: the step ends with Got it), must (Got it waits for it), demo (the
-	// looping hand: tap, hold, ready, turn).
+	// looping hand: hold).
 	scale: { title: 'Welcome to CasaWalk', steps: [
 		{ id: 'start', done: 'start', must: true, hands: 'Press the Start key with your fingertip.', controllers: 'Press Start: touch it, or point and pull.' },
 		{ id: 'menu', done: 'wrist', must: true, hands: 'Touch your right wrist with your left hand: your menu.', controllers: 'Press A (or touch the orb on your right controller): your menu.' },
 		{ id: 'tools', done: 'fan', must: true, hands: 'Look at your {fan} hand: your tools. Touch one with your {take} hand.', controllers: 'Look at your {fan} controller: your tools. Touch one with your {take} controller.' },
 		{ id: 'hold', done: 'held', demo: 'hold', hands: 'Close your hand on the home to hold it. Let go: it goes home.', controllers: 'Squeeze a grip to hold the home. Let go in the air: it goes home.' },
-		// (The thumb tap's ready pose had its own step; the pinch needs none: GESTURE.THUMB_TAP is off.)
 		{ id: 'inside', done: 'inside', hands: 'Palm down, pinch and hold, point at a room. Let go when it holds still: step inside.', controllers: 'Point at a room and pull the trigger: step inside.' },
 	] },
 	walk: { title: 'Moving around', steps: [
@@ -143,8 +142,8 @@ export function handsHelp(side = 'right') {
 	return [
 		{ key: 'Wrist', kind: 'orb', text: `Touch your ${side} wrist with your ${other} index: menu` },
 		{ small: true, text: 'Press its keys with your fingertip, like real keys.' },
-		{ key: 'Move', kind: 'trigger', text: 'Moving with your hands comes in the next update' },
-		{ small: true, text: 'Until then: Walk in → and ← Back on your wrist, or pick up the controllers.' },
+		{ key: 'Move', kind: 'trigger', text: 'Palm down, pinch and hold: aim. Let go on blue: go' },
+		{ small: true, text: 'While aiming, flick your wrist: turn. Palm up: cancel.' },
 		{ small: true, text: 'To leave VR at any moment: the Meta button.' },
 	];
 }

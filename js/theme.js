@@ -60,7 +60,7 @@ export const HAND = {
 	tip: COLOURS.accent, // the fingertip "pen": blue, the thing that presses (orange is the thing to press)
 	tipIdle: 0.35, // its opacity when no key is near
 	fade: 0.15, // seconds to fade out when tracking is lost
-	ready: '#e07a1f', // the teleport "ready" dot where the thumb rests (orange: a gesture you can do now)
+	ready: '#e07a1f', // a bare hand's pointing ray at the scale model (orange: a gesture you can do now)
 	// How hands are drawn: 'generic' (the WebXR generic hand model, js/hand-model.js) or
 	// 'capsules' (C0.2's capsules, js/hands.js: also the fallback while it loads or if it can't).
 	model: 'generic',

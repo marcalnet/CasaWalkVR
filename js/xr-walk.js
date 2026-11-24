@@ -14,7 +14,6 @@
 // (the arc draws back). Turn the palm up or drop the hand below the waist:
 // cancel. A quick wrist flick while aiming turns 30°; the arc stays. A pinch
 // near a key, the fan, the model or a tool never aims (XRExperience.aimBlock).
-// (With GESTURE.THUMB_TAP on: Meta's thumb tap, swipes to turn and step.)
 // The ring snaps to hotspots (room middles, doorways: js/hotspots.js), for
 // controllers too.
 
@@ -23,8 +22,7 @@ import { TeleportArc, yawOf } from './xr-input.js';
 import { WallCollider } from './walls.js';
 import { UP, DOWN, worldNormal, hitSegment } from './xr-targets.js';
 import { EYE_BELOW_TOP, buildFade } from './xr-scene.js';
-import { handAimRay, GESTURE } from './gestures.js';
-import { handHoldsTool } from './xr-tools.js';
+import { handAimRay } from './gestures.js';
 import { hotspots, snapTo, HOTSPOT } from './hotspots.js';
 import { Label } from './panel.js';
 
@@ -36,7 +34,6 @@ const FADE_OUT = 0.1, FADE_IN = 0.15; // teleport fade, seconds
 const ARC_CEILING = 1.85;
 const STEADY = 0.3; // a bare hand's ring turns blue once it has stayed put this long (s)
 const STEADY_MOVE = 0.15; // ... within this distance (m)
-const HAND_STEP = 0.75; // a thumb swipe forward or back: a step this long (m)
 const WAIST = 0.8; // a pinching hand this far below the eyes is dropped: the aim cancels (m)
 const MAX_DISCS = 48; // hotspot discs shown while aiming
 
@@ -208,87 +205,11 @@ export class Walk {
 	}
 
 	/**
-	 * A small step (a bare hand's thumb swipe): HAND_STEP forward (dir +1) or
-	 * back (-1), the way you look; never through a wall, onto a floor you can
-	 * stand on. Returns true if it went.
-	 */
-	stepBy(dir) {
-		const xr = this.xr, rig = xr.rig, t = xr.targets();
-		const head = xr.headWorld(), feet = rig.position.y - xr.lift;
-		const { forward } = xr.viewAxes();
-		const from = new THREE.Vector3(head.x, feet + 1, head.z);
-		const to = from.clone().addScaledVector(forward, dir * HAND_STEP);
-		// Walls (and closed glass) in the way: no step.
-		xr.raycaster.set(from, forward.clone().multiplyScalar(dir));
-		xr.raycaster.far = HAND_STEP + 0.25;
-		if (xr.raycaster.intersectObjects(xr.model.layers.walls?.children.filter((m) => m.visible) ?? [], false).length) return false;
-		// A floor under the new spot, within a stair step of yours.
-		xr.floorRay.set(new THREE.Vector3(to.x, feet + STEP, to.z), DOWN);
-		xr.floorRay.far = 2 * STEP;
-		const h = xr.floorRay.intersectObjects(t.walkableList, false).find((x) => worldNormal(x).y > 0.7);
-		if (!h) return false;
-		this.go(h.point);
-		return true;
-	}
-
-	/**
-	 * Bare hands: the teleport gesture, turns and steps (see the top of the
-	 * file). Taps go to nothing while a menu is open or a fingertip is at a key.
+	 * Bare hands: palm down, pinch and hold: aim; open the pinch on a blue
+	 * ring: go; palm up, the hand dropped or lost: cancel; a wrist flick while
+	 * aiming: turn (see the top of the file).
 	 */
 	handMoves(dt) {
-		if (!GESTURE.THUMB_TAP) return this.pinchMoves(dt);
-		const xr = this.xr, ui = xr.ui, input = xr.input;
-		const busy = !!xr.menu || ui.wrist.open || this.fade;
-		for (const c of input.gestureHands()) {
-			if (handHoldsTool(xr, c)) continue; // (its tap is the tool's trigger: no teleport from that hand)
-			const near = xr.handViews[c.index]?.near;
-			for (const e of c.gestures) {
-				const mine = this.tele?.c === c;
-				if (e.type === 'open' || e.type === 'lost') {
-					if (mine) { this.tele = null; this.hideAim(); xr.sound.play('release'); }
-				} else if (e.type === 'tap' && !near) {
-					if (mine) {
-						const r = this.tele.result;
-						if (r?.valid && this.tele.steady >= STEADY) {
-							this.tele = null;
-							this.hideAim();
-							this.go(r.point);
-							this.teleports = (this.teleports ?? 0) + 1;
-							xr.ui.onTeleport?.(this.teleports);
-						} else xr.sound.play('deny');
-					} else if (!this.tele && !busy) {
-						this.tele = { c, via: 'hand', steady: 0, anchor: null };
-						xr.sound.play('aim');
-						xr.lessons?.note('arc');
-					}
-				} else if (e.type === 'turn' && !busy && !near && !this.tele) { // (never while aiming: the tester's finding)
-					xr.turn(-e.dir * THREE.MathUtils.degToRad(xr.snapAngle));
-					xr.sound.play('tick');
-					xr.lessons?.note('turn');
-				} else if (e.type === 'step' && !busy && !near && !this.tele) {
-					if (!this.stepBy(e.dir)) xr.sound.play('deny');
-				}
-			}
-		}
-		const tele = this.tele;
-		if (tele?.via !== 'hand') return;
-		if (xr.menu || !tele.c.touch.tracked) { this.tele = null; this.hideAim(); return; }
-		const wrist = input.joint(tele.c, 'wrist');
-		if (!wrist) return;
-		const { origin, dir } = handAimRay(xr.headWorld(), xr.viewAxes().right, wrist, tele.c.handedness);
-		const r = this.aim(origin, dir, { pending: tele.steady < STEADY });
-		// Steady: the landing stays within STEADY_MOVE for STEADY seconds.
-		if (r.valid && r.point && tele.anchor && r.point.distanceTo(tele.anchor) < STEADY_MOVE) tele.steady += dt;
-		else { tele.steady = 0; tele.anchor = r.point?.clone() ?? null; }
-		tele.result = r;
-	}
-
-	/**
-	 * Bare hands on the Quest 2: palm down, pinch and hold: aim; open the
-	 * pinch on a blue ring: go; palm up, the hand dropped or lost: cancel; a
-	 * wrist flick while aiming: turn (see the top of the file).
-	 */
-	pinchMoves(dt) {
 		const xr = this.xr, input = xr.input;
 		const cancel = () => { this.tele = null; this.hideAim(); xr.sound.play('release'); };
 		for (const c of input.gestureHands()) {

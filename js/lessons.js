@@ -112,7 +112,7 @@ export class Lessons {
 		this.stop();
 	}
 
-	/** The app says what you did: 'start', 'wrist', 'held', 'ready', 'inside', 'arc', 'teleport', 'turn'. */
+	/** The app says what you did: 'start', 'wrist', 'held', 'inside', 'arc', 'teleport', 'turn'. */
 	note(event) {
 		if (!this.place) return;
 		const step = this.current();
@@ -187,15 +187,11 @@ export class Lessons {
 		// Each demo loops over 1.6 s.
 		const t = (this.demoT % 1.6) / 1.6;
 		const wave = (from, to) => d.userData.pose(presetJoints(pose(from), pose(to), 0.5 - 0.5 * Math.cos(2 * Math.PI * t)));
-		if (step.demo === 'tap') wave('microgesture', 'thumb-lifted');
-		else if (step.demo === 'hold') wave('open', 'fist');
-		else if (step.demo === 'ready') wave('relaxed', 'microgesture');
-		else if (step.demo === 'turn') { d.userData.pose(presetJoints(pose('microgesture'))); }
+		if (step.demo === 'hold') wave('open', 'fist');
 		// Where: 60 cm ahead at eye height, a little left of the card, turned towards you.
 		d.position.copy(a.head).addScaledVector(a.forward, DEMO_AHEAD).addScaledVector(a.right, -DEMO_LEFT);
 		d.position.y -= 0.12;
 		d.lookAt(a.head);
-		if (step.demo === 'turn') d.rotateY(0.25 * Math.sin(2 * Math.PI * t));
 	}
 
 	/** A step's words, with the sides filled in ({fan}: the tool fan's hand, {take}: the other). */

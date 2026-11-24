@@ -11,8 +11,7 @@
 		use its own font file, download models over https, and (only when "Send to
 		my Quest" pairs with a headset) talk to the pairing service in config.js.
 		Nothing else: no outside scripts, frames, fonts or plugins. If you edit the import map, update the hash
-		(npm test prints the right one). To enable the Dropbox Chooser, add
-		https://www.dropbox.com to script-src and frame-src (see README).
+		(npm test prints the right one).
 	-->
 	<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'wasm-unsafe-eval' 'sha256-hUvon5CVPXLquT3WJNr9I0hyTxeK5RACPxDkF4pZIVs='; style-src 'self' 'unsafe-inline'; worker-src 'self' blob:; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' https: wss://0.peerjs.com data: blob:; base-uri 'none'; form-action 'none'; object-src 'none'">
 	<!-- Sites we download a model from are not told which page asked. -->
@@ -267,7 +266,6 @@
 		<div class="panel-body">
 			<!-- No restrictive accept attribute: Quest Browser greys out uncommon extensions. -->
 			<input type="file" id="file-input" multiple>
-			<button id="open-dropbox" class="primary" hidden>Open from Dropbox</button>
 			<button id="open-file" class="primary" title="Sweet Home 3D 5.3 or later (.sh3d), a zip, an OBJ with its .mtl and textures, or a GLB">Open file</button>
 			<div class="link-row">
 				<input type="url" id="link-input" placeholder="Dropbox, Drive, OneDrive link" title="Paste a share link to a model file: Dropbox, Google Drive, OneDrive, GitHub, or any web address of the file" autocomplete="off" aria-label="Link to a model">

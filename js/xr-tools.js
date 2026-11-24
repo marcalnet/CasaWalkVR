@@ -25,19 +25,10 @@
 // and photos keep it (annotations are never hidden from photos).
 
 import * as THREE from 'three';
-import { GESTURE } from './gestures.js';
-
 export const HOLD = 1; // seconds: "hold A for a second"
-// Bare hands: with GESTURE.THUMB_TAP on, a thumb tap of the hand holding a tool is that
-// tool's trigger (the camera's shutter, the meter's point, the marker's stroke). With it
-// off (the Quest 2 design of 24 Nov) the tools get their own buttons (item 11, to come).
-// Either way a hand holding a tool never aims a teleport.
-export const HAND_TAP_IS_TRIGGER = true;
-
-/** True when bare hand c holds a tool whose trigger its thumb tap fires (its teleport is off). */
-export function handHoldsTool(xr, c) {
-	return HAND_TAP_IS_TRIGGER && !!c?.isHand && xr.tools?.held?.c === c;
-}
+// Bare hands have no way to work a tool yet: the tools get their own buttons,
+// pressed by the other index (item 11 of the Quest 2 fixes, to come). A hand
+// holding a tool never aims a teleport (XRExperience.aimBlock).
 const EXTRA = ['stickPress']; // buttons a tool may also own (besides trigger, grip and its second button)
 const NONE = [];
 
@@ -105,12 +96,9 @@ export class ToolSystem {
 		const h = this.held;
 		if (!h?.c.source) return;
 		const { tool, c } = h, s = c.state, key = ToolSystem.secondKey(c);
-		// A bare hand: its thumb tap is the tool's trigger (a press: down, then up).
+		// A bare hand: no trigger yet (see the top); a lost hand ends a stroke.
 		if (c.isHand) {
-			for (const e of c.gestures ?? []) {
-				if (e.type === 'tap' && HAND_TAP_IS_TRIGGER) { tool.trigger?.(c, 'down'); tool.trigger?.(c, 'up'); }
-				else if (((e.type === 'turn' || e.type === 'step') && GESTURE.THUMB_TAP) || e.type === 'open' || e.type === 'lost') tool.gesture?.(c, e); // (the marker's colour, undo, and ending a stroke; a pinch's wrist flick is never one)
-			}
+			for (const e of c.gestures ?? []) if (e.type === 'lost') tool.gesture?.(c, e);
 			tool.update?.(dt, c);
 			return;
 		}

@@ -34,19 +34,7 @@ test('drawing: a stroke grows from the nib; finished strokes merge into one mesh
 	assert.equal(xr.tools.annotations.children.length, 0);
 });
 
-test('bare hands: a tap starts a stroke, the next ends it; a swipe changes colour; a dot is no stroke', () => {
-	const xr = fakeXR(), m = new MarkerTool(xr), h = { isHand: true };
-	m.take(h);
-	m.trigger(h, 'down'); m.trigger(h, 'up');
-	assert.ok(m.drawing, 'drawing after one tap');
-	m.trigger(h, 'down'); m.trigger(h, 'up');
-	assert.equal(m.drawing, null, 'the next tap ends it');
-	assert.equal(m.strokes.length, 0, 'it never moved: no stroke left');
-	m.gesture(h, { type: 'turn', dir: -1 });
-	assert.equal(INKS[m.ink], 'red', 'a swipe back through the colours');
-});
-
-test('a stroke ends on a jump (a fade, a layer change) and when a bare hand opens or is lost', () => {
+test('a stroke ends on a jump (a fade, a layer change) and when the holding hand is lost', () => {
 	const xr = fakeXR(), m = new MarkerTool(xr), c = { isController: true };
 	m.take(c);
 	m.trigger(c, 'down');
@@ -60,8 +48,8 @@ test('a stroke ends on a jump (a fade, a layer change) and when a bare hand open
 	m.putBack(); m.take(h);
 	m.trigger(h, 'down');
 	assert.ok(m.drawing);
-	m.gesture(h, { type: 'open' });
-	assert.equal(m.drawing, null, 'an open hand ends it');
+	m.gesture(h, { type: 'lost' });
+	assert.equal(m.drawing, null, 'a lost hand (its gesture event) ends it');
 	m.trigger(h, 'down');
 	h.touch.tracked = false;
 	m.update(1 / 72);

@@ -35,8 +35,7 @@ import { DELIBERATE } from './touch.js';
 import { roomAt, roomLanding, alongAxis, clearOfWalls, headingOf } from './rooms.js';
 import { Label } from './panel.js';
 import { ease } from './tween.js';
-import { handAimRay, GESTURE } from './gestures.js';
-import { handHoldsTool } from './xr-tools.js';
+import { handAimRay } from './gestures.js';
 import { HAND } from './theme.js';
 
 const DOLLHOUSE_PERSON = 2.0; // metres
@@ -56,7 +55,6 @@ export function nearestScale(ratio) {
 }
 const ROTATE_SPEED = 1.6; // rad/s at full stick
 const HOLD_REACH = 0.08; // a closed hand within this of the model's box holds it
-const AIM_CLEAR = 0.15; // ... and within this, the hand's teleport gesture is not read (a hand never does both)
 const DROP_NEAR = 0.15; // let go this close to the plinth top (over it): it settles
 const RETURN_AWAY = 0.3, RETURN_WAIT = 4; // a floating model goes home once nothing is within 0.3 m for 4 s
 const GRAB_SMOOTH = 0.06, GRAB_SMOOTH_HAND = 0.1; // seconds: a held model follows a controller / a bare hand smoothed this much
@@ -104,8 +102,8 @@ export class Dollhouse {
 		this.xr = xr;
 		this.name = 'dollhouse';
 		// The model on the plinth, in stage space: position, turn and zoom.
-		// (tilt: on top of the turn, in the stage's frame; always the identity now, the model stays level)
-		this.doll = { pos: new THREE.Vector3(0, PLINTH_REST, -xr.plinthDistance), yaw: 0, zoom: 1, tilt: new THREE.Quaternion() };
+		// (Always level: only a turn about the vertical. The full free tilt of C0.4 went on 24 Nov 2026.)
+		this.doll = { pos: new THREE.Vector3(0, PLINTH_REST, -xr.plinthDistance), yaw: 0, zoom: 1 };
 		this.floating = null; // let go in the air: { wait (s with nothing near), going (the glide home) }
 		this.handAim = null; // a bare hand stepping inside: { c, spot }
 		this.dollLift = DOLLHOUSE_LIFT_START; // VR dollhouse lift, from the measured head height
@@ -194,7 +192,6 @@ export class Dollhouse {
 		this.doll.pos.set(0, PLINTH_REST, -this.xr.plinthDistance);
 		this.doll.yaw = 0;
 		this.doll.zoom = 1;
-		this.doll.tilt.identity();
 	}
 
 	/** measure: take the head height now (false at session start, when there is no pose yet). */
@@ -278,7 +275,7 @@ export class Dollhouse {
 		const xr = this.xr;
 		const p = xr.stage.localToWorld(this.doll.pos.clone());
 		xr.anchor.position.copy(p);
-		xr.anchor.quaternion.setFromAxisAngle(UP, xr.stage.rotation.y + this.doll.yaw).premultiply(this.doll.tilt);
+		xr.anchor.quaternion.setFromAxisAngle(UP, xr.stage.rotation.y + this.doll.yaw);
 		xr.anchor.scale.setScalar(xr.baseScale * this.doll.zoom);
 		xr.anchor.updateMatrixWorld(true);
 		xr.plate.set(1 / (xr.baseScale * this.doll.zoom)); // e.g. 1:42 on the plinth
@@ -354,7 +351,7 @@ export class Dollhouse {
 				const modelHit = xr.raycaster.intersectObjects(pointable, false)[0];
 				if (modelHit) {
 					input.showHit(c, modelHit.distance);
-					const floor = this.level() ? xr.findFloor(modelHit.point, 0.01) : null; // (a tilted model: no landing)
+					const floor = xr.findFloor(modelHit.point, 0.01);
 					if (floor) {
 						spots[c.index] = this.landing(floor);
 						if (c.state.down.trigger) jumpTo = spots[c.index];
@@ -417,8 +414,8 @@ export class Dollhouse {
 		this.apply();
 	}
 
-	/** True while the model is level (on the plinth, or let go upright): pointing at it can step inside. */
-	level() { return 2 * Math.acos(Math.min(1, Math.abs(this.doll.tilt.w))) < THREE.MathUtils.degToRad(1); }
+	/** True while the model stands level (its up within 1° of vertical): always, since it only turns about the vertical (a check for the tests). */
+	level() { return (this._up ??= new THREE.Vector3()).copy(UP).applyQuaternion(this.xr.anchor.quaternion).y > Math.cos(THREE.MathUtils.degToRad(1)); }
 
 	/** The model's box in the world (its bounds, as placed now). */
 	modelBox(out = new THREE.Box3()) {
@@ -496,7 +493,6 @@ export class Dollhouse {
 		// (doll.pos is the anchor's place: the model's offset in it stays, so the anchor moves and turns as above)
 		this.doll.pos.copy(g.pos);
 		this.doll.yaw = g.yaw;
-		this.doll.tilt.identity();
 		this.apply();
 		this.keepAbove();
 	}
@@ -528,11 +524,11 @@ export class Dollhouse {
 
 	/** Glides down onto the plinth (keeping its place over it), levelling itself; sound settle. */
 	settleDown(duration) {
-		const xr = this.xr, from = this.doll.pos.clone(), tilt0 = this.doll.tilt.clone();
+		const xr = this.xr, from = this.doll.pos.clone();
 		this.settling = xr.tweens.start({
 			duration, ease: ease.inOut,
-			step: (k) => { this.doll.pos.y = from.y + (PLINTH_REST - from.y) * k; this.doll.tilt.slerpQuaternions(tilt0, new THREE.Quaternion(), k); this.apply(); },
-			done: () => { this.settling = null; this.doll.tilt.identity(); this.apply(); xr.sound.play('settle'); },
+			step: (k) => { this.doll.pos.y = from.y + (PLINTH_REST - from.y) * k; this.apply(); },
+			done: () => { this.settling = null; this.apply(); xr.sound.play('settle'); },
 		});
 	}
 
@@ -587,17 +583,16 @@ export class Dollhouse {
 	/** The glide home: 0.8 s along a gentle arc, levelling itself, then it settles (sound settle). */
 	goHome() {
 		const xr = this.xr, f = this.floating;
-		const from = this.doll.pos.clone(), to = new THREE.Vector3(0, PLINTH_REST, -xr.plinthDistance), tilt0 = this.doll.tilt.clone();
+		const from = this.doll.pos.clone(), to = new THREE.Vector3(0, PLINTH_REST, -xr.plinthDistance);
 		this.dropLine.visible = false;
 		f.going = xr.tweens.start({
 			duration: 0.8, ease: ease.inOut,
 			step: (k) => {
 				this.doll.pos.lerpVectors(from, to, k);
 				this.doll.pos.y += Math.sin(Math.PI * k) * 0.15;
-				this.doll.tilt.slerpQuaternions(tilt0, new THREE.Quaternion(), k);
 				this.apply();
 			},
-			done: () => { this.doll.tilt.identity(); this.apply(); this.floating = null; this.stopFloating(); xr.sound.play('settle'); },
+			done: () => { this.apply(); this.floating = null; this.stopFloating(); xr.sound.play('settle'); },
 		});
 	}
 
@@ -610,7 +605,7 @@ export class Dollhouse {
 
 	/**
 	 * Bare hands at the scale model: a closed hand on the model holds it; the
-	 * teleport gesture (tap, point, tap) steps inside. spots: this frame's
+	 * teleport gesture (pinch and hold, point, let go) steps inside. spots: this frame's
 	 * landing per input index (the hand's is added). Returns where to step
 	 * inside, or null.
 	 */
@@ -622,40 +617,26 @@ export class Dollhouse {
 		for (const c of input.gestureHands()) {
 			const palm = this.holdPoint(c, p);
 			const d = palm ? box.distanceToPoint(palm) : Infinity;
-			const keyNear = xr.handViews[c.index]?.near;
-			const toolHand = handHoldsTool(xr, c); // (its tap is the tool's trigger: it never aims)
 			for (const e of c.gestures) {
 				if (e.type === 'fist' && !this.grab && d < HOLD_REACH && !busy && !c.fistClaimed) { this.cancelHandAim(); this.startGrab(c); } // (a fist on a fan tool takes the tool)
 				else if ((e.type === 'fistEnd' || e.type === 'lost') && this.grab?.c === c) this.release();
 				else if ((e.type === 'open' || e.type === 'lost') && this.handAim?.c === c) { this.cancelHandAim(); xr.sound.play('release'); }
-				else if (!GESTURE.THUMB_TAP) {
-					// (The Quest 2 gesture: pinch held, palm down, aims; opening it on a steady landing steps inside.)
-					if (e.type === 'pinch' && !this.handAim && !busy && this.grab?.c !== c && !xr.aimBlock(c, c.gesture.shape?.pinchAt)) {
-						this.handAim = { c, spot: null, steady: 0, at: new THREE.Vector3(), has: false };
-						xr.sound.play('aim');
-					} else if (e.type === 'pinchEnd' && this.handAim?.c === c) {
-						if (this.handAim.spot && this.handAim.steady >= AIM_STEADY) jump = this.handAim.spot;
-						else { this.cancelHandAim(); xr.sound.play('release'); }
-					}
-				} else if (e.type === 'tap' && !keyNear && !toolHand && d > AIM_CLEAR && this.grab?.c !== c) {
-					if (this.handAim?.c === c) {
-						// (Only on a landing held steady 0.3 s, as inside: the tester's finding.)
-						if (this.handAim.spot && this.handAim.steady >= AIM_STEADY) jump = this.handAim.spot;
-						else xr.sound.play('deny');
-					} else if (!this.handAim && !busy) {
-						this.handAim = { c, spot: null, steady: 0, at: new THREE.Vector3(), has: false };
-						xr.sound.play('aim');
-					}
+				// The pinch held, palm down, aims; opening it on a steady landing steps inside.
+				else if (e.type === 'pinch' && !this.handAim && !busy && this.grab?.c !== c && !xr.aimBlock(c, c.gesture.shape?.pinchAt)) {
+					this.handAim = { c, spot: null, steady: 0, at: new THREE.Vector3(), has: false };
+					xr.sound.play('aim');
+				} else if (e.type === 'pinchEnd' && this.handAim?.c === c) {
+					if (this.handAim.spot && this.handAim.steady >= AIM_STEADY) jump = this.handAim.spot;
+					else { this.cancelHandAim(); xr.sound.play('release'); }
 				}
 			}
 		}
 		const a = this.handAim;
 		if (!a) return jump;
 		if (busy || !a.c.touch.tracked) { this.cancelHandAim(); return null; }
-		// (The pinch point with the pinch gesture, the wrist with the thumb tap.)
-		const through = GESTURE.THUMB_TAP ? input.joint(a.c, 'wrist') : a.c.gesture.shape?.pinchAt;
+		const through = a.c.gesture.shape?.pinchAt;
 		if (!through) return jump;
-		if (!GESTURE.THUMB_TAP && !jump && through.y < xr.headWorld().y - WAIST) { this.cancelHandAim(); xr.sound.play('release'); return null; } // (the hand dropped)
+		if (!jump && through.y < xr.headWorld().y - WAIST) { this.cancelHandAim(); xr.sound.play('release'); return null; } // (the hand dropped)
 		const { origin, dir } = handAimRay(xr.headWorld(), xr.viewAxes().right, through, a.c.handedness);
 		xr.raycaster.set(origin, dir);
 		xr.raycaster.far = 5;
@@ -665,7 +646,7 @@ export class Dollhouse {
 		pos.setXYZ(0, origin.x, origin.y, origin.z); pos.setXYZ(1, end.x, end.y, end.z);
 		pos.needsUpdate = true;
 		line.visible = true;
-		const floor = hit && this.level() ? xr.findFloor(hit.point, 0.01) : null;
+		const floor = hit ? xr.findFloor(hit.point, 0.01) : null;
 		a.spot = floor ? this.landing(floor) : null;
 		if (a.spot) spots[a.c.index] = a.spot;
 		// Steady: the landing (in the model) stays put.

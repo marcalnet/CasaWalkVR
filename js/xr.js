@@ -43,8 +43,9 @@ import { XRInput } from './xr-input.js';
 import { HandView } from './hands.js';
 import { Lessons } from './lessons.js';
 import { SafetyNet } from './safety.js';
-import { HandReadout, readoutWanted } from './hand-readout.js';
-import { FrameStats, statsWanted } from './frame-stats.js';
+import { HandReadout } from './hand-readout.js';
+import { FrameStats } from './frame-stats.js';
+import { DEV } from './dev.js';
 import { ToolsIntro } from './tools-intro.js';
 import { attachTransientPointer } from './transient-pointer.js';
 import { SeeThrough, SEE_THROUGH_MAX } from './walls.js';
@@ -111,8 +112,8 @@ export class XRExperience {
 		this.input.setVisible(false);
 		this.hideFromPhotos(...this.input.controllers.flatMap((c) => [c.ray, c.grip, c.wrist])); // lasers, controllers, and what they carry (orbs, tools)
 		this.handViews = this.input.controllers.map((c) => new HandView(c)); // bare hands, drawn (milestone C0.2)
-		this.readout = readoutWanted() ? new HandReadout(this) : null; // (?hands: the bare-hand tuning readout, for development)
-		this.frameStats = statsWanted() ? new FrameStats(this) : null; // (?stats: fps and draw calls in the headset, for measuring)
+		this.readout = DEV.hands ? new HandReadout(this) : null; // (?hands: the bare-hand tuning readout, for development)
+		this.frameStats = DEV.stats ? new FrameStats(this) : null; // (?stats: fps and draw calls in the headset, for measuring)
 		// The safety net (js/safety.js): errors show a calm card; repeated ones end the session.
 		this.safety = new SafetyNet({
 			showCard: (ending) => this.ui?.showError(ending),
@@ -597,14 +598,6 @@ export class XRExperience {
 		return null;
 	}
 
-	/** Tells the lessons when a bare hand has held the ready pose for 0.5 s. */
-	noteReady(dt) {
-		for (const c of this.input.gestureHands()) {
-			c.readyFor = c.gesture?.ready ? (c.readyFor ?? 0) + dt : 0;
-			if (c.readyFor >= 0.5) this.lessons.note('ready');
-		}
-	}
-
 	/** The viewer's horizontal right and forward axes (world, unit). */
 	viewAxes() {
 		this.rig.updateMatrixWorld(true);
@@ -667,7 +660,7 @@ export class XRExperience {
 		if (this.hidden) return; // (Meta's menu covers the app: nothing reads input behind it)
 		this.frameDt = dt;
 		this.input.update(); // (also clears every controller's claims)
-		this.input.readGestures(dt, this.viewAxes()); // bare hands: the teleport gesture, the closed hand (C0.4)
+		this.input.readGestures(dt); // bare hands: the teleport gesture, the closed hand (C0.4)
 		for (const v of this.handViews) v.near = false; // (a key or the board near a fingertip lights it up again this frame)
 		this.ui.showHandsNote(); // bare hands: "Pick up your controllers" (their pinches are never read)
 		this.tools.claim(); // a held tool's buttons are its own, before the menu and the mode
@@ -682,7 +675,6 @@ export class XRExperience {
 				if (this.lessons.place) this.lessons.place3d(); // (in front of you, now that the head is known)
 			}
 		}
-		this.noteReady(dt);
 		if (!this.layerFx) this.lessons.update(dt); // (its keys before the mode's lasers)
 		this.toolsIntro.update(dt, () => { if (this.mode === 'dollhouse') this.lessons.start('scale', { again: !!this.introAgain }); this.introAgain = false; });
 		if (this.layerFx) this.runLayerFx(dt); // moving between layers: the modes wait
