@@ -54,6 +54,7 @@ js/touch.js       touch keys: hover, contact, click, release, front-only (pure, 
 js/hands.js       bare hands drawn from the WebXR joints (translucent capsules, orange fingertip)
 js/gestures.js    bare-hand gestures from the joints: the pinch-and-hold teleport and wrist flick (Quest 2), the closed hand, the aim ray; the thumb tap behind a switch, off (pure, Node-testable)
 js/hand-readout.js the bare-hand tuning readout over each wrist, only with ?hands on the page URL (development)
+js/frame-stats.js the headset's fps and draw-call counter, only with ?stats on the page URL (measuring)
 js/hotspots.js    teleport hotspots: room middles and doorways, and snapping to them (pure, Node-testable)
 js/guide.js       the guide beside the menu: how to move, for hands or controllers; Hide folds it into a tab
 js/tools-intro.js the tools' first-time introduction: large in front of you, then flying to the wrist
@@ -74,7 +75,7 @@ sw.js             service worker: offline use and clean updates (network-first, 
 js/version.js     the build stamp (number, date), written by scripts/stamp.js (npm run stamp) before each push
 js/build-label.js how the build reads ("Build 213 · 23 Nov 2026 14:05"), and the newer-build check
 assets/ui/        replaceable interface artwork (drafts by scripts/make-ui-assets.js; listed in its README)
-examples/         sample homes (pond-house, apartment: .sh3d + card picture, listed in js/samples.js; colours from scripts/sample-palette.js) and example-home.sh3d (the tests' small fixture), each made by its generator in scripts/ (original content; commit the output)
+examples/         sample homes (pond-house, apartment: .sh3d + card picture, listed in js/samples.js; colours from scripts/sample-palette.js) example-home.sh3d (the tests' small fixture) and heavy-home.sh3d (the budget test's heavy home, not offered on the page), each made by its generator in scripts/ (original content; commit the output)
 js/samples.js     the sample homes the page offers, as data (one entry per home)
 vendor/           vendored dependencies + licences
 tests/            Node tests (node:test)

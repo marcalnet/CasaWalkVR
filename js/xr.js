@@ -44,6 +44,7 @@ import { HandView } from './hands.js';
 import { Lessons } from './lessons.js';
 import { SafetyNet } from './safety.js';
 import { HandReadout, readoutWanted } from './hand-readout.js';
+import { FrameStats, statsWanted } from './frame-stats.js';
 import { ToolsIntro } from './tools-intro.js';
 import { attachTransientPointer } from './transient-pointer.js';
 import { SeeThrough, SEE_THROUGH_MAX } from './walls.js';
@@ -111,6 +112,7 @@ export class XRExperience {
 		this.hideFromPhotos(...this.input.controllers.flatMap((c) => [c.ray, c.grip, c.wrist])); // lasers, controllers, and what they carry (orbs, tools)
 		this.handViews = this.input.controllers.map((c) => new HandView(c)); // bare hands, drawn (milestone C0.2)
 		this.readout = readoutWanted() ? new HandReadout(this) : null; // (?hands: the bare-hand tuning readout, for development)
+		this.frameStats = statsWanted() ? new FrameStats(this) : null; // (?stats: fps and draw calls in the headset, for measuring)
 		// The safety net (js/safety.js): errors show a calm card; repeated ones end the session.
 		this.safety = new SafetyNet({
 			showCard: (ending) => this.ui?.showError(ending),
@@ -305,6 +307,7 @@ export class XRExperience {
 		this.arrival.mesh.visible = false;
 		for (const v of this.handViews) v.hide();
 		this.readout?.hide();
+		this.frameStats?.reset();
 		this.photoPending = false;
 		this.tools.end(); // tools back in the fan; measurements and drawings cleared
 		this.fan.reset();
@@ -673,6 +676,7 @@ export class XRExperience {
 		this.runArrival(dt);
 		for (const v of this.handViews) v.update(dt, { passthrough: !this.vrView });
 		this.readout?.update();
+		this.frameStats?.update(dt);
 		this.fan.update(dt); // the tool fan: open, touch, take, swap, put back (milestone C)
 		this.tools.update(dt);
 		this.tweens.update(dt);

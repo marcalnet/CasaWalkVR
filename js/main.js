@@ -6,7 +6,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { CONFIG } from '../config.js';
 import { openFiles, UserError, checkDecoders } from './formats.js';
-import { optimiseModel } from './optimise.js';
+import { optimiseModel, modelStats } from './optimise.js';
 import { XRExperience } from './xr.js';
 import { Lighting } from './lighting.js';
 import { DepthShading } from './depth.js';
@@ -190,21 +190,9 @@ function setStatus(text, isError = false) {
 	$('status').classList.toggle('error', isError);
 }
 
-function sceneStats(root) {
-	let triangles = 0, drawCalls = 0;
-	root.traverse((o) => {
-		if (!o.isMesh || !o.visible || o.parent?.name === 'lamps') return; // (lamp glows are not part of the model)
-		const g = o.geometry;
-		const count = g.index ? g.index.count : g.attributes.position.count;
-		triangles += count / 3;
-		drawCalls += Array.isArray(o.material) ? Math.max(1, g.groups.length) : 1;
-	});
-	return { triangles: Math.round(triangles), drawCalls };
-}
-
 function showStats() {
 	if (!current) { $('stats').textContent = ''; return; }
-	const { triangles, drawCalls } = sceneStats(current.root);
+	const { triangles, drawCalls } = modelStats(current.root);
 	const s = current.stats;
 	const fmt = (n) => n.toLocaleString('en-GB');
 	const lines = [`${fmt(triangles)} triangles · ${fmt(drawCalls)} draw calls${current.merged ? ` (merged from ${fmt(current.merged.sourceMeshes)} meshes)` : ''}`];
@@ -1076,7 +1064,7 @@ window.__casawalk = {
 	invalidate,
 	frame: (view) => { frame(view); controls.update(); renderer.render(scene, camera); },
 	look: (pos, target) => { camera.position.set(...pos); controls.target.set(...target); controls.update(); renderer.render(scene, camera); },
-	stats: () => ({ ...(current?.stats || {}), ...sceneStats(current?.root || new THREE.Group()), merged: current?.merged }),
+	stats: () => ({ ...(current?.stats || {}), ...modelStats(current?.root || new THREE.Group()), merged: current?.merged }),
 	decoders: checkDecoders,
 	scene,
 	xr,

@@ -1,0 +1,104 @@
+// What each home costs to draw after merging (code audit, A3): draw calls and
+// triangles against CONFIG.budget. The example and sample homes must fit. The
+// heavy test home (examples/heavy-home.sh3d, scripts/make-heavy-home.js) is
+// measured every run and its numbers printed; it is over budget today, so its
+// check is a "todo" (reported, not failing) until the draw-call work of stage
+// B3 brings it under. Remove the todo then.
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import * as THREE from 'three';
+import { unzipSync } from 'fflate';
+import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
+import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
+import { parseHome, buildHome } from '../js/sh3d.js';
+import { prepareObjText } from '../js/formats.js';
+import { optimiseModel, modelStats } from '../js/optimise.js';
+import { CONFIG } from '../config.js';
+
+const ROOT = path.resolve(import.meta.dirname, '..');
+
+/** Opens a .sh3d as the app does (models with their colours), merges it, and measures it. */
+async function measure(file) {
+	const entries = unzipSync(new Uint8Array(fs.readFileSync(path.join(ROOT, file))));
+	const home = parseHome(new TextDecoder().decode(entries['Home.xml']));
+	const built = await buildHome(home, {
+		// (Node decodes no images: a stand-in texture per image, so materials that differ only by their image stay apart, as in the app.)
+		loadTexture: (ref) => (entries[ref] ? Object.assign(new THREE.Texture(), { name: ref }) : null),
+		loadModel: async (ref) => {
+			const text = prepareObjText(new TextDecoder().decode(entries[ref]));
+			const loader = new OBJLoader();
+			const lib = text.match(/^\s*mtllib\s+(.+?)\s*$/m)?.[1];
+			const folder = ref.includes('/') ? ref.slice(0, ref.lastIndexOf('/') + 1) : '';
+			if (lib && entries[folder + lib]) {
+				const creator = new MTLLoader().parse(new TextDecoder().decode(entries[folder + lib]), '');
+				creator.preload();
+				loader.setMaterials(creator);
+			}
+			return loader.parse(text.replace(/^\s*mtllib.*$/gm, ''));
+		},
+	});
+	const { group } = optimiseModel(built.root);
+	return { ...modelStats(group), storeys: built.storeys, missing: built.stats.missingModels, textures: textureMemory(entries) };
+}
+
+/**
+ * The textures the home uses and an estimate of their graphics memory: each
+ * image as the app keeps it (shrunk to CONFIG.maxTextureSize on its longer
+ * side), 4 bytes a pixel, plus a third for its smaller copies (mipmaps).
+ * Reads the size from the PNG or JPEG header (Node decodes no images).
+ */
+function textureMemory(entries) {
+	const xml = new TextDecoder().decode(entries['Home.xml']);
+	const images = new Set([...xml.matchAll(/<texture\b[^>]*\bimage='([^']+)'/g)].map((m) => m[1]));
+	let bytes = 0;
+	for (const name of images) {
+		const b = entries[name];
+		let w = 0, h = 0;
+		if (b?.[0] === 0x89) { const v = new DataView(b.buffer, b.byteOffset); w = v.getUint32(16); h = v.getUint32(20); }
+		else if (b?.[0] === 0xff) { for (let i = 2; i < b.length - 8;) { const len = (b[i + 2] << 8) | b[i + 3]; if (b[i + 1] >= 0xc0 && b[i + 1] <= 0xc3) { h = (b[i + 5] << 8) | b[i + 6]; w = (b[i + 7] << 8) | b[i + 8]; break; } i += 2 + len; } }
+		const k = Math.min(1, CONFIG.maxTextureSize / Math.max(w, h, 1));
+		bytes += Math.round(w * k) * Math.round(h * k) * 4 * 4 / 3;
+	}
+	return { count: images.size, mb: Math.round(bytes / 1048576) };
+}
+
+// (The heavy home takes a few seconds to build: measured once, shared by its two tests.)
+let heavy = null;
+const measureHeavy = () => (heavy ??= measure('examples/heavy-home.sh3d'));
+
+const fits = (s) => s.drawCalls <= CONFIG.budget.drawCalls && s.triangles <= CONFIG.budget.triangles;
+const line = (s) => `${s.drawCalls} draw calls (budget ${CONFIG.budget.drawCalls}), ${s.triangles.toLocaleString('en-GB')} triangles (budget ${CONFIG.budget.triangles.toLocaleString('en-GB')}), ${s.textures.count} textures (about ${s.textures.mb} MB of graphics memory)`;
+
+for (const file of ['examples/example-home.sh3d', 'examples/pond-house.sh3d', 'examples/apartment.sh3d']) {
+	test(`${path.basename(file)} fits the Quest 2 budget`, async (t) => {
+		const s = await measure(file);
+		t.diagnostic(line(s));
+		assert.equal(s.missing, 0);
+		assert.ok(fits(s), line(s));
+	});
+}
+
+test('the heavy test home: three storeys, about a million triangles, six textures, every model read', async (t) => {
+	const s = await measureHeavy();
+	t.diagnostic(line(s));
+	assert.equal(s.storeys, 3);
+	assert.equal(s.textures.count, 6);
+	assert.equal(s.missing, 0);
+	assert.ok(s.triangles > 900_000 && s.triangles <= CONFIG.budget.triangles, `${s.triangles} triangles`);
+});
+
+test('the heavy test home fits the Quest 2 budget', { todo: 'over budget until stage B3 (plain colours folded into vertex colours)' }, async (t) => {
+	const s = await measureHeavy();
+	t.diagnostic(line(s));
+	assert.ok(s.triangles <= CONFIG.budget.triangles, 'its triangles fit already: only its draw calls are over');
+	assert.ok(fits(s), line(s));
+});
+
+test('the ?stats counter: only with ?stats; fps, draw calls and triangles in one short line', async () => {
+	const { statsWanted, statsText } = await import('../js/frame-stats.js');
+	assert.ok(statsWanted('?stats') && statsWanted('?model=examples/heavy-home.sh3d&stats') && !statsWanted('') && !statsWanted('?hands'));
+	assert.equal(statsText(36, 0.5, { calls: 142, triangles: 1_934_000 }), '72 fps · 142 draw calls · 1.93M triangles (both eyes)');
+	assert.equal(statsText(30, 0.5, { calls: 60, triangles: 41_200 }), '60 fps · 60 draw calls · 41k triangles (both eyes)');
+});

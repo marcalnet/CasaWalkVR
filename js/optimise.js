@@ -147,6 +147,24 @@ function flipWinding(g) {
 }
 
 /**
+ * What a model costs to draw: its triangles and draw calls (one per mesh, or
+ * one per material group of a multi-material mesh), counting visible meshes
+ * only and leaving out the lamps' glows (not part of the model). The page's
+ * stats line and the budget test (tests/budget.test.js) both use it.
+ */
+export function modelStats(root) {
+	let triangles = 0, drawCalls = 0;
+	root.traverse((o) => {
+		if (!o.isMesh || !o.visible || o.parent?.name === 'lamps') return;
+		const g = o.geometry;
+		const count = g.index ? g.index.count : g.attributes.position.count;
+		triangles += count / 3;
+		drawCalls += Array.isArray(o.material) ? Math.max(1, g.groups.length) : 1;
+	});
+	return { triangles: Math.round(triangles), drawCalls };
+}
+
+/**
  * Merges the loaded scene. `root` is the object returned by the loaders
  * (in metres). Returns { group, layers: { main (furniture, or a whole OBJ/GLB), walls, floors, ceilings, ground },
  * stats: { drawCalls, triangles, materials, sourceMeshes } }.

@@ -198,6 +198,7 @@ Optional extras:
 ```bash
 npm run fixtures       # download two public Sweet Home 3D example homes as more test files
 npm run example        # rebuild examples/example-home.sh3d, the tests' small fixture (after editing scripts/make-example.js)
+npm run heavy-home     # rebuild examples/heavy-home.sh3d, a heavy home for measuring (tests/budget.test.js; open it with ?model=examples/heavy-home.sh3d&stats)
 npm run stamp          # stamp the build (js/version.js) before committing what you push: the page shows it bottom left
 npm run samples        # rebuild the sample homes in examples/ (scripts/make-pond-house.js, make-apartment.js; colours from scripts/sample-palette.js)
 npm run ui-assets      # redraw the draft interface artwork in assets/ui/
