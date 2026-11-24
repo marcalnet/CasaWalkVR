@@ -61,6 +61,7 @@ const DROP_NEAR = 0.15; // let go this close to the plinth top (over it): it set
 const RETURN_AWAY = 0.3, RETURN_WAIT = 4; // a floating model goes home once nothing is within 0.3 m for 4 s
 const GRAB_SMOOTH = 0.06, GRAB_SMOOTH_HAND = 0.1; // seconds: a held model follows a controller / a bare hand smoothed this much
 const HAND_TURN_DEAD = THREE.MathUtils.degToRad(3); // a bare hand's turn: changes under 3° are tremor, ignored
+const MAX_FRAME_TURN = THREE.MathUtils.degToRad(20); // a held model turns at most this much in one frame
 const AIM_STEADY = 0.3; // a bare hand steps inside (opening the pinch) once its landing has held still this long
 const WAIST = 0.8; // a pinching hand this far below the eyes is dropped: the aim cancels (m)
 const ZOOM_SPEED = 1.2; // e-folds/s at full stick
@@ -83,6 +84,19 @@ const MARKER_HEIGHT = 1.7; // metres at the model's scale (the "stand here" figu
 // (rugs and thresholds don't count) up to head height, around a body's width.
 const CLEAR_FROM = 0.3, CLEAR_TO = 2.0;
 const CLEAR_RING = [[0, 0], [0.25, 0], [-0.25, 0], [0, 0.25], [0, -0.25]];
+
+/**
+ * Where a head faces, as a heading about the vertical, even looking straight
+ * down or up: the forward direction flattened onto the floor, plus the head's
+ * up direction flattened (looking down, the top of the head points forward;
+ * looking up, backward). Like yawOf() otherwise.
+ */
+export function headHeading(m) {
+	const e = m.elements;
+	const f = new THREE.Vector3(-e[8], -e[9], -e[10]).normalize(), u = new THREE.Vector3(e[4], e[5], e[6]).normalize();
+	const x = f.x - Math.sign(f.y) * u.x, z = f.z - Math.sign(f.y) * u.z;
+	return Math.atan2(-x, -z);
+}
 
 export class Dollhouse {
 	/** xr: the XRExperience. */
@@ -275,7 +289,7 @@ export class Dollhouse {
 	recentre(headMatrix = this.xr.camera.matrixWorld) {
 		const xr = this.xr;
 		const head = new THREE.Vector3().setFromMatrixPosition(headMatrix);
-		const yaw = yawOf(headMatrix);
+		const yaw = headHeading(headMatrix);
 		xr.stage.position.set(head.x, 0, head.z);
 		xr.stage.rotation.set(0, yaw, 0);
 		xr.stage.updateMatrixWorld(true);
@@ -435,7 +449,7 @@ export class Dollhouse {
 		this.cancelHandAim();
 		xr.anchor.updateMatrixWorld(true);
 		const hand = c.isHand;
-		this.grab = { c, kind: hand ? 'hand' : 'controller', p0: p, q0inv: q.clone().invert(), turn: 0,
+		this.grab = { c, kind: hand ? 'hand' : 'controller', p0: p, qPrev: q.clone(), raw: 0, turn: 0,
 			pos0: xr.stage.worldToLocal(xr.anchor.position.clone()), yaw0: this.doll.yaw,
 			pos: this.doll.pos.clone(), yaw: this.doll.yaw };
 		xr.sound.play('grab');
@@ -451,9 +465,15 @@ export class Dollhouse {
 	updateGrab(dt) {
 		const xr = this.xr, g = this.grab, p = this.holdPoint(g.c), q = this.holdTurn(g.c);
 		if (!p || !q) return; // (tracking lost for a moment: the model stays where it is)
-		// The hand's turn about the vertical since it took hold (the twist of its turn since then).
-		const dq = q.multiply(g.q0inv);
-		const raw = 2 * Math.atan2(dq.y, dq.w);
+		// The hand's turn about the vertical since it took hold, added up frame by frame:
+		// each frame's small turn, its twist about the vertical. (The twist of the whole turn
+		// since taking hold flips sign once the hand has rolled or pitched about 180°: the
+		// tester's finding, a 36° jump.) A frame's turn is never more than 20° (a tracking glitch).
+		const dq = q.clone().multiply(g.qPrev.invert());
+		g.qPrev.copy(q);
+		if (dq.w < 0) { dq.x = -dq.x; dq.y = -dq.y; dq.z = -dq.z; dq.w = -dq.w; } // (the short way round)
+		g.raw += THREE.MathUtils.clamp(2 * Math.atan2(dq.y, dq.w), -MAX_FRAME_TURN, MAX_FRAME_TURN);
+		const raw = g.raw;
 		// A bare hand: the turn trails the hand's by up to 3° (a dead zone, so tremor never turns it).
 		if (g.kind === 'hand') {
 			const d = THREE.MathUtils.euclideanModulo(raw - g.turn + Math.PI, 2 * Math.PI) - Math.PI;

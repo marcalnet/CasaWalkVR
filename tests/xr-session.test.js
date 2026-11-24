@@ -206,6 +206,36 @@ test('going back to the dollhouse while a teleport fades drops the teleport', as
 	assert.ok(hands.right);
 });
 
+test('holding the model: rolling the hand from palm down to palm up never turns or jumps it', async () => {
+	const { x, press, frame, hands } = await setup();
+	const d = x.modes.dollhouse, grip = hands.right.grip;
+	grip.position.set(0.1, 1.0, -0.4); grip.rotation.set(0, 0, 0);
+	frame();
+	press('right', 'grip'); frame();
+	const yaw0 = d.doll.yaw;
+	let last = yaw0, worst = 0;
+	// A roll about the hand's forward axis, and a pitch, each through 200°, a step a frame.
+	for (const axis of ['z', 'x']) {
+		for (let i = 0; i <= 100; i++) {
+			grip.rotation.set(0, 0, 0); grip.rotation[axis] = THREE.MathUtils.degToRad(2 * i);
+			frame();
+			worst = Math.max(worst, Math.abs(d.doll.yaw - last)); last = d.doll.yaw;
+		}
+	}
+	assert.ok(worst < THREE.MathUtils.degToRad(1), `largest turn in one frame: ${THREE.MathUtils.radToDeg(worst).toFixed(1)}°`);
+	assert.ok(Math.abs(d.doll.yaw - yaw0) < THREE.MathUtils.degToRad(2) && d.level(), 'no turn about the vertical, still level');
+	press('right', 'grip', false); frame();
+});
+
+test('the plinth faces where you look, even looking straight down or up', async () => {
+	const { headHeading } = await import('../js/xr-dollhouse.js');
+	const m = (pitch, yaw) => new THREE.Matrix4().makeRotationFromEuler(new THREE.Euler(pitch, yaw, 0, 'YXZ'));
+	for (const yaw of [0, 1, -2.5]) for (const pitch of [0, -0.8, -Math.PI / 2 + 1e-4, -Math.PI / 2, 0.8, Math.PI / 2]) {
+		const h = headHeading(m(pitch, yaw));
+		assert.ok(Math.abs(Math.atan2(Math.sin(h - yaw), Math.cos(h - yaw))) < 1e-3, `pitch ${pitch.toFixed(2)}, yaw ${yaw}: got ${h.toFixed(3)}`);
+	}
+});
+
 test('back from inside: the plinth in front of where you now stand and look, the model level on it, its zoom and turn kept', async () => {
 	const { x, frame, go } = await setup();
 	const d = x.modes.dollhouse;
@@ -330,7 +360,7 @@ test('holding the model: it follows the grip, level (turned only about the verti
 	// Lift it 40 cm, tilt the hand 40° and turn it 30°: the model follows, smoothed, level, turned 30°.
 	const yaw0 = d.doll.yaw;
 	grip.position.y += 0.4;
-	grip.rotation.set(THREE.MathUtils.degToRad(40), THREE.MathUtils.degToRad(30), 0, 'YXZ');
+	for (let i = 1; i <= 30; i++) { grip.rotation.set(THREE.MathUtils.degToRad(40 * i / 30), THREE.MathUtils.degToRad(30 * i / 30), 0, 'YXZ'); frame(); } // (over 0.4 s, as a hand turns)
 	for (let i = 0; i < 60; i++) frame();
 	assert.ok(d.doll.pos.y > home.y + 0.3, 'lifted');
 	assert.ok(d.level(), 'never tilted');
