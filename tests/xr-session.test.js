@@ -11,7 +11,7 @@ import { unzipSync } from 'fflate';
 import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 import { parseHome, buildHome } from '../js/sh3d.js';
 import { prepareObjText } from '../js/formats.js';
-import { optimiseModel } from '../js/optimise.js';
+import { optimiseModel, unmergedModel } from '../js/optimise.js';
 import { readoutText } from '../js/hand-readout.js';
 import { devFlags } from '../js/dev.js';
 import { XRExperience } from '../js/xr.js';
@@ -19,12 +19,12 @@ import { HOLD } from '../js/xr-tools.js';
 
 const FILE = path.resolve(import.meta.dirname, '../examples/example-home.sh3d');
 
-/** An XRExperience with the example home, a pretend session and two pretend controllers. */
-async function setup() {
+/** An XRExperience with the example home, a pretend session and two pretend controllers. nomerge: the model as loaded (?nomerge). */
+async function setup({ nomerge = false } = {}) {
 	const entries = unzipSync(new Uint8Array(fs.readFileSync(FILE)));
 	const home = parseHome(new TextDecoder().decode(entries['Home.xml']));
 	const built = await buildHome(home, { loadModel: async (ref) => new OBJLoader().parse(prepareObjText(new TextDecoder().decode(entries[ref])).replace(/^\s*mtllib.*$/gm, '')) });
-	const { group, layers } = optimiseModel(built.root);
+	const { group, layers } = nomerge ? unmergedModel(built.root) : optimiseModel(built.root);
 	const scene = new THREE.Scene(), rig = new THREE.Group(), camera = new THREE.PerspectiveCamera(), anchor = new THREE.Group(), centerer = new THREE.Group();
 	rig.add(camera); anchor.add(centerer); centerer.add(group); scene.add(rig, anchor);
 	camera.position.set(0, 1.6, 0);
@@ -58,6 +58,18 @@ async function setup() {
 }
 
 const shape = (rows) => rows.map((r) => r.map((c) => [c.id, c.type, c.label, ...(c.options ?? []).map((o) => o.label)].join(':')).join(' | '));
+
+test('?nomerge (the model as loaded, for debugging): the headset takes it, shadows are set on every mesh, in and back work', async () => {
+	const { x, go } = await setup({ nomerge: true });
+	const meshes = [];
+	x.model.layers.main.traverse((m) => { if (m.isMesh) meshes.push(m); });
+	assert.ok(meshes.length > 10 && x.model.layers.main.children.some((c) => !c.isMesh), 'the layers hold the pieces\' groups, not merged meshes');
+	assert.ok(meshes.every((m) => m.receiveShadow), 'every mesh, however deep, gets its shadow flags');
+	go('in');
+	assert.equal(x.mode, 'walk');
+	go('back');
+	assert.equal(x.mode, 'dollhouse');
+});
 
 test('the settings boards: the same tabs at both layers, a Close key, every target big enough to touch', async () => {
 	const { x } = await setup();

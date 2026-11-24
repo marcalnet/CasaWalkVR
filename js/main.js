@@ -6,7 +6,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { CONFIG } from '../config.js';
 import { openFiles, UserError, checkDecoders } from './formats.js';
-import { optimiseModel, modelStats } from './optimise.js';
+import { optimiseModel, unmergedModel, modelStats } from './optimise.js';
 import { DEV } from './dev.js';
 import { DEVICE } from './device.js';
 import { XRExperience } from './xr.js';
@@ -252,9 +252,7 @@ async function load(files, label, source = { type: 'file' }) {
 		await new Promise((r) => setTimeout(r, 0)); // let the status paint
 		if (superseded(result)) return;
 		// ?nomerge (debugging only): show the scene exactly as loaded.
-		const merged = DEV.nomerge
-			? { group: result.root, layers: Object.fromEntries(['main', 'walls', 'floors', 'ceilings', 'ground'].map((n) => [n, result.root.getObjectByName(n === 'main' ? 'furniture' : n) || new THREE.Group()])), stats: null }
-			: optimiseModel(result.root);
+		const merged = DEV.nomerge ? unmergedModel(result.root) : optimiseModel(result.root);
 		disposeCurrent();
 		current = { ...result, label, source, root: merged.group, layers: merged.layers, merged: merged.stats };
 		// On a computer, keep the opened files: Send to my Quest can pass them on.

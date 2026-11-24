@@ -187,12 +187,14 @@ export class XRExperience {
 		// Everything casts and receives shadows (used only when shadows are on),
 		// except the ground (nothing below it) and glass, so sun comes in
 		// through the windows.
+		// (Every mesh at any depth: merged, a layer holds meshes; with ?nomerge it holds the pieces' groups.)
 		for (const [name, layer] of Object.entries(model.layers)) {
-			for (const m of layer.children) {
-				const glass = [].concat(m.material).some((mat) => mat.transparent && mat.opacity < 0.9);
+			layer.traverse((m) => {
+				if (!m.isMesh || !m.material) return;
+				const glass = [].concat(m.material).some((mat) => mat?.transparent && mat.opacity < 0.9);
 				m.castShadow = name !== 'ground' && !glass;
 				m.receiveShadow = true;
-			}
+			});
 		}
 		this.seeThrough.setModel(model.layers);
 		this.applySeeThrough();

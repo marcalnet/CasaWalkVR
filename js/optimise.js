@@ -147,6 +147,17 @@ function flipWinding(g) {
 }
 
 /**
+ * ?nomerge (debugging only, js/dev.js): the model exactly as loaded, in the
+ * shape optimiseModel() returns ({ group, layers, stats: null }), so the
+ * rest of the app takes it the same way. Its layers hold the loader's groups
+ * (pieces, walls, floors), not single meshes.
+ */
+export function unmergedModel(root) {
+	const layers = Object.fromEntries(['main', 'walls', 'floors', 'ceilings', 'ground'].map((n) => [n, root.getObjectByName(n === 'main' ? 'furniture' : n) || new THREE.Group()]));
+	return { group: root, layers, stats: null };
+}
+
+/**
  * What a model costs to draw: its triangles and draw calls (one per mesh, or
  * one per material group of a multi-material mesh), counting visible meshes
  * only and leaving out the lamps' glows (not part of the model). The page's
