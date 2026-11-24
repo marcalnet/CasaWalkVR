@@ -1,7 +1,10 @@
 // Loads each fixture in the 2D preview with headless Chromium and saves
 // screenshots from several angles into test-output/.
-//   npm run shots              all fixtures
+//   npm run shots              every fixture except your private ones
 //   npm run shots -- example   only fixtures whose name contains "example"
+//   npm run shots -- private   only your own files in tests/fixtures/private/
+// (Private homes only when asked for: the default run's pictures must be safe
+// for anyone to look at. Code audit, A2.)
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -10,11 +13,12 @@ import { startServer } from './serve.js';
 
 const root = path.resolve(import.meta.dirname, '..');
 const outDir = path.join(root, 'test-output');
-const filter = process.argv[2] || '';
+const wantPrivate = process.argv[2] === 'private';
+const filter = wantPrivate ? '' : process.argv[2] || '';
 const VIEWS = (process.env.VIEWS || 'top,se,sw,ne,nw').split(',');
 
 const fixtures = [];
-for (const dir of ['examples', 'tests/fixtures', 'tests/fixtures/private']) {
+for (const dir of wantPrivate ? ['tests/fixtures/private'] : ['examples', 'tests/fixtures']) {
 	const abs = path.join(root, dir);
 	if (!fs.existsSync(abs)) continue;
 	for (const f of fs.readdirSync(abs)) if (/\.(sh3d|zip|obj|glb)$/i.test(f) && f.includes(filter)) fixtures.push(`${dir}/${f}`);
@@ -31,7 +35,7 @@ page.on('pageerror', (e) => console.log('  [pageerror]', e.message));
 // The compressed-glTF decoders (Draco, meshopt, KTX2) must start under the
 // page's real security policy: WebAssembly, and workers built from blob: URLs.
 let failed = false;
-if (!filter) {
+if (!filter && !wantPrivate) {
 	await page.goto(`http://localhost:${port}/?test`);
 	const dec = await page.evaluate(() => window.__casawalk.decoders());
 	const ok = Object.values(dec).every((v) => v === true);

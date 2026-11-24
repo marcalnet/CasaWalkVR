@@ -204,7 +204,7 @@ npm run ui-assets      # redraw the draft interface artwork in assets/ui/
 npm run vendor         # copy three.js, three-mesh-bvh, fflate and the font into vendor/ (after changing versions)
 ```
 
-Every test runs on the example home in `examples/`. Downloaded fixtures and your own homes in `tests/fixtures/private/` (ignored by git) are picked up as well when present. Open a model directly with `http://localhost:8123/?model=examples/example-home.sh3d`.
+Every test runs on the example home in `examples/`. `npm run shots` also takes the downloaded fixtures when present. Your own homes in `tests/fixtures/private/` (ignored by git) are used only when you ask: `npm run shots -- private`, `npm run xr-test -- private`. `npm test` runs on GitHub for every push and pull request (`.github/workflows/test.yml`); it also warns when `js/version.js` was not stamped for the pushed commit. Open a model directly with `http://localhost:8123/?model=examples/example-home.sh3d`.
 
 To test on a headset, fork the repository and enable GitHub Pages on your fork (Settings, Pages, deploy from the `main` branch): WebXR needs https, and Pages gives you that with no setup.
 

@@ -1,0 +1,37 @@
+# Automatic checks (code audit, stage A2): every push and pull request runs
+# the Node tests, as on a fresh clone (no install: the app's dependencies are
+# vendored, and npm test needs none of the dev tools). It also warns when the
+# pushed commit was not stamped (npm run stamp writes js/version.js with the
+# commit count it will have once committed).
+
+name: test
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # (the whole history: the build number is the commit count)
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+      - name: Node tests
+        run: npm test
+      - name: Build stamp
+        run: |
+          count=$(git rev-list --count HEAD)
+          build=$(grep -o 'number: [0-9][0-9]*' js/version.js | grep -o '[0-9][0-9]*')
+          if [ "$build" != "$count" ]; then
+            echo "::warning file=js/version.js::js/version.js says build $build, but this commit is number $count: run npm run stamp before committing what you push."
+          else
+            echo "Build $build is stamped."
+          fi

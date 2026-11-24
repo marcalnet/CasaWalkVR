@@ -3,8 +3,9 @@
 // menu, VR/passthrough switch, jump in at 1:1, walk, snap turn, teleport,
 // pull with the trigger, turn and height options, solid walls, see-through,
 // exit, and re-enter from another spot. Screenshots go to test-output/xr-*.png.
-//   npm run xr-test             (uses the first private fixture, else userGuideExample)
+//   npm run xr-test             (the example home that ships with the repository)
 //   npm run xr-test -- tests/fixtures/SweetHome3DExample.sh3d
+//   npm run xr-test -- private  (your own file in tests/fixtures/private/: only when asked for)
 // It also records a "fingerprint" of the headset scene at fixed moments
 // (what is shown and where, both menus cell by cell, draw calls) into
 // test-output/xr-fingerprint-<device>.json. To prove a change is invisible:
@@ -22,12 +23,13 @@ import { startServer } from './serve.js';
 
 const root = path.resolve(import.meta.dirname, '..');
 const privateDir = path.join(root, 'tests/fixtures/private');
-// The model to test with: the one named on the command line, else your own
-// file in tests/fixtures/private/, else a downloaded Sweet Home 3D example
-// (npm run fixtures), else the example home that ships with the repository.
+// The model to test with: the one named on the command line, else the example
+// home that ships with the repository. A private home (tests/fixtures/private/)
+// only with the word "private" (code audit, A2: the default run's pictures must
+// be safe for anyone to look at).
 const own = fs.existsSync(privateDir) ? fs.readdirSync(privateDir).find((f) => f.endsWith('.sh3d')) : null;
-const fixture = process.argv[2] || (own ? `tests/fixtures/private/${own}`
-	: fs.existsSync(path.join(root, 'tests/fixtures/userGuideExample.sh3d')) ? 'tests/fixtures/userGuideExample.sh3d' : 'examples/example-home.sh3d');
+if (process.argv[2] === 'private' && !own) { console.error('No .sh3d file in tests/fixtures/private/'); process.exit(1); }
+const fixture = process.argv[2] === 'private' ? `tests/fixtures/private/${own}` : process.argv[2] || 'examples/example-home.sh3d';
 const out = path.resolve(root, process.env.XR_OUT || 'test-output');
 const STEADY = !!process.env.XR_STEADY;
 fs.mkdirSync(out, { recursive: true });
