@@ -108,30 +108,30 @@ export const LESSONS = {
 		{ id: 'menu', done: 'wrist', must: true, hands: 'Touch your right wrist with your left hand: your menu.', controllers: 'Press A (or touch the orb on your right controller): your menu.' },
 		{ id: 'tools', done: 'fan', must: true, hands: 'Look at your {fan} hand: your tools. Touch one with your {take} hand.', controllers: 'Look at your {fan} controller: your tools. Touch one with your {take} controller.' },
 		{ id: 'hold', done: 'held', demo: 'hold', hands: 'Close your hand on the home to hold it. Let go: it goes home.', controllers: 'Squeeze a grip to hold the home. Let go in the air: it goes home.' },
-		{ id: 'ready', done: 'ready', demo: 'ready', hands: 'Hold your hand sideways, fingers curled, thumb on your index.' },
-		{ id: 'inside', done: 'inside', demo: 'tap', hands: 'Tap your thumb and point at a room. Tap again: step inside.', controllers: 'Point at a room and pull the trigger: step inside.' },
+		// (The thumb tap's ready pose had its own step; the pinch needs none: GESTURE.THUMB_TAP is off.)
+		{ id: 'inside', done: 'inside', hands: 'Palm down, pinch and hold, point at a room. Let go when it holds still: step inside.', controllers: 'Point at a room and pull the trigger: step inside.' },
 	] },
 	walk: { title: 'Moving around', steps: [
-		{ id: 'arc', done: 'arc', demo: 'tap', hands: 'Same as outside: tap your thumb. An arc shows where you\'ll land.', controllers: 'Right stick forward, or hold a trigger: aim.' },
-		{ id: 'go', done: 'teleport', must: true, demo: 'tap', hands: 'Aim at the orange ring. When it turns blue, tap again: go.', controllers: 'Aim at the orange ring. Let go: go.' },
-		{ id: 'turn', done: 'turn', demo: 'turn', hands: 'Swipe your thumb along your finger: turn.', controllers: 'Right stick left or right: turn.' },
-		{ id: 'end', hands: 'Open your hand to cancel. Your menu has a guide beside it.', controllers: 'Left stick: walk. Grip and pull: slide.' },
+		{ id: 'arc', done: 'arc', hands: 'Palm down, pinch and hold: aim. An arc shows where you\'ll land.', controllers: 'Right stick forward, or hold a trigger: aim.' },
+		{ id: 'go', done: 'teleport', must: true, hands: 'Aim at the orange ring. Let go on blue: go.', controllers: 'Aim at the orange ring. Let go: go.' },
+		{ id: 'turn', done: 'turn', hands: 'While aiming, flick your wrist: turn.', controllers: 'Right stick left or right: turn.' },
+		{ id: 'end', hands: 'Turn your palm up to cancel. Your menu has a guide beside it.', controllers: 'Left stick: walk. Grip and pull: slide.' },
 	] },
 };
 
 export const GUIDES = {
 	'walk-hands': { title: 'How to move', row: 0,
-		frames: ['Hand sideways, fingers curled', 'Tap your thumb: aim', 'Point at the floor', 'Tap again on blue: go'],
-		lines: ['Swipe your thumb left or right: turn', 'Swipe it forward or back: a small step', 'Open your hand: cancel'] },
+		frames: ['Palm down', 'Pinch and hold: aim', 'Point at the floor', 'Let go on blue: go'],
+		lines: ['While aiming, flick your wrist: turn', 'Let go on white or red: nothing happens', 'Palm up: cancel'] },
 	'walk-controllers': { title: 'How to move', row: 1,
 		frames: ['Right stick forward', 'or hold a trigger', 'Aim at the floor', 'Let go on blue: go'],
 		lines: ['Right stick left or right: turn', 'Left stick: walk. Grip and pull: slide', 'B or Y: back to the scale model'] },
 	'dollhouse-hands': { title: 'The scale model', row: 2,
-		frames: ['Close your hand on it: hold', 'Let go: it floats, then goes home', 'Tap your thumb, point at a room', 'Tap again: step inside'],
-		lines: ['Lift it, tilt it, look underneath', 'Open your hand: cancel'] },
+		frames: ['Close your hand on it: hold', 'Let go: it floats, then goes home', 'Palm down, pinch, point at a room', 'Let go when it holds still: step inside'],
+		lines: ['Lift it and turn it: it stays level', 'Palm up: cancel'] },
 	'dollhouse-controllers': { title: 'The scale model', row: 3,
 		frames: ['Grip: hold it', 'Sticks: turn and zoom', 'Point at a room', 'Pull the trigger: step inside'],
-		lines: ['Lift it, tilt it, look underneath', 'Let go in the air: it goes home by itself'] },
+		lines: ['Lift it and turn it: it stays level', 'Let go in the air: it goes home by itself'] },
 };
 
 /**

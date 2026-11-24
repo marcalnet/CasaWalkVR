@@ -25,11 +25,13 @@
 // and photos keep it (annotations are never hidden from photos).
 
 import * as THREE from 'three';
+import { GESTURE } from './gestures.js';
 
 export const HOLD = 1; // seconds: "hold A for a second"
-// Bare hands (pending the user's decision, one switch): a thumb tap of the hand holding a
-// tool is that tool's trigger (the camera's shutter; later the meter's point, the marker's
-// stroke), and that hand's teleport gesture is off while it holds the tool.
+// Bare hands: with GESTURE.THUMB_TAP on, a thumb tap of the hand holding a tool is that
+// tool's trigger (the camera's shutter, the meter's point, the marker's stroke). With it
+// off (the Quest 2 design of 24 Nov) the tools get their own buttons (item 11, to come).
+// Either way a hand holding a tool never aims a teleport.
 export const HAND_TAP_IS_TRIGGER = true;
 
 /** True when bare hand c holds a tool whose trigger its thumb tap fires (its teleport is off). */
@@ -107,7 +109,7 @@ export class ToolSystem {
 		if (c.isHand) {
 			for (const e of c.gestures ?? []) {
 				if (e.type === 'tap' && HAND_TAP_IS_TRIGGER) { tool.trigger?.(c, 'down'); tool.trigger?.(c, 'up'); }
-				else if (e.type === 'turn' || e.type === 'step' || e.type === 'open' || e.type === 'lost') tool.gesture?.(c, e); // (the marker's colour, undo, and ending a stroke)
+				else if (((e.type === 'turn' || e.type === 'step') && GESTURE.THUMB_TAP) || e.type === 'open' || e.type === 'lost') tool.gesture?.(c, e); // (the marker's colour, undo, and ending a stroke; a pinch's wrist flick is never one)
 			}
 			tool.update?.(dt, c);
 			return;

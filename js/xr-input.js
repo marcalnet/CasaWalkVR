@@ -46,6 +46,7 @@
 // c.gesture. Controllers have c.gestures = [].
 
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { TOUCH } from './touch.js';
 import { KEY } from './theme.js';
 import { HandGestures, JOINTS } from './gestures.js';
@@ -367,6 +368,14 @@ export class TeleportArc {
 		this.ring = new THREE.Mesh(new THREE.RingGeometry(0.22, 0.3, 40).rotateX(-Math.PI / 2), ringMat);
 		const disc = new THREE.Mesh(new THREE.CircleGeometry(0.22, 40).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.25, depthTest: false }));
 		this.ring.add(disc);
+		// An × in the ring where you can't go (red), so it never reads as a landing by colour alone.
+		const bar = new THREE.PlaneGeometry(0.34, 0.035).rotateX(-Math.PI / 2);
+		const cross = mergeGeometries([bar.clone().rotateY(Math.PI / 4), bar.rotateY(-Math.PI / 4)]);
+		this.cross = new THREE.Mesh(cross, new THREE.MeshBasicMaterial({ color: BAD_COLOR, side: THREE.DoubleSide, transparent: true, opacity: 0.9, depthTest: false }));
+		this.cross.position.y = 0.002;
+		this.cross.renderOrder = 6;
+		this.cross.name = 'teleport-cross';
+		this.ring.add(this.cross);
 		this.ring.renderOrder = 5;
 		disc.renderOrder = 5;
 		this.ring.name = 'teleport-ring';
@@ -435,6 +444,7 @@ export class TeleportArc {
 			this.ring.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), snapped ? new THREE.Vector3(0, 1, 0) : hit.normal);
 			this.ring.material.color.copy(color);
 			this.ring.children[0].material.color.copy(color);
+			this.cross.visible = !valid;
 		}
 		return { valid, point: hit ? (snapped ?? hit.point).clone() : null, snapped: !!snapped };
 	}

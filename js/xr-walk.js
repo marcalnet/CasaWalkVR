@@ -7,20 +7,23 @@
 // stand on anything, so stairs work (js/xr-targets.js). With Solid walls on,
 // walls stop you (furniture never does: js/walls.js). B or Y goes back.
 //
-// Bare hands (C0.4, Meta's hands locomotion; js/gestures.js): hold a hand
-// sideways, fingers curled, thumb on the index (the ready dot shows); tap the
-// thumb: the arc grows from the hand (from the shoulder through the wrist),
-// its ring white while it settles and blue once steady; tap again on blue: go.
-// Open the hand: cancel. Swipe the thumb left or right: turn; forward or back:
-// a 0.75 m step. The ring snaps to hotspots (room middles, doorways:
-// js/hotspots.js), for controllers too.
+// Bare hands (the Quest 2 design of 24 Nov; js/gestures.js): palm down, pinch
+// and hold 0.25 s: the arc grows from the pinch (aimed from the shoulder
+// through it), its ring white while it moves and blue once steady 0.3 s, red
+// where you can't go. Open the pinch on blue: go; on white or red: nothing
+// (the arc draws back). Turn the palm up or drop the hand below the waist:
+// cancel. A quick wrist flick while aiming turns 30°; the arc stays. A pinch
+// near a key, the fan, the model or a tool never aims (XRExperience.aimBlock).
+// (With GESTURE.THUMB_TAP on: Meta's thumb tap, swipes to turn and step.)
+// The ring snaps to hotspots (room middles, doorways: js/hotspots.js), for
+// controllers too.
 
 import * as THREE from 'three';
 import { TeleportArc, yawOf } from './xr-input.js';
 import { WallCollider } from './walls.js';
 import { UP, DOWN, worldNormal, hitSegment } from './xr-targets.js';
 import { EYE_BELOW_TOP, buildFade } from './xr-scene.js';
-import { handAimRay } from './gestures.js';
+import { handAimRay, GESTURE } from './gestures.js';
 import { handHoldsTool } from './xr-tools.js';
 import { hotspots, snapTo, HOTSPOT } from './hotspots.js';
 import { Label } from './panel.js';
@@ -34,6 +37,7 @@ const ARC_CEILING = 1.85;
 const STEADY = 0.3; // a bare hand's ring turns blue once it has stayed put this long (s)
 const STEADY_MOVE = 0.15; // ... within this distance (m)
 const HAND_STEP = 0.75; // a thumb swipe forward or back: a step this long (m)
+const WAIST = 0.8; // a pinching hand this far below the eyes is dropped: the aim cancels (m)
 const MAX_DISCS = 48; // hotspot discs shown while aiming
 
 export class Walk {
@@ -225,6 +229,7 @@ export class Walk {
 	 * file). Taps go to nothing while a menu is open or a fingertip is at a key.
 	 */
 	handMoves(dt) {
+		if (!GESTURE.THUMB_TAP) return this.pinchMoves(dt);
 		const xr = this.xr, ui = xr.ui, input = xr.input;
 		const busy = !!xr.menu || ui.wrist.open || this.fade;
 		for (const c of input.gestureHands()) {
@@ -264,6 +269,54 @@ export class Walk {
 		const wrist = input.joint(tele.c, 'wrist');
 		if (!wrist) return;
 		const { origin, dir } = handAimRay(xr.headWorld(), xr.viewAxes().right, wrist, tele.c.handedness);
+		const r = this.aim(origin, dir, { pending: tele.steady < STEADY });
+		// Steady: the landing stays within STEADY_MOVE for STEADY seconds.
+		if (r.valid && r.point && tele.anchor && r.point.distanceTo(tele.anchor) < STEADY_MOVE) tele.steady += dt;
+		else { tele.steady = 0; tele.anchor = r.point?.clone() ?? null; }
+		tele.result = r;
+	}
+
+	/**
+	 * Bare hands on the Quest 2: palm down, pinch and hold: aim; open the
+	 * pinch on a blue ring: go; palm up, the hand dropped or lost: cancel; a
+	 * wrist flick while aiming: turn (see the top of the file).
+	 */
+	pinchMoves(dt) {
+		const xr = this.xr, input = xr.input;
+		const cancel = () => { this.tele = null; this.hideAim(); xr.sound.play('release'); };
+		for (const c of input.gestureHands()) {
+			const mine = this.tele?.c === c;
+			for (const e of c.gestures) {
+				if (e.type === 'pinch' && !this.tele && !this.fade && !xr.aimBlock(c, c.gesture.shape?.pinchAt)) {
+					this.tele = { c, via: 'hand', steady: 0, anchor: null };
+					xr.sound.play('aim');
+					xr.lessons?.note('arc');
+				} else if (!mine) {
+					continue;
+				} else if (e.type === 'pinchEnd') {
+					const r = this.tele.result;
+					if (r?.valid && this.tele.steady >= STEADY) {
+						this.tele = null;
+						this.hideAim();
+						this.go(r.point);
+						this.teleports = (this.teleports ?? 0) + 1;
+						xr.ui.onTeleport?.(this.teleports);
+					} else cancel(); // (let go on white or red: a slip never moves you)
+				} else if (e.type === 'open' || e.type === 'lost') {
+					cancel();
+				} else if (e.type === 'turn') {
+					xr.turn(-e.dir * THREE.MathUtils.degToRad(xr.snapAngle));
+					xr.sound.play('tick');
+					xr.lessons?.note('turn');
+				}
+			}
+		}
+		const tele = this.tele;
+		if (tele?.via !== 'hand') return;
+		const at = tele.c.gesture.shape?.pinchAt;
+		if (xr.menu || xr.ui.wrist.open || !tele.c.touch.tracked || !at) { this.tele = null; this.hideAim(); return; }
+		if (at.y < xr.headWorld().y - WAIST) { cancel(); return; } // (the hand dropped below the waist)
+		const { origin, dir } = handAimRay(xr.headWorld(), xr.viewAxes().right, at, tele.c.handedness);
 		const r = this.aim(origin, dir, { pending: tele.steady < STEADY });
 		// Steady: the landing stays within STEADY_MOVE for STEADY seconds.
 		if (r.valid && r.point && tele.anchor && r.point.distanceTo(tele.anchor) < STEADY_MOVE) tele.steady += dt;

@@ -359,7 +359,7 @@ const welcome = () => page.evaluate(() => {
 let wl = await welcome();
 check('welcome notes sit under the two cards on the empty page', wl.shown && wl.notes === 2 && wl.layout === 'below' && wl.under && wl.clear && wl.inside && wl.formats, JSON.stringify(wl));
 await shot('welcome');
-await page.goto(`http://localhost:${PORT}/?test&model=${encodeURIComponent(fixture)}`);
+await page.goto(`http://localhost:${PORT}/?test&model=${encodeURIComponent(fixture)}${process.env.XR_QUERY ? `&${process.env.XR_QUERY}` : ''}`); // (XR_QUERY=hands: the bare-hand readout in the shots)
 check('model loads', await page.evaluate(() => window.__casawalk.ready));
 {
 	await frames(10);
@@ -736,10 +736,17 @@ check('B closes the board', (await state()).menu === null);
 	// Moving with bare hands (C0.4). The gestures themselves are read from the joints
 	// (js/gestures.js, its Node tests); here scripted gesture events drive the app:
 	// each hand's reader is replaced by a queue (events, and whether it is "ready").
+	// The Quest 2 gesture (pinch held, palm down) aims through the pinch point: here,
+	// the wrist joint stands in for it (handAimAt places the wrist on the aim line).
 	await page.evaluate(() => {
 		const x = window.__casawalk.xr;
 		window.__gq = { left: { ready: false, events: [] }, right: { ready: false, events: [] } };
-		for (const c of x.input.controllers) if (c.gesture) c.gesture.step = () => { const q = window.__gq[c.handedness]; c.gesture.ready = q.ready; return q.events.splice(0); };
+		for (const c of x.input.controllers) if (c.gesture) c.gesture.step = () => {
+			const q = window.__gq[c.handedness], w = x.input.joint(c, 'wrist');
+			c.gesture.ready = q.ready;
+			c.gesture.shape = w ? { pinchAt: w, normal: new (w.constructor)(0, -1, 0), pinch: 0.01 } : null;
+			return q.events.splice(0);
+		};
 	});
 	const gesture = (side, ...events) => page.evaluate(({ side, events }) => { window.__gq[side].events.push(...events); }, { side, events });
 	const ready = (side, v) => page.evaluate(({ side, v }) => { window.__gq[side].ready = v; }, { side, v });
@@ -761,7 +768,7 @@ check('B closes the board', (await state()).menu === null);
 	await ready('right', true); await frames(4);
 	const dotShown = await page.evaluate(() => window.__casawalk.xr.handViews.find((v) => v.c.handedness === 'right').readyDot.visible);
 	check('bare hands: the ready pose shows the orange dot on the thumb', dotShown);
-	// Stepping inside by pointing: tap, point at a room, tap again.
+	// Stepping inside by pointing: pinch and hold, point at a room, let go.
 	// Aim at a room's middle (a room hotspot), or the box's middle for a model without rooms (not the pond: water is no landing).
 	const roomPt = await page.evaluate(() => {
 		const x = window.__casawalk.xr, V = x.rig.position.constructor, room = x.modes.walk.spots().find((s) => s.kind === 'room');
@@ -769,56 +776,60 @@ check('B closes the board', (await state()).menu === null);
 		const b = x.modes.dollhouse.modelBox(); return b.getCenter(new V()).setY(b.min.y + 0.02).toArray();
 	});
 	await handAimAt(roomPt); await frames(4); await handAimAt(roomPt); await frames(4);
-	await gesture('right', { type: 'tap' }); await frames(8);
+	await gesture('right', { type: 'pinch' }); await frames(8);
 	await handAimAt(roomPt); await frames(8);
-	const pointing = await page.evaluate(() => { const x = window.__casawalk.xr, d = x.modes.dollhouse; return { aim: !!d.handAim, ray: d.handRays.some((l) => l.visible), marker: d.markers.some((m) => m.visible), spot: !!d.handAim?.spot }; });
-	check('bare hands at the scale model: a thumb tap aims a ray at the model, the marker shows', pointing.aim && pointing.ray && pointing.marker && pointing.spot, JSON.stringify(pointing));
+	const pointing = await page.evaluate(() => { const x = window.__casawalk.xr, d = x.modes.dollhouse, c = x.input.controllers.find((c) => c.handedness === 'right');
+		return { aim: !!d.handAim, ray: d.handRays.some((l) => l.visible), marker: d.markers.some((m) => m.visible), spot: !!d.handAim?.spot, block: x.aimBlock(c, c.gesture?.shape?.pinchAt) }; });
+	check('bare hands at the scale model: a pinch held aims a ray at the model, the marker shows', pointing.aim && pointing.ray && pointing.marker && pointing.spot, JSON.stringify(pointing));
 	await shot('hands-point-inside');
 	await gesture('right', { type: 'open' }); await frames(4);
 	const cancelled = await page.evaluate(() => { const d = window.__casawalk.xr.modes.dollhouse; return !d.handAim && d.handRays.every((l) => !l.visible); });
-	check('bare hands: opening the hand cancels the aim', cancelled);
-	await gesture('right', { type: 'tap' }); await frames(4); await handAimAt(roomPt); await frames(8);
+	check('bare hands: turning the palm up cancels the aim', cancelled);
+	await gesture('right', { type: 'pinch' }); await frames(4); await handAimAt(roomPt); await frames(8);
 	await page.waitForFunction(() => (window.__casawalk.xr.modes.dollhouse.handAim?.steady ?? 0) >= 0.3, null, { timeout: 8000, polling: 'raf' }).catch(() => {});
-	await gesture('right', { type: 'tap' }); await frames(4); await settled(); await frames(4);
+	await gesture('right', { type: 'pinchEnd' }); await frames(4); await settled(); await frames(4);
 	const inside = await state();
-	check('bare hands: tap again steps inside', inside.mode === 'walk' && inside.anchorScale === 1, JSON.stringify({ mode: inside.mode }));
-	// Walking: tap, the arc; it settles (white, then blue); tap again: go.
+	check('bare hands: opening the pinch on a steady landing steps inside', inside.mode === 'walk' && inside.anchorScale === 1, JSON.stringify({ mode: inside.mode }));
+	// Walking: pinch and hold, the arc; it settles (white, then blue); let go: go.
 	// A floor to aim at: the hotspots 1.2-3.5 m away (room middles, doorways), nearest first.
 	const targets = await page.evaluate(() => {
 		const x = window.__casawalk.xr, h = x.headWorld(), V = h.constructor;
 		return x.modes.walk.spots().map((s) => x.centerer.localToWorld(new V(s.x, s.y, s.z))).map((p) => [p, Math.hypot(p.x - h.x, p.z - h.z)])
 			.filter(([, d]) => d > 1.2 && d < 3.5).sort((a, b) => a[1] - b[1]).map(([p]) => p.toArray());
 	});
-	await gesture('right', { type: 'tap' }); await frames(2);
+	await gesture('right', { type: 'pinch' }); await frames(2);
 	let floorAhead = targets[0];
 	for (const t of targets) {
 		await handAimAt(t); await frames(3); await handAimAt(t); await frames(3);
 		if (await page.evaluate(() => !!window.__casawalk.xr.modes.walk.tele?.result?.valid)) { floorAhead = t; break; }
 	}
 	await handAimAt(floorAhead); await frames(2);
-	const settling = await page.evaluate(() => { const w = window.__casawalk.xr.modes.walk; return { via: w.tele?.via, dots: w.arc.dots.visible, colour: w.arc.dots.material.color.getHexString() }; });
+	const settling = await page.evaluate(() => { const x = window.__casawalk.xr, w = x.modes.walk, c = x.input.controllers.find((c) => c.handedness === 'right');
+		return { via: w.tele?.via, dots: w.arc.dots.visible, colour: w.arc.dots.material.color.getHexString(), block: x.aimBlock(c, c.gesture?.shape?.pinchAt) }; });
 	await handAimAt(floorAhead); await frames(10);
 	// (Steady is 0.3 s of the app's own time: a slow emulator needs more real time.)
 	await page.waitForFunction(() => (window.__casawalk.xr.modes.walk.tele?.steady ?? 0) >= 0.3, null, { timeout: 8000, polling: 'raf' }).catch(() => {});
 	const steady = await page.evaluate(() => { const w = window.__casawalk.xr.modes.walk; return { steady: w.tele?.steady ?? 0, valid: !!w.tele?.result?.valid, colour: w.arc.dots.material.color.getHexString(), discs: w.discs.count }; });
-	check('bare hands walking: a tap shows the arc from the hand, white while it settles, blue once steady', settling.via === 'hand' && settling.dots && settling.colour === 'ffffff' && steady.valid && steady.colour === '3d8bfd', JSON.stringify({ settling, steady, targets: targets.length }));
+	check('bare hands walking: a pinch held shows the arc from the hand, white while it settles, blue once steady', settling.via === 'hand' && settling.dots && settling.colour === 'ffffff' && steady.valid && steady.colour === '3d8bfd', JSON.stringify({ settling, steady, targets: targets.length }));
 	await shot('hands-teleport-aim');
 	const head0 = await page.evaluate(() => window.__casawalk.xr.headWorld().toArray());
-	await gesture('right', { type: 'tap' }); await frames(4);
+	await gesture('right', { type: 'pinchEnd' }); await frames(4);
 	await page.waitForFunction(() => { const w = window.__casawalk.xr.modes.walk; return !w.fade && !w.tele; }, null, { timeout: 8000, polling: 'raf' }).catch(() => {}); // (the fade does the move: a slow emulator needs time)
 	const after = await page.evaluate(() => ({ head: window.__casawalk.xr.headWorld().toArray(), tele: !!window.__casawalk.xr.modes.walk.tele }));
 	const jumped = Math.hypot(after.head[0] - head0[0], after.head[2] - head0[2]);
-	check('bare hands walking: tap again on blue teleports', !after.tele && jumped > 0.5, JSON.stringify({ jumped: +jumped.toFixed(2) }));
-	// Turn and step: thumb swipes.
+	check('bare hands walking: opening the pinch on blue teleports', !after.tele && jumped > 0.5, JSON.stringify({ jumped: +jumped.toFixed(2) }));
+	// Turning: a wrist flick while aiming turns 30°; the arc stays. Letting go before blue: nothing.
+	await gesture('right', { type: 'pinch' }); await frames(3);
 	const yaw0 = await page.evaluate(() => window.__casawalk.xr.rig.rotation.y);
 	await gesture('right', { type: 'turn', dir: 1 }); await frames(4);
-	const yaw1 = await page.evaluate(() => window.__casawalk.xr.rig.rotation.y);
-	check('bare hands: a thumb swipe to the right turns right by 30°', Math.abs((yaw0 - yaw1) - Math.PI / 6) < 1e-3, JSON.stringify({ turned: +((yaw0 - yaw1) * 180 / Math.PI).toFixed(1) }));
+	const t1 = await page.evaluate(() => ({ yaw: window.__casawalk.xr.rig.rotation.y, aiming: window.__casawalk.xr.modes.walk.tele?.via === 'hand' }));
+	check('bare hands: a wrist flick to the right while aiming turns right by 30°, the arc stays', Math.abs((yaw0 - t1.yaw) - Math.PI / 6) < 1e-3 && t1.aiming, JSON.stringify({ turned: +((yaw0 - t1.yaw) * 180 / Math.PI).toFixed(1), aiming: t1.aiming }));
 	const s0 = await page.evaluate(() => window.__casawalk.xr.headWorld().toArray());
-	await gesture('right', { type: 'step', dir: 1 }); await frames(20);
-	const s1 = await page.evaluate(() => window.__casawalk.xr.headWorld().toArray());
-	const stepped = Math.hypot(s1[0] - s0[0], s1[2] - s0[2]);
-	check('bare hands: a thumb swipe forward steps 0.75 m (or nothing, at a wall)', Math.abs(stepped - 0.75) < 0.05 || stepped < 0.01, JSON.stringify({ stepped: +stepped.toFixed(3) }));
+	await page.evaluate(() => { const t = window.__casawalk.xr.modes.walk.tele; if (t) t.steady = 0; }); // (white again: a slip)
+	await gesture('right', { type: 'pinchEnd' }); await frames(10);
+	const s1 = await page.evaluate(() => ({ head: window.__casawalk.xr.headWorld().toArray(), tele: !!window.__casawalk.xr.modes.walk.tele, fade: !!window.__casawalk.xr.modes.walk.fade }));
+	const slid = Math.hypot(s1.head[0] - s0[0], s1.head[2] - s0[2]);
+	check('bare hands: opening the pinch before the ring is blue moves nothing; the arc goes', slid < 0.01 && !s1.tele && !s1.fade, JSON.stringify({ moved: +slid.toFixed(3), ...s1 }));
 	// The guide beside the wrist menu inside: how to move with hands.
 	await page.evaluate(() => window.__casawalk.xr.ui.wrist.show({ pinned: true }));
 	await frames(3);

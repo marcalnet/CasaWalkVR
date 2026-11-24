@@ -13,6 +13,7 @@
 // the board's Tools tab (remembered; js/settings.js cameraLens).
 
 import * as THREE from 'three';
+import { GESTURE } from './gestures.js';
 import { buildCamera } from './tool-models.js';
 import { COLOURS, FONT, GUIDE } from './theme.js';
 
@@ -70,7 +71,11 @@ export class StreetCamera {
 		this.lensLabel.set(`${mm} mm`);
 	}
 
-	take(c) { this.held = c; this.hint.set(c?.isHand ? 'Tap your thumb: photo' : 'Trigger: take a photo'); }
+	take(c) {
+		this.held = c;
+		// (Bare hands: the thumb tap is off on the Quest 2; the shutter button comes with item 11. Until then, say so.)
+		this.hint.set(!c?.isHand ? 'Trigger: take a photo' : GESTURE.THUMB_TAP ? 'Tap your thumb: photo' : 'Photos: with a controller, for now');
+	}
 	putBack() { this.held = null; }
 
 	/** The shutter. */

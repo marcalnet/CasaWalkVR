@@ -21,8 +21,10 @@
 // down to the floor; once hands
 // and controllers are 30 cm away for 4 s (a ring on the plinth fills), it
 // glides home and settles. Bare hands step inside with the teleport gesture
-// (js/gestures.js): tap the thumb, point at a room (a straight ray from the
-// hand, the marker hops to the room), tap again. Open the hand: cancel.
+// (js/gestures.js): palm down, pinch and hold, point at a room (a straight
+// ray from the shoulder through the pinch, the marker hops to the room), and
+// open the pinch once the marker has held still 0.3 s. Palm up, or the hand
+// dropped: cancel. A pinch within 15 cm of the model or a key never aims.
 
 import * as THREE from 'three';
 import { UP, DOWN } from './xr-targets.js';
@@ -33,7 +35,7 @@ import { DELIBERATE } from './touch.js';
 import { roomAt, roomLanding, alongAxis, clearOfWalls, headingOf } from './rooms.js';
 import { Label } from './panel.js';
 import { ease } from './tween.js';
-import { handAimRay } from './gestures.js';
+import { handAimRay, GESTURE } from './gestures.js';
 import { handHoldsTool } from './xr-tools.js';
 import { HAND } from './theme.js';
 
@@ -59,7 +61,8 @@ const DROP_NEAR = 0.15; // let go this close to the plinth top (over it): it set
 const RETURN_AWAY = 0.3, RETURN_WAIT = 4; // a floating model goes home once nothing is within 0.3 m for 4 s
 const GRAB_SMOOTH = 0.06, GRAB_SMOOTH_HAND = 0.1; // seconds: a held model follows a controller / a bare hand smoothed this much
 const HAND_TURN_DEAD = THREE.MathUtils.degToRad(3); // a bare hand's turn: changes under 3° are tremor, ignored
-const AIM_STEADY = 0.3; // a bare hand's second tap steps inside once its landing has held still this long
+const AIM_STEADY = 0.3; // a bare hand steps inside (opening the pinch) once its landing has held still this long
+const WAIST = 0.8; // a pinching hand this far below the eyes is dropped: the aim cancels (m)
 const ZOOM_SPEED = 1.2; // e-folds/s at full stick
 // The doors at the scale model, metres (the user's Quest 2 tests): Walk in →
 // is the big one, ← Back about a third as long, the same height, on its left.
@@ -599,7 +602,16 @@ export class Dollhouse {
 				if (e.type === 'fist' && !this.grab && d < HOLD_REACH && !busy && !c.fistClaimed) { this.cancelHandAim(); this.startGrab(c); } // (a fist on a fan tool takes the tool)
 				else if ((e.type === 'fistEnd' || e.type === 'lost') && this.grab?.c === c) this.release();
 				else if ((e.type === 'open' || e.type === 'lost') && this.handAim?.c === c) { this.cancelHandAim(); xr.sound.play('release'); }
-				else if (e.type === 'tap' && !keyNear && !toolHand && d > AIM_CLEAR && this.grab?.c !== c) {
+				else if (!GESTURE.THUMB_TAP) {
+					// (The Quest 2 gesture: pinch held, palm down, aims; opening it on a steady landing steps inside.)
+					if (e.type === 'pinch' && !this.handAim && !busy && this.grab?.c !== c && !xr.aimBlock(c, c.gesture.shape?.pinchAt)) {
+						this.handAim = { c, spot: null, steady: 0, at: new THREE.Vector3(), has: false };
+						xr.sound.play('aim');
+					} else if (e.type === 'pinchEnd' && this.handAim?.c === c) {
+						if (this.handAim.spot && this.handAim.steady >= AIM_STEADY) jump = this.handAim.spot;
+						else { this.cancelHandAim(); xr.sound.play('release'); }
+					}
+				} else if (e.type === 'tap' && !keyNear && !toolHand && d > AIM_CLEAR && this.grab?.c !== c) {
 					if (this.handAim?.c === c) {
 						// (Only on a landing held steady 0.3 s, as inside: the tester's finding.)
 						if (this.handAim.spot && this.handAim.steady >= AIM_STEADY) jump = this.handAim.spot;
@@ -614,9 +626,11 @@ export class Dollhouse {
 		const a = this.handAim;
 		if (!a) return jump;
 		if (busy || !a.c.touch.tracked) { this.cancelHandAim(); return null; }
-		const wrist = input.joint(a.c, 'wrist');
-		if (!wrist) return jump;
-		const { origin, dir } = handAimRay(xr.headWorld(), xr.viewAxes().right, wrist, a.c.handedness);
+		// (The pinch point with the pinch gesture, the wrist with the thumb tap.)
+		const through = GESTURE.THUMB_TAP ? input.joint(a.c, 'wrist') : a.c.gesture.shape?.pinchAt;
+		if (!through) return jump;
+		if (!GESTURE.THUMB_TAP && !jump && through.y < xr.headWorld().y - WAIST) { this.cancelHandAim(); xr.sound.play('release'); return null; } // (the hand dropped)
+		const { origin, dir } = handAimRay(xr.headWorld(), xr.viewAxes().right, through, a.c.handedness);
 		xr.raycaster.set(origin, dir);
 		xr.raycaster.far = 5;
 		const hit = xr.raycaster.intersectObjects(xr.targets().pointable, false)[0];

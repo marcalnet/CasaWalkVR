@@ -42,6 +42,7 @@ import * as THREE from 'three';
 import { XRInput } from './xr-input.js';
 import { HandView } from './hands.js';
 import { Lessons } from './lessons.js';
+import { HandReadout, readoutWanted } from './hand-readout.js';
 import { ToolsIntro } from './tools-intro.js';
 import { attachTransientPointer } from './transient-pointer.js';
 import { SeeThrough, SEE_THROUGH_MAX } from './walls.js';
@@ -108,6 +109,7 @@ export class XRExperience {
 		this.input.setVisible(false);
 		this.hideFromPhotos(...this.input.controllers.flatMap((c) => [c.ray, c.grip, c.wrist])); // lasers, controllers, and what they carry (orbs, tools)
 		this.handViews = this.input.controllers.map((c) => new HandView(c)); // bare hands, drawn (milestone C0.2)
+		this.readout = readoutWanted() ? new HandReadout(this) : null; // (?hands: the bare-hand tuning readout, for development)
 		this.hideFromPhotos(...this.handViews.map((v) => v.group));
 		// Scenery: the gallery and its sky, the stage with the plinth, the walk sky.
 		Object.assign(this, buildShowroom(scene)); // showroom, showroomSky
@@ -268,6 +270,7 @@ export class XRExperience {
 		this.curtain.visible = false;
 		this.arrival.mesh.visible = false;
 		for (const v of this.handViews) v.hide();
+		this.readout?.hide();
 		this.photoPending = false;
 		this.tools.end(); // tools back in the fan; measurements and drawings cleared
 		this.fan.reset();
@@ -518,6 +521,31 @@ export class XRExperience {
 		return new THREE.Vector3().setFromMatrixPosition(this.camera.matrix).applyMatrix4(this.rig.matrixWorld);
 	}
 
+	/**
+	 * Why bare hand c's pinch may not aim a teleport here (the design of 24
+	 * Nov: a pinch near something belongs to it), or null. p: the pinch point
+	 * (world). 'board', 'wrist menu', 'key', 'fan', 'model', 'tool'.
+	 */
+	aimBlock(c, p) {
+		const NEAR = 0.15, tools = this.tools, held = tools?.held?.c;
+		if (held === c) return 'tool'; // (a hand holding a tool never aims)
+		if (this.menu) return 'board';
+		if (this.ui.wrist.open) return 'wrist menu';
+		if (!p) return null;
+		if (held) {
+			const q = held.isHand ? this.input.joint(held, 'wrist') : held.grip.getWorldPosition(new THREE.Vector3());
+			if (q && q.distanceTo(p) < NEAR + 0.05) return 'tool';
+		}
+		if (this.handViews[c.index]?.near) return 'key';
+		const orb = this.ui.wrist.orb?.group; // (only the other hand: the orb rides the wearer's own wrist)
+		if (orb?.visible && this.ui.wrist.wearer !== c && orb.getWorldPosition(new THREE.Vector3()).distanceTo(p) < NEAR) return 'wrist menu';
+		if (this.mode === 'dollhouse' && this.modes.dollhouse.doors.near(p, NEAR)) return 'key';
+		const fan = this.fan?.group;
+		if (fan?.visible && fan.getWorldPosition(new THREE.Vector3()).distanceTo(p) < NEAR + 0.1) return 'fan'; // (the fan's tools spread about 10 cm round its middle)
+		if (this.mode === 'dollhouse' && this.modes.dollhouse.modelBox().distanceToPoint(p) < NEAR) return 'model';
+		return null;
+	}
+
 	/** Tells the lessons when a bare hand has held the ready pose for 0.5 s. */
 	noteReady(dt) {
 		for (const c of this.input.gestureHands()) {
@@ -609,6 +637,7 @@ export class XRExperience {
 		else this.modes[this.mode]?.update(dt);
 		this.runArrival(dt);
 		for (const v of this.handViews) v.update(dt, { passthrough: !this.vrView });
+		this.readout?.update();
 		this.fan.update(dt); // the tool fan: open, touch, take, swap, put back (milestone C)
 		this.tools.update(dt);
 		this.tweens.update(dt);

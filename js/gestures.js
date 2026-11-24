@@ -4,14 +4,25 @@
 // in, events out, so it runs in Node tests. Never reads the Quest's "select"
 // (a pinch never clicks).
 //
+// The Quest 2 teleport (the user's decision, 24 Nov: the thumb tap was missed
+// when meant and fired when not; it stays behind GESTURE.THUMB_TAP, off, to
+// retry on a Quest 3):
+//   pinch    palm down, thumb and index pinched and held PINCH_HOLD: aim
+//   pinchEnd the pinch opens (over PINCH_OFF): go, if the landing is steady
+//   open     the palm turns up while the pinch is held: cancel (the pinch must
+//            open before it can aim again)
+//   turn     while the pinch is held: a quick sideways flick of the wrist (the
+//            hand turns over FLICK about the vertical within FLICK_TIME; dir +1
+//            is to the right as you see it)
+// With GESTURE.THUMB_TAP on (Meta's microgestures):
 //   ready   hand sideways, four fingers curled, thumb resting on the side of
 //           the index (held READY_HOLD): the teleport gesture can start
 //   tap     while ready: the thumb lifts off the index and comes back quickly
 //   turn    while ready: the thumb slides left or right on the index (dir -1 / +1)
 //   step    while ready: the thumb slides forward or back on the index (dir +1 / -1)
 //   open    the fingers open (cancels an aim)
+// Always:
 //   fist    a closed hand (three fingertips near their knuckles), and fistEnd
-//   pinch   the fallback gesture (palm down, pinch held PINCH_HOLD), and pinchEnd
 //   lost    the hand stopped being tracked (cancels everything)
 //
 // The thresholds are first guesses from the designer's notes; they are tuned
@@ -20,13 +31,15 @@
 import * as THREE from 'three';
 
 export const GESTURE = {
-	// One switch for the headset trial: Meta's thumb tap (true), or the
-	// fallback palm-down pinch-and-hold (false). Only one ships.
-	THUMB_TAP: true,
+	// Meta's thumb tap (true), or palm-down pinch-and-hold (false, the Quest 2
+	// design of 24 Nov). Only one ships.
+	THUMB_TAP: false,
 	CURLED: 0.055, // a fingertip this close to its knuckle is curled
 	OPEN: 0.07, // ... and this far is open
 	SIDEWAYS: Math.SQRT1_2, // palm normal within 45° of horizontal (|y| below this)
-	PALM_DOWN: 0.6, // palm normal y below -this: palm down (the fallback)
+	PALM_DOWN: Math.SQRT1_2, // palm normal y below -this: palm down (within 45° of straight down)
+	PALM_UP: 0.3, // palm normal y above this while pinching: turned up, cancel
+	FLICK: THREE.MathUtils.degToRad(25), FLICK_TIME: 0.25, // a wrist flick: the hand turns this much about the vertical, this fast
 	THUMB_REST: 0.025, // thumb tip this close to the index's side: resting on it
 	READY_HOLD: 0.15, // the ready pose held this long
 	TAP_LIFT: 0.012, // a tap lifts the thumb at least this far off its rest
@@ -37,7 +50,7 @@ export const GESTURE = {
 	FIST_ON: 0.045, // three fingertips this close to their knuckles: a closed hand
 	FIST_OFF: 0.06, // two over this: open again
 	FIST_HOLD: 0.15,
-	PINCH_ON: 0.015, PINCH_OFF: 0.03, PINCH_HOLD: 0.25,
+	PINCH_ON: 0.015, PINCH_OFF: 0.03, PINCH_HOLD: 0.25, // pinched under 1.5 cm, held 0.25 s; open over 3 cm
 	TRACKED: 3, // frames a hand must have been tracked before it counts
 	SMOOTH: 0.03, // seconds: joint smoothing (light: taps are quick)
 };
@@ -68,9 +81,10 @@ export function segmentDistance(p, a, b) {
  *            thumb moves on the finger, never when the whole hand moves (the
  *            tester's finding: swipes are read from this)
  *   pinch    thumb tip to index tip
+ *   pinchAt  the point between them (the aim passes through it)
  * out: an object to fill (reused each frame: nothing allocated).
  */
-export function handShape(j, handedness, out = { normal: new THREE.Vector3(), along: new THREE.Vector3(), rel: new THREE.Vector3(), thumb: new THREE.Vector3(), tips: [0, 0, 0, 0] }) {
+export function handShape(j, handedness, out = { normal: new THREE.Vector3(), along: new THREE.Vector3(), rel: new THREE.Vector3(), thumb: new THREE.Vector3(), pinchAt: new THREE.Vector3(), tips: [0, 0, 0, 0] }) {
 	for (const n of JOINTS) if (!j[n]) return null;
 	const w = j.wrist, ip = j['index-finger-phalanx-proximal'], lp = j['pinky-finger-phalanx-proximal'];
 	out.normal.crossVectors(_a.subVectors(ip, w), _b.subVectors(lp, w)).normalize();
@@ -81,6 +95,7 @@ export function handShape(j, handedness, out = { normal: new THREE.Vector3(), al
 	out.rel.subVectors(j['thumb-tip'], j['index-finger-phalanx-intermediate']);
 	out.thumb.copy(j['thumb-tip']);
 	out.pinch = j['thumb-tip'].distanceTo(j['index-finger-tip']);
+	out.pinchAt.addVectors(j['thumb-tip'], j['index-finger-tip']).multiplyScalar(0.5);
 	return out;
 }
 
@@ -107,7 +122,8 @@ export class HandGestures {
 		this.poolAt = 0;
 		this._shape ??= undefined;
 		this.fist = false; this.fistTime = 0;
-		this.pinch = false; this.pinchTime = 0; this.pinchHeld = false;
+		this.pinch = false; this.pinchTime = 0; this.pinchHeld = false; this.pinchSpent = false;
+		this.flick = []; // the hand's heading while the pinch is held: [{ yaw, t }], from a pool
 		this.clock = 0;
 		this.shape = null;
 	}
@@ -199,28 +215,50 @@ export class HandGestures {
 		this.slide.length = 0;
 	}
 
-	/** The fallback: palm down, pinch and hold; letting go ends it. */
+	/**
+	 * Palm down, pinch and hold: aim; open the pinch: go. Turning the palm up
+	 * cancels (open), and the pinch must open before it can aim again. While
+	 * held, a quick wrist flick turns (turn).
+	 */
 	pinchGesture(s, dt, out) {
 		const G = GESTURE;
 		if (!this.pinch) {
 			if (s.pinch < G.PINCH_ON) { this.pinch = true; this.pinchTime = 0; }
 		} else if (s.pinch > G.PINCH_OFF) {
-			this.pinch = false;
+			this.pinch = false; this.pinchSpent = false;
 			if (this.pinchHeld) { this.pinchHeld = false; out.push({ type: 'pinchEnd' }); }
 			return;
 		}
-		if (this.pinch && !this.pinchHeld) {
+		if (!this.pinch || this.pinchSpent) return;
+		if (!this.pinchHeld) {
 			this.pinchTime += dt;
-			if (this.pinchTime >= G.PINCH_HOLD && s.normal.y < -G.PALM_DOWN) { this.pinchHeld = true; out.push({ type: 'pinch' }); }
+			// (The palm must be down all through the hold: a pinch while palm up or sideways never aims.)
+			if (s.normal.y >= -G.PALM_DOWN) this.pinchTime = 0;
+			if (this.pinchTime >= G.PINCH_HOLD) { this.pinchHeld = true; this.flick.length = 0; out.push({ type: 'pinch' }); }
+			return;
+		}
+		if (s.normal.y > G.PALM_UP) { this.pinchHeld = false; this.pinchSpent = true; out.push({ type: 'open' }); return; }
+		// A wrist flick: the hand's heading (its length, seen from above) turns over FLICK within FLICK_TIME.
+		if (Math.hypot(s.along.x, s.along.z) < 0.3) return; // (pointing up or down: no heading)
+		const yaw = Math.atan2(-s.along.x, -s.along.z);
+		const e = this.pool[this.poolAt++ % this.pool.length];
+		e.x = yaw; e.t = this.clock;
+		this.flick.push(e);
+		while (this.flick.length && this.clock - this.flick[0].t > G.FLICK_TIME) this.flick.shift();
+		const d = THREE.MathUtils.euclideanModulo(yaw - this.flick[0].x + Math.PI, 2 * Math.PI) - Math.PI;
+		if (Math.abs(d) >= G.FLICK) {
+			out.push({ type: 'turn', dir: d > 0 ? -1 : 1 }); // (yaw grows turning left)
+			this.flick.length = 0;
 		}
 	}
 }
 
 /**
  * The aim ray for a bare hand (Meta's hand guidance): from an estimated
- * shoulder (15 cm below the head, 18 cm to the hand's side) through the
- * wrist. head: world position; right: the viewer's horizontal right axis.
- * Returns { origin, dir } (origin at the wrist).
+ * shoulder (15 cm below the head, 18 cm to the hand's side) through a point
+ * of the hand (the pinch point; the wrist with the thumb tap). head: world
+ * position; right: the viewer's horizontal right axis. Returns { origin, dir }
+ * (origin at that point).
  */
 export function handAimRay(head, right, wrist, handedness) {
 	const shoulder = head.clone().addScaledVector(right, handedness === 'left' ? -0.18 : 0.18);

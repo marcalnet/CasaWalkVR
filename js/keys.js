@@ -43,10 +43,23 @@ export class KeyPad {
 	/** Adds a key of w x h metres; returns it (place its group yourself). */
 	add(slot, w = WRIST.key, h = WRIST.key) {
 		const k = makeKey(`${this.name}-${slot}`, w, h);
-		k.slot = slot;
+		k.slot = slot; k.w = w; k.h = h;
 		this.keys.set(slot, k);
 		this.list = [...this.keys.values()];
 		return k;
+	}
+
+	/** True if world point p is within margin (metres) of a shown key's face (the nearest point of its rectangle). */
+	near(p, margin) {
+		for (const k of this.list) {
+			let o = k.group, shown = true;
+			while (o) { if (!o.visible) { shown = false; break; } o = o.parent; }
+			if (!shown) continue;
+			const L = k.group.worldToLocal(this._v.copy(p)); // (keys are never scaled: local metres are world metres)
+			const dx = Math.max(0, Math.abs(L.x) - k.w / 2), dy = Math.max(0, Math.abs(L.y) - k.h / 2);
+			if (Math.hypot(dx, dy, L.z) < margin) return true;
+		}
+		return false;
 	}
 
 	/** What a key shows: { id (null: not pressable), look, icon, label, caption, hold (seconds: pressed only when held this long, a ring filling) }. */

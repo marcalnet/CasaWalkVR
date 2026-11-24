@@ -12,6 +12,8 @@ import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 import { parseHome, buildHome } from '../js/sh3d.js';
 import { prepareObjText } from '../js/formats.js';
 import { optimiseModel } from '../js/optimise.js';
+import { GESTURE } from '../js/gestures.js';
+import { readoutWanted, readoutText } from '../js/hand-readout.js';
 import { XRExperience } from '../js/xr.js';
 import { HOLD } from '../js/xr-tools.js';
 
@@ -481,7 +483,81 @@ test('the tool fan: opens over the raised left hand in view; the right tip touch
 	assert.ok(!fan.group.visible, 'closed: the hand lowered');
 });
 
-test('bare hands: a thumb tap of the hand holding a tool is its trigger; that hand never teleports', async () => {
+test('bare hands, Quest 2: a pinch held aims; opening it on white goes nowhere; a hand holding a tool never aims', async () => {
+	const { x, go } = await setup();
+	go('in');
+	const c = x.input.hands.right;
+	c.isHand = true; c.isController = false; // (this entry plays a bare hand)
+	c.gesture = { shape: { pinchAt: new THREE.Vector3(0.25, 1.15, -0.35) } }; // (palm down, chest height, in front)
+	x.input._gh = [c]; // (this frame's bare hands)
+	c.touch.tracked = true;
+	const tool = { name: 'test', object: new THREE.Group(), trigger: () => {} };
+	x.tools.take(tool, c);
+	c.gestures = [{ type: 'pinch' }];
+	x.modes.walk.handMoves(1 / 72);
+	assert.equal(x.modes.walk.tele, null, 'the hand holding a tool never aims');
+	assert.equal(x.aimBlock(c, c.gesture.shape.pinchAt), 'tool');
+	x.tools.putBack();
+	x.modes.walk.handMoves(1 / 72);
+	assert.equal(x.modes.walk.tele?.via, 'hand', 'with no tool in that hand, the pinch aims');
+	c.gestures = [];
+	x.modes.walk.handMoves(1 / 72);
+	const at = x.rig.position.clone();
+	c.gestures = [{ type: 'pinchEnd' }];
+	x.modes.walk.handMoves(1 / 72);
+	assert.ok(x.modes.walk.tele === null && !x.modes.walk.fade && x.rig.position.equals(at), 'let go before the ring is blue: nothing moves');
+	// Dropped below the waist while aiming: cancelled.
+	c.gestures = [{ type: 'pinch' }];
+	x.modes.walk.handMoves(1 / 72);
+	assert.equal(x.modes.walk.tele?.via, 'hand');
+	c.gesture.shape.pinchAt.y = x.headWorld().y - 1;
+	c.gestures = [];
+	x.modes.walk.handMoves(1 / 72);
+	assert.equal(x.modes.walk.tele, null, 'the hand dropped: cancelled');
+	// The wrist menu open: a pinch is not a teleport.
+	c.gesture.shape.pinchAt.y = 1.15;
+	x.ui.wrist.open = true;
+	c.gestures = [{ type: 'pinch' }];
+	x.modes.walk.handMoves(1 / 72);
+	assert.equal(x.modes.walk.tele, null, 'the wrist menu is open: no aim');
+	x.ui.wrist.open = false;
+});
+
+test('a pinch within 15 cm of a door\'s face is the door\'s, not a teleport; further away it may aim', async () => {
+	const { x } = await setup();
+	const d = x.modes.dollhouse, k = d.doors.keys.get('in');
+	x.scene.updateMatrixWorld(true);
+	const at = (z, y = 0) => k.group.localToWorld(new THREE.Vector3(0, y, z));
+	assert.ok(d.doors.near(at(0.1), 0.15), '10 cm in front of Walk in →');
+	assert.ok(!d.doors.near(at(0.2), 0.15), '20 cm in front: free');
+	assert.ok(!d.doors.near(at(0.05, 0.25), 0.15), '25 cm above its middle (20 cm above its edge): free');
+	assert.equal(x.aimBlock({ index: 1 }, at(0.1)), 'key');
+});
+
+test('the ?hands readout: only with ?hands; palm angle, pinch, and ready, aiming or what blocks it', async () => {
+	assert.ok(readoutWanted('?hands') && readoutWanted('?x=1&hands&plinth=10') && !readoutWanted('') && !readoutWanted('?nomerge'));
+	const { x, go } = await setup();
+	go('in');
+	const c = x.input.hands.right;
+	c.isHand = true; c.isController = false;
+	const eye = x.headWorld().y;
+	c.gesture = { shape: { normal: new THREE.Vector3(0, -1, 0), pinch: 0.012, pinchAt: new THREE.Vector3(0.2, eye - 0.45, -0.35) } };
+	assert.equal(readoutText(x, c), 'R · palm 0° · pinch 1.2 cm · ready');
+	c.gesture.shape.normal.set(1, 0, 0);
+	assert.match(readoutText(x, c), /palm 90° .* palm not down$/);
+	c.gesture.shape.normal.set(0, -1, 0);
+	x.ui.wrist.open = true;
+	assert.match(readoutText(x, c), /blocked: wrist menu$/);
+	x.ui.wrist.open = false;
+	x.modes.walk.tele = { c, via: 'hand' };
+	assert.match(readoutText(x, c), /aiming$/);
+	x.modes.walk.tele = null;
+});
+
+test('bare hands (thumb tap, off on Quest 2): a thumb tap of the hand holding a tool is its trigger; that hand never teleports', async (t) => {
+	const was = GESTURE.THUMB_TAP;
+	GESTURE.THUMB_TAP = true;
+	t.after(() => { GESTURE.THUMB_TAP = was; });
 	const { x, go } = await setup();
 	go('in');
 	const c = x.input.hands.right;
