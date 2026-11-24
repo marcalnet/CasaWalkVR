@@ -13,10 +13,12 @@
 // keeps the word dollhouse.)
 //
 // Holding the model (C0.4, both inputs): a grip held anywhere, or a bare hand
-// closed on it (within 8 cm of its box). It follows the hand fully: lift it,
-// tilt it, look under it. Let go near the plinth (its base within 15 cm of
-// the top, over it, tilted under 30°): it settles, level. Let go anywhere
-// else: it floats where it is, with a line down to the floor; once hands
+// closed on it (within 8 cm of its box). It stays level (the user's decision,
+// 24 Nov): it moves with the hand and turns only about the vertical; a bare
+// hand moves it by the palm's centre, ignores turns under 3° and is smoothed
+// more. Let go near the plinth (its base within 15 cm of the top, over it):
+// it settles. Let go anywhere else: it floats where it is, level, with a line
+// down to the floor; once hands
 // and controllers are 30 cm away for 4 s (a ring on the plinth fills), it
 // glides home and settles. Bare hands step inside with the teleport gesture
 // (js/gestures.js): tap the thumb, point at a room (a straight ray from the
@@ -53,9 +55,10 @@ export function nearestScale(ratio) {
 const ROTATE_SPEED = 1.6; // rad/s at full stick
 const HOLD_REACH = 0.08; // a closed hand within this of the model's box holds it
 const AIM_CLEAR = 0.15; // ... and within this, the hand's teleport gesture is not read (a hand never does both)
-const DROP_NEAR = 0.15, DROP_TILT = 30; // let go this close to the plinth top, tilted less: it settles
+const DROP_NEAR = 0.15; // let go this close to the plinth top (over it): it settles
 const RETURN_AWAY = 0.3, RETURN_WAIT = 4; // a floating model goes home once nothing is within 0.3 m for 4 s
-const GRAB_SMOOTH = 0.06; // seconds: a held model follows the hand smoothed this much
+const GRAB_SMOOTH = 0.06, GRAB_SMOOTH_HAND = 0.1; // seconds: a held model follows a controller / a bare hand smoothed this much
+const HAND_TURN_DEAD = THREE.MathUtils.degToRad(3); // a bare hand's turn: changes under 3° are tremor, ignored
 const AIM_STEADY = 0.3; // a bare hand's second tap steps inside once its landing has held still this long
 const ZOOM_SPEED = 1.2; // e-folds/s at full stick
 // The doors at the scale model, metres (the user's Quest 2 tests): Walk in →
@@ -84,12 +87,12 @@ export class Dollhouse {
 		this.xr = xr;
 		this.name = 'dollhouse';
 		// The model on the plinth, in stage space: position, turn and zoom.
-		// (tilt: on top of the turn, in the stage's frame; level on the plinth, free while held or floating)
+		// (tilt: on top of the turn, in the stage's frame; always the identity now, the model stays level)
 		this.doll = { pos: new THREE.Vector3(0, PLINTH_REST, -xr.plinthDistance), yaw: 0, zoom: 1, tilt: new THREE.Quaternion() };
 		this.floating = null; // let go in the air: { wait (s with nothing near), going (the glide home) }
 		this.handAim = null; // a bare hand stepping inside: { c, spot }
 		this.dollLift = DOLLHOUSE_LIFT_START; // VR dollhouse lift, from the measured head height
-		this.grab = null; // grabbing the model: { c, p0, yaw0, aPos0, aYaw0 }
+		this.grab = null; // holding the model: { c, kind, p0, q0inv, turn, pos0, yaw0, pos, yaw }
 		this.markers = buildMarkers(); // one "stand here" marker per controller
 		// The room's name above each marker: in the world, so it stays readable at any zoom.
 		this.labels = this.markers.map(() => new Label());
@@ -259,7 +262,13 @@ export class Dollhouse {
 		xr.lighting?.fit(); // the sun follows the model; shadows re-render
 	}
 
-	/** Moves the room, plinth and model in front of where the user now stands and looks. */
+	/**
+	 * Moves the room, plinth and doors in front of where the user now stands
+	 * and looks, the model on the plinth, level. It keeps the model's zoom
+	 * and its turn on the plinth, so you find the home as you left it. Every
+	 * arrival at the scale model does this, behind the fade (the first entry,
+	 * Back from inside, the Meta button's re-centre).
+	 */
 	recentre(headMatrix = this.xr.camera.matrixWorld) {
 		const xr = this.xr;
 		const head = new THREE.Vector3().setFromMatrixPosition(headMatrix);
@@ -267,7 +276,11 @@ export class Dollhouse {
 		xr.stage.position.set(head.x, 0, head.z);
 		xr.stage.rotation.set(0, yaw, 0);
 		xr.stage.updateMatrixWorld(true);
+		const { yaw: turn, zoom } = this.doll;
+		this.grab = null;
 		this.reset();
+		this.doll.yaw = turn;
+		this.doll.zoom = zoom;
 		this.apply();
 	}
 
@@ -391,9 +404,13 @@ export class Dollhouse {
 		return out.copy(xr.model.bounds).applyMatrix4(xr.centerer.matrixWorld);
 	}
 
-	/** Where a hand holds (world): a bare hand's palm, a controller's grip. Null when not tracked. */
+	/** Where a hand holds (world): a bare hand's palm centre (between the wrist and the middle knuckle), a controller's grip. Null when not tracked. */
 	holdPoint(c, out = new THREE.Vector3()) {
-		if (c.isHand) return this.xr.input.joint(c, 'middle-finger-phalanx-proximal', out);
+		if (c.isHand) {
+			const input = this.xr.input, knuckle = input.joint(c, 'middle-finger-phalanx-proximal', out);
+			const wrist = knuckle && input.joint(c, 'wrist', this._wrist ??= new THREE.Vector3());
+			return wrist ? knuckle.add(wrist).multiplyScalar(0.5) : null;
+		}
 		c.grip.updateMatrixWorld(true);
 		return out.setFromMatrixPosition(c.grip.matrixWorld);
 	}
@@ -414,36 +431,45 @@ export class Dollhouse {
 		this.stopFloating();
 		this.cancelHandAim();
 		xr.anchor.updateMatrixWorld(true);
-		this.grab = { c, kind: c.isHand ? 'hand' : 'controller', p0: p, q0inv: q.clone().invert(),
-			aPos0: xr.anchor.position.clone(), aQ0: xr.anchor.quaternion.clone(), pos: xr.anchor.position.clone(), q: xr.anchor.quaternion.clone() };
+		const hand = c.isHand;
+		this.grab = { c, kind: hand ? 'hand' : 'controller', p0: p, q0inv: q.clone().invert(), turn: 0,
+			pos0: xr.stage.worldToLocal(xr.anchor.position.clone()), yaw0: this.doll.yaw,
+			pos: this.doll.pos.clone(), yaw: this.doll.yaw };
 		xr.sound.play('grab');
 		if (!c.isHand) xr.haptics.play(c, 'click');
 		xr.lessons?.note('held');
 	}
 
-	/** The held model follows the hand fully (position and turn), smoothed, never into the plinth or the floor. */
+	/**
+	 * The held model follows the hand, level: it moves with the hold point
+	 * and turns only with the hand's turn about the vertical (a bare hand's
+	 * turns under 3° are ignored), smoothed, never into the plinth or the floor.
+	 */
 	updateGrab(dt) {
 		const xr = this.xr, g = this.grab, p = this.holdPoint(g.c), q = this.holdTurn(g.c);
 		if (!p || !q) return; // (tracking lost for a moment: the model stays where it is)
-		const dq = q.multiply(g.q0inv); // the hand's turn since it took hold
-		const pos = g.aPos0.clone().sub(g.p0).applyQuaternion(dq).add(p);
-		const rot = dq.multiply(g.aQ0);
-		const k = 1 - Math.exp(-dt / GRAB_SMOOTH);
+		// The hand's turn about the vertical since it took hold (the twist of its turn since then).
+		const dq = q.multiply(g.q0inv);
+		const raw = 2 * Math.atan2(dq.y, dq.w);
+		// A bare hand: the turn trails the hand's by up to 3° (a dead zone, so tremor never turns it).
+		if (g.kind === 'hand') {
+			const d = THREE.MathUtils.euclideanModulo(raw - g.turn + Math.PI, 2 * Math.PI) - Math.PI;
+			if (Math.abs(d) > HAND_TURN_DEAD) g.turn += d - Math.sign(d) * HAND_TURN_DEAD;
+		} else {
+			g.turn = raw;
+		}
+		// Where the model goes, in stage space: its offset from the hold point, turned with the hand.
+		const st = xr.stage, p0 = st.worldToLocal(g.p0.clone()), now = st.worldToLocal(p.clone());
+		const pos = g.pos0.clone().sub(p0).applyAxisAngle(UP, g.turn).add(now);
+		const k = 1 - Math.exp(-dt / (g.kind === 'hand' ? GRAB_SMOOTH_HAND : GRAB_SMOOTH));
 		g.pos.lerp(pos, k);
-		g.q.slerp(rot, k);
-		this.setPose(g.pos, g.q);
-		this.keepAbove();
-	}
-
-	/** Sets the model's place from a world position and turn: doll.pos, and the turn split into yaw and tilt. */
-	setPose(pos, q) {
-		const xr = this.xr;
-		this.doll.pos.copy(xr.stage.worldToLocal(pos.clone()));
-		const yaw = 2 * Math.atan2(q.y, q.w); // (the turn about the vertical)
-		const twist = new THREE.Quaternion().setFromAxisAngle(UP, yaw);
-		this.doll.tilt.copy(q).multiply(twist.invert()).normalize();
-		this.doll.yaw = yaw - xr.stage.rotation.y;
+		g.yaw += (g.yaw0 + g.turn - g.yaw) * k;
+		// (doll.pos is the anchor's place: the model's offset in it stays, so the anchor moves and turns as above)
+		this.doll.pos.copy(g.pos);
+		this.doll.yaw = g.yaw;
+		this.doll.tilt.identity();
 		this.apply();
+		this.keepAbove();
 	}
 
 	/** Never into the plinth or the floor: the model's lowest point stays 4 mm above them. */
@@ -467,8 +493,7 @@ export class Dollhouse {
 		this.grab = null;
 		if (!g) return;
 		const { box, over } = this.keepAbove();
-		const tilt = THREE.MathUtils.radToDeg(2 * Math.acos(Math.min(1, Math.abs(this.doll.tilt.w))));
-		if (over && box.min.y - PLINTH_HEIGHT < DROP_NEAR && tilt < DROP_TILT) this.settleDown(0.35);
+		if (over && box.min.y - PLINTH_HEIGHT < DROP_NEAR) this.settleDown(0.35);
 		else this.floating = { wait: 0, going: null };
 	}
 

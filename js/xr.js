@@ -364,6 +364,9 @@ export class XRExperience {
 			if (f.t >= OUT) {
 				f.done = true; f.t = 0;
 				f.go();
+				// Every arrival at the scale model puts the plinth in front of you, the model
+				// level on it, here behind the fade (you may have turned and walked inside).
+				if (this.mode === 'dollhouse') this.recentreHere();
 				this.showArrival(`Scale model 1:${Math.round(1 / (this.baseScale * doll.doll.zoom))}`);
 			}
 		} else {
@@ -372,6 +375,14 @@ export class XRExperience {
 			if (this.mode === 'dollhouse') { doll.doll.zoom = f.zoom * (1 + 0.6 * (1 - ease.out(g))); doll.apply(); }
 			if (f.t >= GROW) { doll.doll.zoom = f.zoom; if (this.mode === 'dollhouse') doll.apply(); cover(0); this.layerFx = null; }
 		}
+	}
+
+	/** The room, plinth and doors in front of where the head is now (behind a fade), the model level on the plinth. */
+	recentreHere() {
+		const head = this.viewerMatrix() ?? this.camera.matrix.clone();
+		this.rig.updateMatrixWorld(true); // (the rig was just reset by the mode's enter(): the head's world place is fresh again)
+		this.modes.dollhouse.recentre(head.premultiply(this.rig.matrix));
+		if (this.lessons.place === 'scale') this.lessons.place3d(); // (a lesson card in front of you too)
 	}
 
 	/** The arrival title: the layer's name, 1.5 m in front of you for 1.5 s, then it fades. */
@@ -405,7 +416,7 @@ export class XRExperience {
 	/** The head pose for this frame (rig space), straight from WebXR. */
 	viewerMatrix() {
 		const frame = this.renderer.xr.getFrame?.();
-		const space = this.renderer.xr.getReferenceSpace();
+		const space = this.renderer.xr.getReferenceSpace?.();
 		const pose = frame && space ? frame.getViewerPose(space) : null;
 		return pose ? new THREE.Matrix4().fromArray(pose.transform.matrix) : null;
 	}

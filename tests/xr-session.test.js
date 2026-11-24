@@ -204,6 +204,26 @@ test('going back to the dollhouse while a teleport fades drops the teleport', as
 	assert.ok(hands.right);
 });
 
+test('back from inside: the plinth in front of where you now stand and look, the model level on it, its zoom and turn kept', async () => {
+	const { x, frame, go } = await setup();
+	const d = x.modes.dollhouse;
+	d.doll.zoom = 1.5; d.doll.yaw = 0.7; d.apply();
+	go('in');
+	// Inside, you walked 1 m to the side and turned round to face behind you.
+	x.camera.position.set(1, 1.6, 0.5);
+	x.camera.rotation.set(0, Math.PI * 0.9, 0);
+	x.camera.updateMatrix();
+	for (let i = 0; i < 5; i++) frame();
+	go('back');
+	assert.equal(x.mode, 'dollhouse');
+	const st = x.stage;
+	assert.ok(Math.abs(st.position.x - 1) < 1e-6 && Math.abs(st.position.z - 0.5) < 1e-6, 'the room stands where you stand');
+	assert.ok(Math.abs(st.rotation.y - Math.PI * 0.9) < 1e-6, 'and faces where you look');
+	assert.ok(d.level() && Math.abs(d.doll.pos.z + x.plinthDistance) < 1e-6 && Math.abs(d.doll.pos.x) < 1e-6, 'the model level, on the plinth');
+	assert.ok(Math.abs(d.doll.zoom - 1.5) < 1e-6 && Math.abs(d.doll.yaw - 0.7) < 1e-6, 'its zoom and turn kept');
+	x.camera.position.set(0, 0, 0); x.camera.rotation.set(0, 0, 0); x.camera.updateMatrix();
+});
+
 test('a held tool owns its hand\'s trigger, grip and A; the other hand and the menu keep theirs', async () => {
 	const { x, press, frame, hands } = await setup();
 	const got = [];
@@ -296,7 +316,7 @@ test('the wrist menu: Help opens beside it, and the menu stays', async () => {
 	assert.equal(x.ui.help, null, 'closing the menu takes Help with it');
 });
 
-test('holding the model: it follows the grip fully (tilt too); let go in the air it floats, then goes home by itself', async () => {
+test('holding the model: it follows the grip, level (turned only about the vertical); let go in the air it floats, then goes home by itself', async () => {
 	const { x, press, frame, hands } = await setup();
 	const d = x.modes.dollhouse;
 	const home = new THREE.Vector3(0, d.doll.pos.y, -x.plinthDistance); // (the middle of the plinth)
@@ -305,13 +325,15 @@ test('holding the model: it follows the grip fully (tilt too); let go in the air
 	frame();
 	press('right', 'grip'); frame();
 	assert.ok(d.grab && d.grab.kind === 'controller', 'a grip held anywhere holds it');
-	// Lift it 40 cm and tilt it 40° (the hand turns): the model follows, smoothed.
+	// Lift it 40 cm, tilt the hand 40° and turn it 30°: the model follows, smoothed, level, turned 30°.
+	const yaw0 = d.doll.yaw;
 	grip.position.y += 0.4;
-	grip.rotation.x = THREE.MathUtils.degToRad(40);
+	grip.rotation.set(THREE.MathUtils.degToRad(40), THREE.MathUtils.degToRad(30), 0, 'YXZ');
 	for (let i = 0; i < 60; i++) frame();
 	assert.ok(d.doll.pos.y > home.y + 0.3, 'lifted');
-	assert.ok(!d.level(), 'tilted');
-	assert.equal(d.markers.filter((m) => m.visible).length, 0, 'a tilted model offers no landing');
+	assert.ok(d.level(), 'never tilted');
+	assert.ok(Math.abs(THREE.MathUtils.radToDeg(d.doll.yaw - yaw0) - 30) < 1, 'turned with the hand about the vertical');
+	grip.rotation.set(0, 0, 0);
 	press('right', 'grip', false); frame();
 	assert.ok(!d.grab && d.floating, 'let go in the air: it floats');
 	// A controller near it (within 30 cm) keeps it waiting.

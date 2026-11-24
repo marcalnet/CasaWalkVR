@@ -827,13 +827,27 @@ check('B closes the board', (await state()).menu === null);
 	await shot('hands-guide');
 	await page.evaluate(() => window.__casawalk.xr.ui.closeAll()); await frames(4);
 	// Back to the scale model; hold it with a closed hand, let go in the air: it floats, then goes home.
-	if ((await state()).mode === 'walk') { await page.evaluate(() => window.__casawalk.xr.menuAction('back')); await settled(); await frames(6); }
+	if ((await state()).mode === 'walk') {
+		// (Turned away first: the plinth must still come back in front of you, the model level.)
+		const q0 = await page.evaluate(() => { const q = window.__device.quaternion; const was = [q.x, q.y, q.z, q.w]; q.set(0, Math.sin(1.2), 0, Math.cos(1.2)); return was; }); // (turned 137° to the left)
+		await frames(4);
+		await page.evaluate(() => window.__casawalk.xr.menuAction('back')); await settled(); await frames(6);
+		const back = await page.evaluate(() => {
+			const x = window.__casawalk.xr, d = x.modes.dollhouse, m = x.camera.matrixWorld.elements;
+			const headYaw = Math.atan2(m[8], m[10]); // (the head's forward is -Z)
+			const diff = Math.abs(((headYaw - x.stage.rotation.y + 3 * Math.PI) % (2 * Math.PI)) - Math.PI);
+			return { diff: +diff.toFixed(3), level: d.level(), onPlinth: Math.abs(d.doll.pos.z + x.plinthDistance) < 1e-3 };
+		});
+		check('back from inside, turned away: the plinth in front of where you look, the model level on it', back.diff < 0.05 && back.level && back.onPlinth, JSON.stringify(back));
+		await page.evaluate((q) => window.__device.quaternion.set(...q), q0); await frames(2); // (the head as it was)
+		await page.evaluate(() => window.__casawalk.xr.recentreHere()); await frames(4); // (the plinth in front of it again, for what follows)
+	}
 	await ready('right', false);
 	const grabAt = await page.evaluate(() => {
 		const x = window.__casawalk.xr, d = window.__device, b = x.modes.dollhouse.modelBox(), V = x.rig.position.constructor;
 		const top = b.getCenter(new V()).setY(b.max.y + 0.02);
 		x.rig.updateMatrixWorld(true);
-		const palm = x.input.joint(x.input.controllers.find((c) => c.handedness === 'right'), 'middle-finger-phalanx-proximal');
+		const palm = x.modes.dollhouse.holdPoint(x.input.controllers.find((c) => c.handedness === 'right')); // (the palm's centre)
 		const hp = d.hands.right.position;
 		const off = palm ? palm.clone().sub(x.rig.localToWorld(new V(hp.x, hp.y, hp.z))) : new V();
 		const to = x.rig.worldToLocal(top.clone().sub(off));
