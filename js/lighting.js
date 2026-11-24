@@ -21,11 +21,15 @@ const SHADOW_SIZE = 2048;
 // Colours and strengths per time of day. Morning is the default.
 // sky/ground: hemisphere light; top/horizon: sky dome gradient (null = the home's sky colour).
 const PRESETS = {
-	morning: { hourAngle: -45 * DEG, sun: 0xffe7c8, sunI: 1.7, sky: 0xe6eefa, ground: 0xb2a898, hemiI: 2.0, top: 0x8db6e4, horizon: 0xf7eee0 },
-	noon: { hourAngle: 0, sun: 0xffffff, sunI: 1.6, sky: 0xffffff, ground: 0xb4b0a8, hemiI: 2.2, top: null, horizon: 0xf5f7f9 },
-	sunset: { elevation: 5 * DEG, sun: 0xff9b52, sunI: 2.2, sky: 0xffe6d2, ground: 0x9c8c84, hemiI: 1.75, top: 0x6b7fb8, horizon: 0xffb98c },
-	// Night: a dim bluish moon and a soft warm fill, as if the lamps were on.
-	night: { hourAngle: 0, elevation: 35 * DEG, sun: 0xb0c2ff, sunI: 0.4, sky: 0xfff0dc, ground: 0x4a4440, hemiI: 1.05, top: 0x070d1c, horizon: 0x1c2944 },
+	// Calm and true to the file's colours (the Graphic Designer's values, 25 Nov 2026, after a beta
+	// tester found colours oversaturated: the old warm morning, orange sunset and dark shade were the
+	// cause). Near-white light; more and paler sky fill, so shade lifts and whites stay white.
+	morning: { hourAngle: -45 * DEG, sun: 0xfff9f2, sunI: 1.3, sky: 0xf3f5f8, ground: 0xd5d2cc, hemiI: 2.55, top: 0xa9c6e6, horizon: 0xf6f2ea },
+	noon: { hourAngle: 0, sun: 0xffffff, sunI: 1.25, sky: 0xffffff, ground: 0xd2cfc8, hemiI: 2.45, top: null, horizon: 0xf5f7f9 },
+	// Sunset: still evening (a low peach sun, a dimmer room, the lamps on), no longer orange.
+	sunset: { elevation: 5 * DEG, sun: 0xffe0c4, sunI: 1.5, sky: 0xf8efe6, ground: 0xc2b8ae, hemiI: 2.3, top: 0x8494c4, horizon: 0xf6cfae },
+	// Night: a dim, soft moon and a warm fill, as if the lamps were on.
+	night: { hourAngle: 0, elevation: 35 * DEG, sun: 0xc4d0f4, sunI: 0.35, sky: 0xfaf0e2, ground: 0x6a645e, hemiI: 1.15, top: 0x0a1222, horizon: 0x223150 },
 };
 
 /**
