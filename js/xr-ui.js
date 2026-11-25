@@ -29,17 +29,12 @@ import { BUILD } from './version.js';
 import { buildLabel } from './build-label.js';
 import { yawOf } from './xr-input.js';
 import { TOUCH, touchState, stepTouch, reset as resetTouch, ringSize } from './touch.js';
-import { KEY, BOARD } from './theme.js';
+import { KEY } from './theme.js';
+import { WING, placeWing, zoneOf } from './wings.js';
 import { guideSheet } from './guide.js';
-import { PLINTH_REST } from './xr-scene.js';
 import { WristMenu } from './wrist-menu.js';
 import { FIRST_TIME_CARDS } from './lessons.js';
 
-// The board within reach: 40 cm in front, 30 cm below the eyes, tilted back
-// 25° like a lectern; at the scale model 30° to the left.
-// (Closer and less to the side than the first draft: the user had to use the laser to reach it.)
-const BOARD_NEAR = 0.4, BOARD_DROP = 0.3, BOARD_TILT = THREE.MathUtils.degToRad(25), BOARD_SIDE = THREE.MathUtils.degToRad(30);
-const GUIDE_UNTIL = 5; // a session's first board opens on How to move until this many teleports (then View)
 // The note after a photo. Photos are kept in the app and saved from the page
 // after VR (a download in VR would end the session).
 const PHOTO_TEXT = {
@@ -63,19 +58,24 @@ export class XRUI {
 	/** xr: the XRExperience (rig, camera, input, menus, mode, model, stage, ...). */
 	constructor(xr) {
 		this.xr = xr;
-		this.menu = null; // the open settings board (a Panel), or null
-		this.tab = null; // the board's tab last shown (kept between the two layers' boards); null: none yet this session
-		this.teleports = 0; // this session's teleports (How to move stops being the first tab after GUIDE_UNTIL)
+		this.menu = null; // the open settings wing, on the right (a Panel), or null
+		this.guide = null; // the open How to move wing, on the left (a Panel), or null
+		this.tab = null; // the settings tab last shown (kept between the two layers' boards); null: none yet this session
+		this.opened = false; // Settings has opened this session (its first time, until a teleport, opens How to move with it)
+		this.pinchNotes = 0; // the wrong-hand notes shown this session (at most 3)
+		this.pinchNote = null;
+		this.teleports = 0; // this session's teleports
 		this.drag = null; // a slider being dragged: { c, id }
-		this.boardDrag = null; // a controller holding the board's handle: { c, offset }
 		this.wrist = new WristMenu(xr);
-		guideSheet.onLoad = () => this.menu?.draw(); // (the How to move pictures, once loaded)
+		guideSheet.onLoad = () => this.guide?.draw(); // (the How to move pictures, once loaded)
 		this.touches = []; // per input entry: its touch on the open board (js/touch.js)
 		this.buildWelcome();
 		this.buildPhotoFeedback();
 		this.buildHandsNote();
 		this.buildErrorNote();
-		xr.hideFromPhotos(this.welcome.mesh, this.photoNote.mesh, this.handsNote.mesh, this.errorNote.mesh);
+		this.pinchLabel = new Label({ height: 0.035 });
+		this.pinchLabel.mesh.visible = false;
+		xr.hideFromPhotos(this.pinchLabel.mesh, this.welcome.mesh, this.photoNote.mesh, this.handsNote.mesh, this.errorNote.mesh);
 	}
 
 	// -----------------------------------------------------------------------
@@ -117,7 +117,7 @@ export class XRUI {
 	placeWelcome() {
 		const xr = this.xr, card = this.welcome.mesh;
 		const size = xr.model ? xr.model.bounds.getSize(new THREE.Vector3()).multiplyScalar(xr.baseScale) : new THREE.Vector3(1, 0.4, 1);
-		const top = PLINTH_REST + size.y;
+		const top = xr.plinthH + 0.004 + size.y;
 		const h = card.geometry.parameters.height;
 		// As far away as the model, floating well above its back edge (not in front of the eyes).
 		card.position.set(0, top + 0.45 + h / 2, -xr.plinthDistance - (xr.plinthSize?.D ?? size.z) / 2);
@@ -156,6 +156,33 @@ export class XRUI {
 	}
 
 	hideError() { this.errorNote.mesh.visible = false; }
+
+	/**
+	 * A pinch from the hand that does not teleport right now: a quiet no and a
+	 * small note at that hand for 1.5 s, saying which hand to use ("Pinch with
+	 * your right hand to move"); only the first 3 times in a session, then silent.
+	 */
+	noteWrongHand(c, at) {
+		const xr = this.xr;
+		if (this.pinchNotes >= 3 || this.pinchNote?.visible) return;
+		this.pinchNotes++;
+		const label = this.pinchLabel;
+		label.set(`Pinch with your ${xr.teleportHand({ handedness: 'left' }) ? 'left' : 'right'} hand to move`); // (the hand that can: the main hand, or the other while it holds a tool)
+		label.mesh.position.copy(at).y += 0.12;
+		label.mesh.lookAt(xr.headWorld());
+		if (label.mesh.parent !== xr.scene) xr.scene.add(label.mesh);
+		label.mesh.visible = true;
+		this.pinchNote = { visible: true, t: 0 };
+		if (xr.soundLevel !== 'off') xr.sound.play('deny', 0.5);
+	}
+
+	/** Advances the wrong-hand note. */
+	runPinchNote(dt) {
+		const n = this.pinchNote;
+		if (!n) return;
+		n.t += dt;
+		if (n.t > 1.5) { n.visible = false; this.pinchNote = null; if (this.pinchLabel) this.pinchLabel.mesh.visible = false; }
+	}
 
 	/** Shows the hands note while only bare hands are reported (called every frame). */
 	showHandsNote() {
@@ -198,48 +225,86 @@ export class XRUI {
 	// The board
 	// -----------------------------------------------------------------------
 
-	/** Where the board opens: within reach, tilted back; 45° left at the scale model. */
-	placeNear(mesh, headMatrix = this.xr.camera.matrix) {
-		const xr = this.xr;
-		const head = new THREE.Vector3().setFromMatrixPosition(headMatrix);
-		const yaw = yawOf(headMatrix);
-		const towards = yaw + (xr.mode === 'dollhouse' ? BOARD_SIDE : 0); // (a positive angle turns left)
-		mesh.position.copy(head).add(new THREE.Vector3(-Math.sin(towards), 0, -Math.cos(towards)).multiplyScalar(BOARD_NEAR));
-		mesh.position.y -= BOARD_DROP;
+	/**
+	 * Puts a wing (a Panel) beside the model: 40° to its side, 15° below eye
+	 * level, 0.55 m from the eyes, leaned back 20°, and out of the way of the
+	 * model (js/wings.js: moves outward, then up, if it would cover it).
+	 * side: +1 the left wing, -1 the right.
+	 */
+	placeWing(panel, side, headMatrix = this.xr.camera.matrix) {
+		const xr = this.xr, mesh = panel.mesh, g = mesh.geometry.parameters;
+		const head = new THREE.Vector3().setFromMatrixPosition(headMatrix), yaw = yawOf(headMatrix);
+		let zone = null;
+		if (xr.mode === 'dollhouse' && xr.model) {
+			// The model's box in the rig's space (where the wings live), seen from the eyes.
+			const box = xr.modes.dollhouse.modelBox(), pts = [], rigBox = new THREE.Box3();
+			xr.rig.updateMatrixWorld(true);
+			for (const x of [box.min.x, box.max.x]) for (const y of [box.min.y, box.max.y]) for (const z of [box.min.z, box.max.z]) pts.push(xr.rig.worldToLocal(new THREE.Vector3(x, y, z)));
+			rigBox.setFromPoints(pts);
+			zone = zoneOf(rigBox, head, yaw);
+		}
+		const { az, el } = placeWing(side, g.width, g.height, zone);
+		const heading = yaw + az; // (a positive angle turns left)
+		mesh.position.set(-Math.sin(heading) * Math.cos(el), Math.sin(el), -Math.cos(heading) * Math.cos(el)).multiplyScalar(WING.dist).add(head);
 		xr.rig.updateMatrixWorld(true);
-		mesh.lookAt(xr.rig.localToWorld(head.clone().setY(mesh.position.y)));
-		mesh.rotateX(-BOARD_TILT);
+		mesh.lookAt(xr.rig.localToWorld(head.clone()));
+		mesh.rotateX(-WING.tilt);
 	}
 
 	/**
-	 * Opens this layer's settings board, on `tab` if given, else on the tab
-	 * last shown; a session's first opening starts on How to move until you
-	 * have teleported GUIDE_UNTIL times (then View).
+	 * Opens this layer's settings wing (the right one) on `tab` if given, else
+	 * the tab last shown (View at first). A session's first opening, until you
+	 * have teleported once, opens the How to move wing with it: seen once
+	 * without being looked for. Afterwards it opens from its own key.
 	 */
 	openMenu(headMatrix, tab = null) {
 		const xr = this.xr;
 		this.closeMenu();
 		const panel = xr.menus[xr.mode];
 		if (!panel) return;
-		this.placeNear(panel.mesh, headMatrix);
-		this.prepareGuide(panel);
-		panel.setTab(tab ?? this.tab ?? (this.teleports >= GUIDE_UNTIL ? 'view' : 'move'));
+		this.placeWing(panel, -1, headMatrix);
+		panel.setTab(tab ?? this.tab ?? 'view');
+		panel.lead.on = !!this.guide;
 		panel.draw();
 		panel.setHover(null);
 		panel.mesh.visible = true;
 		this.menu = panel;
 		this.feel(null, 'open');
+		if (!this.opened && this.teleports === 0 && !this.guide) this.openGuide(headMatrix);
+		this.opened = true;
 	}
 
-	/** Closes the board. */
+	/** Closes the settings wing. */
 	closeMenu() {
 		if (this.menu) { this.tab = this.menu.tab; this.menu.closeDropdown(); this.menu.mesh.visible = false; this.feel(null, 'close'); }
 		this.menu = null;
-		this.boardDrag = null;
 		this.drag = null;
 	}
 
-	/** The How to move tab (js/guide.js): for the input in hand, at this layer, and which build is running at its foot. */
+	/** Opens How to move, the left wing: the pictures for the input in hand, here, the replay keys, the build at its foot. */
+	openGuide(headMatrix) {
+		const xr = this.xr;
+		this.closeGuide();
+		const panel = xr.guides[xr.mode];
+		if (!panel) return;
+		this.placeWing(panel, 1, headMatrix);
+		this.prepareGuide(panel);
+		panel.draw();
+		panel.setHover(null);
+		panel.mesh.visible = true;
+		this.guide = panel;
+		if (this.menu?.lead) { this.menu.lead.on = true; this.menu.draw(); }
+		this.feel(null, 'open');
+	}
+
+	/** Closes the How to move wing. */
+	closeGuide() {
+		if (this.guide) { this.guide.mesh.visible = false; this.feel(null, 'close'); }
+		this.guide = null;
+		if (this.menu?.lead) { this.menu.lead.on = false; this.menu.draw(); }
+	}
+
+	/** The How to move wing (js/guide.js): for the input in hand, at this layer, and which build is running at its foot. */
 	prepareGuide(panel) {
 		const xr = this.xr, cell = panel.cells.get('guide');
 		if (!cell) return;
@@ -248,32 +313,27 @@ export class XRUI {
 		cell.foot = buildLabel(BUILD) + (xr.newerBuild > BUILD.number ? ' · Newer version: reload after VR' : '');
 	}
 
-	/** Counts this session's teleports: after GUIDE_UNTIL, a session's first board opens on View. */
+	/** Counts this session's teleports (after the first, Settings no longer opens How to move by itself). */
 	onTeleport() { this.teleports++; } // (walk mode's own count runs across sessions: this one is per session)
 
-	/** Closes everything: the board and the wrist menu (moving between layers). */
+	/** Closes everything: both wings and the wrist menu (moving between layers). */
 	closeAll() {
 		this.closeMenu();
+		this.closeGuide();
 		this.wrist.close();
 	}
 
-	/** True while the board or the wrist menu is open. */
-	get anyOpen() { return !!this.menu || this.wrist.open; }
+	/** The wings open now. */
+	openPanels() { return this.guide ? (this.menu ? [this.menu, this.guide] : [this.guide]) : this.menu ? [this.menu] : []; }
 
-	toggleBoard() { this.menu ? this.closeMenu() : this.openMenu(); }
+	/** True while a wing or the wrist menu is open. */
+	get anyOpen() { return !!this.menu || !!this.guide || this.wrist.open; }
 
-	/**
-	 * Help: the board on How to move (and, at the scale model, the tools'
-	 * introduction replays: the user liked it). Help again, with the board on
-	 * that tab, closes it.
-	 */
-	toggleHelp() {
-		const xr = this.xr;
-		if (this.menu?.tab === 'move') { this.closeMenu(); return; }
-		if (xr.mode === 'dollhouse' && xr.toolsIntro?.start({ again: true })) { xr.lessons.stop(); xr.introAgain = true; }
-		else xr.lessons?.start(xr.mode === 'walk' ? 'walk' : 'scale', { again: true }); // (the lessons are off for now: js/lessons.js)
-		this.openMenu(undefined, 'move');
-	}
+	/** Settings on the wrist: opens the right wing; with any wing open, closes both. */
+	toggleBoard() { if (this.menu || this.guide) { this.closeMenu(); this.closeGuide(); } else this.openMenu(); }
+
+	/** How to move: opens the left wing, or closes it. */
+	toggleHelp() { if (this.guide) this.closeGuide(); else this.openGuide(); }
 
 	/** A sound (if sound is on) and, on a controller, a vibration. */
 	feel(c, sound, haptic = null, gain = 1) {
@@ -291,82 +351,57 @@ export class XRUI {
 	point(dt = this.xr.frameDt ?? 1 / 72) {
 		const xr = this.xr, input = xr.input, raycaster = xr.raycaster;
 		let hover = null;
+		this.runPinchNote(dt);
 		let { action } = this.wrist.update(dt);
 		if (this.wrist.open) { this.setWelcome(false); this.xr.lessons?.note('wrist'); } // found it: the welcome card has done its job
 		const active = input.active();
 		if (this.drag && (!this.menu || !this.drag.c.source || !this.drag.c.state.trigger)) this.drag = null; // let go
-		this.moveBoard();
+		const panels = this.openPanels();
 		for (const c of active) {
 			if (c.claim.trigger) continue;
 			input.setRaycaster(c, raycaster);
-			const menuHit = this.menu ? raycaster.intersectObject(this.menu.mesh, false)[0] : null;
+			// The nearest wing the laser hits.
+			let menuHit = null, panel = null;
+			for (const p of panels) {
+				const h = raycaster.intersectObject(p.mesh, false)[0];
+				if (h && (!menuHit || h.distance < menuHit.distance)) { menuHit = h; panel = p; }
+			}
 			if (this.drag?.c === c) {
 				// Dragging a slider: follow the laser along the track while the trigger is held.
 				c.claim.trigger = 'ui';
-				input.showHit(c, menuHit?.distance ?? null);
-				const value = menuHit ? this.menu.sliderValue(this.drag.id, menuHit.uv) : null;
+				const hit = menuHit && panel === this.menu ? menuHit : null;
+				input.showHit(c, hit?.distance ?? null);
+				const value = hit ? this.menu.sliderValue(this.drag.id, hit.uv) : null;
 				if (value !== null) action = { id: this.drag.id, value };
-				hover = { id: this.drag.id, slider: true };
+				hover = { id: this.drag.id, slider: true, panel: this.menu };
 				continue;
 			}
 			if (menuHit) {
 				c.claim.trigger = 'ui';
 				input.showHit(c, menuHit.distance);
-				const target = this.menu.hitTest(menuHit.uv);
-				hover ||= target;
+				const target = panel.hitTest(menuHit.uv);
+				if (target && !hover) hover = { ...target, panel };
 				if (c.state.down.trigger) {
 					if (target) {
 						// (Opening or closing a dropdown's list is handled by the panel itself.)
-						action = this.menu.press(target) ?? action;
+						action = panel.press(target) ?? action;
 						if (action?.slider) this.drag = { c, id: action.id };
 						this.feel(c, 'press', 'click');
-					} else if (this.menu.disabledAt(menuHit.uv)) this.feel(c, 'deny', 'deny');
+					} else if (panel.disabledAt(menuHit.uv)) this.feel(c, 'deny', 'deny');
 				}
-			} else if ((this.menu || (this.wrist.open && this.wrist.pinned)) && c.state.down.trigger) {
-				// A pull elsewhere while a menu is open does nothing (the board never
-				// closes on it); a pinned wrist menu closes.
+			} else if ((panels.length || (this.wrist.open && this.wrist.pinned)) && c.state.down.trigger) {
+				// A pull elsewhere while a wing is open does nothing (the wings never
+				// close on it); a pinned wrist menu closes.
 				c.claim.trigger = 'ui';
-				if (!this.menu) this.wrist.close(true);
+				if (!panels.length) this.wrist.close(true);
 			}
 		}
 		// Touch keys: fingertips and controller tips press the open board.
 		const touched = this.touchMenu();
 		hover ||= touched.hover;
 		action ||= touched.action;
-		this.menu?.setHover(hover);
+		for (const p of panels) p.setHover(hover?.panel === p ? hover : null);
 		return { action };
-	}
-
-	/** A controller's grip on the board's handle (its tip near it, or its laser on it) carries the board. */
-	moveBoard() {
-		const xr = this.xr, input = xr.input, panel = this.menu;
-		if (!panel) { this.boardDrag = null; return; }
-		const grip = (c) => { c.grip.updateMatrixWorld(true); return c.grip.matrixWorld; };
-		if (this.boardDrag) {
-			const { c, offset } = this.boardDrag;
-			if (!c.source || !c.isController || !c.state.grip) { this.boardDrag = null; return; }
-			c.claim.grip = 'ui';
-			const world = grip(c).clone().multiply(offset);
-			xr.rig.updateMatrixWorld(true);
-			const local = xr.rig.matrixWorld.clone().invert().multiply(world);
-			local.decompose(panel.mesh.position, panel.mesh.quaternion, new THREE.Vector3());
-			return;
-		}
-		const h = panel.handle, [hw, hh] = BOARD.handle;
-		for (const c of input.active()) {
-			if (!c.state.down.grip || c.claim.grip) continue;
-			h.updateMatrixWorld(true);
-			const L = h.worldToLocal(c.touch.tip.clone());
-			const near = Math.abs(L.x) < hw / 2 + 0.03 && Math.abs(L.y) < hh / 2 + 0.04 && Math.abs(L.z) < 0.06;
-			input.setRaycaster(c, xr.raycaster);
-			const pointed = xr.raycaster.intersectObject(h, false).length > 0;
-			if (!near && !pointed) continue;
-			c.claim.grip = 'ui';
-			panel.mesh.updateMatrixWorld(true);
-			this.boardDrag = { c, offset: grip(c).clone().invert().multiply(panel.mesh.matrixWorld) };
-			this.feel(c, 'grab', 'click');
-			return;
-		}
 	}
 
 	/**
@@ -374,56 +409,65 @@ export class XRUI {
 	 * contact, click, release (js/touch.js). Returns { hover, action }.
 	 */
 	touchMenu() {
-		const xr = this.xr, panel = this.menu, now = performance.now() / 1000;
+		const xr = this.xr, now = performance.now() / 1000;
 		let hover = null, action = null;
+		const panels = this.openPanels();
+		// (A wing that closed: its touches forget what was in progress.)
+		for (const row of this.touches) {
+			if (!row) continue;
+			for (const [panel, st] of row) if (!panels.includes(panel)) { resetTouch(st.s); st.ring.visible = false; st.last = null; st.slider = null; }
+		}
 		for (const c of xr.input.controllers) {
-			const st = this.touches[c.index] ||= this.newTouch();
-			const busy = c.claim.trigger === 'tool' || c.claim.trigger === 'ui' && this.drag?.c === c;
-			if (!panel || !c.touch.tracked || busy || st.panel !== panel || st.kind !== c.touch.kind) {
-				// Gone, switched, or another menu: nothing in progress completes.
-				resetTouch(st.s);
-				st.panel = panel; st.kind = c.touch.kind; st.last = null; st.slider = null;
-				st.ring.visible = false;
-				if (!panel || !c.touch.tracked || busy) continue;
+			const row = this.touches[c.index] ||= new Map();
+			for (const panel of panels) {
+				const st = row.get(panel) ?? row.set(panel, this.newTouch()).get(panel);
+				const busy = c.claim.trigger === 'tool' || c.claim.trigger === 'ui' && this.drag?.c === c;
+				if (!c.touch.tracked || busy || st.kind !== c.touch.kind) {
+					// Gone, or switched: nothing in progress completes.
+					resetTouch(st.s);
+					st.kind = c.touch.kind; st.last = null; st.slider = null;
+					st.ring.visible = false;
+					if (!c.touch.tracked || busy) continue;
+				}
+				const geo = panel.mesh.geometry.parameters;
+				panel.mesh.updateMatrixWorld(true);
+				const L = panel.mesh.worldToLocal(st.local.copy(c.touch.tip));
+				const inside = Math.abs(L.x) <= geo.width / 2 + TOUCH.MARGIN && Math.abs(L.y) <= geo.height / 2 + TOUCH.MARGIN;
+				const depth = L.z - TOUCH.RADIUS;
+				const lateral = st.last ? Math.hypot(L.x - st.last.x, L.y - st.last.y) : 0;
+				const dt = st.t ? Math.min(now - st.t, 0.1) : 1 / 72;
+				st.t = now;
+				st.last = (st.last ?? new THREE.Vector2()).set(L.x, L.y);
+				const uv = { x: L.x / geo.width + 0.5, y: L.y / geo.height + 0.5 };
+				const target = inside ? panel.hitTest(uv) : null;
+				for (const e of stepTouch(st.s, { depth, inside, lateral, dt })) {
+					if (e === 'contact') this.feel(c, 'tick', 'tick', 0.5);
+					else if (e === 'click') {
+						const key = target ? `${target.id}|${target.value ?? ''}` : null;
+						if (now - st.lastClick < TOUCH.PANEL_GAP || (key && key === st.lastKey && now - st.lastClick < TOUCH.KEY_GAP)) continue;
+						if (target) {
+							st.lastClick = now; st.lastKey = key;
+							action = panel.press(target) ?? action;
+							if (action?.slider) st.slider = action.id;
+							this.feel(c, 'press', 'click');
+						} else if (panel.disabledAt(uv)) this.feel(c, 'deny', 'deny');
+					} else if (e === 'release') { st.slider = null; this.feel(c, 'release', null, 0.6); }
+				}
+				const live = st.s.phase === 'hover' || st.s.phase === 'contact' || st.s.phase === 'pressed';
+				if (st.s.phase === 'pressed' && st.slider) {
+					const value = panel.sliderValue(st.slider, uv);
+					if (value !== null) action = { id: st.slider, value };
+					hover = { id: st.slider, slider: true, panel };
+				} else if (live && target) hover ||= { ...target, panel };
+				// The ring under the fingertip shows where it will land.
+				if (live) {
+					if (st.ring.parent !== panel.mesh) panel.mesh.add(st.ring);
+					st.ring.position.set(L.x, L.y, 0.002);
+					st.ring.scale.setScalar(ringSize(Math.max(depth, 0)));
+				}
+				st.ring.visible = live;
+				if (live && xr.handViews?.[c.index]) xr.handViews[c.index].near = true; // (the wrist menu set it first this frame)
 			}
-			const geo = panel.mesh.geometry.parameters;
-			panel.mesh.updateMatrixWorld(true);
-			const L = panel.mesh.worldToLocal(st.local.copy(c.touch.tip));
-			const inside = Math.abs(L.x) <= geo.width / 2 + TOUCH.MARGIN && Math.abs(L.y) <= geo.height / 2 + TOUCH.MARGIN;
-			const depth = L.z - TOUCH.RADIUS;
-			const lateral = st.last ? Math.hypot(L.x - st.last.x, L.y - st.last.y) : 0;
-			const dt = st.t ? Math.min(now - st.t, 0.1) : 1 / 72;
-			st.t = now;
-			st.last = (st.last ?? new THREE.Vector2()).set(L.x, L.y);
-			const uv = { x: L.x / geo.width + 0.5, y: L.y / geo.height + 0.5 };
-			const target = inside ? panel.hitTest(uv) : null;
-			for (const e of stepTouch(st.s, { depth, inside, lateral, dt })) {
-				if (e === 'contact') this.feel(c, 'tick', 'tick', 0.5);
-				else if (e === 'click') {
-					const key = target ? `${target.id}|${target.value ?? ''}` : null;
-					if (now - st.lastClick < TOUCH.PANEL_GAP || (key && key === st.lastKey && now - st.lastClick < TOUCH.KEY_GAP)) continue;
-					if (target) {
-						st.lastClick = now; st.lastKey = key;
-						action = panel.press(target) ?? action;
-						if (action?.slider) st.slider = action.id;
-						this.feel(c, 'press', 'click');
-					} else if (panel.disabledAt(uv)) this.feel(c, 'deny', 'deny');
-				} else if (e === 'release') { st.slider = null; this.feel(c, 'release', null, 0.6); }
-			}
-			const live = st.s.phase === 'hover' || st.s.phase === 'contact' || st.s.phase === 'pressed';
-			if (st.s.phase === 'pressed' && st.slider) {
-				const value = panel.sliderValue(st.slider, uv);
-				if (value !== null) action = { id: st.slider, value };
-				hover = { id: st.slider, slider: true };
-			} else if (live) hover ||= target;
-			// The ring under the fingertip shows where it will land.
-			if (live) {
-				if (st.ring.parent !== panel.mesh) panel.mesh.add(st.ring);
-				st.ring.position.set(L.x, L.y, 0.002);
-				st.ring.scale.setScalar(ringSize(Math.max(depth, 0)));
-			}
-			st.ring.visible = live;
-			if (live && xr.handViews?.[c.index]) xr.handViews[c.index].near = true; // (the wrist menu set it first this frame)
 		}
 		return { hover, action };
 	}
@@ -434,7 +478,7 @@ export class XRUI {
 		ring.visible = false;
 		ring.name = 'touch-ring';
 		this.xr.hideFromPhotos(ring);
-		return { s: touchState(), ring, panel: null, kind: null, last: null, local: new THREE.Vector3(), t: 0, slider: null, lastClick: -1, lastKey: null };
+		return { s: touchState(), ring, kind: null, last: null, local: new THREE.Vector3(), t: 0, slider: null, lastClick: -1, lastKey: null };
 	}
 
 	/**
@@ -447,7 +491,7 @@ export class XRUI {
 		const wearer = this.wrist.wearer;
 		for (const c of this.xr.input.active()) {
 			if (c.state.down.a && !c.claim.a && c === wearer) { this.wrist.toggle({ pinned: true }); if (this.wrist.open) { this.setWelcome(false); this.xr.lessons?.note('wrist'); } return true; }
-			if (c.state.down.b && !c.claim.b && this.anyOpen) { this.closeMenu(); this.wrist.close(true); return true; }
+			if (c.state.down.b && !c.claim.b && this.anyOpen) { this.closeMenu(); this.closeGuide(); this.wrist.close(true); return true; }
 		}
 		return false;
 	}
@@ -456,6 +500,7 @@ export class XRUI {
 	reset() {
 		this.drag = null;
 		this.closeMenu();
+		this.closeGuide();
 		this.setWelcome(false);
 		this.photoFx = null;
 		this.xr.veil.set('flash', 0);
@@ -463,9 +508,13 @@ export class XRUI {
 		this.handsNote.mesh.visible = false;
 		this.errorNote.mesh.visible = false;
 		this.wrist.reset();
-		this.tab = null; // (a new session's first board opens on How to move again)
+		this.tab = null;
+		this.opened = false; // (a new session's first Settings opens How to move with it again)
 		this.teleports = 0;
-		for (const st of this.touches) { if (!st) continue; resetTouch(st.s); st.ring.visible = false; st.panel = null; st.slider = null; }
+		this.pinchNotes = 0;
+		this.pinchNote = null;
+		if (this.pinchLabel) this.pinchLabel.mesh.visible = false;
+		for (const row of this.touches) for (const st of row?.values() ?? []) { resetTouch(st.s); st.ring.visible = false; st.slider = null; }
 	}
 }
 

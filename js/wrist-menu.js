@@ -3,16 +3,15 @@
 // One orb on one wrist: the right one, or the left when the tool fan is set
 // to the right hand (the fan takes the other hand, milestone C). Touching the
 // orb with the other index (or the other controller's tip), pressing A (X
-// when swapped) or pointing at it and pulling the trigger springs out four
+// when swapped) or pointing at it and pulling the trigger springs out three
 // keys in an arc (the design of 24 Nov, item 5), floating 7 cm in front of the
 // wrist towards the eyes (so the hand is behind them whichever way it turns),
 // laid out as you see them (view space: right stays on your right whichever
 // wrist wears it and however it is turned):
 //
-//        ← Back  Settings
-//       (orb)          Help
-//                          Walk in →     (inside: a flat "Inside" plate
-//                                         with the room's name)
+//        ← Back  Settings (and help)
+//       (orb)          Walk in →     (inside: a flat "Inside" plate with the
+//                                     room's name in its place)
 //
 // The arc rises from just above the orb round to its right, like a quarter
 // rainbow, so the orb's left side and underside stay clear for the other
@@ -23,8 +22,8 @@
 // it opens it stays where it is in the world (a menu spawned from the wrist
 // is static, HB §3), so the wearing hand can move freely. It closes after any
 // key, when the orb is touched again, with B/Y, when the wrist is out of view
-// for 0.4 s (a bare hand), or after 8 s with no finger within 15 cm; opened by
-// a controller it stays until a key, B/Y or A again, or the 8 s.
+// for 0.4 s (a bare hand), or after 12 s with no finger within 15 cm of the nearest key and no laser on
+// one; opened by a controller it stays until a key, B/Y or A again, or the 12 s.
 
 import * as THREE from 'three';
 import { WRIST_ORB } from './xr-input.js';
@@ -37,19 +36,18 @@ const ORB_SCALE = 1; // the orb at full size (about 5 cm): easy to notice (the u
 const ORB_TIP_TOUCH = 0.035, ORB_TIP_RELEASE = 0.08; // a fingertip or controller tip touching the orb
 const ORB_GRIP_TOUCH = 0.08, ORB_GRIP_RELEASE = 0.14; // or a whole controller reaching into it
 const TOWARDS_EYES = 0.07; // the cross floats this far from the wrist towards the eyes: the hand is always behind it, never over the keys
-const IDLE = 8, IDLE_NEAR = 0.15; // seconds with no finger within this of the arc (m) before it closes: a menu you forgot doesn't hang there
+const IDLE = 12, IDLE_NEAR = 0.15; // seconds with no finger within this of the nearest key (m), and no laser on a key, before it closes: a menu you forgot doesn't hang there
 const OUT_OF_VIEW = 0.4; // seconds with the wrist out of view before it closes
 const VIEW_ANGLE = THREE.MathUtils.degToRad(50); // "in view": within this of where the head looks
-const ORDER = ['left', 'up', 'down', 'right']; // along the arc, ← Back first: the keys spring out in that order
+const ORDER = ['left', 'up', 'right']; // along the arc, ← Back first: the keys spring out in that order
 
-/** What each slot holds at each layer. */
+/** What each slot holds at each layer (the same three places at both layers). Help is in Settings, "How to move". */
 export function keysFor(mode, roomName = '') {
 	return {
-		up: { id: 'settings', look: 'plain', icon: 'settings', label: 'Settings' },
+		up: { id: 'settings', look: 'plain', icon: 'settings', label: 'Settings', caption: 'and help' },
 		right: mode === 'walk'
-			? { id: null, look: 'flat', label: 'Inside', caption: roomName } // as deep as it goes: you are here
+			? { id: null, look: 'flat', label: 'Inside', caption: roomName } // as deep as it goes: you are here (the keys stay where the hand learned them)
 			: { id: 'in', look: 'filled', icon: 'in', label: 'Walk in →', caption: 'Inside the home' },
-		down: { id: 'help', look: 'plain', icon: 'help', label: 'Help' },
 		left: { id: 'back', look: 'outline', icon: 'back', label: '← Back', caption: mode === 'walk' ? 'Scale model' : 'Leave VR' },
 	};
 }
@@ -71,8 +69,8 @@ export class WristMenu {
 		this.cross.visible = false;
 		this.pad = new KeyPad(xr, 'wrist-key');
 		this.keys = {};
-		for (const slot of ORDER) { this.keys[slot] = this.pad.add(slot); this.cross.add(this.keys[slot].group); }
-		this.keysHot = false; // a fingertip is over a key: the orb ignores touches (it sits between the keys)
+		for (const slot of ORDER) { this.keys[slot] = this.pad.add(slot, slot === 'up' ? WRIST.settingsW : WRIST.key); this.cross.add(this.keys[slot].group); }
+		this.keysHot = false; this.laserNear = false; this.orbYield = false; // a fingertip is over a key: the orb ignores touches (it sits between the keys)
 		xr.scene.add(this.cross);
 		xr.hideFromPhotos(this.cross);
 		this._p = new THREE.Vector3(); this._q = new THREE.Vector3(); this._m = new THREE.Matrix4(); this._quat = new THREE.Quaternion();
@@ -92,7 +90,10 @@ export class WristMenu {
 	/** The keys' content for this layer. */
 	redraw() {
 		const spec = keysFor(this.xr.mode, this.roomName ?? '');
-		for (const slot of ORDER) this.pad.setSpec(slot, spec[slot]);
+		for (const slot of ORDER) {
+			this.pad.setSpec(slot, spec[slot]);
+			this.keys[slot].group.visible = !!spec[slot];
+		}
 	}
 
 	toggle(opts) { this.open ? this.close(true) : this.show(opts); }
@@ -170,8 +171,11 @@ export class WristMenu {
 		}
 
 		// The keys: touch and lasers (never the wearer's own hand or laser).
-		const { action, hot: keysHot } = this.pad.update(dt, { active: this.open, exclude: wearer });
+		const { action, hot: keysHot, near: padNear } = this.pad.update(dt, { active: this.open, exclude: wearer });
 		this.keysHot = keysHot.size > 0;
+		this.laserNear = padNear; // (a laser on a key counts as near, however far the hand)
+		// The orb's own hand reaching into the fan: it shrinks and fades, out of the way (tool-fan.js sets orbYield).
+		o.yieldK += ((this.orbYield ? 1 : 0) - o.yieldK) * (1 - Math.exp(-dt / 0.15 * 1));
 		animateOrb(o, performance.now() / 1000, hot || this.open);
 
 		if (action) this.close(); // after any key (Help opens the board, like Settings)
@@ -222,8 +226,8 @@ export class WristMenu {
 			this.cross.quaternion.copy(this._quat);
 			this.snap = false;
 		}
-		// A menu you forgot doesn't hang there: closed after IDLE seconds with no finger near.
-		const near = this.keysHot || xr.input.touches().some((c) => c !== wearer && c.touch.tip.distanceTo(this.cross.position) < IDLE_NEAR);
+		// A menu you forgot doesn't hang there: closed after IDLE seconds with no finger or laser near a key.
+		const near = this.keysHot || this.laserNear || xr.input.touches().some((c) => c !== wearer && this.pad.near(c.touch.tip, IDLE_NEAR));
 		this.idleT = near ? 0 : this.idleT + dt;
 		if (this.idleT > IDLE) { this.close(true); return; }
 		// Spring out along the arc, ← Back first.
@@ -260,7 +264,7 @@ export class WristMenu {
 export function makeOrb() {
 	const group = new THREE.Group();
 	group.name = 'menu-orb';
-	const core = new THREE.Mesh(new THREE.SphereGeometry(0.011, 16, 12), new THREE.MeshBasicMaterial({ color: 0xfff1d6 }));
+	const core = new THREE.Mesh(new THREE.SphereGeometry(0.011, 16, 12), new THREE.MeshBasicMaterial({ color: 0xfff1d6, transparent: true }));
 	const shellMat = new THREE.MeshLambertMaterial({ color: 0xe99a45, emissive: 0x8a3f0c, flatShading: true, transparent: true, opacity: 0.78, depthWrite: false });
 	const shell = new THREE.Mesh(new THREE.IcosahedronGeometry(0.024, 0), shellMat);
 	const ringMat = new THREE.MeshBasicMaterial({ color: 0xffd7a3, transparent: true, opacity: 0.9 });
@@ -272,7 +276,7 @@ export function makeOrb() {
 	body.add(core, shell, ring1, ring2);
 	group.add(body, target);
 	group.position.copy(ORB_ON_GRIP);
-	return { group, body, core, shell, shellMat, ring1, ring2, ringMat, target, holder: null, armed: true, glow: 0, phase: Math.random() * 10 };
+	return { group, body, core, shell, shellMat, ring1, ring2, ringMat, target, holder: null, armed: true, glow: 0, yieldK: 0, phase: Math.random() * 10 };
 }
 
 const ORB_AMBER = new THREE.Color(0xe99a45), ORB_BLUE = new THREE.Color(0x4d8dff);
@@ -283,11 +287,14 @@ export function animateOrb(o, time, hot) {
 	o.glow += ((hot ? 1 : 0) - o.glow) * 0.2;
 	// Breathing: two slow waves, so it never looks mechanical.
 	const breathe = 1 + 0.1 * Math.sin(t * 2.1) + 0.04 * Math.sin(t * 5.3);
-	o.body.scale.setScalar(breathe * (1 + 0.4 * o.glow));
+	const y = o.yieldK ?? 0; // (0..1) the orb makes room for a hand reaching into the fan: half size, 30% strength
+	o.body.scale.setScalar(breathe * (1 + 0.4 * o.glow) * (1 - 0.5 * y));
 	o.shell.rotation.set(t * 0.5, t * 0.8, 0);
 	o.ring1.rotation.set(Math.PI / 2 + 0.5 * Math.sin(t * 0.7), t * 1.3, 0);
 	o.ring2.rotation.set(0.6 * Math.sin(t * 0.9), -t * 1.1, Math.PI / 3);
 	o.shellMat.color.copy(ORB_AMBER).lerp(ORB_BLUE, o.glow);
 	o.shellMat.emissive.copy(ORB_EMBER).lerp(ORB_EMBER_BLUE, o.glow).multiplyScalar(0.8 + 0.4 * (0.5 + 0.5 * Math.sin(t * 3.2)));
-	o.ringMat.opacity = 0.6 + 0.35 * (0.5 + 0.5 * Math.sin(t * 2.6));
+	o.ringMat.opacity = (0.6 + 0.35 * (0.5 + 0.5 * Math.sin(t * 2.6))) * (1 - 0.7 * y);
+	o.shellMat.opacity = 0.78 * (1 - 0.7 * y);
+	o.core.material.opacity = 1 - 0.7 * y;
 }

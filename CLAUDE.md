@@ -26,8 +26,9 @@ js/xr.js          XR session: the parts below, the frame order, setMode, layers 
 js/safety.js      the safety net in the headset: errors show a calm card, repeated errors end the session (pure, Node-testable)
 js/xr-dollhouse.js  scale model mode ("dollhouse" in code): plinth, rotate/zoom/grab, scale plate and zoom settling, the doors on the plinth, where stepping inside lands
 js/xr-walk.js     walk mode: locomotion, teleport and fade, snap turn, grip pull, floor following, solid walls
-js/xr-ui.js       the settings board and help (opening, closing, touch and lasers, trigger claims), welcome card, notes
-js/wrist-menu.js  the wrist menu: orb on one wrist, four keys in a cross laid out as seen (Settings, Help, ← Back, Walk in →)
+js/xr-ui.js       the two wings (Settings right, How to move left: opening, closing, touch and lasers, trigger claims), welcome card, notes
+js/wings.js       where the wings go: 0.55 m, 40° to the side, never over the scale model (pure, Node-testable)
+js/wrist-menu.js  the wrist menu: orb on one wrist, three keys on an arc laid out as seen (← Back, Settings and help, Walk in →)
 js/keys.js        keys pressed by touch or laser (wrist menu, the doors on the plinth)
 js/xr-menus.js    the boards as data (cells by id; tabs as rows of ids), help cards, labels, what a key or cell does
 js/xr-scene.js    scenery builders: gallery room, plinth, skies, markers

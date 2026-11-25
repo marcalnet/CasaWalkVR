@@ -137,3 +137,26 @@ test('a clenched fist is a closed hand, never a pinch', () => {
 	assert.ok(ev.includes('fist') && !ev.includes('pinch'), JSON.stringify(ev));
 });
 
+
+test('the teleport: turning your whole body with the pinch held is not a flick (the hand turns with the head)', () => {
+	const g = new HandGestures('right');
+	const deg = THREE.MathUtils.degToRad;
+	const stepAll = (secs, rot, headYaw) => {
+		const out = [];
+		for (let t = 0; t < secs; t += 1 / 72) {
+			const f = Math.min(1, t / secs);
+			const joints = palmDown(PINCHED, rot * f);
+			out.push(...g.step(joints, 1 / 72, new THREE.Vector3(0, 1.6, 0), headYaw * f).map((e) => e.type + (e.dir ?? '')));
+		}
+		return out;
+	};
+	stepAll(0.4, 0, 0);
+	// The body turns 40 degrees in 0.15 s: hand and head together.
+	assert.deepEqual(stepAll(0.15, deg(40), deg(40)).filter((e) => e.startsWith('turn')), [], 'a brisk body turn: no snap turn');
+	// A real flick (the hand turns 40 degrees, the head does not).
+	const g2 = new HandGestures('right');
+	for (let t = 0; t < 0.4; t += 1 / 72) g2.step(palmDown(PINCHED), 1 / 72, new THREE.Vector3(0, 1.6, 0), 0);
+	const ev = [];
+	for (let t = 0; t < 0.15; t += 1 / 72) ev.push(...g2.step(palmDown(PINCHED, deg(40) * Math.min(1, t / 0.15)), 1 / 72, new THREE.Vector3(0, 1.6, 0), 0).map((e) => e.type));
+	assert.ok(ev.includes('turn'), 'the flick alone still turns');
+});

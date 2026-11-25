@@ -29,7 +29,7 @@
 import * as THREE from 'three';
 import { UP, DOWN } from './xr-targets.js';
 import { yawOf } from './xr-input.js';
-import { PLINTH_REST, PLINTH_HEIGHT, EYE_BELOW_TOP, buildMarkers } from './xr-scene.js';
+import { PLINTH_HEIGHT, PLINTH_HEIGHT_HANDS, setPlinthHeight, EYE_BELOW_TOP, buildMarkers } from './xr-scene.js';
 import { KeyPad } from './keys.js';
 import { DELIBERATE } from './touch.js';
 import { roomAt, roomLanding, alongAxis, clearOfWalls, headingOf } from './rooms.js';
@@ -43,19 +43,34 @@ const DOLLHOUSE_LIFT_START = 0.25; // used for the first frames, before the head
 const DOLLHOUSE_LIFT_MAX = 1.4; // (lying on the floor is not a case to support)
 const ZOOM_MIN = 0.5, ZOOM_MAX = 4;
 const ABOVE_REAL_FLOOR = 0.05; // passthrough: the model never sinks below the real floor
-// Standard architectural scales: after zooming, a scale this close to one of
-// them (as a fraction) settles on it. (1:5 and 1:10 are detail scales; a
-// home on the plinth is usually between 1:5 and 1:30.)
-export const STANDARD_SCALES = [5, 10, 20, 25, 50, 100, 200];
-const SETTLE_NEAR = 0.08;
+// Round scales only (build 111's test: 1:23 and 1:8 showed). The scale model
+// rests, and the plate reads, only on these (1:5, 1:10, 1:15, 1:20, ...); while
+// you zoom the plate shows the nearest one and on letting go the model glides
+// onto it. The fit scale at entry rounds up to one too (js/xr.js setModel), so
+// the model still fits the plinth.
+export const ROUND_SCALES = [5, 10, 15, 20, 25, 30, 40, 50, 75, 100, 150, 200, 300, 500, 1000];
 
-/** The standard scale (the 50 of 1:50) near a ratio, or null. */
-export function nearestScale(ratio) {
-	return STANDARD_SCALES.find((s) => Math.abs(ratio - s) / s <= SETTLE_NEAR) ?? null;
+/** A yaw (radians) turned to the nearest quarter turn: square to the plinth (0°, 90°, 180°, 270°). */
+export function squareYaw(yaw) { return Math.round(yaw / (Math.PI / 2)) * (Math.PI / 2); }
+
+/** The round scale (the 50 of 1:50) nearest a ratio (by proportion, not by difference). */
+export function roundScale(ratio) {
+	let best = ROUND_SCALES[0];
+	for (const s of ROUND_SCALES) if (Math.abs(Math.log(s / ratio)) < Math.abs(Math.log(best / ratio))) best = s;
+	return best;
+}
+
+/** The smallest round scale at or above a ratio (a smaller model than asked: it still fits), else the ratio rounded. */
+export function roundScaleUp(ratio) {
+	return ROUND_SCALES.find((s) => s >= ratio - 1e-9) ?? Math.round(ratio);
 }
 const ROTATE_SPEED = 1.6; // rad/s at full stick
 const HOLD_REACH = 0.08; // a closed hand within this of the model's box holds it
+const PLINTH_WAIT = 1.0, PLINTH_MOVE = 0.8, PLINTH_CLEAR = 0.3; // the input must hold this long (s); the move; no hand or controller within this of the model (m)
 const DROP_NEAR = 0.15; // let go this close to the plinth top (over it): it settles
+const DROP_NEAR_HAND = 0.3, DROP_OVER_HAND = 0.15; // bare hands, with no depth cues and a shaky hold: twice as far above it, and 15 cm beyond its edge
+const RETURN_AWAY_HAND = 0.15; // a bare hand counts as "at the model" only this close, and only above the waist (a hand hanging at your side, or one tracking lost in the model's box, never keeps it from going home)
+const RETURN_GLIDE = 1.6, RETURN_LOOK = THREE.MathUtils.degToRad(60); // the glide home (s); the plinth must be within this of where you look
 const RETURN_AWAY = 0.3, RETURN_WAIT = 4; // a floating model goes home once nothing is within 0.3 m for 4 s
 const GRAB_SMOOTH = 0.06, GRAB_SMOOTH_HAND = 0.1; // seconds: a held model follows a controller / a bare hand smoothed this much
 const HAND_TURN_DEAD = THREE.MathUtils.degToRad(3); // a bare hand's turn: changes under 3° are tremor, ignored
@@ -106,7 +121,7 @@ export class Dollhouse {
 		this.name = 'dollhouse';
 		// The model on the plinth, in stage space: position, turn and zoom.
 		// (Always level: only a turn about the vertical. The full free tilt of C0.4 went on 24 Nov 2026.)
-		this.doll = { pos: new THREE.Vector3(0, PLINTH_REST, -xr.plinthDistance), yaw: 0, zoom: 1 };
+		this.doll = { pos: new THREE.Vector3(0, xr.plinthH + 0.004, -xr.plinthDistance), yaw: 0, zoom: 1 };
 		this.floating = null; // let go in the air: { wait (s with nothing near), going (the glide home) }
 		this.handAim = null; // a bare hand stepping inside: { c, spot }
 		this.dollLift = DOLLHOUSE_LIFT_START; // VR dollhouse lift, from the measured head height
@@ -229,7 +244,7 @@ export class Dollhouse {
 	reset() {
 		if (this.settling) { this.xr.tweens.stop(this.settling); this.settling = null; }
 		this.stopFloating();
-		this.doll.pos.set(0, PLINTH_REST, -this.xr.plinthDistance);
+		this.doll.pos.set(0, this.xr.plinthH + 0.004, -this.xr.plinthDistance);
 		this.doll.yaw = 0;
 		this.doll.zoom = 1;
 	}
@@ -242,11 +257,68 @@ export class Dollhouse {
 		xr.lift = 0;
 		if (measure) this.measureLift(xr.camera.matrix);
 		xr.stage.visible = true;
+		this.snapPlinth(); // (the height for the input in hand, at once: the live switch is animated)
 		for (const c of xr.input.controllers) xr.input.setLaser(c, true);
 		xr.applyView();
 		xr.applyStoreys();
 		this.apply();
 		xr.ui.setWelcome(xr.ui.welcomeOn);
+	}
+
+	// -----------------------------------------------------------------------
+	// The plinth's height: 0.60 m while any controller is tracked, 0.90 m with
+	// only bare hands (the user's decision; build 111's design, item 3)
+	// -----------------------------------------------------------------------
+
+	/** The height for the input in hand. */
+	wantedPlinth() { return this.xr.input.active().length ? PLINTH_HEIGHT : PLINTH_HEIGHT_HANDS; }
+
+	/** Sets the plinth's top to h now: the body, the plate, and a model resting on it ride along. */
+	setPlinthNow(h) {
+		const xr = this.xr, resting = !this.grab && !this.floating && Math.abs(this.doll.pos.y - (xr.plinthH + 0.004)) < 0.002;
+		xr.plinthH = h;
+		setPlinthHeight(xr.pedestal, h);
+		const plate = xr.plate?.mesh;
+		if (plate) plate.position.y = h + (plate.userData.tiltHalf ?? 0.03);
+		if (resting) { this.doll.pos.y = h + 0.004; this.apply(); }
+	}
+
+	/** At once (entering): the height for the input in hand. */
+	snapPlinth() {
+		if (this.plinthAnim) { this.xr.tweens.stop(this.plinthAnim); this.plinthAnim = null; }
+		this.plinthSwitch = null;
+		this.setPlinthNow(this.wantedPlinth());
+	}
+
+	/**
+	 * Once a frame: when the input changes (controllers to bare hands, or back)
+	 * and holds for 1.0 s (the Quest flickers between them), the plinth and
+	 * everything on it rise or sink over 0.8 s (sine ease), once the model is
+	 * at rest and no hand or controller is within 30 cm of it. The room, the
+	 * doors and the levels stay still. A very soft settle sound, no vibration.
+	 */
+	updatePlinth(dt) {
+		const xr = this.xr, want = this.wantedPlinth();
+		if (this.plinthAnim) return;
+		if (Math.abs(want - xr.plinthH) < 1e-6) { this.plinthSwitch = null; return; }
+		if (this.plinthSwitch?.to !== want) this.plinthSwitch = { to: want, t: 0 };
+		this.plinthSwitch.t += dt;
+		if (this.plinthSwitch.t < PLINTH_WAIT) return;
+		// Not while the model is held, floating, gliding home or settling, or a hand or controller is near it.
+		if (this.grab || this.floating || this.settling) return;
+		const box = this.modelBox(this._box3 ??= new THREE.Box3()), p = this._p3 ??= new THREE.Vector3();
+		for (const c of xr.input.controllers) {
+			if (!(c.isHand ? c.touch.tracked : c.isController) || !this.holdPoint(c, p)) continue;
+			if (box.distanceToPoint(p) < PLINTH_CLEAR) return;
+		}
+		const from = xr.plinthH;
+		this.plinthSwitch = null;
+		if (xr.soundLevel !== 'off') xr.sound.play('settle', 0.33);
+		this.plinthAnim = xr.tweens.start({
+			duration: PLINTH_MOVE, ease: ease.inOut, // (sine)
+			step: (k) => this.setPlinthNow(from + (want - from) * k),
+			done: () => { this.plinthAnim = null; this.setPlinthNow(want); },
+		});
 	}
 
 	/** Leaving the dollhouse (for walking, or the session ended). */
@@ -318,7 +390,7 @@ export class Dollhouse {
 		xr.anchor.quaternion.setFromAxisAngle(UP, xr.stage.rotation.y + this.doll.yaw);
 		xr.anchor.scale.setScalar(xr.baseScale * this.doll.zoom);
 		xr.anchor.updateMatrixWorld(true);
-		xr.plate.set(1 / (xr.baseScale * this.doll.zoom)); // e.g. 1:42 on the plinth
+		xr.plate.set(roundScale(1 / (xr.baseScale * this.doll.zoom))); // e.g. 1:40 on the plinth: round scales only
 		xr.lighting?.fit(); // the sun follows the model; shadows re-render
 	}
 
@@ -375,7 +447,7 @@ export class Dollhouse {
 	 * through or beside the board; they come back when it closes.
 	 */
 	fadeDoors(dt) {
-		const target = this.xr.menu ? 0 : 1;
+		const target = this.xr.boardOpen ? 0 : 1;
 		if (this.doorAlpha === target) return;
 		this.doorAlpha = target > this.doorAlpha ? Math.min(1, this.doorAlpha + dt / DOORS_FADE) : Math.max(0, this.doorAlpha - dt / DOORS_FADE);
 		this.doorMaterials ??= (() => { const list = []; this.doorGroup.traverse((o) => { for (const m of [].concat(o.material ?? [])) if (!list.some((e) => e.m === m)) list.push({ m, opacity: m.opacity }); }); return list; })();
@@ -393,7 +465,7 @@ export class Dollhouse {
 		// controllers rest (the tester's finding; the Lead's rules): by touch only a
 		// deliberate push from the front (DELIBERATE); a laser only when the door is in
 		// front of the model, pressed and let go over it; ← Back is held 0.6 s.
-		const door = this.doors.update(dt, { active: !xr.menu, rules: DELIBERATE, blockers: xr.targets().pointable, laserOnRelease: true });
+		const door = this.doors.update(dt, { active: !xr.boardOpen, rules: DELIBERATE, blockers: xr.targets().pointable, laserOnRelease: true });
 		this.followDoors(door);
 		let action = point.action ?? door.action;
 		if (action?.id?.startsWith('level:')) { // a level key: show the home up to that level (the chosen one does nothing)
@@ -456,12 +528,13 @@ export class Dollhouse {
 		if (this.grab && (!this.grab.c.source || (this.grab.kind === 'controller' && !this.grab.c.state.grip))) this.release();
 		if (this.grab) this.updateGrab(dt);
 		this.updateFloating(dt);
+		this.updatePlinth(dt);
 
 		// Thumbsticks: left/right rotates, up/down zooms (either controller).
 		// Letting go of a zoom near a standard scale settles on it.
 		let sx = 0, sy = 0, zoomHand = null;
 		for (const c of input.active()) { sx += c.state.stick.x; sy += c.state.stick.y; if (c.state.stick.y) zoomHand = c; }
-		if (sx) this.doll.yaw -= sx * ROTATE_SPEED * dt;
+		if (sx) { this.doll.yaw -= sx * ROTATE_SPEED * dt; if (this.floating) this.stickTurned = true; } // (a turn you made with the stick is kept when it goes home)
 		if (sy) {
 			if (this.settling) { xr.tweens.stop(this.settling); this.settling = null; }
 			this.doll.zoom = THREE.MathUtils.clamp(this.doll.zoom * Math.exp(-sy * ZOOM_SPEED * dt), ZOOM_MIN, ZOOM_MAX);
@@ -557,12 +630,12 @@ export class Dollhouse {
 	}
 
 	/** Never into the plinth or the floor: the model's lowest point stays 4 mm above them. */
-	keepAbove() {
+	keepAbove(margin = 0) {
 		const xr = this.xr, box = this.modelBox();
 		const c = xr.stage.worldToLocal(box.getCenter(new THREE.Vector3()));
 		const { W, D } = xr.plinthSize;
-		const over = xr.vrView && Math.abs(c.x) < W / 2 && Math.abs(c.z + xr.plinthDistance) < D / 2;
-		const limit = (over ? PLINTH_HEIGHT : xr.vrView ? 0 : xr.lift) + 0.004;
+		const over = xr.vrView && Math.abs(c.x) < W / 2 + margin && Math.abs(c.z + xr.plinthDistance) < D / 2 + margin;
+		const limit = (over ? xr.plinthH : xr.vrView ? 0 : xr.lift) + 0.004;
 		if (box.min.y < limit) { this.doll.pos.y += limit - box.min.y; this.apply(); }
 		return { box, over };
 	}
@@ -576,23 +649,30 @@ export class Dollhouse {
 		const xr = this.xr, g = this.grab;
 		this.grab = null;
 		if (!g) return;
-		const { box, over } = this.keepAbove();
-		if (over && box.min.y - PLINTH_HEIGHT < DROP_NEAR) this.settleDown(0.35);
+		const hand = g.kind === 'hand';
+		const { box, over } = this.keepAbove(hand ? DROP_OVER_HAND : 0);
+		if (over && box.min.y - xr.plinthH < (hand ? DROP_NEAR_HAND : DROP_NEAR)) this.settleDown(0.35, hand);
 		else this.floating = { wait: 0, going: null };
 	}
 
 	/** Glides down onto the plinth (keeping its place over it), levelling itself; sound settle. */
-	settleDown(duration) {
+	settleDown(duration, centre = false) {
 		const xr = this.xr, from = this.doll.pos.clone();
 		this.settling = xr.tweens.start({
 			duration, ease: ease.inOut,
-			step: (k) => { this.doll.pos.y = from.y + (PLINTH_REST - from.y) * k; this.apply(); },
+			step: (k) => {
+				this.doll.pos.y = from.y + (xr.plinthH + 0.004 - from.y) * k;
+				// (Let go a hand's breadth beyond its edge: it also slides onto the plinth, never half off it.)
+				if (centre) { this.doll.pos.x = from.x * (1 - k); this.doll.pos.z = from.z + (-xr.plinthDistance - from.z) * k; }
+				this.apply();
+			},
 			done: () => { this.settling = null; this.apply(); xr.sound.play('settle'); },
 		});
 	}
 
 	/** No longer floating: the ring and the drop line go. */
 	stopFloating() {
+		this.stickTurned = false;
 		if (this.floating?.going) this.xr.tweens.stop(this.floating.going);
 		this.floating = null;
 		this.dropLine.visible = this.homeRing.visible = this.homeOutline.visible = false;
@@ -612,7 +692,7 @@ export class Dollhouse {
 			if (!(c.isHand ? c.touch.tracked : c.isController) || !this.holdPoint(c, p)) continue;
 			const d = box.distanceToPoint(p);
 			if (c.isHand && d < HOLD_REACH && !this.grab) canHold = true;
-			if (d < RETURN_AWAY) near = true;
+			if (c.isHand) { if (d < RETURN_AWAY_HAND && p.y >= xr.headWorld().y - WAIST) near = true; } else if (d < RETURN_AWAY) near = true;
 		}
 		this.holdBox.box.copy(box);
 		this.holdBox.visible = canHold;
@@ -628,27 +708,45 @@ export class Dollhouse {
 		this.dropLine.visible = true;
 		// Its place on the plinth: an outline, and a ring that fills over the wait.
 		const size = xr.model.bounds.getSize(new THREE.Vector3()).multiplyScalar(xr.anchor.scale.x);
-		const r = Math.max(0.1, Math.min(Math.max(size.x, size.z) / 2, xr.plinthSize.W / 2 - 0.02));
+		const r = Math.max(0.1, Math.min(Math.hypot(size.x, size.z) / 2, Math.min(xr.plinthSize.W, xr.plinthSize.D) / 2 - 0.02)); // (half the footprint's diagonal, never past the plinth's edge)
 		for (const m of [this.homeRing, this.homeOutline]) {
-			m.position.set(0, PLINTH_HEIGHT + 0.003, -xr.plinthDistance);
+			m.position.set(0, xr.plinthH + 0.003, -xr.plinthDistance);
 			m.scale.setScalar(r);
 			m.visible = xr.vrView;
 		}
 		const n = this.homeRing.geometry.index.count;
 		this.homeRing.geometry.setDrawRange(0, Math.floor((n / 6) * Math.min(1, f.wait / RETURN_WAIT)) * 6);
-		if (f.wait >= RETURN_WAIT) this.goHome();
+		// The plinth more than 60° from where you look: it waits for you to look (the ring, full, breathes slowly).
+		if (f.wait >= RETURN_WAIT) {
+			const head = xr.headWorld(), look = this._look3 ??= new THREE.Vector3(), to = this._to3 ??= new THREE.Vector3();
+			look.setFromMatrixColumn(xr.camera.matrixWorld, 2).negate();
+			xr.stage.localToWorld(to.set(0, xr.plinthH, -xr.plinthDistance)).sub(head).normalize();
+			if (look.angleTo(to) > RETURN_LOOK) {
+				this.homeRing.material.opacity = 0.55 + 0.35 * Math.sin(this.clockT = (this.clockT ?? 0) + dt * 2.2);
+				return;
+			}
+			this.homeRing.material.opacity = 0.9;
+			this.goHome();
+		}
 	}
 
-	/** The glide home: 0.8 s along a gentle arc, levelling itself, then it settles (sound settle). */
+	/**
+	 * The glide home: 1.6 s (sine ease) along a gentle arc rising 15 cm at its
+	 * middle, turning to the nearest quarter turn square to the plinth (unless
+	 * you turned it with the stick: then it lands on that turn), then it
+	 * settles (sound settle).
+	 */
 	goHome() {
 		const xr = this.xr, f = this.floating;
-		const from = this.doll.pos.clone(), to = new THREE.Vector3(0, PLINTH_REST, -xr.plinthDistance);
+		const from = this.doll.pos.clone(), to = new THREE.Vector3(0, xr.plinthH + 0.004, -xr.plinthDistance);
+		const yaw0 = this.doll.yaw, yaw1 = this.stickTurned ? yaw0 : squareYaw(yaw0);
 		this.dropLine.visible = false;
 		f.going = xr.tweens.start({
-			duration: 0.8, ease: ease.inOut,
+			duration: RETURN_GLIDE, ease: ease.inOut,
 			step: (k) => {
 				this.doll.pos.lerpVectors(from, to, k);
 				this.doll.pos.y += Math.sin(Math.PI * k) * 0.15;
+				this.doll.yaw = yaw0 + (yaw1 - yaw0) * k;
 				this.apply();
 			},
 			done: () => { this.apply(); this.floating = null; this.stopFloating(); xr.sound.play('settle'); },
@@ -671,7 +769,7 @@ export class Dollhouse {
 	handMoves(dt, spots) {
 		const xr = this.xr, ui = xr.ui, input = xr.input;
 		const box = this.modelBox(this._box2 ??= new THREE.Box3()), p = this._p2 ??= new THREE.Vector3();
-		const busy = !!xr.menu || ui.wrist.open;
+		const busy = xr.boardOpen || ui.wrist.open;
 		let jump = null;
 		for (const c of input.gestureHands()) {
 			const palm = this.holdPoint(c, p);
@@ -681,9 +779,11 @@ export class Dollhouse {
 				else if ((e.type === 'fistEnd' || e.type === 'lost') && this.grab?.c === c) this.release();
 				else if ((e.type === 'open' || e.type === 'lost') && this.handAim?.c === c) { this.cancelHandAim(); xr.sound.play('release'); }
 				// The pinch held aims; opening it on a steady landing steps inside.
-				else if (e.type === 'pinch' && !this.handAim && !busy && this.grab?.c !== c && !xr.aimBlock(c, c.gesture.shape?.pinchAt) && c.gesture.shape.pinchAt.y >= xr.headWorld().y - WAIST) { // (a hand at your side never aims)
+				else if (e.type === 'pinch' && !this.handAim && !busy && this.grab?.c !== c && xr.teleportHand(c) && !xr.aimBlock(c, c.gesture.shape?.pinchAt) && c.gesture.shape.pinchAt.y >= xr.headWorld().y - WAIST) { // (a hand at your side never aims)
 					this.handAim = { c, spot: null, steady: 0, at: new THREE.Vector3(), has: false };
 					xr.sound.play('aim');
+				} else if (e.type === 'pinch' && !this.handAim && !busy && this.grab?.c !== c && !xr.teleportHand(c) && !xr.aimBlock(c, c.gesture.shape?.pinchAt) && c.gesture.shape?.pinchAt) {
+					xr.ui.noteWrongHand(c, c.gesture.shape.pinchAt);
 				} else if (e.type === 'pinchEnd' && this.handAim?.c === c) {
 					if (this.handAim.spot && this.handAim.steady >= AIM_STEADY) jump = this.handAim.spot;
 					else { this.cancelHandAim(); xr.sound.play('release'); }
@@ -716,15 +816,17 @@ export class Dollhouse {
 	}
 
 	/**
-	 * After zooming: near a standard architectural scale (1:50, ...), the
-	 * model glides onto it, with a light tick in the hand that zoomed.
+	 * After zooming: the model glides onto the nearest round scale (1:50, ...
+	 * one the zoom range allows), with a light tick in the hand that zoomed.
 	 */
 	settleZoom(c) {
 		const xr = this.xr;
-		const target = nearestScale(1 / (xr.baseScale * this.doll.zoom));
-		if (!target) return;
+		const ratio = 1 / (xr.baseScale * this.doll.zoom);
+		const allowed = ROUND_SCALES.filter((n) => { const z = 1 / (xr.baseScale * n); return z >= ZOOM_MIN - 1e-9 && z <= ZOOM_MAX + 1e-9; });
+		if (!allowed.length) return;
+		const target = allowed.reduce((a, b) => (Math.abs(Math.log(b / ratio)) < Math.abs(Math.log(a / ratio)) ? b : a));
 		const from = this.doll.zoom, to = 1 / (xr.baseScale * target);
-		if (to < ZOOM_MIN || to > ZOOM_MAX || Math.abs(to - from) < 1e-6) return;
+		if (Math.abs(to - from) < 1e-6) return;
 		this.settling = xr.tweens.start({
 			duration: 0.25, ease: ease.out,
 			step: (k) => { this.doll.zoom = from + (to - from) * k; this.apply(); },
@@ -732,4 +834,3 @@ export class Dollhouse {
 		});
 	}
 }
-

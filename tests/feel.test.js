@@ -113,7 +113,8 @@ test('sound recipes: short, never clipping, envelopes that start and end silent'
 	assert.deepEqual(Object.keys(RECIPES).sort(), ['aim', 'beep', 'close', 'deny', 'dive', 'grab', 'open', 'portal', 'press', 'release', 'settle', 'shutter', 'squeak', 'step', 'surface', 'tick', 'whoosh']);
 	for (const [name, r] of Object.entries(RECIPES)) {
 		const len = recipeLength(r);
-		assert.ok(len > 0.01 && len <= FEEDBACK_MAX + 0.01, `${name}: ${len} s`);
+		const max = name === 'dive' ? 1.7 : FEEDBACK_MAX; // (the dive is as long as the slow growth stepping inside, 1.3 s and the fade)
+		assert.ok(len > 0.01 && len <= max + 0.01, `${name}: ${len} s`);
 		let peaks = 0;
 		for (const l of r.layers) {
 			const e = l.env;

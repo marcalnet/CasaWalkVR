@@ -82,7 +82,8 @@ export class HandView {
 	/** Once a frame. passthrough: only the fingertip and a faint outline. */
 	update(dt, { passthrough = false, show = true } = {}) {
 		const c = this.c;
-		const tracked = show && c.isHand && c.touch.tracked;
+		// (Shown only when every joint is reported: a half-tracked hand, seen at the hand-over from a controller, floated in front of the face.)
+		const tracked = show && c.isHand && c.touch.tracked && allJoints(c.hand.joints);
 		// The hand model for this side, once loaded (else the capsules).
 		const want = this.models && (c.handedness === 'left' || c.handedness === 'right') ? this.models[c.handedness] : null;
 		if (want !== this.model) {
@@ -135,4 +136,12 @@ export class HandView {
 
 	/** Leaving VR. */
 	hide() { this.alpha = 0; this.group.visible = false; this.near = false; }
+}
+
+const JOINT_COUNT = 25; // the WebXR hand: wrist, 4 thumb, 5 per finger x 4
+/** True when the hand reports every joint as visible (an object keyed by joint name). */
+export function allJoints(joints) {
+	let n = 0;
+	for (const k in joints) { if (!joints[k]?.visible) return false; n++; }
+	return n >= JOINT_COUNT;
 }

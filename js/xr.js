@@ -54,13 +54,13 @@ import { Portals } from './portal.js';
 import { PinchDemo } from './pinch-demo.js';
 import { takePhoto, photoName, saveFile, INTERFACE_LAYER } from './photo.js';
 import { readSetting } from './settings.js';
-import { buildShowroom, buildStage, fitPlinth, placePlate, buildWalkSky, recolourSphere } from './xr-scene.js';
+import { buildShowroom, buildStage, fitPlinth, placePlate, buildWalkSky, recolourSphere, PLINTH_HEIGHT } from './xr-scene.js';
 import { ScalePlate, Label } from './panel.js';
 import { roomAt } from './rooms.js';
 import { targetSets, findFloor } from './xr-targets.js';
 import { buildMenus, updateLabels, menuAction, SEE_THROUGH_ON } from './xr-menus.js';
 import { XRUI } from './xr-ui.js';
-import { Dollhouse } from './xr-dollhouse.js';
+import { Dollhouse, roundScale, roundScaleUp } from './xr-dollhouse.js';
 import { Walk } from './xr-walk.js';
 import { ToolSystem } from './xr-tools.js';
 import { ToolFan } from './tool-fan.js';
@@ -72,6 +72,8 @@ import { Sound } from './sound.js';
 // the 2D page framed the model, which can clip things held near the face.
 const XR_NEAR = 0.05, XR_FAR = 300;
 const DOLLHOUSE_SIZE = 1.2; // metres across
+/** Stepping inside: how long the model grows towards you (s), eased in and out, before the fade. 0.8 is the fallback if the slow growth is uncomfortable (build 111's design, item 4), 0.3 the old blink. */
+export const WALK_IN_GROW = 1.3;
 
 export class XRExperience {
 	/**
@@ -101,7 +103,7 @@ export class XRExperience {
 		this.seeThrough = new SeeThrough();
 		this.portals = new Portals(); // the wall portal (js/portal.js)
 		this.soundLevel = readSetting('sound'); // off | effects | all (effects and ambience)
-		this.toolFan = readSetting('toolFan'); // the hand that holds the tool fan; the wrist menu is on the other
+		this.toolFan = readSetting('mainHand') === 'left' ? 'right' : 'left'; // the hand the tool fan floats over: the one that is not the main hand (the main hand wears the wrist menu, takes tools, teleports)
 		this.cameraLens = readSetting('cameraLens'); // the street camera's lens, mm (milestone D)
 		this.layerFx = null; // a move between layers in progress (goLayer())
 		this.frameDt = 1 / 72;
@@ -134,10 +136,11 @@ export class XRExperience {
 		Object.assign(this, buildShowroom(scene)); // showroom, showroomSky
 		Object.assign(this, buildStage(scene)); // stage, gallery, pedestal, plinthMaterials
 		this.plate = new ScalePlate(); // the model's true scale, on the plinth (SPEC.md B2)
+		this.plinthH = PLINTH_HEIGHT; // the plinth's height now: 0.6 m with a controller, 0.9 m with only bare hands (animated between: js/xr-dollhouse.js)
 		this.setPlinth(1.2, 0.9);
 		this.walkSky = buildWalkSky(camera);
 		Object.assign(this, buildMenus(rig)); // menus: the settings boards
-		this.hideFromPhotos(...Object.values(this.menus).map((p) => p.mesh));
+		this.hideFromPhotos(...Object.values(this.menus).map((p) => p.mesh), ...Object.values(this.guides).map((p) => p.mesh));
 		// The one sphere round the eyes (js/veil.js): the teleport fade, the move between layers
 		// (dark for in and back, white for leaving VR) and the photo flash. Then the arrival title.
 		this.veil = new Veil(camera);
@@ -160,7 +163,9 @@ export class XRExperience {
 	}
 
 	/** The open settings board (a Panel), or null. */
-	get menu() { return this.ui.menu; }
+	get menu() { return this.ui.menu; } // the settings wing (right)
+	/** True while either wing (Settings, How to move) is open: nothing else claims the hands then. */
+	get boardOpen() { return !!(this.ui.menu || this.ui.guide); }
 
 	/** Objects never drawn in a photo (the interface); hiding one hides what it carries. */
 	/**
@@ -181,10 +186,10 @@ export class XRExperience {
 	/** Sizes the plinth for a model footprint of w x d metres, with the scale plate on it. */
 	setPlinth(w, d) {
 		this.plate.mesh.removeFromParent(); // (fitPlinth rebuilds the plinth's parts)
-		const { W, D, distance } = fitPlinth(this, w, d);
+		const { W, D, distance } = fitPlinth(this, w, d, this.plinthH);
 		this.plinthSize = { W, D };
 		this.plinthDistance = distance; // from where you stand to the plinth's centre
-		placePlate(this.plate.mesh, this.pedestal, W, D);
+		placePlate(this.plate.mesh, this.pedestal, W, D, this.plinthH);
 	}
 
 	// -----------------------------------------------------------------------
@@ -198,7 +203,7 @@ export class XRExperience {
 		this.maxStorey = null;
 		this.modes.dollhouse.setModel(model); // the landing markers
 		const size = model.bounds.getSize(new THREE.Vector3());
-		this.baseScale = DOLLHOUSE_SIZE / Math.max(size.x, size.z, 0.01);
+		this.baseScale = 1 / roundScaleUp(Math.max(size.x, size.z, 0.01) / DOLLHOUSE_SIZE); // a round scale (1:25, not 1:23) that still fits the plinth
 		this.setPlinth(size.x * this.baseScale, size.z * this.baseScale);
 		this.ui.placeWelcome();
 		// Everything casts and receives shadows (used only when shadows are on),
@@ -410,7 +415,7 @@ export class XRExperience {
 	runLayerFx(dt) {
 		const f = this.layerFx, doll = this.modes.dollhouse;
 		f.t += dt;
-		const GROW = 0.3, OUT = 0.1, IN = 0.15, WHITE = 0.3;
+		const GROW = f.dir === 'in' ? WALK_IN_GROW : 0.3, OUT = f.dir === 'in' ? 0.15 : 0.1, IN = f.dir === 'in' ? 0.2 : 0.15, WHITE = 0.3;
 		const cover = (v) => this.veil.set('layer', v, this.layerColour);
 		if (f.dir === 'out') {
 			cover(Math.min(1, f.t / WHITE));
@@ -420,11 +425,14 @@ export class XRExperience {
 		if (f.dir === 'in') {
 			// The model grows towards you, then the fade; inside, the fade lifts.
 			if (!f.done) {
+				// Only the model grows (the gallery stays still, a fixed frame), eased in and out, with a soft vignette; then the fade.
 				const g = Math.min(1, f.t / GROW);
 				if (this.mode === 'dollhouse') { doll.doll.zoom = f.zoom * (1 + 0.6 * ease.inOut(g)); doll.apply(); }
-				cover(THREE.MathUtils.clamp((f.t - (GROW - OUT)) / OUT, 0, 1));
-				if (f.t >= GROW) {
+				this.veil.setVignette(Math.min(1, f.t / 0.3) * (WALK_IN_GROW > 0.5 ? 1 : 0));
+				cover(THREE.MathUtils.clamp((f.t - GROW) / OUT, 0, 1));
+				if (f.t >= GROW + OUT) {
 					f.done = true; f.t = 0;
+					this.veil.setVignette(0);
 					doll.doll.zoom = f.zoom; // (the scale model is as you left it when you come back)
 					f.go();
 					this.showArrival(this.roomHere() || 'Inside');
@@ -444,7 +452,7 @@ export class XRExperience {
 				// Every arrival at the scale model puts the plinth in front of you, the model
 				// level on it, here behind the fade (you may have turned and walked inside).
 				if (this.mode === 'dollhouse') this.recentreHere();
-				this.showArrival(`Scale model 1:${Math.round(1 / (this.baseScale * doll.doll.zoom))}`);
+				this.showArrival(`Scale model 1:${roundScale(1 / (this.baseScale * doll.doll.zoom))}`);
 			}
 		} else {
 			cover(Math.max(0, 1 - f.t / IN));
@@ -596,6 +604,41 @@ export class XRExperience {
 	}
 
 	/**
+	 * True if world point p is within `margin` of any key you could press (the
+	 * orb, the plinth doors and levels, the wrist keys, a lesson's keys, an
+	 * open wing): the fan stays closed over a hand reaching for one.
+	 */
+	nearKey(p, margin) {
+		const wrist = this.ui.wrist, orb = wrist.orb?.group;
+		if (orb?.visible && orb.getWorldPosition(this._nk ??= new THREE.Vector3()).distanceTo(p) < margin) return true;
+		if (this.modes.dollhouse.doors.near(p, margin)) return true;
+		if (wrist.open && wrist.pad.near(p, margin)) return true;
+		if (this.lessons?.keys?.near(p, margin)) return true;
+		const q = this._nk2 ??= new THREE.Vector3();
+		for (const panel of this.ui.openPanels()) {
+			panel.mesh.updateMatrixWorld(true);
+			const g = panel.mesh.geometry.parameters, L = panel.mesh.worldToLocal(q.copy(p));
+			if (Math.abs(L.x) < g.width / 2 + margin && Math.abs(L.y) < g.height / 2 + margin && Math.abs(L.z) < margin) return true;
+		}
+		return false;
+	}
+
+	/**
+	 * Bare hands teleport (and point at a room) with ONE hand: the main hand
+	 * while it is empty, the other while the main hand holds a tool (Settings,
+	 * General: Main hand, right by default). Both may still open a wall portal.
+	 */
+	teleportHand(c) {
+		const main = this.mainHand, held = this.tools?.held?.c;
+		// (The main hand takes tools from the fan, so it often holds one: then the other hand teleports. One hand always can.)
+		const side = held && held.handedness === main ? this.toolFan : main;
+		return c.handedness === side;
+	}
+
+	/** The hand that wears the wrist menu, takes tools and teleports ('right' by default; the Main hand setting). */
+	get mainHand() { return this.toolFan === 'right' ? 'left' : 'right'; }
+
+	/**
 	 * Why bare hand c's pinch may not aim a teleport here (the design of 24
 	 * Nov: a pinch near something belongs to it), or null. p: the pinch point
 	 * (world). 'board', 'wrist menu', 'key', 'fan', 'model', 'tool'.
@@ -603,7 +646,7 @@ export class XRExperience {
 	aimBlock(c, p) {
 		const NEAR = 0.15, tools = this.tools, held = tools?.held?.c;
 		if (held === c) return 'tool'; // (a hand holding a tool never aims)
-		if (this.menu) return 'board';
+		if (this.boardOpen) return 'board';
 		if (this.ui.wrist.open) return 'wrist menu';
 		if (!p) return null;
 		if (held) {
@@ -619,6 +662,9 @@ export class XRExperience {
 		if (this.mode === 'dollhouse' && this.modes.dollhouse.modelBox().distanceToPoint(p) < NEAR) return 'model';
 		return null;
 	}
+
+	/** The head's yaw in the world (radians, + = turning left): the flick gesture subtracts its change. */
+	viewYaw() { this.rig.updateMatrixWorld(true); return yawOfMatrix((this._viewM2 ??= new THREE.Matrix4()).copy(this.camera.matrix).premultiply(this.rig.matrixWorld)); }
 
 	/** The viewer's horizontal right and forward axes (world, unit). */
 	viewAxes() {
@@ -684,7 +730,7 @@ export class XRExperience {
 		if (this.hidden) return; // (Meta's menu covers the app: nothing reads input behind it)
 		this.frameDt = dt;
 		this.input.update(); // (also clears every controller's claims)
-		this.input.readGestures(dt, this.headWorld()); // bare hands: the teleport gesture, the closed hand (C0.4)
+		this.input.readGestures(dt, this.headWorld(), this.viewYaw()); // bare hands: the teleport gesture, the closed hand (C0.4)
 		for (const v of this.handViews) v.near = false; // (a key or the board near a fingertip lights it up again this frame)
 		this.ui.showHandsNote(); // bare hands: "Pick up your controllers" (their pinches are never read)
 		this.tools.claim(); // a held tool's buttons are its own, before the menu and the mode

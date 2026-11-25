@@ -216,7 +216,7 @@ export class XRInput {
 	}
 
 	/** Runs each bare hand's gesture reader for this frame (see the top of the file). head: the eyes' world position. */
-	readGestures(dt, head = null) {
+	readGestures(dt, head = null, headYaw = 0) {
 		this._gh = this._gh ?? [];
 		this._gh.length = 0;
 		for (const c of this.controllers) {
@@ -233,7 +233,7 @@ export class XRInput {
 					(joints[n] ??= new THREE.Vector3()).setFromMatrixPosition(j.matrixWorld);
 				}
 			}
-			c.gestures = c.gesture.step(joints, dt, head);
+			c.gestures = c.gesture.step(joints, dt, head, headYaw);
 		}
 	}
 

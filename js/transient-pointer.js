@@ -39,11 +39,11 @@ export function act(xr, origin, dir) {
 	ray.set(origin, dir.clone().normalize());
 	ray.far = 30;
 	// The board.
-	if (xr.menu) {
-		const hit = ray.intersectObject(xr.menu.mesh, false)[0];
+	for (const panel of xr.ui.openPanels()) { // (the wings)
+		const hit = ray.intersectObject(panel.mesh, false)[0];
 		if (hit) {
-			const target = xr.menu.hitTest(hit.uv);
-			const action = target && xr.menu.press(target);
+			const target = panel.hitTest(hit.uv);
+			const action = target && panel.press(target);
 			if (action) xr.menuAction(action);
 			return 'board';
 		}

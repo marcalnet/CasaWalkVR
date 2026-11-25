@@ -20,7 +20,7 @@
 import * as THREE from 'three';
 import { TeleportArc, yawOf } from './xr-input.js';
 import { WallCollider } from './walls.js';
-import { UP, DOWN, worldNormal, hitSegment } from './xr-targets.js';
+import { UP, DOWN, worldNormal, hitSegment, firstHit } from './xr-targets.js';
 import { EYE_BELOW_TOP } from './xr-scene.js';
 import { handAimRay } from './gestures.js';
 import { hotspots, snapTo, HOTSPOT } from './hotspots.js';
@@ -152,6 +152,9 @@ export class Walk {
 		const spots = this.spots();
 		const head = xr.centerer.worldToLocal(xr.headWorld());
 		let snappedTo = null;
+		// A wall portal open in front of you (a fingertip's, or your eyes'): the arc and the snap's sight lines pass through the hole.
+		t.holes = xr.portals?.holes() ?? null;
+		t.cut = xr.portals?.cutSet ?? null;
 		const walls = (xr.model.layers.walls?.children ?? []).filter((w) => w.visible), knee = new THREE.Vector3(), to = new THREE.Vector3();
 		// (Never through a wall: pointing beside a door must not land you in the next room; the tester's finding.)
 		const clear = (p, s) => {
@@ -161,7 +164,7 @@ export class Walk {
 			if (len < 1e-3) return true;
 			xr.raycaster.set(knee, to.sub(knee).divideScalar(len));
 			xr.raycaster.far = len;
-			return !xr.raycaster.intersectObjects(walls, false).length;
+			return !firstHit(xr.raycaster.intersectObjects(walls, false), t);
 		};
 		const snap = (p) => {
 			const m = xr.centerer.worldToLocal(p.clone());
@@ -213,10 +216,12 @@ export class Walk {
 		for (const c of input.gestureHands()) {
 			const mine = this.tele?.c === c;
 			for (const e of c.gestures) {
-				if (e.type === 'pinch' && !this.tele && !this.fade && !xr.aimBlock(c, c.gesture.shape?.pinchAt) && c.gesture.shape.pinchAt.y >= xr.headWorld().y - WAIST) { // (a hand at your side never aims)
+				if (e.type === 'pinch' && !this.tele && !this.fade && xr.teleportHand(c) && !xr.aimBlock(c, c.gesture.shape?.pinchAt) && c.gesture.shape.pinchAt.y >= xr.headWorld().y - WAIST) { // (a hand at your side never aims)
 					this.tele = { c, via: 'hand', steady: 0, anchor: null };
 					xr.sound.play('aim');
 					xr.lessons?.note('arc');
+				} else if (e.type === 'pinch' && !this.tele && !xr.teleportHand(c) && !xr.aimBlock(c, c.gesture.shape?.pinchAt) && c.gesture.shape?.pinchAt) {
+					xr.ui.noteWrongHand(c, c.gesture.shape.pinchAt); // (the other hand moves you)
 				} else if (!mine) {
 					continue;
 				} else if (e.type === 'pinchEnd') {
@@ -240,7 +245,7 @@ export class Walk {
 		const tele = this.tele;
 		if (tele?.via !== 'hand') return;
 		const at = tele.c.gesture.shape?.pinchAt;
-		if (xr.menu || xr.ui.wrist.open || !tele.c.touch.tracked || !at) { this.tele = null; this.hideAim(); return; }
+		if (xr.boardOpen || xr.ui.wrist.open || !tele.c.touch.tracked || !at) { this.tele = null; this.hideAim(); return; }
 		if (at.y < xr.headWorld().y - WAIST) { cancel(); return; } // (the hand dropped below the waist)
 		const { origin, dir } = handAimRay(xr.headWorld(), xr.viewAxes().right, at, tele.c.handedness);
 		const r = this.aim(origin, dir, { pending: tele.steady < STEADY });
@@ -349,7 +354,7 @@ export class Walk {
 		// Lasers only show while a menu is open or one points at the orb (never
 		// on a hand holding a tool).
 		for (const c of input.active()) {
-			const show = c.claim.trigger === 'ui' || ((!!xr.menu || ui.wrist.open) && c.claim.trigger !== 'tool');
+			const show = c.claim.trigger === 'ui' || ((xr.boardOpen || ui.wrist.open) && c.claim.trigger !== 'tool');
 			input.setLaser(c, show);
 			if (!show) input.showHit(c, null);
 		}
@@ -359,7 +364,7 @@ export class Walk {
 
 		// Teleport: push the right stick forward, or hold a trigger, and aim;
 		// release to go.
-		if (!this.tele && !xr.menu && !this.fade) {
+		if (!this.tele && !xr.boardOpen && !this.fade) {
 			const rs = right?.state.stick;
 			if (rs && rs.y < -0.6 && Math.abs(rs.y) > Math.abs(rs.x)) this.tele = { c: right, via: 'stick' };
 			else {
@@ -404,7 +409,7 @@ export class Walk {
 		const pull = new THREE.Vector3();
 		let pulling = 0;
 		for (const c of input.active()) {
-			if (c.state.down.grip && c.claim.grip === null && !xr.menu) c.pull = c.grip.position.clone();
+			if (c.state.down.grip && c.claim.grip === null && !xr.boardOpen) c.pull = c.grip.position.clone();
 			if (!c.state.grip) c.pull = null;
 			if (c.pull) {
 				pull.add(c.pull.clone().sub(c.grip.position));

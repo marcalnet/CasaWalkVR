@@ -88,12 +88,29 @@ export function hitSegment(raycaster, a, b, t) {
 	if (len < 1e-6) return null;
 	raycaster.set(a, dir.divideScalar(len));
 	raycaster.far = len;
-	const h = raycaster.intersectObjects(t.solid, false)[0];
+	const h = firstHit(raycaster.intersectObjects(t.solid, false), t);
 	if (!h) return null;
 	const normal = worldNormal(h);
 	if (normal.dot(dir) > 0) normal.negate(); // the side the arc came from
 	if (normal.y > 0.7 || !t.walkable.has(h.object) || normal.y < -0.3) return { point: h.point, normal, valid: normal.y > 0.7 && t.walkable.has(h.object) };
 	return treadAbove(raycaster, h.point, normal, t) ?? { point: h.point, normal, valid: false };
+}
+
+/**
+ * True where a ray hit is inside a wall portal's hole (t.holes: spheres
+ * { x, y, z, w }; t.cut: the meshes they cut): the arc and the snap's sight
+ * lines pass through it as the eyes do.
+ */
+export function inPortal(hit, t) {
+	if (!t?.holes?.length || !t.cut?.has(hit.object)) return false;
+	for (const u of t.holes) if (Math.hypot(hit.point.x - u.x, hit.point.y - u.y, hit.point.z - u.z) < u.w) return true;
+	return false;
+}
+
+/** The first of a ray's hits (nearest first) that is not inside a portal's hole. */
+export function firstHit(hits, t) {
+	if (!t?.holes?.length) return hits[0];
+	return hits.find((h) => !inPortal(h, t));
 }
 
 /** The walkable top just above and behind a steep face at `point` (normal: towards the arc), or null. */

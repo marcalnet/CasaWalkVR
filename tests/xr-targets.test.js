@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
-import { targetSets, findFloor, hitSegment } from '../js/xr-targets.js';
+import { targetSets, findFloor, hitSegment, inPortal, firstHit } from '../js/xr-targets.js';
 
 const mat = new THREE.MeshLambertMaterial();
 const box = (w, h, d, x, y, z, userData = {}) => {
@@ -158,4 +158,23 @@ test('glass is never a landing, by name or transparent material; it blocks nothi
 	t = targetSets(one.model);
 	const through = hitSegment(ray, V(-1.5, 2, 1.5), V(-1.5, -0.1, 1.5), t);
 	assert.ok(through && through.valid && Math.abs(through.point.y) < 0.02, 'one level: through the glass to the floor');
+});
+
+test('a wall portal is a hole for the arc: through it you land beyond; outside it the wall still stops you', () => {
+	// The wall at z = -3 (0.15 thick); a floor on both sides of it.
+	const h = home();
+	const beyond = box(6, 0.02, 4, 0, -0.01, -5);
+	h.model.layers.floors.add(beyond);
+	const t = targetSets(h.model);
+	const from = V(0, 1.3, -2.5), to = V(0, -0.2, -3.6); // a steep arc segment crossing the wall, landing beyond it
+	assert.ok(!hitSegment(ray, from, to, t).valid, 'no portal: the wall stops the arc (red)');
+	t.cut = new Set([h.wall]);
+	t.holes = [{ x: 0, y: 1, z: -3.0, w: 0.35 }];
+	const seg = hitSegment(ray, V(0, 1.0, -2.8), V(0, -0.2, -3.8), t);
+	assert.ok(seg && seg.valid && seg.point.z < -3.1, `through the hole, landing beyond: ${JSON.stringify(seg?.point)}`);
+	t.holes = [{ x: 2, y: 1, z: -3.0, w: 0.35 }]; // a hole elsewhere in the wall
+	assert.ok(!hitSegment(ray, V(0, 1.0, -2.8), V(0, -0.2, -3.8), t).valid, 'outside the hole: still a wall');
+	// Only what the portal cuts: furniture inside the sphere still counts.
+	assert.ok(!inPortal({ object: h.table, point: V(0, 1, -3) }, { holes: [{ x: 0, y: 1, z: -3, w: 0.35 }], cut: new Set([h.wall]) }));
+	assert.equal(firstHit([1, 2], { holes: [] }), 1);
 });

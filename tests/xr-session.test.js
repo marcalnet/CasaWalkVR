@@ -75,17 +75,17 @@ test('?nomerge (the model as loaded, for debugging): the headset takes it, shado
 test('the settings boards: the same tabs at both layers, a Close key, every target big enough to touch', async () => {
 	const { x } = await setup();
 	for (const p of Object.values(x.menus)) {
-		assert.deepEqual(p.tabs.map((t) => t.label), ['How to move', 'View', 'Walk', 'Tools', 'General']);
-		assert.deepEqual(p.tabs[0].rows.flat().map((c) => `${c.id}:${c.type}`), ['guide:drawn'], 'How to move: the guide, drawn, never pressed');
-		assert.deepEqual(shape(p.tabs[1].rows), ['light:choice:Time of day:Morning:Noon:Sunset:Night', 'shadows:switch:Shadows | depth:switch:Depth shading',
+		assert.deepEqual(p.tabs.map((t) => t.label), ['View', 'Walk', 'Tools', 'General']);
+		assert.equal(p.lead.label, '? How to move', 'the How to move key at the tabs\' left end');
+		assert.deepEqual(shape(p.tabs[0].rows), ['light:choice:Time of day:Morning:Noon:Sunset:Night', 'shadows:switch:Shadows | depth:switch:Depth shading',
 			'ceilings:switch:Ceilings | view:switch:Passthrough', 'seethrough:switch:Transparent walls']);
-		assert.deepEqual(shape(p.tabs[2].rows), ['height:choice:Height:Yours:1.4 m:1.7 m:2.0 m', 'solid:switch:Solid walls']);
-		assert.deepEqual(shape(p.tabs[3].rows), ['lens:choice:Camera lens:24 mm:28 mm:35 mm:50 mm']);
-		assert.deepEqual(shape(p.tabs[4].rows), ['toolFan:choice:Tool fan:Left hand:Right hand', 'sound:choice:Sound:Off:Effects']);
+		assert.deepEqual(shape(p.tabs[1].rows), ['height:choice:Height:Yours:1.4 m:1.7 m:2.0 m', 'solid:switch:Solid walls']);
+		assert.deepEqual(shape(p.tabs[2].rows), ['lens:choice:Camera lens:24 mm:28 mm:35 mm:50 mm']);
+		assert.deepEqual(shape(p.tabs[3].rows), ['mainHand:choice:Main hand:Right:Left', 'sound:choice:Sound:Off:Effects']);
 		assert.equal(p.actions.length, 0, 'no actions on the board: the doors are on the wrist');
 		assert.ok(p.rects().some((r) => r.id === 'close'), 'a Close key');
 		assert.ok(!p.get('levels'), 'Levels is not on the board: a stack of keys beside the doors');
-		// Touch targets: at least 4 cm (the board is 52 cm wide).
+		// Touch targets: at least 4 cm (the wing is 40 cm wide).
 		const m = p.mesh.geometry.parameters.width / p.size.w;
 		for (const r of p.rects()) assert.ok(Math.min(r.w, r.h) * m >= 0.04 - 1e-9, `${r.id} ${r.value ?? ''}: ${(Math.min(r.w, r.h) * m * 100).toFixed(1)} cm`);
 	}
@@ -94,22 +94,23 @@ test('the settings boards: the same tabs at both layers, a Close key, every targ
 	// Scale-model settings are greyed out inside; the boards are the same size whatever the tab.
 	assert.ok(Object.values(x.menus).every((p) => !p.get('figure') && !p.get('photo') && !p.get('recentre') && !p.get('exit')), 'no figure, Photo, Recentre or Exit VR');
 	const h = x.menus.dollhouse.size.h;
-	for (const tab of ['general', 'move']) { x.menus.dollhouse.setTab(tab); assert.equal(x.menus.dollhouse.size.h, h, tab); }
+	for (const tab of ['general', 'walk']) { x.menus.dollhouse.setTab(tab); assert.equal(x.menus.dollhouse.size.h, h, tab); }
 	x.menus.dollhouse.setTab('view');
 });
 
-test('the wrist menu: Settings above, Help below, ← Back on the left, Walk in → on the right', async () => {
+test('the wrist menu: ← Back on the left, Settings (and help) in the middle, Walk in → on the right; inside, the flat plate takes the right-hand place', async () => {
 	const { keysFor } = await import('../js/wrist-menu.js');
 	const doll = keysFor('dollhouse'), inside = keysFor('walk', 'Living room');
 	assert.deepEqual(Object.fromEntries(Object.entries(doll).map(([k, v]) => [k, [v.id, v.look, v.label, v.caption ?? '']])), {
-		up: ['settings', 'plain', 'Settings', ''], right: ['in', 'filled', 'Walk in \u2192', 'Inside the home'],
-		down: ['help', 'plain', 'Help', ''], left: ['back', 'outline', '\u2190 Back', 'Leave VR'],
+		up: ['settings', 'plain', 'Settings', 'and help'], right: ['in', 'filled', 'Walk in \u2192', 'Inside the home'],
+		left: ['back', 'outline', '\u2190 Back', 'Leave VR'],
 	});
-	assert.deepEqual([inside.right.id, inside.right.look, inside.right.label, inside.right.caption], [null, 'flat', 'Inside', 'Living room'], 'inside: a flat plate, you are as deep as it goes');
+	assert.deepEqual([inside.right.id, inside.right.look, inside.right.label, inside.right.caption], [null, 'flat', 'Inside', 'Living room'], 'inside: the flat plate stays in the right-hand place');
+	assert.equal(inside.down, undefined, 'Help is in Settings, not on the wrist');
 	assert.deepEqual([inside.left.id, inside.left.caption], ['back', 'Scale model']);
 });
 
-test('the wrist menu: an arc over the upper outer side of the orb, frozen once open, closed after 8 s with no finger near', async () => {
+test('the wrist menu: an arc over the upper outer side of the orb, frozen once open, closed after 12 s with no finger or laser near a key', async () => {
 	const { WRIST } = await import('../js/theme.js');
 	const { x, frame, hands } = await setup();
 	hands.left.grip.visible = hands.right.grip.visible = true; // (tracked)
@@ -118,24 +119,30 @@ test('the wrist menu: an arc over the upper outer side of the orb, frozen once o
 	w.show({ pinned: true });
 	for (let i = 0; i < 20; i++) frame();
 	assert.ok(w.open && Object.values(w.keys).every((k) => k.out), 'open, every key out');
-	// Along the arc, as seen: ← Back, Settings, Help, Walk in →; 36° apart on a 14 cm radius, 7 cm keys.
+	// Along the arc, as seen: ← Back, Settings, Walk in →; 50° apart on a 14 cm radius, 7 cm keys (Settings 11 cm long).
 	const at = (slot) => w.keys[slot].group.position;
 	const ang = (slot) => Math.round(THREE.MathUtils.radToDeg(Math.atan2(at(slot).y, at(slot).x)));
-	assert.deepEqual(['left', 'up', 'down', 'right'].map(ang), [100, 64, 28, -8]);
-	for (const slot of ['left', 'up', 'down', 'right']) assert.ok(Math.abs(at(slot).length() - 0.14) < 0.003, slot);
+	assert.deepEqual(['left', 'up', 'right'].map(ang), [100, 50, 0]);
+	for (const slot of ['left', 'up', 'right']) assert.ok(Math.abs(at(slot).length() - 0.14) < 0.003, slot);
 	assert.equal(WRIST.key, 0.07);
-	assert.ok(['left', 'up', 'down', 'right'].every((s) => at(s).y > -0.03), 'the orb\'s underside stays clear');
-	assert.ok(['left', 'up', 'down', 'right'].every((s) => at(s).distanceTo(new THREE.Vector3()) > 0.1), 'no key over the orb');
+	assert.ok(['left', 'up', 'right'].every((s) => at(s).y > -0.03), 'the orb\'s underside stays clear');
+	assert.ok(['left', 'up', 'right'].every((s) => at(s).distanceTo(new THREE.Vector3()) > 0.1), 'no key over the orb');
 	// Frozen: the cross stays where it opened while the wrist moves.
 	const before = w.cross.position.clone();
 	x.input.controllers.forEach((c) => c.grip.position.x += 0.2);
 	for (let i = 0; i < 5; i++) frame();
 	assert.ok(w.open && w.cross.position.distanceTo(before) < 1e-6, 'world-locked');
-	// 8 s with no finger within 15 cm: it closes.
-	for (let t = 0; t < 7.5; t += 1 / 72) w.update(1 / 72);
-	assert.ok(w.open, 'still open at 7.5 s');
-	for (let t = 0; t < 1; t += 1 / 72) w.update(1 / 72);
-	assert.ok(!w.open, 'closed after 8 s');
+	// 12 s with no finger within 15 cm of the nearest key and no laser on one: it closes.
+	for (let t = 0; t < 11.5; t += 1 / 72) w.update(1 / 72);
+	assert.ok(w.open, 'still open at 11.5 s');
+	// A fingertip near the nearest key (far from the cross's middle) holds it open.
+	const tip = x.input.controllers.find((c) => c !== w.wearer);
+	tip.touch.tracked = true; tip.touch.tip.copy(w.keys.right.group.getWorldPosition(new THREE.Vector3())).add(new THREE.Vector3(0, 0.1, 0));
+	for (let t = 0; t < 3; t += 1 / 72) w.update(1 / 72);
+	assert.ok(w.open, 'a finger near the far key: still open');
+	tip.touch.tracked = false;
+	for (let t = 0; t < 12.5; t += 1 / 72) w.update(1 / 72);
+	assert.ok(!w.open, 'closed after 12 s');
 });
 
 test('the levels stack beside the doors: one key per level, ground at the bottom, the chosen one filled; one level has none', async () => {
@@ -227,14 +234,14 @@ test('the tab you left a board on is the one the other board opens on', async ()
 	assert.equal(x.menu.tab, 'walk');
 });
 
-test('Tool fan: the wrist menu moves to the other wrist, remembered', async () => {
+test('Main hand: the wrist menu, the tool fan and the teleport hand flip together, remembered', async () => {
 	const { x } = await setup();
 	assert.equal(x.ui.wrist.side, 'right');
-	x.menuAction({ id: 'toolFan', value: 'right' });
+	x.menuAction({ id: 'mainHand', value: 'left' });
 	assert.equal(x.toolFan, 'right');
 	assert.equal(x.ui.wrist.side, 'left');
-	assert.equal(x.menus.dollhouse.get('toolFan').value, 'right');
-	x.menuAction({ id: 'toolFan', value: 'left' });
+	assert.equal(x.menus.dollhouse.get('mainHand').value, 'left');
+	x.menuAction({ id: 'mainHand', value: 'right' });
 	assert.equal(x.ui.wrist.side, 'right');
 });
 
@@ -482,12 +489,12 @@ test('Help opens the board on How to move (for the input in hand, here, with the
 	const { x, frame } = await setup();
 	frame();
 	x.menuAction('help');
-	assert.ok(x.menu && x.menu.tab === 'move' && x.menu.mesh.visible, 'the board, on How to move');
-	const cell = x.menu.cells.get('guide');
+	assert.ok(x.ui.guide && x.ui.guide.mesh.visible && !x.menu, 'the left wing, How to move; Settings stays shut');
+	const cell = x.ui.guide.cells.get('guide');
 	assert.equal(cell.kind, 'dollhouse-controllers');
 	assert.match(cell.foot, /^Build /);
 	x.menuAction('help');
-	assert.equal(x.menu, null, 'Help again: closed');
+	assert.equal(x.ui.guide, null, 'Help again: closed');
 });
 
 test('the plinth doors fade out while the board is open, take no presses, and come back', async () => {
@@ -497,24 +504,31 @@ test('the plinth doors fade out while the board is open, take no presses, and co
 	x.ui.openMenu();
 	for (let i = 0; i < 20; i++) frame();
 	assert.ok(!d.doorGroup.visible && d.doorAlpha === 0, 'gone while the board is open');
-	x.ui.closeMenu();
+	x.ui.closeAll();
 	for (let i = 0; i < 20; i++) frame();
 	assert.ok(d.doorGroup.visible && d.doorAlpha === 1, 'back once it closes');
 });
 
-test('a session\'s first board opens on How to move until five teleports; after that, the tab you left', async () => {
+test('a session\'s first Settings opens How to move with it, until a teleport; afterwards How to move opens from its own key; the tab you left is kept', async () => {
 	const { x } = await setup();
 	x.ui.openMenu();
-	assert.equal(x.menu.tab, 'move');
-	x.menu.setTab('walk'); x.ui.closeMenu();
+	assert.ok(x.menu && x.ui.guide, 'the first Settings of a session: both wings');
+	assert.equal(x.menu.tab, 'view');
+	x.menu.setTab('walk'); x.ui.toggleBoard();
+	assert.ok(!x.menu && !x.ui.guide, 'Settings on the wrist closes both');
 	x.ui.openMenu();
+	assert.ok(x.menu && !x.ui.guide, 'the second time: only Settings');
 	assert.equal(x.menu.tab, 'walk', 'the tab you left');
-	x.ui.closeMenu();
+	x.menuAction('guideKey');
+	assert.ok(x.ui.guide, 'the How to move key opens the left wing');
+	x.menuAction('closeGuide');
+	assert.ok(x.menu && !x.ui.guide, 'its Close key closes only that wing');
+	x.ui.closeAll();
 	x.ui.reset(); // (a new session)
-	for (let i = 0; i < 5; i++) x.ui.onTeleport();
+	x.ui.onTeleport();
 	x.ui.openMenu();
-	assert.equal(x.menu.tab, 'view', 'five teleports: View first');
-	x.ui.closeMenu();
+	assert.ok(x.menu && !x.ui.guide, 'after a teleport, even a new session\'s first Settings opens alone');
+	x.ui.closeAll();
 });
 
 test('holding the model: it follows the grip, level (turned only about the vertical); let go in the air it floats, then goes home by itself', async () => {
@@ -941,4 +955,135 @@ test('20 measurements and 20 strokes cost a handful of draw calls', async () => 
 	assert.equal(meter.m.lines.length, 20);
 	assert.equal(marker.strokes.length, 20);
 	assert.ok(meshes <= 6, `all of it in ${meshes} meshes (lines, labels, one per ink)`);
+});
+
+test('round scales only: the plate and the model rest on 1:5, 1:10, 1:15 ... never 1:23 or 1:8', async () => {
+	const { roundScale, roundScaleUp, ROUND_SCALES } = await import('../js/xr-dollhouse.js');
+	assert.equal(roundScale(23), 25); assert.equal(roundScale(8), 10); assert.equal(roundScale(12), 10); assert.equal(roundScale(13), 15);
+	assert.equal(roundScaleUp(23.4), 25, 'the fit scale rounds up, so the model still fits'); assert.equal(roundScaleUp(25), 25);
+	const { x, frame } = await setup();
+	frame();
+	const d = x.modes.dollhouse, ratio = () => 1 / (x.baseScale * d.doll.zoom);
+	assert.ok(ROUND_SCALES.includes(Math.round(ratio())) && Math.abs(ratio() - Math.round(ratio())) < 1e-6, `on entry: 1:${ratio()}`);
+	assert.equal(x.plate.text, `1:${Math.round(ratio())}`);
+	// Zooming between two round scales: the plate shows the nearest; letting go glides onto it.
+	d.doll.zoom *= 1.19; d.apply();
+	assert.ok(ROUND_SCALES.includes(Number(x.plate.text.slice(2))), `while zooming: ${x.plate.text}`);
+	d.zoomHand = x.input.controllers[1];
+	d.settleZoom(d.zoomHand);
+	for (let i = 0; i < 40; i++) frame();
+	assert.ok(ROUND_SCALES.some((s) => Math.abs(s - ratio()) < 1e-6), `settled on 1:${ratio()}`);
+});
+
+test('bare hands teleport with one hand: the main hand while it is empty, the other while it holds a tool; Main hand flips them', async () => {
+	const { x } = await setup();
+	const L = { handedness: 'left' }, R = { handedness: 'right' };
+	assert.equal(x.mainHand, 'right');
+	assert.ok(!x.teleportHand(L) && x.teleportHand(R), 'main hand right: the right hand teleports');
+	x.tools.held = { c: R, tool: {} };
+	assert.ok(x.teleportHand(L) && !x.teleportHand(R), 'the right hand holds a tool: the left one teleports');
+	x.tools.held = null;
+	x.menuAction({ id: 'mainHand', value: 'left' });
+	assert.ok(x.teleportHand(L) && !x.teleportHand(R), 'main hand left: the left hand teleports');
+	x.menuAction({ id: 'mainHand', value: 'right' });
+});
+
+test('the fan: opens only on the "look at your watch" pose; tools slide aside from the orb (20 cm kept); the orb yields to its own hand', async () => {
+	const { x, frame, hands } = await setup();
+	const fan = x.fan;
+	x.lessons.stop();
+	hands.left.grip.visible = hands.right.grip.visible = true;
+	hands.left.grip.position.set(-0.1, 1.3, -0.45);
+	hands.right.grip.position.set(0.3, 0.8, 0);
+	// The left controller's face turned away from your eyes (face down): the fan stays closed.
+	hands.left.grip.rotation.set(Math.PI, 0, 0);
+	for (let i = 0; i < 20; i++) frame();
+	assert.ok(!fan.group.visible, 'a hand held face down: no fan');
+	hands.left.grip.rotation.set(0, 0, 0.0);
+	hands.left.grip.rotation.x = 0.6; // tilted so the face looks at the eyes
+	for (let i = 0; i < 20; i++) frame();
+	assert.ok(fan.group.visible && fan.alpha === 1, 'the face towards the eyes: the fan opens');
+	// The orb (on the right wrist) brought near the open fan: the tools slide away, never nearer than 20 cm.
+	const orb = x.ui.wrist.orb.group, o = new THREE.Vector3(), p = new THREE.Vector3();
+	const meter = fan.slots.find((s) => s.name === 'meter');
+	meter.home.getWorldPosition(p);
+	x.ui.wrist.wearer ?? null;
+	hands.right.grip.position.copy(x.rig.worldToLocal(p.clone().add(new THREE.Vector3(0.15, 0, 0)))); // (the wrist, 15 cm from the meter)
+	for (let i = 0; i < 40; i++) frame();
+	orb.getWorldPosition(o);
+	meter.home.getWorldPosition(p);
+	assert.ok(fan.group.visible, 'the fan stays open');
+	assert.ok(p.distanceTo(o) >= 0.19, `the meter keeps its distance: ${p.distanceTo(o).toFixed(3)}`);
+	assert.ok(meter.pushWorld.length() > 0.01, 'it was pushed aside');
+});
+
+test('the tools show also starts on a wider look after 4 s, and by itself after 10 s, never behind an open board', async () => {
+	const { x } = await setup();
+	const intro = x.toolsIntro;
+	x.camera.rotation.x = 1.2; x.camera.updateMatrixWorld(true); // (looking up, far from the model)
+	intro.start();
+	for (let t = 0; t < 9.5; t += 1 / 72) intro.update(1 / 72, () => {});
+	assert.ok(intro.state.waiting && !intro.lookingAtModel(Math.PI / 3), 'not before 10 s when looking far away');
+	x.ui.openMenu();
+	for (let t = 0; t < 2; t += 1 / 72) intro.update(1 / 72, () => {});
+	assert.ok(intro.state.waiting, 'the board is open: it waits');
+	x.ui.closeMenu();
+	intro.update(1 / 72, () => {});
+	assert.ok(!intro.state.waiting && intro.group.visible, 'timed: it begins');
+	intro.stop();
+});
+
+test('the plinth: 0.60 m with a controller, 0.90 m with only bare hands; a switch waits 1 s, then rises over 0.8 s with the model on it; never while the model floats', async () => {
+	const { x, frame } = await setup();
+	const d = x.modes.dollhouse;
+	frame();
+	assert.equal(x.plinthH, 0.6, 'controllers: 0.60 m');
+	const top = () => x.pedestal.userData.parts.slab.position.y + 0.015;
+	assert.ok(Math.abs(top() - 0.6) < 1e-6);
+	// The controllers put down: only bare hands (no controller source).
+	const sources = x.input.controllers.map((c) => c.source);
+	x.input.controllers.forEach((c) => { c.source = null; });
+	for (let i = 0; i < 40; i++) frame(); // 0.55 s: still waiting (a flicker must not bob the plinth)
+	assert.equal(x.plinthH, 0.6, 'waits 1 s');
+	for (let i = 0; i < 40; i++) frame(); // 1.1 s: the move began
+	assert.ok(x.plinthH > 0.6 && x.plinthH < 0.9 || x.plinthH === 0.9, 'moving');
+	for (let i = 0; i < 100; i++) frame();
+	assert.ok(Math.abs(x.plinthH - 0.9) < 1e-6 && Math.abs(top() - 0.9) < 1e-6, 'bare hands: 0.90 m');
+	assert.ok(Math.abs(d.doll.pos.y - 0.904) < 1e-6, 'the model rode up with it');
+	assert.ok(Math.abs(x.plate.mesh.position.y - (0.9 + x.plate.mesh.userData.tiltHalf)) < 1e-6, 'and the plate');
+	// A controller is back, but the model is floating: it waits.
+	d.floating = { wait: 0, going: null };
+	x.input.controllers.forEach((c, i) => { c.source = sources[i]; });
+	for (let i = 0; i < 200; i++) frame();
+	assert.equal(x.plinthH, 0.9, 'not while the model floats');
+	d.stopFloating();
+	for (let i = 0; i < 200; i++) frame();
+	assert.ok(Math.abs(x.plinthH - 0.6) < 1e-6, 'back to 0.60 m once at rest');
+});
+
+test('going home turns the model square to the plinth (unless you turned it with the stick)', async () => {
+	const { squareYaw } = await import('../js/xr-dollhouse.js');
+	const q = Math.PI / 2;
+	assert.ok(Math.abs(squareYaw(0.3) - 0) < 1e-9 && Math.abs(squareYaw(1.3) - q) < 1e-9 && Math.abs(squareYaw(-2.8) + Math.PI) < 1e-9);
+});
+
+test('a laser on a wing hovers its cell', async () => {
+	const { x, frame, hands } = await setup();
+	x.lessons.stop();
+	hands.right.grip.visible = true;
+	frame();
+	x.ui.openMenu();
+	frame();
+	const p = x.menu, r = p.rects().find((t) => t.id === 'ceilings');
+	const g = p.mesh.geometry.parameters;
+	p.mesh.updateMatrixWorld(true);
+	const at = p.mesh.localToWorld(new THREE.Vector3((((r.x + r.w / 2) / p.size.w) - 0.5) * g.width, (0.5 - (r.y + r.h / 2) / p.size.h) * g.height, 0));
+	// The right controller 0.4 m in front of the cell, pointing at it.
+	const from = at.clone().add(new THREE.Vector3(0.1, 0.1, 0.4));
+	hands.right.grip.position.copy(x.rig.worldToLocal(from));
+	const dir = at.clone().sub(from).normalize(), orig = x.input.setRaycaster.bind(x.input);
+	x.input.setRaycaster = (c, rc) => { if (c === x.input.controllers[1]) rc.set(from, dir); else orig(c, rc); };
+	for (let i = 0; i < 5; i++) frame();
+	const c = x.input.controllers[1]; x.input.setRaycaster(c, x.raycaster); const hit = x.raycaster.intersectObject(p.mesh, false)[0];
+	assert.ok(x.menu.hover?.startsWith('ceilings|'), `hover=${x.menu.hover} hit=${hit?.distance} claim=${c.claim.trigger} active=${x.input.active().length} panels=${x.ui.openPanels().length} vis=${p.mesh.visible}`);
 });

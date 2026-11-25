@@ -13,10 +13,10 @@ test('the shader chunk goes into a Lambert and a Basic shader once each', () => 
 	for (const name of ['lambert', 'basic']) {
 		const lib = THREE.ShaderLib[name];
 		const s = portalShader({ uniforms: {}, vertexShader: lib.vertexShader, fragmentShader: lib.fragmentShader }, portalUniforms());
-		for (const [text, where] of [['vCwWorld = (modelMatrix', s.vertexShader], ['uniform vec4 cwPortalHand', s.fragmentShader], ['if (cwOpen > 0.999) discard;', s.fragmentShader], ['gl_FragColor.a *= max(1.0 - cwOpen, cwRim);', s.fragmentShader]]) {
+		for (const [text, where] of [['vCwWorld = (modelMatrix', s.vertexShader], ['uniform vec4 cwPortalHand;', s.fragmentShader], ['if (cwOpen > 0.999) discard;', s.fragmentShader], ['gl_FragColor.a *= max(1.0 - cwOpen, cwRim);', s.fragmentShader]]) {
 			assert.equal(where.split(text).length, 2, `${name}: ${text}`);
 		}
-		assert.ok(s.uniforms.cwPortalHand && s.uniforms.cwPortalEye, name);
+		assert.ok(s.uniforms.cwPortalHand && s.uniforms.cwPortalHand2 && s.uniforms.cwPortalEye, name);
 	}
 });
 
@@ -156,4 +156,17 @@ test('the eye portal: none at 0.35 m, opening from 0.30 m, 0.40 m radius at 0.20
 	assert.ok(Math.abs(u.w - PORTAL.EYE_R) < 1e-9, 'landing next to a wall: already open behind the fade');
 	xr.mode = 'dollhouse'; p.update(xr, DT);
 	assert.equal(u.w, 0, 'never at the scale model');
+});
+
+test('both hands open their own portal; a third touch has none to open; the arc may pass through either', () => {
+	const r = room(), tipA = V(0.5, 1.3, 0.02), tipB = V(-1.5, 1.2, 0.02), xr = fakeXR(r, tipA), p = new Portals();
+	xr.input.controllers.push({ isController: true, touch: { tracked: true, tip: tipB } });
+	p.setModel(r.layers);
+	run(p, xr, 0.3);
+	const a = p.uniforms.cwPortalHand.value, b = p.uniforms.cwPortalHand2.value;
+	assert.equal(a.w, PORTAL.HAND_R); assert.equal(b.w, PORTAL.HAND_R, 'the other hand has its own');
+	assert.ok(V(a.x, a.y, a.z).distanceTo(V(b.x, b.y, b.z)) > 1.5, 'two different places');
+	assert.equal(p.holes().length, 2);
+	tipA.z = 0.4; run(p, xr, 0.5);
+	assert.equal(a.w, 0, 'the first closes when its hand leaves'); assert.equal(b.w, PORTAL.HAND_R, 'the second stays');
 });

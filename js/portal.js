@@ -7,6 +7,7 @@
 //                circle there: 0.35 m radius over 0.25 s (ease-out), following
 //                the fingertip along the wall (smoothed 0.1 s). It closes over
 //                0.4 s once the fingertip is more than 15 cm from the surface.
+//                Each hand opens its own (two at most).
 //                Never with Solid walls on (a window on a room you can't walk
 //                into would be a lie): a touch gives a small ring and a tick
 //                instead. Never from a hand holding a tool, or one at a key,
@@ -52,6 +53,7 @@ export const PORTAL = {
 export function portalUniforms() {
 	return {
 		cwPortalHand: { value: new THREE.Vector4(0, 0, 0, 0) },
+		cwPortalHand2: { value: new THREE.Vector4(0, 0, 0, 0) }, // the other hand's own portal
 		cwPortalEye: { value: new THREE.Vector4(0, 0, 0, 0) },
 		cwPortalRim: { value: new THREE.Color(LOOK.rim) },
 		cwPortalLook: { value: new THREE.Vector4(PORTAL.SOFT, PORTAL.RIM, LOOK.rimStrength, PORTAL.INSET) }, // soft edge, rim width, rim strength, inset
@@ -61,6 +63,7 @@ export function portalUniforms() {
 const VERTEX_HEAD = 'varying vec3 vCwWorld;';
 const VERTEX_BODY = 'vCwWorld = (modelMatrix * vec4(transformed, 1.0)).xyz;';
 const FRAGMENT_HEAD = `uniform vec4 cwPortalHand;
+uniform vec4 cwPortalHand2;
 uniform vec4 cwPortalEye;
 uniform vec3 cwPortalRim;
 uniform vec4 cwPortalLook;
@@ -79,8 +82,8 @@ float cwPortalRimAt(vec4 p) {
 	float at = cwPortalLook.x > 0.0 ? p.w - 0.5 * cwPortalLook.x : p.w + 0.5 * cwPortalLook.y;
 	return 1.0 - smoothstep(0.0, 0.5 * cwPortalLook.y, abs(cwPortalRho(p) - at));
 }`;
-const FRAGMENT_CUT = 'float cwOpen = max(cwPortalOpen(cwPortalHand), cwPortalOpen(cwPortalEye));\nif (cwOpen > 0.999) discard;';
-const FRAGMENT_EDGE = `float cwRim = max(cwPortalRimAt(cwPortalHand), cwPortalRimAt(cwPortalEye)) * cwPortalLook.z;
+const FRAGMENT_CUT = 'float cwOpen = max(max(cwPortalOpen(cwPortalHand), cwPortalOpen(cwPortalHand2)), cwPortalOpen(cwPortalEye));\nif (cwOpen > 0.999) discard;';
+const FRAGMENT_EDGE = `float cwRim = max(max(cwPortalRimAt(cwPortalHand), cwPortalRimAt(cwPortalHand2)), cwPortalRimAt(cwPortalEye)) * cwPortalLook.z;
 gl_FragColor.rgb = mix(gl_FragColor.rgb, cwPortalRim, cwRim);
 gl_FragColor.a *= max(1.0 - cwOpen, cwRim);`;
 
@@ -174,7 +177,10 @@ export class Portals {
 		this.hooked = new WeakSet();
 		this.layers = null;
 		this.prepared = false;
-		this.hand = { c: null, open: false, from: 0, t: 0, radius: 0, centre: new THREE.Vector3(), target: new THREE.Vector3() };
+		// Two hand portals, one for each hand that touches a wall (the first to touch takes the first).
+		const state = () => ({ c: null, open: false, from: 0, t: 0, radius: 0, centre: new THREE.Vector3(), target: new THREE.Vector3() });
+		this.hands = [state(), state()];
+		this.hand = this.hands[0];
 		this.touching = new Map(); // controller entry -> true while its tip touches a wall (with the LEAVE hysteresis)
 		this.lastTick = -Infinity;
 		this.clock = 0;
@@ -233,6 +239,24 @@ export class Portals {
 		hookPortal(mat, this.uniforms);
 	}
 
+	/**
+	 * The portals open right now, for the teleport arc: [{ x, y, z, w }] (centre
+	 * and radius, world), and the set of meshes they cut. An arc passes through
+	 * a hole in a wall as the eyes do (a fingertip's portal: build 111's test).
+	 */
+	holes() {
+		const out = this._holes ??= [];
+		out.length = 0;
+		for (const u of [this.uniforms.cwPortalHand.value, this.uniforms.cwPortalHand2.value, this.uniforms.cwPortalEye.value]) if (u.w > 0.05) out.push(u);
+		return out;
+	}
+
+	/** The meshes a portal cuts (walls and openings), as a Set. */
+	get cutSet() {
+		if (this._cutFor !== this.meshes) { this._cut = new Set(this.meshes); this._cutFor = this.meshes; }
+		return this._cut;
+	}
+
 	/** Every portal shut at once (leaving walk mode). */
 	reset() {
 		this.resetHand();
@@ -242,19 +266,18 @@ export class Portals {
 
 	/** The hand portal shut at once (a jump: never carried across). */
 	resetHand() {
-		const h = this.hand;
-		h.c = null; h.open = false; h.from = 0; h.t = 0; h.radius = 0;
+		for (const h of this.hands) { h.c = null; h.open = false; h.from = 0; h.t = 0; h.radius = 0; }
 		this.touching.clear();
-		this.uniforms.cwPortalHand.value.w = 0;
+		this.uniforms.cwPortalHand.value.w = this.uniforms.cwPortalHand2.value.w = 0;
 	}
 
 	/** The walls whole for one draw (a photo, the viewfinder): call show() after. */
 	hide() {
-		if (this.hidden++ === 0) { this._hw = this.uniforms.cwPortalHand.value.w; this._ew = this.uniforms.cwPortalEye.value.w; this.uniforms.cwPortalHand.value.w = this.uniforms.cwPortalEye.value.w = 0; }
+		if (this.hidden++ === 0) { this._hw = this.uniforms.cwPortalHand.value.w; this._h2 = this.uniforms.cwPortalHand2.value.w; this._ew = this.uniforms.cwPortalEye.value.w; this.uniforms.cwPortalHand.value.w = this.uniforms.cwPortalHand2.value.w = this.uniforms.cwPortalEye.value.w = 0; }
 	}
 
 	show() {
-		if (this.hidden > 0 && --this.hidden === 0) { this.uniforms.cwPortalHand.value.w = this._hw; this.uniforms.cwPortalEye.value.w = this._ew; }
+		if (this.hidden > 0 && --this.hidden === 0) { this.uniforms.cwPortalHand.value.w = this._hw; this.uniforms.cwPortalHand2.value.w = this._h2; this.uniforms.cwPortalEye.value.w = this._ew; }
 	}
 
 	/**
@@ -265,38 +288,42 @@ export class Portals {
 		this.xr = xr;
 		this.clock += dt;
 		if (this.hidden) return;
-		if (xr.mode !== 'walk' || !this.meshes.length) { if (this.hand.radius || this.hand.c || this.touching.size || this.uniforms.cwPortalEye.value.w) this.reset(); return; }
+		if (xr.mode !== 'walk' || !this.meshes.length) { if (this.hands.some((h) => h.radius || h.c) || this.touching.size || this.uniforms.cwPortalEye.value.w) this.reset(); return; }
 		this.prepare(xr.seeThrough);
 		// A jump (the teleport's fade, a layer change): the hand portal shuts at
 		// once; the eye portal is set for the new head position behind the fade.
-		if (xr.modes.walk?.fade || xr.layerFx) { if (this.hand.radius || this.hand.c) this.resetHand(); }
+		if (xr.modes.walk?.fade || xr.layerFx) { if (this.hands.some((h) => h.radius || h.c)) this.resetHand(); }
 		else this.updateHand(xr, dt);
 		this.updateEye(xr);
 		this.updateRing(dt);
 	}
 
 	updateHand(xr, dt) {
-		const P = PORTAL, h = this.hand, s = this._s;
-		let first = null; // a hand that has just touched a wall this frame
+		const P = PORTAL, hs = this.hands, sc = this._s;
+		const firsts = []; // hands that have just touched a wall this frame
 		for (const c of xr.input.controllers) {
 			const tip = c.touch?.tracked ? c.touch.tip : null;
 			// (A hand holding a tool, or at a key, the board or the fan, never opens one.)
 			const free = tip && !xr.aimBlock(c, tip);
-			const near = free ? nearestSurface(this.meshes, tip, P.LEAVE, s) : null;
+			const near = free ? nearestSurface(this.meshes, tip, P.LEAVE, sc) : null;
 			const was = this.touching.get(c) ?? false;
 			const now = !!near && (near.behind || near.distance < (was ? P.LEAVE : P.TOUCH));
 			if (now) this.touching.set(c, true); else this.touching.delete(c);
-			if (now && h.c === c) h.target.copy(near.point).addScaledVector(near.normal, -P.INSET);
+			const mine = hs.find((h) => h.c === c);
+			if (now && mine) mine.target.copy(near.point).addScaledVector(near.normal, -P.INSET);
 			if (now && !was) {
 				// A first touch: the vibration (at most once a second), and the portal or, with Solid walls, the ring.
 				if (c.isController && this.clock - this.lastTick > P.TICK_EVERY) { xr.haptics?.play(c, 'tick'); this.lastTick = this.clock; }
 				if (xr.solid) { xr.sound?.play('tick'); this.showRing(near.point, near.normal); }
-				else if (!h.c) first = { c, point: near.point.clone(), normal: near.normal.clone() };
+				else if (!mine) firsts.push({ c, point: near.point.clone(), normal: near.normal.clone() });
 			}
 		}
-		if (h.c && !this.touching.has(h.c)) { h.c = null; h.open = false; h.from = h.radius; h.t = 0; } // let go: it closes
-		if (xr.solid) { if (h.radius) { h.c = null; h.open = false; h.radius = 0; } }
-		else if (first) {
+		for (const h of hs) if (h.c && !this.touching.has(h.c)) { h.c = null; h.open = false; h.from = h.radius; h.t = 0; } // let go: it closes
+		for (const h of hs) if (xr.solid && h.radius) { h.c = null; h.open = false; h.radius = 0; }
+		if (!xr.solid) for (const first of firsts) {
+			// The hand's own portal: a free one (preferring one fully shut), else none.
+			const h = hs.find((x) => !x.c && x.radius === 0) ?? hs.find((x) => !x.c);
+			if (!h) break;
 			const target = first.point.addScaledVector(first.normal, -P.INSET);
 			// A new touch far from a closing portal starts afresh there; near it, it reopens from where it is.
 			if (h.radius > 0 && h.centre.distanceTo(target) > P.HAND_R) h.radius = 0;
@@ -305,12 +332,13 @@ export class Portals {
 			h.c = first.c; h.open = true; h.from = h.radius; h.t = 0;
 			xr.sound?.play('portal');
 		}
-		h.t += dt;
-		if (h.c) h.centre.lerp(h.target, 1 - Math.exp(-dt / P.FOLLOW));
-		h.radius = h.open || h.from > 0 ? handRadius(h.open, h.from, h.t) : 0;
-		if (!h.open && h.t >= P.HAND_CLOSE) { h.radius = 0; h.from = 0; }
-		const u = this.uniforms.cwPortalHand.value;
-		u.set(h.centre.x, h.centre.y, h.centre.z, h.radius);
+		hs.forEach((h, i) => {
+			h.t += dt;
+			if (h.c) h.centre.lerp(h.target, 1 - Math.exp(-dt / P.FOLLOW));
+			h.radius = h.open || h.from > 0 ? handRadius(h.open, h.from, h.t) : 0;
+			if (!h.open && h.t >= P.HAND_CLOSE) { h.radius = 0; h.from = 0; }
+			(i ? this.uniforms.cwPortalHand2 : this.uniforms.cwPortalHand).value.set(h.centre.x, h.centre.y, h.centre.z, h.radius);
+		});
 	}
 
 	/** The eye portal: its size from how close the eyes are to a wall (no tween: it follows the head). */

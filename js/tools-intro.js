@@ -18,7 +18,8 @@ import { Label } from './panel.js';
 import { readSetting, writeSetting } from './settings.js';
 
 const AHEAD = 1.3, DOWN = 15, SPACING = 0.38, BIG = 0.32; // metres (DOWN: degrees below eye level)
-const LOOK = THREE.MathUtils.degToRad(30), SETTLE = 1; // it waits until you look towards the model (within this), and this long (s) after you arrive
+const LOOK = THREE.MathUtils.degToRad(30), LOOK_WIDE = THREE.MathUtils.degToRad(60), SETTLE = 1; // it starts when you look towards the model (within 30°) a second after arriving, within 60° after 4 s, and by itself after 10 s
+const WIDE_AFTER = 4, TIMED_AFTER = 10; // (seconds; the Tester's finding: waiting for a look within 30° it might never be seen)
 const MODEL_MIDDLE = 0.8; // metres above the stage floor: about the middle of the model on the plinth
 const FAN_OPEN = 2; // seconds the fan opens by itself as the tools land
 const HOLD = 5; // seconds before they fly, unless reached for
@@ -81,12 +82,12 @@ export class ToolsIntro {
 		this.group.visible = true;
 	}
 
-	/** True while the head looks towards the scale model (within 30°). */
-	lookingAtModel() {
+	/** True while the head looks towards the scale model (within `limit`, 30° by default). */
+	lookingAtModel(limit = LOOK) {
 		const xr = this.xr, head = xr.headWorld(), look = this._look ??= new THREE.Vector3(), to = this._to ??= new THREE.Vector3();
 		look.setFromMatrixColumn(xr.camera.matrixWorld, 2).negate();
 		to.set(0, MODEL_MIDDLE, -xr.plinthDistance); xr.stage.localToWorld(to); to.sub(head).normalize(); // (about the middle of the model, above the plinth's middle)
-		return look.angleTo(to) < LOOK;
+		return look.angleTo(to) < limit;
 	}
 
 	stop() {
@@ -102,7 +103,10 @@ export class ToolsIntro {
 		s.t += dt;
 		// Waiting: once you have been here a second (Help: at once) and look towards the model, they appear.
 		if (s.waiting) {
-			if (s.t >= (this.again ? 0 : SETTLE) && this.lookingAtModel()) this.begin();
+			// (Never while the board or the wrist menu is open: it would play unseen behind it.)
+			if (xr.menu || xr.ui.wrist.open) return;
+			const seen = this.lookingAtModel() && s.t >= (this.again ? 0 : SETTLE) || this.lookingAtModel(LOOK_WIDE) && s.t >= WIDE_AFTER || s.t >= TIMED_AFTER;
+			if (seen) this.begin();
 			return;
 		}
 		// Slowly turning, until they fly.

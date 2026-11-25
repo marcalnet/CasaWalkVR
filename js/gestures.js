@@ -90,9 +90,10 @@ export class HandGestures {
 		this.shape = null;
 	}
 
-	/** head: the eyes' world position (a palm facing them never aims), or null. */
-	step(joints, dt, head = null) {
+	/** head: the eyes' world position (a palm facing them never aims), or null; headYaw: where the head looks (radians, + = left), so a flick is the hand turning against the head. */
+	step(joints, dt, head = null, headYaw = 0) {
 		this.head = head;
+		this.headYaw = headYaw;
 		const G = GESTURE, out = [];
 		this.clock += dt;
 		if (!joints) {
@@ -155,7 +156,8 @@ export class HandGestures {
 		if (facing) { this.pinchHeld = false; this.pinchSpent = true; out.push({ type: 'open' }); return; }
 		// A wrist flick: the hand's heading (its length, seen from above) turns over FLICK within FLICK_TIME.
 		if (Math.hypot(s.along.x, s.along.z) < 0.3) return; // (pointing up or down: no heading)
-		const yaw = Math.atan2(-s.along.x, -s.along.z);
+		// (Relative to the head: turning your body briskly with the pinch held turns the hand's heading too; that is not a flick.)
+		const yaw = Math.atan2(-s.along.x, -s.along.z) - (this.headYaw ?? 0);
 		const e = this.pool[this.poolAt++ % this.pool.length];
 		e.x = yaw; e.t = this.clock;
 		this.flick.push(e);

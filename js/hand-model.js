@@ -100,7 +100,7 @@ export function dressHand(gltf, handedness) {
 		pose: (joints) => {
 			for (const n of JOINT_NAMES) {
 				const j = joints[n], b = bones[n];
-				if (!j || !b) continue;
+				if (!j || !b || j.visible === false) continue; // (a joint the headset does not report keeps its last pose: never a stray bone)
 				b.position.copy(j.position);
 				b.quaternion.copy(j.quaternion);
 			}

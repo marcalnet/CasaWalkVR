@@ -98,8 +98,9 @@ export const WRIST = {
 	key: 0.07, // key face, metres (square): 7 cm, well above the 32 mm floor for icon plus text (HB §3)
 	// The keys sit on an arc over the upper outer side of the orb, like a quarter rainbow (the design of 24 Nov, item 5):
 	// the left side and the underside of the orb stay clear for the other index. Angles in degrees from the orb's right, as seen,
-	// counter-clockwise: ← Back just above the orb, then Settings, Help, and Walk in → to its right; 36° apart at 14 cm: about 1.8 cm between keys.
-	arc: { radius: 0.14, angles: { left: 100, up: 64, down: 28, right: -8 } },
+	// counter-clockwise: ← Back just above the orb, then Settings (11 cm long), and Walk in → to its right (inside: the flat Inside plate there); about 2.8 cm between keys at 14 cm: about 1.8 cm between keys.
+	arc: { radius: 0.14, angles: { left: 100, up: 50, right: 0 } },
+	settingsW: 0.11, // the middle key is longer: Settings, and help (7 cm high like the others)
 	raise: 0.006, // a key's face above its base
 	face: '#ffffff', edge: '#d3d9df', text: COLOURS.text, flat: COLOURS.off, flatText: COLOURS.offText,
 	labelFont: '"Kalam", "Bradley Hand", cursive', // hand-lettered labels (vendor/kalam)
@@ -116,7 +117,5 @@ export const GUIDE = {
 /** The settings board (C0.3): its artwork and where it opens. */
 export const BOARD = {
 	image: 'assets/ui/board.png', // aluminium frame and paper, under the settings drawn by code
-	width: 0.52, // metres
-	handle: [0.3, 0.03], // the bar on top that moves it, metres
-	handleColour: '#8f98a3',
+	width: 0.52, // metres (the wings are 0.40 and 0.34 wide: js/xr-menus.js WING_SIZE)
 };

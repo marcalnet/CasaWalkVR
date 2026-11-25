@@ -37,7 +37,7 @@ const sw = (id, label) => ({ type: 'switch', id, label, value: false });
  * the View tab's five rows, so the board keeps its size.
  */
 const GUIDE_CELL = {
-	type: 'drawn', id: 'guide', h: 5 * 80 + 4 * 14, kind: 'dollhouse-hands', foot: '',
+	type: 'drawn', id: 'guide', h: 330, kind: 'dollhouse-hands', foot: '',
 	draw(ctx, box) { drawGuide(ctx, this.kind, box, this.foot); },
 };
 
@@ -50,21 +50,22 @@ const CELLS = {
 	solid: sw('solid', 'Solid walls'),
 	seethrough: sw('seethrough', 'Transparent walls'),
 	view: sw('view', 'Passthrough'), // on: the room around you; off: the VR world
-	toolFan: { type: 'choice', id: 'toolFan', label: 'Tool fan', options: [{ value: 'left', label: 'Left hand' }, { value: 'right', label: 'Right hand' }], value: 'left' },
+	mainHand: { type: 'choice', id: 'mainHand', label: 'Main hand', options: [{ value: 'right', label: 'Right' }, { value: 'left', label: 'Left' }], value: 'right' }, // flips the wrist menu, the tool fan and the teleport hand together
 	lens: { type: 'choice', id: 'lens', label: 'Camera lens', options: [24, 28, 35, 50].map((mm) => ({ value: mm, label: `${mm} mm` })), value: 28 },
 	sound: { type: 'choice', id: 'sound', label: 'Sound', options: [{ value: 'off', label: 'Off' }, { value: 'effects', label: 'Effects' }], value: 'effects' },
 	guide: GUIDE_CELL,
+	replayTools: { type: 'button', id: 'replayTools', label: 'Tools show' }, // the left wing's two replay keys
+	replayPinch: { type: 'button', id: 'replayPinch', label: 'Pinch hand' },
 	height: { type: 'choice', id: 'height', label: 'Height', options: HEIGHTS.map((h) => ({ value: h, label: h ? `${h.toFixed(1)} m` : 'Yours' })), value: 0 },
 };
 
 
 /** The board's tabs (the same at both layers), each with rows of cell ids. Camera lens joins General in milestone D. */
 export const TABS = [
-	{ id: 'move', label: 'How to move', rows: [['guide']] }, // (the guide, since 25 Nov: no card beside the board)
 	{ id: 'view', label: 'View', rows: [['light'], ['shadows', 'depth'], ['ceilings', 'view'], ['seethrough']] },
 	{ id: 'walk', label: 'Walk', rows: [['height'], ['solid']] }, // (Turn left the board: 30° stays, the user's call)
 	{ id: 'tools', label: 'Tools', rows: [['lens']] }, // (the street camera's lens: wide for interiors; to get closer, walk closer)
-	{ id: 'general', label: 'General', rows: [['toolFan'], ['sound']] },
+	{ id: 'general', label: 'General', rows: [['mainHand'], ['sound']] },
 ];
 
 /** The boards, one per layer: the title names the layer. */
@@ -72,6 +73,9 @@ export const MENUS = {
 	dollhouse: { title: 'Settings · Scale model' },
 	walk: { title: 'Settings · Inside' },
 };
+
+/** The two wings beside the model (build 111's design): Settings on the right, How to move on the left. */
+export const WING_SIZE = { settings: 0.40, guide: 0.34 }; // widths, metres
 
 /**
  * The guide beside the menu (C0.4): how to move here, for bare hands or for
@@ -119,28 +123,35 @@ export const GUIDES = {
  * How to move tab: the help cards went on 25 Nov 2026.)
  */
 export function buildMenus(rig) {
-	const menus = {};
+	const menus = {}, guides = {};
 	const cells = (rows) => rows.map((row) => row.map((id) => CELLS[id]));
 	const paper = typeof Image !== 'undefined' ? new Image() : null;
 	for (const [mode, { title }] of Object.entries(MENUS)) {
-		const p = new Panel({ tabs: TABS.map((t) => ({ ...t, rows: cells(t.rows) })), actions: [] }, { title, width: BOARD.width, pxPerM: BOARD_PX_PER_M, close: true, background: paper });
+		// The right wing: Settings (the tabs), with the How to move key at the tabs' left end.
+		const p = new Panel({ tabs: TABS.map((t) => ({ ...t, rows: cells(t.rows) })), actions: [] }, {
+			title, width: WING_SIZE.settings, pxPerM: BOARD_PX_PER_M, close: true, background: paper,
+			lead: { id: 'guideKey', label: '? How to move', w: 150 },
+		});
 		p.mesh.visible = false;
 		p.mesh.name = 'board';
 		p.mesh.material.depthTest = false; // never hidden inside a wall
-		// The handle bar on top: hold it to move the board.
-		const [hw, hh] = BOARD.handle, height = p.mesh.geometry.parameters.height;
-		p.handle = new THREE.Mesh(new THREE.BoxGeometry(hw, hh, 0.012), new THREE.MeshLambertMaterial({ color: BOARD.handleColour }));
-		p.handle.position.set(0, height / 2 + hh / 2 + 0.006, 0);
-		p.handle.name = 'board-handle';
-		p.mesh.add(p.handle);
 		rig.add(p.mesh);
 		menus[mode] = p;
+		// The left wing: How to move (moving pictures for the input in hand), the two replay keys, the Meta button's line.
+		const g = new Panel({ tabs: [{ id: 'guide', label: '', rows: cells([['guide'], ['replayTools', 'replayPinch']]) }], actions: [] }, {
+			title: 'How to move', width: WING_SIZE.guide, pxPerM: BOARD_PX_PER_M, close: true, closeId: 'closeGuide', background: paper,
+		});
+		g.mesh.visible = false;
+		g.mesh.name = 'guide-wing';
+		g.mesh.material.depthTest = false;
+		rig.add(g.mesh);
+		guides[mode] = g;
 	}
 	if (paper) {
-		paper.onload = () => { for (const p of Object.values(menus)) p.draw(); };
+		paper.onload = () => { for (const p of [...Object.values(menus), ...Object.values(guides)]) p.draw(); };
 		paper.src = BOARD.image;
 	}
-	return { menus };
+	return { menus, guides };
 }
 
 /** Shows the current settings in both menus (switch positions, chosen options, slider, levels). */
@@ -151,7 +162,7 @@ export function updateLabels(xr) {
 		p.set('ceilings', { value: ceilings });
 		p.set('view', view);
 		p.set('seethrough', { value: xr.seeThroughAmount > 0 });
-		p.set('toolFan', { value: xr.toolFan });
+		p.set('mainHand', { value: xr.mainHand });
 		if (xr.lighting) {
 			p.set('light', { value: xr.lighting.time });
 			p.set('shadows', { value: xr.lighting.shadows });
@@ -163,6 +174,9 @@ export function updateLabels(xr) {
 		p.set('sound', { value: xr.soundLevel === 'off' ? 'off' : 'effects' });
 		p.set('lens', { value: xr.cameraLens });
 	}
+	// The left wing's replay keys: the tools' show is at the scale model, the pinch hand inside.
+	xr.guides.dollhouse.set('replayPinch', { disabled: true, note: 'Inside' });
+	xr.guides.walk.set('replayTools', { disabled: true, note: 'At the scale model' });
 	const walk = xr.menus.walk, doll = xr.menus.dollhouse;
 	walk.set('height', { value: xr.personHeight });
 	const walls = (xr.model?.layers.walls?.children.length ?? 0) > 0;
@@ -192,14 +206,25 @@ export function menuAction(xr, target) {
 		case 'dollhouse': if (xr.mode === 'walk') xr.goLayer('back', () => xr.setMode('dollhouse')); break;
 		case 'exit': xr.goLayer('out', () => xr.end()); break;
 		case 'settings': ui.toggleBoard(); break;
-		case 'help': ui.toggleHelp(); break;
+		case 'help': case 'guideKey': ui.toggleHelp(); break; // (How to move: the left wing)
 		case 'close': ui.closeMenu(); break;
-		case 'toolFan':
-			xr.toolFan = SETTINGS.toolFan.options.includes(value) ? value : xr.toolFan === 'left' ? 'right' : 'left';
-			writeSetting('toolFan', xr.toolFan);
+		case 'closeGuide': ui.closeGuide(); break;
+		case 'replayTools':
+			ui.closeAll(); // (it must play where it can be seen)
+			if (xr.mode === 'dollhouse' && xr.toolsIntro?.start({ again: true })) { xr.lessons.stop(); xr.introAgain = true; }
+			break;
+		case 'replayPinch':
+			ui.closeAll();
+			if (xr.mode === 'walk') xr.pinchDemo.play(xr.pinchDemo.inputKind());
+			break;
+		case 'mainHand': {
+			const main = SETTINGS.mainHand.options.includes(value) ? value : xr.mainHand === 'left' ? 'right' : 'left';
+			xr.toolFan = main === 'left' ? 'right' : 'left';
+			writeSetting('mainHand', main);
 			ui.wrist.setSide();
 			updateLabels(xr);
 			break;
+		}
 		case 'ceilings': {
 			const c = xr.model.layers.ceilings;
 			c.visible = !c.visible;

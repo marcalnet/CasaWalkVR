@@ -49,7 +49,7 @@ export class Panel {
 	 *              actions never move. Clicking a tab is handled here (like a dropdown).
 	 * @param opts  { title, hint (small text at the bottom), width (m), pxPerM (canvas pixels per metre) }
 	 */
-	constructor(rows, { title = '', hint = '', width = 0.62, pxPerM = PX_PER_M, close = false, background = null } = {}) {
+	constructor(rows, { title = '', hint = '', width = 0.62, pxPerM = PX_PER_M, close = false, closeId = 'close', background = null, lead = null } = {}) {
 		const spec = Array.isArray(rows) ? { tabs: [{ id: '', label: '', rows }], actions: [] } : rows;
 		const cellsOf = (rs) => rs.map((r) => r.map((c) => ({ type: 'button', ...c })));
 		this.tabs = spec.tabs.map((t) => ({ id: t.id, label: t.label, rows: cellsOf(t.rows) }));
@@ -59,6 +59,8 @@ export class Panel {
 		this.title = title;
 		this.hint = hint;
 		this.close = close; // a Close key (×) in the top-right corner, in the title's row
+		this.closeId = closeId; // the id its press returns
+		this.lead = lead; // { id, label, w (canvas px) }: a key at the left end of the tab row, nearest the body (How to move)
 		this.background = background; // an image drawn under everything (the board's frame and paper), once loaded
 		this.hover = null; // key of the hovered target
 		this.open = null; // id of the dropdown whose list is open
@@ -113,11 +115,14 @@ export class Panel {
 		// (the user's bare-hands test: beside the last tab it read as a tab).
 		this.closeBox = this.close ? { x: this.size.w - PAD - TAB_H, y: PAD + (TITLE_H - TAB_H) / 2 - 4, w: TAB_H, h: TAB_H } : null;
 		if (this.tabs.length > 1) {
-			const full = this.size.w - 2 * PAD, w = (full - (this.tabs.length - 1) * 8) / this.tabs.length;
-			this.tabBoxes = this.tabs.map((t, i) => ({ id: t.id, label: t.label, x: PAD + i * (w + 8), y, w, h: TAB_H }));
+			const lead = this.lead ? this.lead.w + 8 : 0;
+			const full = this.size.w - 2 * PAD - lead, w = (full - (this.tabs.length - 1) * 8) / this.tabs.length;
+			this.leadBox = this.lead ? { ...this.lead, x: PAD, y: y - 3, w: this.lead.w, h: TAB_H + 6 } : null;
+			this.tabBoxes = this.tabs.map((t, i) => ({ id: t.id, label: t.label, x: PAD + lead + i * (w + 8), y, w, h: TAB_H }));
 			y += TAB_H + TAB_GAP;
 		} else {
 			this.tabBoxes = [];
+			this.leadBox = null;
 		}
 		// The tab's rows, in the space of the tallest tab, then the actions.
 		const top = y;
@@ -147,7 +152,8 @@ export class Panel {
 	 */
 	rects() {
 		const out = this.open ? [] : this.tabBoxes.map((t) => ({ id: TAB, value: t.id, x: t.x, y: t.y, w: t.w, h: t.h }));
-		if (!this.open && this.closeBox) out.push({ id: 'close', ...this.closeBox });
+		if (!this.open && this.closeBox) out.push({ id: this.closeId, x: this.closeBox.x, y: this.closeBox.y, w: this.closeBox.w, h: this.closeBox.h });
+		if (!this.open && this.leadBox) out.push({ id: this.lead.id, x: this.leadBox.x, y: this.leadBox.y, w: this.leadBox.w, h: this.leadBox.h });
 		if (this.open) {
 			const list = this.list();
 			if (list) {
@@ -250,7 +256,7 @@ export class Panel {
 	/** The Close key (top-right corner), then the row of tabs: the shown one white and raised, the others flat. */
 	drawTabs(ctx) {
 		if (this.closeBox) {
-			const b = this.closeBox, hot = this.hover === 'close|';
+			const b = this.closeBox, hot = this.hover === `${this.closeId}|`;
 			roundRect(ctx, b.x, b.y, b.w, b.h, 18);
 			ctx.fillStyle = hot ? COLOURS.hover : COLOURS.cell;
 			ctx.fill();
@@ -262,6 +268,19 @@ export class Panel {
 			ctx.moveTo(b.x + b.w - m, b.y + m); ctx.lineTo(b.x + m, b.y + b.h - m);
 			ctx.stroke();
 			ctx.lineCap = 'butt';
+		}
+		if (this.leadBox) {
+			// The How to move key: a "?" and the words, at the tabs' left end, a raised key (not a tab).
+			const b = this.leadBox, hot = this.hover === `${this.lead.id}|`, on = !!this.lead.on;
+			roundRect(ctx, b.x, b.y, b.w, b.h, 18);
+			ctx.fillStyle = on ? COLOURS.accent : hot ? COLOURS.hover : COLOURS.cell;
+			ctx.fill();
+			ctx.lineWidth = hot ? 4 : 2; ctx.strokeStyle = hot ? COLOURS.hoverEdge : COLOURS.edge; ctx.stroke();
+			ctx.fillStyle = on ? COLOURS.accentText : COLOURS.text;
+			ctx.textAlign = 'center';
+			fitFont(ctx, this.lead.label, b.w - 18, 26, 14, 600);
+			ctx.fillText(this.lead.label, b.x + b.w / 2, b.y + b.h / 2 + 2);
+			ctx.textAlign = 'left';
 		}
 		for (const t of this.tabBoxes) {
 			const on = t.id === this.tab, hot = !on && this.hover === `${TAB}|${t.id}`;
