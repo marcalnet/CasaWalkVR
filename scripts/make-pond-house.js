@@ -103,8 +103,19 @@ const MODELS = {
 		 c(70, 12, 10, 196, 198, 'brass', 10), c(70, 6, 1, 160, 198, 'brass', 6)],
 	tallWindow: [b(0, 0, 0, 4, 200, 30, 'steelWhite'), b(146, 0, 0, 150, 200, 30, 'steelWhite'), b(4, 0, 0, 146, 4, 30, 'steelWhite'), b(4, 196, 0, 146, 200, 30, 'steelWhite'), b(4, 4, 14, 146, 196, 16, 'glass')],
 	railing: [b(0, 96, 0, 300, 100, 4, 'graphite'), ...Array.from({ length: 11 }, (_, i) => b(i * 29.6, 0, 1, i * 29.6 + 3, 96, 3, 'graphite'))],
-	waterA: [b(0, 0, 0, 950, 1, 620, 'water')],
-	waterB: [b(0, 0, 0, 700, 1, 520, 'water')],
+	// The pond (reworked 25 Nov 2026 for the Interior Design Advisor, the Quest 2 list's item 12): the water is sunk in a
+	// stone basin. Coping 18 cm high, 25 cm wide (one piece, 1650 x 620, no two boxes overlapping); the water's top at 5 cm,
+	// 13 cm below it, so the basin's sides show; the water slab floats 4 cm over the ground (elevation 4). Nothing else
+	// at water level; no two surfaces nearer than 3 cm. The pond's pieces are named Pond (water, never stood on); the
+	// coping and the stepping stones are not, so they can be stood on, in a different colour.
+	waterA: [b(0, 0, 0, 900, 1, 570, 'water')],
+	waterB: [b(0, 0, 0, 650, 1, 470, 'water')],
+	pondCoping: [
+		b(0, 0, 0, 25, 18, 620, 'masonry'), b(25, 0, 0, 925, 18, 25, 'masonry'), b(925, 0, 0, 975, 18, 620, 'masonry'), // west, the north of the west basin, the divider
+		b(975, 0, 100, 1625, 18, 125, 'masonry'), b(1625, 0, 100, 1650, 18, 620, 'masonry'), // the north and east of the east basin
+		b(25, 0, 595, 925, 18, 620, 'masonry'), b(975, 0, 595, 1625, 18, 620, 'masonry')], // the south of both
+	// Eleven stepping stones across the west basin, north to south: 60 x 40 cm, 10 cm apart, tops 5 cm above the water.
+	stepStones: Array.from({ length: 11 }, (_, i) => b(0, 0, i * 50, 60, 10, i * 50 + 40, 'walnut')),
 	stepsOut: steps(2, 15, 35, 160),
 	ledge: [b(0, 0, 0, 260, 22, 90, 'masonry'), b(30, 22, 10, 200, 38, 80, 'masonry')],
 	boulder: [b(0, 0, 0, 120, 45, 90, 'masonry'), b(20, 45, 15, 95, 70, 70, 'masonry')],
@@ -216,11 +227,13 @@ furniture('Stone ledge', 'ledge', G, 1180, 1180, { angle: PI / 2 });
 furniture('Boulder', 'boulder', G, -220, 1000, { angle: 0.4 });
 furniture('Boulder', 'boulder', G, 1050, 1000, { angle: -0.3 });
 // The pond: flat water pieces (not a room, so nobody steps inside onto the water); it runs under the terrace
-furniture('Pond', 'waterA', G, 125, 1110);
-furniture('Pond', 'waterB', G, 950, 1160);
-furniture('Lily pads', 'lily', G, 300, 1250, { elevation: 1 });
-furniture('Lily pads', 'lily', G, 420, 1180, { elevation: 1 });
-furniture('Lily pads', 'lily', G, 900, 1270, { elevation: 1 });
+furniture('Stone coping', 'pondCoping', G, 475, 1110);
+furniture('Pond', 'waterA', G, 125, 1110, { elevation: 4 });
+furniture('Pond', 'waterB', G, 950, 1160, { elevation: 4 });
+furniture('Stepping stones', 'stepStones', G, 105, 1101);
+furniture('Lily pads', 'lily', G, 300, 1250, { elevation: 8 }); // 3 cm clear of the water's top (5 cm)
+furniture('Lily pads', 'lily', G, 420, 1180, { elevation: 8 });
+furniture('Lily pads', 'lily', G, 900, 1270, { elevation: 8 });
 
 // --- Ground floor
 // Living room: round the fireplace in the west stone wall

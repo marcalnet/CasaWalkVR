@@ -77,6 +77,24 @@ test('Pond House: 2 levels, 17 rooms (14 named; the pond is water, not a room), 
 	assert.ok(glass.every((m) => !t.walkable.has(m)), 'glass is never a landing');
 });
 
+test('Pond House: the water is sunk in a stone basin, the stepping stones stand 5 cm above it, nothing within 3 cm of anything at water level', async () => {
+	const entries = unzipSync(new Uint8Array(fs.readFileSync(path.join(ROOT, 'examples/pond-house.sh3d'))));
+	const xml = new TextDecoder().decode(entries['Home.xml']);
+	const pieces = [...xml.matchAll(/<pieceOfFurniture ([^>]*)\/>/g)].map((m) => Object.fromEntries([...m[1].matchAll(/(\w+)='([^']*)'/g)].map((a) => [a[1], a[2]])));
+	const by = (name) => pieces.filter((p) => p.name === name);
+	const top = (p) => Number(p.elevation ?? 0) + Number(p.height);
+	const water = by('Pond'), coping = by('Stone coping'), stones = by('Stepping stones'), lilies = by('Lily pads');
+	assert.ok(water.length === 2 && coping.length === 1 && stones.length === 1 && lilies.length === 3);
+	const level = Math.min(...water.map(top));
+	assert.ok(coping.every((p) => top(p) - level >= 10 && top(p) - level <= 15), `the water sits 10-15 cm below the coping (${top(coping[0])} vs ${level} cm)`);
+	assert.ok(stones.every((p) => Math.abs(top(p) - level - 5) < 0.01), 'the stepping stones: tops 5 cm above the water');
+	assert.ok(lilies.every((p) => Number(p.elevation) - level >= 2 && Number(p.elevation) - level <= 3.5), 'the lilies float 2-3 cm clear of the water');
+	assert.ok(water.every((p) => Number(p.elevation) >= 3), 'the water slab is clear of the ground');
+	// The stones are no water: not named pool or water, so a visitor can stand on them (several levels).
+	const { WATER_NAME } = await import('../js/optimise.js');
+	assert.ok([...coping, ...stones, ...lilies].every((p) => !WATER_NAME.test(p.name)), 'only the water is named water');
+});
+
 test('Apartment: one level without <level> elements, named zones in one open room, lamps, nothing missing', async () => {
 	const entries = unzipSync(new Uint8Array(fs.readFileSync(path.join(ROOT, 'examples/apartment.sh3d'))));
 	const xml = new TextDecoder().decode(entries['Home.xml']);
