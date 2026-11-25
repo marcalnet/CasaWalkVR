@@ -58,7 +58,7 @@ js/device.js      which device: the headset's own browser, a Quest 2 (the one pl
 js/hand-readout.js the bare-hand tuning readout over each wrist, only with ?hands on the page URL (development)
 js/frame-stats.js the headset's fps and draw-call counter, only with ?stats on the page URL (measuring)
 js/hotspots.js    teleport hotspots: room middles and doorways, and snapping to them (pure, Node-testable)
-js/guide.js       the guide beside the menu: how to move, for hands or controllers; Hide folds it into a tab
+js/guide.js       How to move, the board's first tab: pictures and lines for hands or controllers, the build at its foot
 js/tools-intro.js the tools' first-time introduction: large in front of you, then flying to the wrist
 js/transient-pointer.js Apple Vision Pro's look-and-pinch: one pinch acts along its ray (isolated)
 js/lessons.js     the first-time lessons: a card of steps that tick off, the looping 3D hand, the first target

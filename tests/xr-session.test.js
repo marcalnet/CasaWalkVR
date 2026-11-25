@@ -75,12 +75,13 @@ test('?nomerge (the model as loaded, for debugging): the headset takes it, shado
 test('the settings boards: the same tabs at both layers, a Close key, every target big enough to touch', async () => {
 	const { x } = await setup();
 	for (const p of Object.values(x.menus)) {
-		assert.deepEqual(p.tabs.map((t) => t.label), ['View', 'Walk', 'Tools', 'General']);
-		assert.deepEqual(shape(p.tabs[0].rows), ['light:choice:Time of day:Morning:Noon:Sunset:Night', 'shadows:switch:Shadows | depth:switch:Depth shading',
+		assert.deepEqual(p.tabs.map((t) => t.label), ['How to move', 'View', 'Walk', 'Tools', 'General']);
+		assert.deepEqual(p.tabs[0].rows.flat().map((c) => `${c.id}:${c.type}`), ['guide:drawn'], 'How to move: the guide, drawn, never pressed');
+		assert.deepEqual(shape(p.tabs[1].rows), ['light:choice:Time of day:Morning:Noon:Sunset:Night', 'shadows:switch:Shadows | depth:switch:Depth shading',
 			'ceilings:switch:Ceilings | view:switch:Passthrough', 'seethrough:switch:Transparent walls', `levels:choice:Levels${p === x.menus.dollhouse ? ':All levels (2):Up to Ground floor' : ''}`]);
-		assert.deepEqual(shape(p.tabs[1].rows), ['height:choice:Height:Yours:1.4 m:1.7 m:2.0 m', 'solid:switch:Solid walls']);
-		assert.deepEqual(shape(p.tabs[2].rows), ['lens:choice:Camera lens:24 mm:28 mm:35 mm:50 mm']);
-		assert.deepEqual(shape(p.tabs[3].rows), ['toolFan:choice:Tool fan:Left hand:Right hand', 'sound:choice:Sound:Off:Effects']);
+		assert.deepEqual(shape(p.tabs[2].rows), ['height:choice:Height:Yours:1.4 m:1.7 m:2.0 m', 'solid:switch:Solid walls']);
+		assert.deepEqual(shape(p.tabs[3].rows), ['lens:choice:Camera lens:24 mm:28 mm:35 mm:50 mm']);
+		assert.deepEqual(shape(p.tabs[4].rows), ['toolFan:choice:Tool fan:Left hand:Right hand', 'sound:choice:Sound:Off:Effects']);
 		assert.equal(p.actions.length, 0, 'no actions on the board: the doors are on the wrist');
 		assert.ok(p.rects().some((r) => r.id === 'close'), 'a Close key');
 		assert.ok(p.get('levels').stepper, 'Levels is a ‹ › stepper');
@@ -94,8 +95,7 @@ test('the settings boards: the same tabs at both layers, a Close key, every targ
 	assert.ok(x.menus.walk.get('levels').disabled && /scale model/i.test(x.menus.walk.get('levels').note));
 	assert.ok(Object.values(x.menus).every((p) => !p.get('figure') && !p.get('photo') && !p.get('recentre') && !p.get('exit')), 'no figure, Photo, Recentre or Exit VR');
 	const h = x.menus.dollhouse.size.h;
-	x.menus.dollhouse.setTab('general');
-	assert.equal(x.menus.dollhouse.size.h, h);
+	for (const tab of ['general', 'move']) { x.menus.dollhouse.setTab(tab); assert.equal(x.menus.dollhouse.size.h, h, tab); }
 	x.menus.dollhouse.setTab('view');
 });
 
@@ -173,7 +173,7 @@ test('settings keep the board open; the doors move one layer at a time', async (
 test('the interface is never in a photo; what the tools make is', async () => {
 	const { x } = await setup();
 	const hidden = x.photoHidden;
-	for (const o of [...Object.values(x.menus).map((p) => p.mesh), ...Object.values(x.help).map((c) => c.mesh), x.ui.wrist.cross, x.veil.mesh, x.arrival.mesh, x.ui.welcome.mesh, x.ui.photoNote.mesh, x.modes.walk.arc.dots, x.modes.walk.arc.ring,
+	for (const o of [...Object.values(x.menus).map((p) => p.mesh), x.ui.wrist.cross, x.veil.mesh, x.arrival.mesh, x.ui.welcome.mesh, x.ui.photoNote.mesh, x.modes.walk.arc.dots, x.modes.walk.arc.ring,
 		...x.modes.dollhouse.markers, ...x.input.controllers.flatMap((c) => [c.ray, c.grip])]) assert.ok(hidden.has(o), o.name || o.type);
 	assert.ok(!hidden.has(x.tools.annotations) && x.tools.annotations.parent === x.centerer, 'measurements and drawings live in model space and show in photos');
 });
@@ -372,18 +372,43 @@ test('the doors at the scale model: a big Walk in →, a small ← Back on its l
 	frame(); settle();
 });
 
-test('the wrist menu: Help opens beside it, and the menu stays', async () => {
+test('Help opens the board on How to move (for the input in hand, here, with the build at its foot); Help again closes it', async () => {
 	const { x, frame } = await setup();
 	frame();
-	x.ui.wrist.show({ pinned: true });
 	x.menuAction('help');
-	assert.ok(x.ui.wrist.open, 'the menu stays open');
-	assert.ok(x.ui.help && x.ui.help.mesh.parent === x.ui.wrist.cross && x.ui.help.mesh.position.x > 0.15, 'on its right, in its plane');
+	assert.ok(x.menu && x.menu.tab === 'move' && x.menu.mesh.visible, 'the board, on How to move');
+	const cell = x.menu.cells.get('guide');
+	assert.equal(cell.kind, 'dollhouse-controllers');
+	assert.match(cell.foot, /^Build /);
 	x.menuAction('help');
-	assert.ok(!x.ui.help && x.ui.wrist.open, 'Help again: the card goes, the menu stays');
-	x.menuAction('help');
-	x.ui.wrist.close();
-	assert.equal(x.ui.help, null, 'closing the menu takes Help with it');
+	assert.equal(x.menu, null, 'Help again: closed');
+});
+
+test('the plinth doors fade out while the board is open, take no presses, and come back', async () => {
+	const { x, frame } = await setup();
+	const d = x.modes.dollhouse;
+	frame();
+	x.ui.openMenu();
+	for (let i = 0; i < 20; i++) frame();
+	assert.ok(!d.doorGroup.visible && d.doorAlpha === 0, 'gone while the board is open');
+	x.ui.closeMenu();
+	for (let i = 0; i < 20; i++) frame();
+	assert.ok(d.doorGroup.visible && d.doorAlpha === 1, 'back once it closes');
+});
+
+test('a session\'s first board opens on How to move until five teleports; after that, the tab you left', async () => {
+	const { x } = await setup();
+	x.ui.openMenu();
+	assert.equal(x.menu.tab, 'move');
+	x.menu.setTab('walk'); x.ui.closeMenu();
+	x.ui.openMenu();
+	assert.equal(x.menu.tab, 'walk', 'the tab you left');
+	x.ui.closeMenu();
+	x.ui.reset(); // (a new session)
+	for (let i = 0; i < 5; i++) x.ui.onTeleport();
+	x.ui.openMenu();
+	assert.equal(x.menu.tab, 'view', 'five teleports: View first');
+	x.ui.closeMenu();
 });
 
 test('holding the model: it follows the grip, level (turned only about the vertical); let go in the air it floats, then goes home by itself', async () => {

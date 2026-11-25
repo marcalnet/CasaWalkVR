@@ -172,7 +172,7 @@ export class WristMenu {
 		this.keysHot = keysHot.size > 0;
 		animateOrb(o, performance.now() / 1000, hot || this.open);
 
-		if (action && action.id !== 'help') this.close(); // after a key (Help opens beside the menu, which stays)
+		if (action) this.close(); // after any key (Help opens the board, like Settings)
 		else if (toggle && !action) {
 			if (this.open) this.close(true);
 			else this.show({ pinned: byController });

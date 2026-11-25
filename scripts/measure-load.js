@@ -3,7 +3,7 @@
 // unzipping, preparing and parsing the OBJ models, building the home,
 // merging, the BVH (the raycast trees) and the depth-shading bake, plus the
 // draw calls and triangles after the merge. For the heavy-models
-// investigation (planning, report 12). Run with Node 24:
+// investigation. Run with Node 24:
 //   node --expose-gc --import ./tests/register.js scripts/measure-load.js test-output/stress/many-1m.sh3d
 // Prints one JSON line. Memory: rss (the whole process), heap (JavaScript
 // objects, strings) and buffers (typed arrays: the geometry), in MB, after

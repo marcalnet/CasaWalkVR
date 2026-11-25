@@ -76,6 +76,7 @@ const DOOR_AHEAD = 0.3; // in front of where you stand
 // a hand lowered onto it from above is far off its normal and never presses it.
 const DOOR_TILT = 70;
 const BACK_HOLD = 0.6; // ← Back (leave VR) is held this long, a ring filling (the Lead's decision)
+const DOORS_FADE = 0.15; // seconds: the doors fade out while the board is open (they showed through it), and back
 const DOOR_FOLLOW = 0.08; // the doors move to a new head height once it differs by this much
 const MARKER_HEIGHT = 1.7; // metres at the model's scale (the "stand here" figure)
 // A landing spot must be free of furniture from this height above the floor
@@ -125,6 +126,7 @@ export class Dollhouse {
 		this.doors.setSpec('in', { id: 'in', look: 'filled', icon: 'in', label: 'Walk in \u2192', caption: 'Inside the home' });
 		xr.stage.add(this.doorGroup);
 		xr.hideFromPhotos(this.doorGroup);
+		this.doorAlpha = 1; // 0 while the settings board is open (the Quest 2 design's item 7)
 		this.placeDoors();
 		this.clearRay = new THREE.Raycaster();
 		this.clearRay.firstHitOnly = true;
@@ -330,8 +332,23 @@ export class Dollhouse {
 		if (xr.mode === 'dollhouse') xr.setLift(this.viewLift());
 	}
 
+	/**
+	 * While the settings board is open, the doors fade out (and take no
+	 * presses: doors.update below is inactive then), so they never show
+	 * through or beside the board; they come back when it closes.
+	 */
+	fadeDoors(dt) {
+		const target = this.xr.menu ? 0 : 1;
+		if (this.doorAlpha === target) return;
+		this.doorAlpha = target > this.doorAlpha ? Math.min(1, this.doorAlpha + dt / DOORS_FADE) : Math.max(0, this.doorAlpha - dt / DOORS_FADE);
+		this.doorMaterials ??= (() => { const list = []; this.doorGroup.traverse((o) => { for (const m of [].concat(o.material ?? [])) if (!list.some((e) => e.m === m)) list.push({ m, opacity: m.opacity }); }); return list; })();
+		for (const { m, opacity } of this.doorMaterials) { m.transparent = true; m.opacity = opacity * this.doorAlpha; }
+		this.doorGroup.visible = this.doorAlpha > 0;
+	}
+
 	update(dt) {
 		const xr = this.xr, ui = xr.ui, input = xr.input;
+		this.fadeDoors(dt);
 		ui.faceWelcome();
 		if (ui.buttons()) return;
 		const point = ui.point();

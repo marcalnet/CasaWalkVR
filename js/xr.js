@@ -133,8 +133,8 @@ export class XRExperience {
 		this.plate = new ScalePlate(); // the model's true scale, on the plinth (SPEC.md B2)
 		this.setPlinth(1.2, 0.9);
 		this.walkSky = buildWalkSky(camera);
-		Object.assign(this, buildMenus(rig)); // menus: the settings boards; help: the help cards
-		this.hideFromPhotos(...Object.values(this.menus).map((p) => p.mesh), ...Object.values(this.help).map((c) => c.mesh));
+		Object.assign(this, buildMenus(rig)); // menus: the settings boards
+		this.hideFromPhotos(...Object.values(this.menus).map((p) => p.mesh));
 		// The one sphere round the eyes (js/veil.js): the teleport fade, the move between layers
 		// (dark for in and back, white for leaving VR) and the photo flash. Then the arrival title.
 		this.veil = new Veil(camera);
@@ -147,7 +147,6 @@ export class XRExperience {
 		this.ui = new XRUI(this);
 		this.lessons = new Lessons(this); // the first-time lessons (C0.5)
 		this.toolsIntro = new ToolsIntro(this); // the tools' first-time introduction (C3)
-		for (const c of Object.values(this.help)) this.ui.wrist.cross.add(c.mesh); // (Help opens beside the wrist menu, on its right)
 		this.tools = new ToolSystem(this);
 		this.fan = new ToolFan(this); // the tool fan over the left hand (milestone C)
 		this.tweens = new Tweens();

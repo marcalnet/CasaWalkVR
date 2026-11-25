@@ -41,6 +41,7 @@ export class Panel {
 	 *              { type: 'choice', id, label, options: [{ value, label }], value }
 	 *              { type: 'slider', id, label, value: 0..1, format(value) -> text }
 	 *              { type: 'dropdown', id, label, options: [{ value, label }], value }
+	 *              { type: 'drawn', id, h (canvas pixels), draw(ctx, box) }: drawn by its owner, never pressed (the How to move tab)
 	 *              any cell: disabled, note (text shown instead of the control when disabled)
 	 *              Or, for a menu with tabs: { tabs: [{ id, label, rows }], actions: rows }:
 	 *              a row of tabs, the chosen tab's rows, then the actions, shown on
@@ -96,7 +97,7 @@ export class Panel {
 		rows.forEach((row, i) => {
 			const primary = row.some((c) => c.primary);
 			if (i > 0) y += primary ? PRIMARY_GAP : GAP;
-			const h = primary ? PRIMARY_H : ROW_H;
+			const h = Math.max(primary ? PRIMARY_H : ROW_H, ...row.map((c) => c.h ?? 0));
 			const w = (full - (row.length - 1) * GAP) / row.length;
 			row.forEach((cell, k) => boxes.push({ cell, x: PAD + k * (w + GAP), y, w, h, primary: !!cell.primary }));
 			y += h;
@@ -157,7 +158,7 @@ export class Panel {
 		}
 		for (const b of this.boxes) {
 			const c = b.cell;
-			if (c.disabled) continue;
+			if (c.disabled || c.type === 'drawn') continue;
 			if (c.type === 'dropdown') {
 				const a = this.controlArea(b);
 				out.push({ id: c.id, toggle: true, x: a.x, y: b.y, w: a.w + 12, h: b.h });
@@ -324,6 +325,7 @@ export class Panel {
 
 	drawCell(ctx, b) {
 		const c = b.cell;
+		if (c.type === 'drawn') { c.draw?.(ctx, b); return; }
 		const hot = this.hover && this.hover.split('|')[0] === c.id;
 		if (c.type === 'button') {
 			roundRect(ctx, b.x, b.y, b.w, b.h, 20);
@@ -513,150 +515,6 @@ function roundRect(ctx, x, y, w, h, r) {
 	ctx.arcTo(x, y + h, x, y, r);
 	ctx.arcTo(x, y, x + w, y, r);
 	ctx.closePath();
-}
-
-// ---------------------------------------------------------------------------
-// Controls card: a drawing of the two Quest controllers (top view) with what
-// each stick, trigger, grip and button does in the current mode. Shown beside
-// the menu.
-// ---------------------------------------------------------------------------
-
-const CARD_W = 1200, CARD_H = 1140; // canvas pixels (room for 7 rows)
-const FOOTER_H = 190; // extra height for the footer tip (screenshot reminder)
-
-export class ControlsCard {
-	/**
-	 * @param title  e.g. 'Controls: dollhouse'
-	 * @param hands  { left: [{ kind, key, text }], right: [...] }
-	 *               kind: stick | trigger | grip | button | orb; key: badge text
-	 * @param footer { key, lines: [text, text] }: a full-width tip under both hands
-	 */
-	constructor(title, hands, { width = 0.46, footer = null } = {}) {
-		this.title = title;
-		this.hands = hands;
-		this.footer = footer;
-		const w = CARD_W, h = CARD_H + (footer ? FOOTER_H : 0), height = width * h / w;
-		this.size = { w, h };
-		({ canvas: this.canvas, texture: this.texture } = canvasTexture(w, h));
-		this.mesh = new THREE.Mesh(new THREE.PlaneGeometry(width, height),
-			new THREE.MeshBasicMaterial({ map: this.texture, transparent: true, toneMapped: false, depthTest: false }));
-		this.mesh.name = 'controls-card';
-		this.mesh.renderOrder = 10;
-		this.draw();
-	}
-
-	draw() {
-		if (!this.canvas) return;
-		const ctx = this.canvas.getContext('2d');
-		const { w, h } = this.size;
-		ctx.clearRect(0, 0, w, h);
-		roundRect(ctx, 0, 0, w, h, 48);
-		ctx.fillStyle = 'rgba(255,255,255,0.95)';
-		ctx.fill();
-		ctx.textBaseline = 'middle';
-		ctx.fillStyle = '#1d2329';
-		ctx.font = `600 52px ${FONT}`;
-		ctx.fillText(this.title, 48, 70);
-		const half = w / 2;
-		this.drawHand(ctx, 'left', 0, half);
-		this.drawHand(ctx, 'right', half, half);
-		// Divider
-		ctx.strokeStyle = '#e3e7eb';
-		ctx.lineWidth = 3;
-		ctx.beginPath(); ctx.moveTo(half, 130); ctx.lineTo(half, CARD_H - 40); ctx.stroke();
-		if (this.footer) this.drawFooter(ctx, CARD_H, w);
-		this.texture.needsUpdate = true;
-	}
-
-	/** Full-width tip under both hands: a badge and up to two lines of text. */
-	drawFooter(ctx, y0, w) {
-		const { key, lines } = this.footer;
-		ctx.strokeStyle = '#e3e7eb';
-		ctx.lineWidth = 3;
-		ctx.beginPath(); ctx.moveTo(44, y0 - 10); ctx.lineTo(w - 44, y0 - 10); ctx.stroke();
-		const b = BADGE.shot, cy = y0 + FOOTER_H / 2 - 25;
-		ctx.font = `700 28px ${FONT}`;
-		const bw = Math.max(64, ctx.measureText(key).width + 32);
-		roundRect(ctx, 44, cy - 26, bw, 52, 14);
-		ctx.fillStyle = b.fill; ctx.fill();
-		ctx.fillStyle = b.text;
-		ctx.textAlign = 'center';
-		ctx.fillText(key, 44 + bw / 2, cy + 1);
-		ctx.textAlign = 'left';
-		const x = 44 + bw + 20, max = w - x - 44;
-		let px = 34;
-		do ctx.font = `400 ${px}px ${FONT}`;
-		while (lines.some((t) => ctx.measureText(t).width > max) && --px > 20);
-		ctx.fillStyle = '#1d2329';
-		lines.forEach((t, i) => ctx.fillText(t, x, cy + (i - (lines.length - 1) / 2) * (px + 12) + 1));
-	}
-
-	drawHand(ctx, side, x0, width) {
-		const rows = this.hands[side] || [];
-		const cx = x0 + width / 2, top = 130;
-		const isLeft = side === 'left';
-		const btn = isLeft ? ['X', 'Y'] : ['A', 'B'];
-
-		// Controller, top view: tracking ring, handle, face with stick and buttons.
-		ctx.save();
-		ctx.translate(cx, top + 150);
-		ctx.lineWidth = 10;
-		ctx.strokeStyle = '#2b3036';
-		ctx.beginPath(); ctx.arc(isLeft ? -40 : 40, -40, 105, 0, Math.PI * 2); ctx.stroke(); // ring
-		ctx.fillStyle = '#2b3036';
-		roundRect(ctx, -70, -60, 140, 230, 60); ctx.fill(); // body
-		// Trigger (front) and grip (inner side) tabs
-		ctx.fillStyle = BADGE.trigger.fill;
-		roundRect(ctx, -34, -96, 68, 30, 12); ctx.fill();
-		ctx.fillStyle = BADGE.grip.fill;
-		roundRect(ctx, isLeft ? 64 : -84, 30, 20, 100, 8); ctx.fill();
-		// Stick and buttons
-		ctx.fillStyle = '#8a949e';
-		ctx.beginPath(); ctx.arc(isLeft ? 18 : -18, -10, 30, 0, Math.PI * 2); ctx.fill();
-		ctx.fillStyle = '#5d6873';
-		ctx.beginPath(); ctx.arc(isLeft ? 18 : -18, -10, 16, 0, Math.PI * 2); ctx.fill();
-		ctx.font = `700 28px ${FONT}`;
-		ctx.textAlign = 'center';
-		const bx = isLeft ? -22 : 22;
-		for (const [i, k] of btn.entries()) {
-			const by = 60 + i * 56;
-			ctx.fillStyle = '#e8ecef';
-			ctx.beginPath(); ctx.arc(bx + (isLeft ? -6 : 6) * i, by, 22, 0, Math.PI * 2); ctx.fill();
-			ctx.fillStyle = '#1d2329';
-			ctx.fillText(k, bx + (isLeft ? -6 : 6) * i, by + 1);
-		}
-		// Orb above the back of the hand
-		ctx.fillStyle = BADGE.orb.fill;
-		ctx.beginPath(); ctx.arc(0, 200, 16, 0, Math.PI * 2); ctx.fill();
-		ctx.restore();
-
-		ctx.textAlign = 'left';
-		ctx.fillStyle = '#5d6873';
-		ctx.font = `600 34px ${FONT}`;
-		ctx.textAlign = 'center';
-		ctx.fillText(isLeft ? 'Left hand' : 'Right hand', cx, top + 395);
-		ctx.textAlign = 'left';
-
-		// Rows: coloured badge + what it does.
-		let y = top + 470;
-		for (const r of rows) {
-			const b = BADGE[r.kind] || BADGE.button;
-			ctx.font = `700 28px ${FONT}`;
-			const bw = Math.max(64, ctx.measureText(r.key).width + 32);
-			roundRect(ctx, x0 + 44, y - 26, bw, 52, 14);
-			ctx.fillStyle = b.fill; ctx.fill();
-			ctx.fillStyle = b.text;
-			ctx.textAlign = 'center';
-			ctx.fillText(r.key, x0 + 44 + bw / 2, y + 1);
-			ctx.textAlign = 'left';
-			ctx.fillStyle = '#1d2329';
-			let px = 34;
-			do ctx.font = `400 ${px}px ${FONT}`;
-			while (ctx.measureText(r.text).width > width - bw - 90 && --px > 22);
-			ctx.fillText(r.text, x0 + 44 + bw + 20, y + 1);
-			y += 68;
-		}
-	}
 }
 
 // ---------------------------------------------------------------------------

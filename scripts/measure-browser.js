@@ -1,8 +1,8 @@
 // Opens a model in the real page (headless Chromium, software rendering) and
 // measures the whole load: how long until it is shown, the page's JavaScript
 // memory, the first draws (the first one sends the geometry to the GPU), and
-// whether the tab survives. For the heavy-models investigation (planning,
-// report 12). Run with Node 24:
+// whether the tab survives. For the heavy-models investigation. Run with
+// Node 24:
 //   node scripts/measure-browser.js test-output/stress/many-1m.sh3d
 //   HEAP_MB=1024 node scripts/measure-browser.js test-output/stress/warehouse.sh3d
 // HEAP_MB caps the page's JavaScript heap, to see where a smaller device

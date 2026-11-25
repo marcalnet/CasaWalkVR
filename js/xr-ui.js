@@ -10,8 +10,10 @@
 //            grip). What it says and does: js/xr-menus.js. It closes with its
 //            Close key, Settings again, B/Y, or by moving between layers,
 //            never on a touch elsewhere.
-//   Help     a card where the board opens: what each control does, for
-//            controllers or for bare hands.
+//   Help     opens the board on its first tab, How to move (js/guide.js):
+//            how to move here, for controllers or bare hands, and the build
+//            at its foot. (The help cards beside the wrist menu went on 25
+//            Nov 2026: one panel instead of two, the Quest 2 design's item 6.)
 //   Welcome  a card above the scale model on every entry, until the wrist
 //            menu is first opened.
 //   Photo    the flash and note of a photo (the street camera, milestone D).
@@ -27,19 +29,17 @@ import { BUILD } from './version.js';
 import { buildLabel } from './build-label.js';
 import { yawOf } from './xr-input.js';
 import { TOUCH, touchState, stepTouch, reset as resetTouch, ringSize } from './touch.js';
-import { KEY, BOARD, GUIDE } from './theme.js';
-import { Guide } from './guide.js';
-import { readSetting, writeSetting } from './settings.js';
+import { KEY, BOARD } from './theme.js';
+import { guideSheet } from './guide.js';
 import { PLINTH_REST } from './xr-scene.js';
 import { WristMenu } from './wrist-menu.js';
-import { handsHelp } from './xr-menus.js';
 import { FIRST_TIME_CARDS } from './lessons.js';
 
 // The board within reach: 40 cm in front, 30 cm below the eyes, tilted back
 // 25° like a lectern; at the scale model 30° to the left.
 // (Closer and less to the side than the first draft: the user had to use the laser to reach it.)
 const BOARD_NEAR = 0.4, BOARD_DROP = 0.3, BOARD_TILT = THREE.MathUtils.degToRad(25), BOARD_SIDE = THREE.MathUtils.degToRad(30);
-const HELP_WIDTH = 0.32; // the help card beside the wrist menu, metres
+const GUIDE_UNTIL = 5; // a session's first board opens on How to move until this many teleports (then View)
 // The note after a photo. Photos are kept in the app and saved from the page
 // after VR (a download in VR would end the session).
 const PHOTO_TEXT = {
@@ -64,14 +64,12 @@ export class XRUI {
 	constructor(xr) {
 		this.xr = xr;
 		this.menu = null; // the open settings board (a Panel), or null
-		this.help = null; // the open help card, or null
-		this.tab = null; // the board's tab last shown (kept between the two layers' boards)
+		this.tab = null; // the board's tab last shown (kept between the two layers' boards); null: none yet this session
+		this.teleports = 0; // this session's teleports (How to move stops being the first tab after GUIDE_UNTIL)
 		this.drag = null; // a slider being dragged: { c, id }
 		this.boardDrag = null; // a controller holding the board's handle: { c, offset }
 		this.wrist = new WristMenu(xr);
-		this.wrist.onClose = () => this.hideHelp(); // (Help lives beside the wrist menu)
-		this.guide = new Guide(xr); // how to move, beside the wrist menu or the board (C0.4)
-		xr.hideFromPhotos(this.guide.group);
+		guideSheet.onLoad = () => this.menu?.draw(); // (the How to move pictures, once loaded)
 		this.touches = []; // per input entry: its touch on the open board (js/touch.js)
 		this.buildWelcome();
 		this.buildPhotoFeedback();
@@ -197,10 +195,10 @@ export class XRUI {
 	}
 
 	// -----------------------------------------------------------------------
-	// The board and the help card
+	// The board
 	// -----------------------------------------------------------------------
 
-	/** Where the board (or the help card) opens: within reach, tilted back; 45° left at the scale model. */
+	/** Where the board opens: within reach, tilted back; 45° left at the scale model. */
 	placeNear(mesh, headMatrix = this.xr.camera.matrix) {
 		const xr = this.xr;
 		const head = new THREE.Vector3().setFromMatrixPosition(headMatrix);
@@ -213,21 +211,27 @@ export class XRUI {
 		mesh.rotateX(-BOARD_TILT);
 	}
 
-	/** Opens this layer's settings board. */
-	openMenu(headMatrix) {
+	/**
+	 * Opens this layer's settings board, on `tab` if given, else on the tab
+	 * last shown; a session's first opening starts on How to move until you
+	 * have teleported GUIDE_UNTIL times (then View).
+	 */
+	openMenu(headMatrix, tab = null) {
 		const xr = this.xr;
 		this.closeMenu();
 		const panel = xr.menus[xr.mode];
 		if (!panel) return;
 		this.placeNear(panel.mesh, headMatrix);
-		if (this.tab) panel.setTab(this.tab);
+		this.prepareGuide(panel);
+		panel.setTab(tab ?? this.tab ?? (this.teleports >= GUIDE_UNTIL ? 'view' : 'move'));
+		panel.draw();
 		panel.setHover(null);
 		panel.mesh.visible = true;
 		this.menu = panel;
 		this.feel(null, 'open');
 	}
 
-	/** Closes the board and the help card. */
+	/** Closes the board. */
 	closeMenu() {
 		if (this.menu) { this.tab = this.menu.tab; this.menu.closeDropdown(); this.menu.mesh.visible = false; this.feel(null, 'close'); }
 		this.menu = null;
@@ -235,79 +239,40 @@ export class XRUI {
 		this.drag = null;
 	}
 
-	/**
-	 * The guide beside the menu (js/guide.js): on the right of the open board,
-	 * or of the wrist menu (not while Help is there). Bare hands or controllers,
-	 * for the layer you are in; folded into its tab if you hid it.
-	 */
-	placeGuide() {
-		const xr = this.xr, guide = this.guide;
-		const at = this.menu ? this.menu.mesh : this.wrist.open && !this.help ? this.wrist.cross : null;
-		if (!at || !xr.mode) { guide.hide(); return; }
-		if (guide.group.parent !== at) at.add(guide.group);
-		const kind = `${xr.mode === 'walk' ? 'walk' : 'dollhouse'}-${xr.input.active().length ? 'controllers' : 'hands'}`;
-		const folded = readSetting('guide') === 'tab';
-		if (at === this.wrist.cross) {
-			guide.show(kind, folded, GUIDE.width);
-			guide.group.position.copy(this.wrist.besideRight(GUIDE.width));
-		} else {
-			const bw = this.menu.mesh.geometry.parameters.width, w = 0.3;
-			guide.show(kind, folded, w);
-			guide.group.position.set(bw / 2 + 0.03 + w / 2, 0, 0.002);
-		}
-		guide.group.rotation.set(0, 0, 0);
+	/** The How to move tab (js/guide.js): for the input in hand, at this layer, and which build is running at its foot. */
+	prepareGuide(panel) {
+		const xr = this.xr, cell = panel.cells.get('guide');
+		if (!cell) return;
+		cell.kind = `${xr.mode === 'walk' ? 'walk' : 'dollhouse'}-${xr.input.active().length ? 'controllers' : 'hands'}`;
+		// (A newer build live on the site: one calm line, here only; reloading is yours to choose, after VR.)
+		cell.foot = buildLabel(BUILD) + (xr.newerBuild > BUILD.number ? ' · Newer version: reload after VR' : '');
 	}
 
-	/** Counts teleports: after the 5th, the guide folds into its tab by itself (once; remembered). */
-	onTeleport(n) {
-		if (n >= 5 && readSetting('guide') === 'auto') writeSetting('guide', 'tab');
-	}
+	/** Counts this session's teleports: after GUIDE_UNTIL, a session's first board opens on View. */
+	onTeleport() { this.teleports++; } // (walk mode's own count runs across sessions: this one is per session)
 
-	/** Hides the help card beside the wrist menu. */
-	hideHelp() {
-		if (this.help) this.help.mesh.visible = false;
-		this.help = null;
-		if (this.buildTag) this.buildTag.mesh.visible = false;
-	}
-
-	/** Closes everything: board, help, the wrist menu (moving between layers). */
+	/** Closes everything: the board and the wrist menu (moving between layers). */
 	closeAll() {
 		this.closeMenu();
 		this.wrist.close();
-		this.guide.hide();
 	}
 
-	/** True while the board, the help card or the wrist menu is open. */
-	get anyOpen() { return !!this.menu || !!this.help || this.wrist.open; }
+	/** True while the board or the wrist menu is open. */
+	get anyOpen() { return !!this.menu || this.wrist.open; }
 
 	toggleBoard() { this.menu ? this.closeMenu() : this.openMenu(); }
 
-	/** Help: what each control does here, for controllers, or for bare hands when no controller is held. */
+	/**
+	 * Help: the board on How to move (and, at the scale model, the tools'
+	 * introduction replays: the user liked it). Help again, with the board on
+	 * that tab, closes it.
+	 */
 	toggleHelp() {
-		if (this.help) { this.hideHelp(); this.feel(null, 'close'); return; }
-		this.closeMenu();
 		const xr = this.xr;
-		// Help replays this place's lesson (and, at the scale model, the tools' introduction first).
+		if (this.menu?.tab === 'move') { this.closeMenu(); return; }
 		if (xr.mode === 'dollhouse' && xr.toolsIntro?.start({ again: true })) { xr.lessons.stop(); xr.introAgain = true; }
-		else xr.lessons?.start(xr.mode === 'walk' ? 'walk' : 'scale', { again: true });
-		const card = xr.input.active().length ? xr.help[xr.mode] : xr.help.hands;
-		if (!card || !this.wrist.open) return;
-		if (card === xr.help.hands) { card.lines = handsHelp(this.wrist.side); card.draw(); }
-		// Beside the wrist menu, on its right (menu left, help right), in its plane; the menu stays open.
-		const w = card.mesh.geometry.parameters.width;
-		card.mesh.scale.setScalar(HELP_WIDTH / w);
-		card.mesh.position.copy(this.wrist.besideRight(HELP_WIDTH));
-		card.mesh.rotation.set(0, 0, 0);
-		card.mesh.visible = true;
-		this.help = card;
-		// Which build is running, small, under the card (the same as the page's, bottom left).
-		// (A newer build live on the site: one calm line, here only; reloading is yours to choose, after VR.)
-		if (!this.buildTag) { this.buildTag = new Label({ height: 0.018 }); this.buildTag.mesh.name = 'build'; this.wrist.cross.add(this.buildTag.mesh); this.xr.hideFromPhotos(this.buildTag.mesh); }
-		this.buildTag.set(buildLabel(BUILD) + (this.xr.newerBuild > BUILD.number ? ' · Newer version: reload after VR' : ''));
-		const h = card.mesh.geometry.parameters.height * card.mesh.scale.y;
-		this.buildTag.mesh.position.copy(card.mesh.position).y -= h / 2 + 0.016;
-		this.buildTag.mesh.visible = true;
-		this.feel(null, 'open');
+		else xr.lessons?.start(xr.mode === 'walk' ? 'walk' : 'scale', { again: true }); // (the lessons are off for now: js/lessons.js)
+		this.openMenu(undefined, 'move');
 	}
 
 	/** A sound (if sound is on) and, on a controller, a vibration. */
@@ -327,15 +292,6 @@ export class XRUI {
 		const xr = this.xr, input = xr.input, raycaster = xr.raycaster;
 		let hover = null;
 		let { action } = this.wrist.update(dt);
-		// The guide beside the menu: its Hide key and its tab.
-		this.placeGuide();
-		const g = this.guide.update(dt, { active: true });
-		if (g.action?.id === 'guide-hide' || g.action?.id === 'guide-show') {
-			writeSetting('guide', g.action.id === 'guide-hide' ? 'tab' : 'full');
-			this.placeGuide();
-			g.action = null;
-		}
-		action ??= g.action;
 		if (this.wrist.open) { this.setWelcome(false); this.xr.lessons?.note('wrist'); } // found it: the welcome card has done its job
 		const active = input.active();
 		if (this.drag && (!this.menu || !this.drag.c.source || !this.drag.c.state.trigger)) this.drag = null; // let go
@@ -366,11 +322,11 @@ export class XRUI {
 						this.feel(c, 'press', 'click');
 					} else if (this.menu.disabledAt(menuHit.uv)) this.feel(c, 'deny', 'deny');
 				}
-			} else if ((this.menu || this.help || (this.wrist.open && this.wrist.pinned)) && c.state.down.trigger) {
+			} else if ((this.menu || (this.wrist.open && this.wrist.pinned)) && c.state.down.trigger) {
 				// A pull elsewhere while a menu is open does nothing (the board never
 				// closes on it); a pinned wrist menu closes.
 				c.claim.trigger = 'ui';
-				if (!this.menu && !this.help) this.wrist.close(true);
+				if (!this.menu) this.wrist.close(true);
 			}
 		}
 		// Touch keys: fingertips and controller tips press the open board.
@@ -491,7 +447,7 @@ export class XRUI {
 		const wearer = this.wrist.wearer;
 		for (const c of this.xr.input.active()) {
 			if (c.state.down.a && !c.claim.a && c === wearer) { this.wrist.toggle({ pinned: true }); if (this.wrist.open) { this.setWelcome(false); this.xr.lessons?.note('wrist'); } return true; }
-			if (c.state.down.b && !c.claim.b && this.anyOpen) { this.closeMenu(); this.hideHelp(); this.wrist.close(true); return true; }
+			if (c.state.down.b && !c.claim.b && this.anyOpen) { this.closeMenu(); this.wrist.close(true); return true; }
 		}
 		return false;
 	}
@@ -507,7 +463,8 @@ export class XRUI {
 		this.handsNote.mesh.visible = false;
 		this.errorNote.mesh.visible = false;
 		this.wrist.reset();
-		this.guide.hide();
+		this.tab = null; // (a new session's first board opens on How to move again)
+		this.teleports = 0;
 		for (const st of this.touches) { if (!st) continue; resetTouch(st.s); st.ring.visible = false; st.panel = null; st.slider = null; }
 	}
 }

@@ -1,5 +1,5 @@
 // Generates stress models for measuring how CasaWalk copes with very heavy
-// homes (planning: heavy-models investigation). Everything in them is
+// homes (the heavy-models investigation). Everything in them is
 // original and written here. They are large, so they are generated on demand
 // into test-output/stress/ (ignored by git), never committed:
 //   node scripts/make-stress-models.js            every case

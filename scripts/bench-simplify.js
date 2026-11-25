@@ -1,5 +1,5 @@
 // Times mesh simplification on dense meshes, for the heavy-models
-// investigation (planning, report 12): meshoptimizer's simplifier (MIT; the
+// investigation: meshoptimizer's simplifier (MIT; the
 // copy that ships with three.js, WebAssembly, no eval) in its careful mode
 // (simplify: edge collapses that keep the shape and the borders) and its
 // fast mode (simplifySloppy: merges nearby vertices on a grid, ignoring the

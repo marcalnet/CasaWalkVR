@@ -100,10 +100,8 @@ export const WRIST = {
 export const GUIDE = {
 	sheets: 'assets/ui/guide-sheets.png', // 4 rows (walk hands, walk controllers, scale hands, scale controllers) x 4 frames
 	frame: 256, // pixels per frame in the sheet
-	width: 0.24, height: 0.16, // beside the wrist menu, metres (beside the board: scaled to 30 cm wide)
-	paper: '#fbfaf6', edge: '#d8d3c6', text: COLOURS.text, soft: COLOURS.soft,
+	edge: '#d8d3c6', text: COLOURS.text, soft: COLOURS.soft, // (drawn on the board's How to move tab: js/guide.js)
 	font: '"Kalam", "Bradley Hand", cursive',
-	hideKey: 0.05, tab: [0.06, 0.04], // the Hide guide key, and the folded Guide tab
 };
 
 /** The settings board (C0.3): its artwork and where it opens. */

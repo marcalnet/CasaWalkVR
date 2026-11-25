@@ -118,7 +118,9 @@ const tipPath = async (kind, side, points, wait = 3) => {
  */
 const pressKey = async (kind, side, menu, id, { from = 0.06, to = -0.006, hold = false, backOnly = false } = {}) => {
 	const pts = await page.evaluate(({ menu, id, from, to }) => {
-		const x = window.__casawalk.xr, p = x.menus[menu], r = p.rects().find((r) => r.id === id);
+		const x = window.__casawalk.xr, p = x.menus[menu], tab = p.tabOf?.(id);
+		if (tab && tab !== p.tab) p.setTab(tab); // (the board opens on How to move: show the cell's tab first)
+		const r = p.rects().find((r) => r.id === id);
 		const g = p.mesh.geometry.parameters, V = x.rig.position.constructor;
 		const lx = ((r.x + r.w / 2) / p.size.w - 0.5) * g.width, ly = (0.5 - (r.y + r.h / 2) / p.size.h) * g.height;
 		p.mesh.updateMatrixWorld(true);
@@ -162,6 +164,9 @@ const state = () => page.evaluate(() => {
 const menuPoint = (id, value) => page.evaluate(async ({ id, value }) => {
 	const THREE = await import('three');
 	const p = window.__casawalk.xr.menu;
+	// (Since 25 Nov the board opens on How to move: a cell on another tab is shown first, as a person would.)
+	const tab = p.tabOf?.(id);
+	if (tab && tab !== p.tab) p.setTab(tab);
 	const r = p.rects().find((b) => b.id === id && (b.slider || value === undefined || b.value === value));
 	if (!r) throw new Error(`no menu target ${id} ${value ?? ''}`);
 	const x = r.slider ? r.track.x + r.track.w * (value ?? 0) : r.x + r.w / 2;
@@ -249,7 +254,7 @@ const leftovers = () => page.evaluate(() => {
 	const S = window.__casawalk, x = S.xr, bad = [], want = (n, ok) => ok || bad.push(n);
 	want('session', x.session === null && x.mode === null);
 	want('grab/tele/fade/drag', !x.modes.dollhouse.grab && !x.modes.walk.tele && !x.modes.walk.fade && !x.ui.drag && !x.pendingRecentre);
-	want('menu', x.menu === null && Object.values(x.menus).every((p) => !p.mesh.visible && !p.open) && !x.ui.help && Object.values(x.help).every((c) => !c.mesh.visible) && !x.ui.wrist.open && !x.ui.wrist.cross.visible);
+	want('menu', x.menu === null && Object.values(x.menus).every((p) => !p.mesh.visible && !p.open) && !x.ui.wrist.open && !x.ui.wrist.cross.visible);
 	want('layers', !x.layerFx && !(x.veil.amount('layer') > 0) && !x.arrival.mesh.visible);
 	want('welcome', !x.ui.welcome.mesh.visible && !x.ui.welcomeOn);
 	want('hands note', !x.ui.handsNote.mesh.visible);
@@ -319,7 +324,7 @@ const FINGERPRINT = async () => {
 		plinth: [n(x.plinthSize.W), n(x.plinthSize.D), n(x.plinthDistance), n(x.baseScale)], welcomeAt: v3(x.ui.welcome.mesh.position),
 		clip: [x.camera.near, x.camera.far], background: S.scene.background?.getHex?.() ?? S.scene.background,
 		hands: x.input.controllers.map((c) => [c.handedness, vis(c.ray), vis(c.grip), vis(c.line), vis(c.dot), x.ui.wrist.orb.group.parent === c.grip]),
-		wrist: [x.ui.wrist.side, x.ui.wrist.open, !!x.ui.help],
+		wrist: [x.ui.wrist.side, x.ui.wrist.open, false], // (the third: Help's card, gone since 25 Nov; kept false so old fingerprints still compare)
 		menus: { dollhouse: menu(x.menus.dollhouse), walk: menu(x.menus.walk) },
 		settings: [x.snapAngle, x.personHeight, x.solid, x.seeThroughAmount, S.lighting.time, S.lighting.shadows, S.depth.enabled],
 		draw: [r.info.render.calls, r.info.render.triangles, r.info.memory.geometries, r.info.memory.textures],
@@ -831,11 +836,11 @@ check('B closes the board', (await state()).menu === null);
 	const s1 = await page.evaluate(() => ({ head: window.__casawalk.xr.headWorld().toArray(), tele: !!window.__casawalk.xr.modes.walk.tele, fade: !!window.__casawalk.xr.modes.walk.fade }));
 	const slid = Math.hypot(s1.head[0] - s0[0], s1.head[2] - s0[2]);
 	check('bare hands: opening the pinch before the ring is blue moves nothing; the arc goes', slid < 0.01 && !s1.tele && !s1.fade, JSON.stringify({ moved: +slid.toFixed(3), ...s1 }));
-	// The guide beside the wrist menu inside: how to move with hands.
-	await page.evaluate(() => window.__casawalk.xr.ui.wrist.show({ pinned: true }));
+	// Help inside: the board on How to move, for bare hands.
+	await page.evaluate(() => window.__casawalk.xr.menuAction('help'));
 	await frames(3);
-	const guide = await page.evaluate(() => { const g = window.__casawalk.xr.ui.guide; return { shown: g.group.visible, kind: g.kind, card: g.card.visible || g.tab.visible }; });
-	check('inside, the guide opens beside the wrist menu: how to move with bare hands', guide.shown && guide.kind === 'walk-hands' && guide.card, JSON.stringify(guide));
+	const guide = await page.evaluate(() => { const x = window.__casawalk.xr, m = x.menu; return { tab: m?.tab, kind: m?.cells.get('guide')?.kind, shown: !!m?.mesh.visible }; });
+	check('inside, Help opens the board on How to move, for bare hands', guide.shown && guide.tab === 'move' && guide.kind === 'walk-hands', JSON.stringify(guide));
 	await shot('hands-guide');
 	await page.evaluate(() => window.__casawalk.xr.ui.closeAll()); await frames(4);
 	// Back to the scale model; hold it with a closed hand, let go in the air: it floats, then goes home.
@@ -1458,12 +1463,11 @@ check('example home: two storeys, all shown', lv.count === 2 && lv.multi && lv.h
 			texts.push(p.title, p.hint, ...p.tabs.map((t) => t.label));
 			for (const c of p.cells.values()) texts.push(c.label, c.note ?? '', ...(c.options ?? []).map((o) => o.label));
 		}
-		for (const card of [x.help.dollhouse, x.help.walk]) texts.push(card.title, ...Object.values(card.hands).flat().map((h) => `${h.key} ${h.text}`), ...(card.footer?.lines ?? []));
-		for (const w of [x.ui.welcome, x.ui.photoNote, x.help.hands]) texts.push(w.title, ...w.lines.map((l) => l.text));
+		for (const w of [x.ui.welcome, x.ui.photoNote]) texts.push(w.title, ...w.lines.map((l) => l.text));
 		for (const k of Object.values(x.ui.wrist.keys)) texts.push(k.spec?.label ?? '', k.spec?.caption ?? '');
 		return { bad: texts.filter((t) => /dollhouse/i.test(t)), exit: texts.filter((t) => /exit vr/i.test(t)), titles: Object.values(x.menus).map((p) => p.title), tabs: x.menus.dollhouse.tabs.map((t) => t.label) };
 	});
-	check('the words: "scale model", never "dollhouse", no "Exit VR"; boards titled by layer; tabs View, Walk, Tools, General', !words.bad.length && !words.exit.length && words.titles.join() === 'Settings \u00b7 Scale model,Settings \u00b7 Inside' && words.tabs.join() === 'View,Walk,Tools,General', JSON.stringify(words));
+	check('the words: "scale model", never "dollhouse", no "Exit VR"; boards titled by layer; tabs How to move, View, Walk, Tools, General', !words.bad.length && !words.exit.length && words.titles.join() === 'Settings \u00b7 Scale model,Settings \u00b7 Inside' && words.tabs.join() === 'How to move,View,Walk,Tools,General', JSON.stringify(words));
 	check('the page says "scale model" too', !/dollhouse/i.test(await page.evaluate(() => document.querySelector('meta[name=description]').content + document.body.innerText)));
 	// The plinth stands 60 cm in front of you, and its plate shows the true scale.
 	const pl = await page.evaluate(() => {
@@ -1641,15 +1645,15 @@ check('wrist menu open: a pull on the model only closes it', opened && !s.wrist 
 await restRight(); await frames(3); await click('right', 'a-button'); await click('right', 'a-button');
 check('A closes the wrist menu it opened', !(await state()).wrist);
 
-// Help: with controllers, the card of what each control does; B closes it.
+// Help: the board on How to move, for controllers, with the build at its foot; B closes it.
 await pressWrist('down');
 {
-	const hp = await page.evaluate(() => { const x = window.__casawalk.xr; return { card: x.ui.help === x.help.dollhouse && x.help.dollhouse.mesh.visible, beside: x.help.dollhouse.mesh.parent === x.ui.wrist.cross && x.help.dollhouse.mesh.position.x > 0.15, menu: x.ui.wrist.open, meta: x.help.dollhouse.footer.lines.some((l) => /Meta button/.test(l)) }; });
+	await frames(3);
+	const hp = await page.evaluate(() => { const x = window.__casawalk.xr, m = x.menu, c = m?.cells.get('guide'); return { tab: m?.tab, kind: c?.kind, foot: c?.foot ?? '', wrist: x.ui.wrist.open, doors: x.modes.dollhouse.doorGroup.visible }; });
 	await shot('dollhouse-help');
-	const tag = await page.evaluate(() => { const t = window.__casawalk.xr.ui.buildTag; return { shown: !!t?.mesh.visible, text: t?.text ?? '' }; });
-	check('Help shows the build under its card, and that a newer version waits (reload after VR)', tag.shown && /^Build \d+/.test(tag.text) && /Newer version: reload after VR$/.test(tag.text), JSON.stringify(tag));
+	check('Help shows the build at the foot of How to move, and that a newer version waits (reload after VR)', /^Build \d+/.test(hp.foot) && /Newer version: reload after VR$/.test(hp.foot), JSON.stringify(hp));
 	await click('right', 'b-button');
-	check('Help: the controls card beside the wrist menu (on its right; the menu stays), with "the Meta button"; B closes both', hp.card && hp.beside && hp.menu && hp.meta && !(await state()).wrist && !(await page.evaluate(() => window.__casawalk.xr.ui.help)), JSON.stringify(hp));
+	check('Help: the board on How to move, for controllers; the plinth doors gone while it is open; B closes it', hp.tab === 'move' && hp.kind === 'dollhouse-controllers' && !hp.wrist && !hp.doors && !(await state()).menu, JSON.stringify(hp));
 }
 
 // Photo: nothing of the interface in the picture, all of it back afterwards.

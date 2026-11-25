@@ -15,10 +15,11 @@
 // cell. Opening, closing and pointing are js/xr-ui.js.
 
 import * as THREE from 'three';
-import { Panel, ControlsCard, WelcomeCard } from './panel.js';
+import { Panel } from './panel.js';
 import { TIMES } from './lighting.js';
 import { SETTINGS, writeSetting } from './settings.js';
 import { BOARD } from './theme.js';
+import { drawGuide } from './guide.js';
 
 const BOARD_PX_PER_M = 1450; // canvas pixels per metre: a row of 80 px is 5.5 cm
 const TIME_LABELS = { morning: 'Morning', noon: 'Noon', sunset: 'Sunset', night: 'Night' };
@@ -28,6 +29,17 @@ const HEIGHTS = SETTINGS.height.options; // person height, metres (0 = your own)
 export const SEE_THROUGH_ON = 0.75;
 
 const sw = (id, label) => ({ type: 'switch', id, label, value: false });
+
+/**
+ * How to move: the first tab's one cell, drawn by js/guide.js (pictures and
+ * lines for the input in hand, at this layer). js/xr-ui.js sets its kind and
+ * foot (the build) before the board is drawn; it is never pressed. As tall as
+ * the View tab's five rows, so the board keeps its size.
+ */
+const GUIDE_CELL = {
+	type: 'drawn', id: 'guide', h: 5 * 80 + 4 * 14, kind: 'dollhouse-hands', foot: '',
+	draw(ctx, box) { drawGuide(ctx, this.kind, box, this.foot); },
+};
 
 /** Every cell of the settings boards, by id. */
 const CELLS = {
@@ -42,11 +54,14 @@ const CELLS = {
 	toolFan: { type: 'choice', id: 'toolFan', label: 'Tool fan', options: [{ value: 'left', label: 'Left hand' }, { value: 'right', label: 'Right hand' }], value: 'left' },
 	lens: { type: 'choice', id: 'lens', label: 'Camera lens', options: [24, 28, 35, 50].map((mm) => ({ value: mm, label: `${mm} mm` })), value: 28 },
 	sound: { type: 'choice', id: 'sound', label: 'Sound', options: [{ value: 'off', label: 'Off' }, { value: 'effects', label: 'Effects' }], value: 'effects' },
+	guide: GUIDE_CELL,
 	height: { type: 'choice', id: 'height', label: 'Height', options: HEIGHTS.map((h) => ({ value: h, label: h ? `${h.toFixed(1)} m` : 'Yours' })), value: 0 },
 };
 
+
 /** The board's tabs (the same at both layers), each with rows of cell ids. Camera lens joins General in milestone D. */
 export const TABS = [
+	{ id: 'move', label: 'How to move', rows: [['guide']] }, // (the guide, since 25 Nov: no card beside the board)
 	{ id: 'view', label: 'View', rows: [['light'], ['shadows', 'depth'], ['ceilings', 'view'], ['seethrough'], ['levels']] },
 	{ id: 'walk', label: 'Walk', rows: [['height'], ['solid']] }, // (Turn left the board: 30° stays, the user's call)
 	{ id: 'tools', label: 'Tools', rows: [['lens']] }, // (the street camera's lens: wide for interiors; to get closer, walk closer)
@@ -58,40 +73,6 @@ export const MENUS = {
 	dollhouse: { title: 'Settings · Scale model' },
 	walk: { title: 'Settings · Inside' },
 };
-
-/** Help with controllers: what each stick, trigger, grip and button does at that layer. */
-function controlsCards() {
-	const either = (btn) => [
-		{ kind: 'stick', key: 'Stick', text: '↔ turn   ↕ zoom' },
-		{ kind: 'trigger', key: 'Point', text: 'At a room: see where you land' },
-		{ kind: 'trigger', key: 'Trigger', text: 'Step inside there' },
-		{ kind: 'grip', key: 'Grip', text: 'Hold to move the model' },
-		{ kind: 'button', key: btn[0], text: btn[0] === 'A' ? 'Menu' : '' },
-		{ kind: 'button', key: btn[1], text: 'Close the menu' },
-		{ kind: 'orb', key: 'Wrist', text: 'Touch with the other hand: menu' },
-	].filter((r) => r.text);
-	const footer = { footer: { key: 'Meta', lines: ['To leave VR at any moment: the Meta button.', 'Or ← Back on your wrist menu.'] } };
-	return {
-		dollhouse: new ControlsCard('Help: scale model', { left: either('XY'), right: either('AB') }, footer),
-		walk: new ControlsCard('Help: inside', {
-			left: [
-				{ kind: 'stick', key: 'Stick', text: 'Walk where you look' },
-				{ kind: 'trigger', key: 'Trigger', text: 'Hold, aim, let go: teleport' },
-				{ kind: 'grip', key: 'Grip', text: 'Hold and pull: move' },
-				{ kind: 'button', key: 'Y', text: '← Back to the scale model' },
-			],
-			right: [
-				{ kind: 'stick', key: 'Stick ↔', text: 'Turn' },
-				{ kind: 'stick', key: 'Stick ↑', text: 'Aim, let go: teleport' },
-				{ kind: 'trigger', key: 'Trigger', text: 'Hold, aim, let go: teleport' },
-				{ kind: 'grip', key: 'Grip', text: 'Hold and pull: move' },
-				{ kind: 'button', key: 'A', text: 'Menu' },
-				{ kind: 'button', key: 'B', text: '← Back to the scale model' },
-				{ kind: 'orb', key: 'Wrist', text: 'Touch with the other hand: menu' },
-			],
-		}, { footer: { key: 'Meta', lines: ['To leave VR at any moment: the Meta button.', 'Or ← Back twice on your wrist menu.'] } }),
-	};
-}
 
 /**
  * The guide beside the menu (C0.4): how to move here, for bare hands or for
@@ -121,40 +102,24 @@ export const LESSONS = {
 export const GUIDES = {
 	'walk-hands': { title: 'How to move', row: 0,
 		frames: ['Palm down', 'Pinch and hold: aim', 'Point at the floor', 'Let go on blue: go'],
-		lines: ['While aiming, flick your wrist: turn', 'Let go on white or red: nothing happens', 'Palm up: cancel'] },
+		lines: ['While aiming, flick your wrist: turn', 'Let go on white or red: nothing happens', 'Palm up: cancel', 'The Meta button leaves VR at any moment'] },
 	'walk-controllers': { title: 'How to move', row: 1,
 		frames: ['Right stick forward', 'or hold a trigger', 'Aim at the floor', 'Let go on blue: go'],
-		lines: ['Right stick left or right: turn', 'Left stick: walk. Grip and pull: slide', 'B or Y: back to the scale model'] },
+		lines: ['Right stick left or right: turn', 'Left stick: walk. Grip and pull: slide', 'B or Y: back to the scale model', 'The Meta button leaves VR at any moment'] },
 	'dollhouse-hands': { title: 'The scale model', row: 2,
 		frames: ['Close your hand on it: hold', 'Let go: it floats, then goes home', 'Palm down, pinch, point at a room', 'Let go when it holds still: step inside'],
-		lines: ['Lift it and turn it: it stays level', 'Palm up: cancel'] },
+		lines: ['Lift it and turn it: it stays level', 'Palm up: cancel', 'The Meta button leaves VR at any moment'] },
 	'dollhouse-controllers': { title: 'The scale model', row: 3,
 		frames: ['Grip: hold it', 'Sticks: turn and zoom', 'Point at a room', 'Pull the trigger: step inside'],
-		lines: ['Lift it and turn it: it stays level', 'Let go in the air: it goes home by itself'] },
+		lines: ['Lift it and turn it: it stays level', 'Let go in the air: it goes home by itself', 'The Meta button leaves VR at any moment'] },
 };
 
 /**
- * Help with bare hands (milestone C0.3: moving with hands comes in C0.4, and
- * this card says so). side: the wrist that wears the menu.
- */
-export function handsHelp(side = 'right') {
-	const other = side === 'right' ? 'left' : 'right';
-	return [
-		{ key: 'Wrist', kind: 'orb', text: `Touch your ${side} wrist with your ${other} index: menu` },
-		{ small: true, text: 'Press its keys with your fingertip, like real keys.' },
-		{ key: 'Move', kind: 'trigger', text: 'Palm down, pinch and hold: aim. Let go on blue: go' },
-		{ small: true, text: 'While aiming, flick your wrist: turn. Palm up: cancel.' },
-		{ small: true, text: 'To leave VR at any moment: the Meta button.' },
-	];
-}
-
-/**
- * Builds the settings boards (one per layer, hidden, in the rig) and the help
- * cards. Returns { menus: { dollhouse: Panel, walk: Panel }, help: { dollhouse,
- * walk: ControlsCard, hands: WelcomeCard } }.
+ * Builds the settings boards (one per layer, hidden, in the rig). Returns
+ * { menus: { dollhouse: Panel, walk: Panel } }. (Help opens a board on its
+ * How to move tab: the help cards went on 25 Nov 2026.)
  */
 export function buildMenus(rig) {
-	const cards = controlsCards();
 	const menus = {};
 	const cells = (rows) => rows.map((row) => row.map((id) => CELLS[id]));
 	const paper = typeof Image !== 'undefined' ? new Image() : null;
@@ -176,9 +141,7 @@ export function buildMenus(rig) {
 		paper.onload = () => { for (const p of Object.values(menus)) p.draw(); };
 		paper.src = BOARD.image;
 	}
-	const help = { dollhouse: cards.dollhouse, walk: cards.walk, hands: new WelcomeCard('Help: bare hands', handsHelp(), { width: 0.5 }) };
-	for (const c of Object.values(help)) { c.mesh.visible = false; c.mesh.material.depthTest = false; } // (they live in the wrist menu: js/xr.js)
-	return { menus, help };
+	return { menus };
 }
 
 /** Shows the current settings in both menus (switch positions, chosen options, slider, levels). */
