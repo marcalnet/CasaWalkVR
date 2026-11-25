@@ -1229,7 +1229,47 @@ const walkUntil = async (pred, arg, timeout = 15000) => {
 		const walked = Math.hypot(stopped.head[0] - w.head[0], stopped.head[2] - w.head[2]);
 		check('Solid walls: you stop a body\'s width in front of a wall', stopped.d !== null && stopped.d > 0.17 && stopped.d < 0.3 && walked > w.d - 0.35, `wall was ${w.d.toFixed(2)} m away; walked ${walked.toFixed(2)} m, now ${stopped.d?.toFixed(2)} m from it`);
 		await shot('walk-solid-wall');
+		// The wall portal: the right controller's tip touches the wall in front, 1.3 m up.
+		// (Placed by reading the tip back and correcting twice: the grip pose sits apart from the device's position.)
+		const touchWall = async (gap) => {
+			let at = null;
+			for (let i = 0; i < 3; i++) {
+				at = await page.evaluate(({ a, gap, i }) => {
+					const x = window.__casawalk.xr, V = x.rig.position.constructor, head = x.headWorld();
+					const dir = new V(-Math.sin(a), 0, -Math.cos(a)), right = new V(Math.cos(a), 0, -Math.sin(a));
+					const from = new V(head.x, x.rig.position.y + 1.3, head.z).addScaledVector(right, 0.15);
+					x.raycaster.set(from, dir);
+					x.raycaster.far = 3;
+					const hit = x.raycaster.intersectObjects(x.model.layers.walls.children, false)[0];
+					if (!hit) return null;
+					const want = hit.point.clone().addScaledVector(dir, -gap);
+					const c = x.input.controllers.find((k) => k.isController && k.handedness === 'right');
+					const d = window.__device.controllers.right;
+					x.rig.updateMatrixWorld(true);
+					// (IWER's vectors take plain numbers.)
+					if (i === 0) { const l = x.rig.worldToLocal(want.clone()); d.position.set(l.x, l.y, l.z); d.quaternion.set(0, 0, 0, 1); }
+					else if (c?.touch.tracked) { const e = x.rig.worldToLocal(want.clone()).sub(x.rig.worldToLocal(c.touch.tip.clone())); d.position.set(d.position.x + e.x, d.position.y + e.y, d.position.z + e.z); }
+					return { wall: hit.point.toArray(), tip: c?.touch.tracked ? c.touch.tip.toArray() : null, off: c?.touch.tracked ? +c.touch.tip.distanceTo(want).toFixed(3) : null };
+				}, { a: w.a, gap, i });
+				await frames(2);
+			}
+			return at;
+		};
+		const portal = () => page.evaluate(() => { const p = window.__casawalk.xr.portals; const u = p.uniforms.cwPortalHand.value; return { r: +u.w.toFixed(3), at: [u.x, u.y, u.z].map((v) => +v.toFixed(2)), ring: !!p.ring?.visible, touching: p.touching.size, hidden: p.hidden, meshes: p.meshes.length, mode: window.__casawalk.xr.mode }; });
+		await touchWall(0.3); await frames(5); // (the resting controller reaches into the wall this close: away first)
+		let touched = await touchWall(0.02); await frames(2);
+		let pt = await portal();
+		check('Solid walls on: touching the wall opens no portal (a small ring instead)', touched && pt.r === 0 && pt.ring, JSON.stringify({ pt, touched }));
 		await page.evaluate(() => window.__casawalk.xr.menuAction('solid')); // off
+		await touchWall(0.3); await frames(5);
+		touched = await touchWall(0.02); await frames(30);
+		pt = await portal();
+		check('a fingertip touching a wall opens a 0.35 m portal, centred on the touch (0.1 m inside)', touched && pt.r === 0.35 && Math.hypot(pt.at[0] - touched.wall[0], pt.at[1] - touched.wall[1], pt.at[2] - touched.wall[2]) < 0.13, JSON.stringify({ pt, touched }));
+		await shot('walk-portal');
+		await touchWall(0.3); await frames(40);
+		pt = await portal();
+		check('pulled back 15 cm, the portal closes', pt.r === 0, JSON.stringify(pt));
+		await restRight();
 		await walkUntil(({ start, a, d }) => {
 			const h = window.__casawalk.xr.headWorld();
 			return (h.x - start[0]) * -Math.sin(a) + (h.z - start[2]) * -Math.cos(a) > d + 0.05;
@@ -1575,6 +1615,20 @@ await fingerprint('example-walk');
 		return { openings: openings.length, inSolid: openings.filter((m) => t.solid.includes(m)).length, furnitureSolid: t.solid.some((m) => main.includes(m) && !m.userData.opening) };
 	});
 	check('several levels: the arc passes doors and windows, not other furniture', o.openings > 0 && o.inSolid === 0 && o.furnitureSolid, JSON.stringify(o));
+	// Stairs: an arc meeting a step's front (the riser) lands on its top (the tread), not red.
+	const st = await page.evaluate(() => {
+		const x = window.__casawalk.xr, t = x.targets(), V = x.rig.position.constructor;
+		const W = (px, h, pz) => x.centerer.localToWorld(new V(px, h, pz)); // plan metres to world (the example home's Stairs at 7.45, 5.35)
+		const out = [];
+		for (const s of [1, -1]) for (const h of [0.1, 0.3]) {
+			const seg = x.modes.walk.hitSegment(W(7.45, h, 5.35 + 2 * s), W(7.45, h, 5.35 - 2 * s), t);
+			if (!seg) continue;
+			const local = x.centerer.worldToLocal(seg.point.clone());
+			out.push({ from: s, h, valid: seg.valid, y: +local.y.toFixed(3), up: +seg.normal.y.toFixed(2) });
+		}
+		return out;
+	});
+	check('stairs: an arc meeting a riser lands on the tread above it', st.some((r) => r.valid && r.up > 0.7 && r.y > r.h && r.y < r.h + 0.25), JSON.stringify(st));
 }
 await shot('example-walk-depth');
 await page.evaluate(() => window.__casawalk.xr.end());
@@ -1630,20 +1684,6 @@ check('the welcome card turns to face you as you move', faceAngle < 1, `${faceAn
 await aimW('right', R, await modelTop()); await frames(6); await click('right', 'trigger'); await settled();
 // (Shown: visible, and every parent too.)
 const welcomeShown = () => page.evaluate(() => { for (let a = window.__casawalk.xr.ui.welcome.mesh; a; a = a.parent) if (!a.visible) return false; return true; });
-	// Stairs: an arc meeting a step's front (the riser) lands on its top (the tread), not red.
-	const st = await page.evaluate(() => {
-		const x = window.__casawalk.xr, t = x.targets(), V = x.rig.position.constructor;
-		const W = (px, h, pz) => x.centerer.localToWorld(new V(px, h, pz)); // plan metres to world (the example home's Stairs at 7.45, 5.35)
-		const out = [];
-		for (const s of [1, -1]) for (const h of [0.1, 0.3]) {
-			const seg = x.modes.walk.hitSegment(W(7.45, h, 5.35 + 2 * s), W(7.45, h, 5.35 - 2 * s), t);
-			if (!seg) continue;
-			const local = x.centerer.worldToLocal(seg.point.clone());
-			out.push({ from: s, h, valid: seg.valid, y: +local.y.toFixed(3), up: +seg.normal.y.toFixed(2) });
-		}
-		return out;
-	});
-	check('stairs: an arc meeting a riser lands on the tread above it', st.some((r) => r.valid && r.up > 0.7 && r.y > r.h && r.y < r.h + 0.25), JSON.stringify(st));
 const wk = { mode: (await state()).mode, shown: await welcomeShown(), on: await page.evaluate(() => window.__casawalk.xr.ui.welcomeOn) };
 await restRight(); await click('right', 'b-button'); await settled(); await frames(3);
 s = await state();

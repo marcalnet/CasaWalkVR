@@ -50,6 +50,7 @@ import { DEV } from './dev.js';
 import { ToolsIntro } from './tools-intro.js';
 import { attachTransientPointer } from './transient-pointer.js';
 import { SeeThrough, SEE_THROUGH_MAX } from './walls.js';
+import { Portals } from './portal.js';
 import { takePhoto, photoName, saveFile, INTERFACE_LAYER } from './photo.js';
 import { readSetting } from './settings.js';
 import { buildShowroom, buildStage, fitPlinth, placePlate, buildWalkSky, recolourSphere } from './xr-scene.js';
@@ -97,6 +98,7 @@ export class XRExperience {
 		// See-through walls and furniture (headset only): 0 = as modelled, 1 = glass house.
 		this.seeThroughAmount = readSetting('seeThrough') > 0 ? SEE_THROUGH_ON : 0; // (a switch: an older stored amount counts as on)
 		this.seeThrough = new SeeThrough();
+		this.portals = new Portals(); // the wall portal (js/portal.js)
 		this.soundLevel = readSetting('sound'); // off | effects | all (effects and ambience)
 		this.toolFan = readSetting('toolFan'); // the hand that holds the tool fan; the wrist menu is on the other
 		this.cameraLens = readSetting('cameraLens'); // the street camera's lens, mm (milestone D)
@@ -211,6 +213,7 @@ export class XRExperience {
 		}
 		this.seeThrough.setModel(model.layers);
 		this.applySeeThrough();
+		this.portals.setModel(model.layers);
 		this.tools.setModel(); // nothing the tools made carries over to another model
 		this.updateSky();
 		this.updateLabels();
@@ -647,7 +650,9 @@ export class XRExperience {
 		// street camera's lens (eye: its world matrix; 3:2, its field of view).
 		this.markInterface();
 		this.rig.updateMatrixWorld(true);
-		const job = takePhoto(this.renderer, this.scene, eye ?? this.camera.matrixWorld.clone(), { near: XR_NEAR, far: XR_FAR, width, height, fov, level });
+		this.portals.hide(); // (the photo shows the walls whole: a portal is the viewer's peek; drawn before takePhoto's first wait)
+		let job;
+		try { job = takePhoto(this.renderer, this.scene, eye ?? this.camera.matrixWorld.clone(), { near: XR_NEAR, far: XR_FAR, width, height, fov, level }); } finally { this.portals.show(); }
 		let error = null, kept = null;
 		try {
 			const blob = await job;
@@ -695,6 +700,7 @@ export class XRExperience {
 		if (this.layerFx) this.runLayerFx(dt); // moving between layers: the modes wait
 		else this.modes[this.mode]?.update(dt);
 		this.runArrival(dt);
+		this.portals.update(this, dt); // the wall portal: after the mode, so a jump this frame shuts it
 		for (const v of this.handViews) v.update(dt, { passthrough: !this.vrView });
 		this.readout?.update();
 		this.frameStats?.update(dt);

@@ -110,7 +110,7 @@ test('Haptics plays patterns on the frame clock, and only on controllers that ca
 });
 
 test('sound recipes: short, never clipping, envelopes that start and end silent', () => {
-	assert.deepEqual(Object.keys(RECIPES).sort(), ['aim', 'beep', 'close', 'deny', 'dive', 'grab', 'open', 'press', 'release', 'settle', 'shutter', 'squeak', 'step', 'surface', 'tick', 'whoosh']);
+	assert.deepEqual(Object.keys(RECIPES).sort(), ['aim', 'beep', 'close', 'deny', 'dive', 'grab', 'open', 'portal', 'press', 'release', 'settle', 'shutter', 'squeak', 'step', 'surface', 'tick', 'whoosh']);
 	for (const [name, r] of Object.entries(RECIPES)) {
 		const len = recipeLength(r);
 		assert.ok(len > 0.01 && len <= FEEDBACK_MAX + 0.01, `${name}: ${len} s`);

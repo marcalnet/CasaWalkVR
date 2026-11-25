@@ -69,6 +69,8 @@ export const RECIPES = {
 	dive: { layers: [{ noise: true, band: [1800, 400], q: 0.8, env: [[0, 0], [0.08, 0.3], [0.3, 0]] }] },
 	surface: { layers: [{ noise: true, band: [400, 1800], q: 0.8, env: [[0, 0], [0.08, 0.3], [0.3, 0]] }] },
 	// A teleport or stepping inside: soft air, shorter and lower than whoosh.
+	// The wall portal opening: an airy swell with no pitch (draft, until the Graphic Designer's recipe).
+	portal: { layers: [{ noise: true, band: [250, 800], q: 0.7, env: [[0, 0], [0.2, 0.16], [0.25, 0]] }] },
 	step: { layers: [{ noise: true, band: [300, 1100], q: 0.8, env: [[0, 0], [0.07, 0.3], [0.18, 0]] }] },
 };
 

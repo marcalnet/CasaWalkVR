@@ -178,10 +178,12 @@ export class StreetCamera {
 		const xrOn = r.xr.enabled, previous = r.getRenderTarget();
 		try {
 			r.xr.enabled = false;
+			xr.portals?.hide(); // (the viewfinder shows the walls whole)
 			r.setRenderTarget(this.target);
 			r.clear();
 			r.render(xr.scene, this.view);
 		} finally {
+			xr.portals?.show();
 			r.setRenderTarget(previous);
 			r.xr.enabled = xrOn;
 		}

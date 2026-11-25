@@ -68,6 +68,7 @@ js/panel.js       canvas-texture board (switches, options, stepper, Close key), 
 js/canvas-card.js the one way every drawn card, key and label makes its canvas and texture
 js/veil.js        the one sphere round the eyes: teleport fade, layer change, photo flash
 js/walls.js       solid walls while walking and see-through walls and furniture (headset only)
+js/portal.js      the wall portal: a circle fades open where a fingertip touches a wall or door, or the eyes come within 30 cm (headset only)
 js/photo.js       photos: renders the view without the interface (its own layer, INTERFACE_LAYER) and saves a JPEG
 js/lighting.js    time of day (sun from the compass) and on-demand shadows
 js/depth.js       depth shading (headset only): corner gradients baked per vertex, no post-process
