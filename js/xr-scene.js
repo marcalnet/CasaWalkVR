@@ -131,15 +131,6 @@ export function buildMarkers() {
 	return [m, m.clone()];
 }
 
-/** Black sphere around the head for the teleport fade (a child of the camera). */
-export function buildFade(camera) {
-	const fade = new THREE.Mesh(new THREE.SphereGeometry(0.3, 16, 8), new THREE.MeshBasicMaterial({ color: 0x000000, side: THREE.BackSide, transparent: true, opacity: 0, depthTest: false, depthWrite: false }));
-	fade.renderOrder = 1000;
-	fade.visible = false;
-	fade.name = 'fade';
-	camera.add(fade);
-	return fade;
-}
 
 /** Inside-out sphere with a vertical colour gradient (horizon -> top). */
 function gradientSphere(r, top, horizon) {

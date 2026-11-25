@@ -172,9 +172,33 @@ test('settings keep the board open; the doors move one layer at a time', async (
 test('the interface is never in a photo; what the tools make is', async () => {
 	const { x } = await setup();
 	const hidden = x.photoHidden;
-	for (const o of [...Object.values(x.menus).map((p) => p.mesh), ...Object.values(x.help).map((c) => c.mesh), x.ui.wrist.cross, x.curtain, x.arrival.mesh, x.ui.welcome.mesh, x.ui.flash, x.ui.photoNote.mesh, x.modes.walk.fadeMesh, x.modes.walk.arc.dots, x.modes.walk.arc.ring,
+	for (const o of [...Object.values(x.menus).map((p) => p.mesh), ...Object.values(x.help).map((c) => c.mesh), x.ui.wrist.cross, x.veil.mesh, x.arrival.mesh, x.ui.welcome.mesh, x.ui.photoNote.mesh, x.modes.walk.arc.dots, x.modes.walk.arc.ring,
 		...x.modes.dollhouse.markers, ...x.input.controllers.flatMap((c) => [c.ray, c.grip])]) assert.ok(hidden.has(o), o.name || o.type);
 	assert.ok(!hidden.has(x.tools.annotations) && x.tools.annotations.parent === x.centerer, 'measurements and drawings live in model space and show in photos');
+});
+
+test('the interface lives on its own layer: the headset shows it, a photo\'s camera does not, lasers still hit it', async () => {
+	const { x } = await setup();
+	const { INTERFACE_LAYER } = await import('../js/photo.js');
+	const board = x.menus.dollhouse.mesh;
+	assert.ok(board.layers.isEnabled(INTERFACE_LAYER) && !board.layers.isEnabled(0), 'the board is on the interface layer only');
+	assert.ok(x.camera.layers.isEnabled(INTERFACE_LAYER) && x.camera.layers.isEnabled(0), 'the headset sees the model and the interface');
+	const photoCamera = new THREE.PerspectiveCamera();
+	assert.ok(!board.layers.test(photoCamera.layers), 'a new camera (a photo, the viewfinder) leaves it out');
+	assert.ok(x.tools.annotations.layers.test(photoCamera.layers) && x.model.layers.walls.layers.test(photoCamera.layers), 'the model and what the tools made are in photos');
+	// Added later under the interface (a ring on a key, a print): moved onto its layer before any photo.
+	const ring = new THREE.Mesh(new THREE.RingGeometry(0.1, 0.2), new THREE.MeshBasicMaterial());
+	x.ui.wrist.cross.add(ring);
+	x.markInterface();
+	assert.ok(ring.layers.isEnabled(INTERFACE_LAYER) && !ring.layers.test(photoCamera.layers));
+	// A laser still hits the board.
+	x.scene.updateMatrixWorld(true);
+	board.visible = true;
+	const at = board.getWorldPosition(new THREE.Vector3());
+	x.raycaster.set(at.clone().add(new THREE.Vector3(0, 0, 1).applyQuaternion(board.getWorldQuaternion(new THREE.Quaternion()))), new THREE.Vector3(0, 0, -1).applyQuaternion(board.getWorldQuaternion(new THREE.Quaternion())));
+	x.raycaster.far = 5;
+	assert.ok(x.raycaster.intersectObject(board, false).length > 0, 'the laser hits the board');
+	board.visible = false;
 });
 
 test('leaving VR in the middle of a walk leaves nothing behind', async () => {
@@ -187,13 +211,14 @@ test('leaving VR in the middle of a walk leaves nothing behind', async () => {
 	assert.ok(x.ui.wrist.orb.holder, 'the orb is on a wrist');
 	const walk = x.modes.walk;
 	Object.assign(walk, { tele: { c, via: 'trigger' }, fade: { t: 0, action: () => { throw new Error('a stale teleport ran'); } } });
-	walk.arc.dots.visible = walk.fadeMesh.visible = true;
+	walk.arc.dots.visible = true;
+	x.veil.set('teleport', 1);
 	x.ui.drag = { c, id: 'seethrough' };
 	x.photoPending = true;
 	x.tools.annotations.add(new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshBasicMaterial()));
 	x.end();
 	assert.deepEqual([x.mode, x.menu, walk.tele, walk.fade, x.ui.drag, x.modes.dollhouse.grab, x.ui.welcomeOn, x.pendingRecentre, x.photoPending], [null, null, null, null, null, null, false, false, false]);
-	const shown = [walk.arc.dots, walk.arc.ring, walk.fadeMesh, x.ui.flash, x.ui.photoNote.mesh, x.walkSky, x.showroom, x.stage, x.ui.welcome.mesh, ...x.modes.dollhouse.markers, ...Object.values(x.menus).map((p) => p.mesh)].filter((o) => o.visible);
+	const shown = [walk.arc.dots, walk.arc.ring, x.veil.mesh, x.ui.photoNote.mesh, x.walkSky, x.showroom, x.stage, x.ui.welcome.mesh, ...x.modes.dollhouse.markers, ...Object.values(x.menus).map((p) => p.mesh)].filter((o) => o.visible);
 	assert.deepEqual(shown.map((o) => o.name || o.type), []);
 	assert.ok(!x.ui.wrist.orb.group.parent && !x.ui.wrist.orb.holder && !x.ui.wrist.open);
 	assert.equal(x.rig.position.length() + x.anchor.position.length() + x.lift, 0);
@@ -207,11 +232,11 @@ test('going back to the dollhouse while a teleport fades drops the teleport', as
 	let jumped = false;
 	x.modes.walk.fade = { t: 0, action: () => { jumped = true; } };
 	frame();
-	assert.ok(x.modes.walk.fadeMesh.visible, 'fading out');
+	assert.ok(x.veil.amount('teleport') > 0 && x.veil.mesh.visible, 'fading out');
 	press('right', 'b'); frame(); press('right', 'b', false); frame();
 	settle();
 	assert.equal(x.mode, 'dollhouse');
-	assert.ok(!x.modes.walk.fadeMesh.visible && x.modes.walk.fade === null, 'the view is not left half dark');
+	assert.ok(!x.veil.mesh.visible && x.modes.walk.fade === null, 'the view is not left half dark');
 	go('in');
 	for (let i = 0; i < 30; i++) frame();
 	assert.ok(!jumped, 'the old teleport does not run on the next walk');
@@ -574,6 +599,21 @@ test('a pinch within 15 cm of a door\'s face is the door\'s, not a teleport; fur
 	assert.ok(!d.doors.near(at(0.2), 0.15), '20 cm in front: free');
 	assert.ok(!d.doors.near(at(0.05, 0.25), 0.15), '25 cm above its middle (20 cm above its edge): free');
 	assert.equal(x.aimBlock({ index: 1 }, at(0.1)), 'key');
+});
+
+test('the veil round the eyes: the strongest request shows; a flash during a fade never lightens it', async () => {
+	const { x } = await setup();
+	const v = x.veil;
+	v.set('teleport', 0.6);
+	v.set('flash', 0.3, 0xffffff);
+	assert.ok(v.mesh.visible && v.mesh.material.opacity === 0.6 && v.mesh.material.color.getHex() === 0x000000, 'the darker fade wins');
+	v.set('teleport', 0);
+	assert.ok(v.mesh.material.opacity === 0.3 && v.mesh.material.color.getHex() === 0xffffff, 'the flash, alone');
+	v.set('flash', 0);
+	assert.ok(!v.mesh.visible, 'nothing asked: nothing shown');
+	let spheres = 0;
+	x.camera.traverse((o) => { if (o.isMesh && o.geometry.type === 'SphereGeometry' && o.geometry.parameters.radius < 1) spheres++; }); // (the walk sky is a sphere too, far out)
+	assert.equal(spheres, 1, 'one sphere round the eyes');
 });
 
 test('the safety net: an error in a frame shows the card; errors every frame end the session', async () => {

@@ -14,6 +14,7 @@
 // labels' size are kept the same to the eye whatever the zoom. Photos keep them.
 
 import * as THREE from 'three';
+import { canvasTexture } from './canvas-card.js';
 import { buildMeter } from './tool-models.js';
 import { Measurements, liveReading } from './measure.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
@@ -59,6 +60,7 @@ export class LaserMeter {
 		this.object.add(this.screen.mesh);
 		this.ray = new THREE.Raycaster();
 		this.ray.firstHitOnly = true;
+		this.ray.layers.enableAll(); // (it names what it may hit)
 		this._o = new THREE.Vector3(); this._d = new THREE.Vector3(); this._q = new THREE.Quaternion();
 	}
 
@@ -179,10 +181,7 @@ const Z = new THREE.Vector3(0, 0, 1);
  */
 class LabelLayer {
 	constructor() {
-		this.canvas = typeof document !== 'undefined' ? document.createElement('canvas') : null;
-		if (this.canvas) { this.canvas.width = ATLAS[0]; this.canvas.height = ATLAS[1]; }
-		this.texture = this.canvas ? new THREE.CanvasTexture(this.canvas) : null;
-		if (this.texture) { this.texture.colorSpace = THREE.SRGBColorSpace; this.texture.anisotropy = 4; }
+		({ canvas: this.canvas, texture: this.texture } = canvasTexture(ATLAS[0], ATLAS[1]));
 		const n = LABEL_SLOTS;
 		const geo = new THREE.BufferGeometry();
 		geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(n * 4 * 3), 3).setUsage(THREE.DynamicDrawUsage));
@@ -247,10 +246,7 @@ class LabelLayer {
 
 /** The meter's little screen: the reading, big, and the trigger's next job, small. */
 function makeScreen() {
-	const canvas = typeof document !== 'undefined' ? document.createElement('canvas') : null;
-	if (canvas) { canvas.width = 256; canvas.height = 170; }
-	const texture = canvas ? new THREE.CanvasTexture(canvas) : null;
-	if (texture) texture.colorSpace = THREE.SRGBColorSpace;
+	const { canvas, texture } = canvasTexture(256, 170, { anisotropy: 1 });
 	const mesh = new THREE.Mesh(new THREE.PlaneGeometry(0.023, 0.0153), new THREE.MeshBasicMaterial({ map: texture, color: texture ? 0xffffff : 0x5d6873, toneMapped: false }));
 	mesh.name = 'meter-screen';
 	let last = '';

@@ -21,6 +21,7 @@
 // slider) or null when the click only opened or closed a dropdown.
 
 import * as THREE from 'three';
+import { canvasTexture } from './canvas-card.js';
 import { FONT, COLOURS, BADGE, LABEL, PLATE } from './theme.js';
 
 const PX_PER_M = 1024; // canvas pixels per metre of panel
@@ -64,10 +65,7 @@ export class Panel {
 		this.size = { w: wPx, h: 0 };
 		this.boxes = this.layout();
 		const hPx = this.size.h;
-		this.canvas = typeof document !== 'undefined' ? document.createElement('canvas') : null;
-		if (this.canvas) { this.canvas.width = wPx; this.canvas.height = hPx; }
-		this.texture = this.canvas ? new THREE.CanvasTexture(this.canvas) : null;
-		if (this.texture) { this.texture.colorSpace = THREE.SRGBColorSpace; this.texture.anisotropy = 4; }
+		({ canvas: this.canvas, texture: this.texture } = canvasTexture(wPx, hPx));
 		const geo = new THREE.PlaneGeometry(width, hPx / pxPerM);
 		const mat = new THREE.MeshBasicMaterial({ map: this.texture, transparent: true, toneMapped: false });
 		this.mesh = new THREE.Mesh(geo, mat);
@@ -539,10 +537,7 @@ export class ControlsCard {
 		this.footer = footer;
 		const w = CARD_W, h = CARD_H + (footer ? FOOTER_H : 0), height = width * h / w;
 		this.size = { w, h };
-		this.canvas = typeof document !== 'undefined' ? document.createElement('canvas') : null;
-		if (this.canvas) { this.canvas.width = w; this.canvas.height = h; }
-		this.texture = this.canvas ? new THREE.CanvasTexture(this.canvas) : null;
-		if (this.texture) { this.texture.colorSpace = THREE.SRGBColorSpace; this.texture.anisotropy = 4; }
+		({ canvas: this.canvas, texture: this.texture } = canvasTexture(w, h));
 		this.mesh = new THREE.Mesh(new THREE.PlaneGeometry(width, height),
 			new THREE.MeshBasicMaterial({ map: this.texture, transparent: true, toneMapped: false, depthTest: false }));
 		this.mesh.name = 'controls-card';
@@ -678,10 +673,7 @@ export class WelcomeCard {
 		this.lines = lines;
 		const h = 150 + lines.reduce((n, l) => n + (l.small ? 64 : 92), 0) + 40;
 		this.size = { w: WELCOME_W, h };
-		this.canvas = typeof document !== 'undefined' ? document.createElement('canvas') : null;
-		if (this.canvas) { this.canvas.width = WELCOME_W; this.canvas.height = h; }
-		this.texture = this.canvas ? new THREE.CanvasTexture(this.canvas) : null;
-		if (this.texture) { this.texture.colorSpace = THREE.SRGBColorSpace; this.texture.anisotropy = 4; }
+		({ canvas: this.canvas, texture: this.texture } = canvasTexture(WELCOME_W, h));
 		// Drawn over the model, so a zoomed-in home never hides it.
 		this.mesh = new THREE.Mesh(new THREE.PlaneGeometry(width, width * h / WELCOME_W),
 			new THREE.MeshBasicMaterial({ map: this.texture, transparent: true, toneMapped: false, depthTest: false }));
@@ -759,10 +751,7 @@ export class Label {
 	/** height: metres, of the whole label (the pill around the text). */
 	constructor({ height = 0.05 } = {}) {
 		this.text = '';
-		this.canvas = typeof document !== 'undefined' ? document.createElement('canvas') : null;
-		if (this.canvas) { this.canvas.width = LABEL_W; this.canvas.height = LABEL_H; }
-		this.texture = this.canvas ? new THREE.CanvasTexture(this.canvas) : null;
-		if (this.texture) { this.texture.colorSpace = THREE.SRGBColorSpace; this.texture.anisotropy = 4; }
+		({ canvas: this.canvas, texture: this.texture } = canvasTexture(LABEL_W, LABEL_H));
 		this.mesh = new THREE.Mesh(new THREE.PlaneGeometry(height * LABEL_W / LABEL_H, height),
 			new THREE.MeshBasicMaterial({ map: this.texture, transparent: true, toneMapped: false, depthTest: false }));
 		this.mesh.name = 'label';
@@ -809,10 +798,7 @@ export class ScalePlate {
 	constructor() {
 		this.ratio = null;
 		const [w, h] = PLATE.size;
-		this.canvas = typeof document !== 'undefined' ? document.createElement('canvas') : null;
-		if (this.canvas) { this.canvas.width = w; this.canvas.height = h; }
-		this.texture = this.canvas ? new THREE.CanvasTexture(this.canvas) : null;
-		if (this.texture) { this.texture.colorSpace = THREE.SRGBColorSpace; this.texture.anisotropy = 4; }
+		({ canvas: this.canvas, texture: this.texture } = canvasTexture(w, h));
 		// Lit like the gallery, with a little light of its own so the ratio stays readable at night.
 		this.mesh = new THREE.Mesh(new THREE.PlaneGeometry(...PLATE.metres),
 			new THREE.MeshLambertMaterial({ map: this.texture, transparent: true, emissive: 0xffffff, emissiveMap: this.texture, emissiveIntensity: 0.35 }));

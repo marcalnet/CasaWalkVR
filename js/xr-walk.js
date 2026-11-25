@@ -21,7 +21,7 @@ import * as THREE from 'three';
 import { TeleportArc, yawOf } from './xr-input.js';
 import { WallCollider } from './walls.js';
 import { UP, DOWN, worldNormal, hitSegment } from './xr-targets.js';
-import { EYE_BELOW_TOP, buildFade } from './xr-scene.js';
+import { EYE_BELOW_TOP } from './xr-scene.js';
 import { handAimRay } from './gestures.js';
 import { hotspots, snapTo, HOTSPOT } from './hotspots.js';
 import { Label } from './panel.js';
@@ -47,7 +47,6 @@ export class Walk {
 		this.snapReady = true;
 		this.collider = new WallCollider(); // Solid walls
 		this.body = null; // where the body was last frame (null: just placed)
-		this.fadeMesh = buildFade(xr.camera);
 		this.arc = new TeleportArc(xr.scene);
 		// Hotspots: faint discs on the floor while aiming, and the room's name over the one the ring snaps to.
 		this.discs = new THREE.InstancedMesh(new THREE.RingGeometry(0.12, 0.16, 32).rotateX(-Math.PI / 2),
@@ -59,7 +58,7 @@ export class Walk {
 		xr.scene.add(this.discs);
 		this.spotLabel = new Label({ height: 0.12 });
 		xr.scene.add(this.spotLabel.mesh);
-		xr.hideFromPhotos(this.fadeMesh, this.arc.dots, this.arc.ring, this.discs, this.spotLabel.mesh);
+		xr.hideFromPhotos(this.arc.dots, this.arc.ring, this.discs, this.spotLabel.mesh);
 	}
 
 	/** Walk in at the Sweet Home 3D observer camera (or the model's centre). */
@@ -118,8 +117,7 @@ export class Walk {
 		this.tele = null;
 		this.hideAim();
 		this.fade = null;
-		this.fadeMesh.material.opacity = 0;
-		this.fadeMesh.visible = false;
+		this.xr.veil.set('teleport', 0);
 		for (const c of this.xr.input.controllers) c.pull = null;
 	}
 
@@ -324,15 +322,15 @@ export class Walk {
 		const f = this.fade;
 		if (!f) return;
 		f.t += dt;
-		const m = this.fadeMesh.material;
+		let opacity;
 		if (f.t < FADE_OUT) {
-			m.opacity = f.t / FADE_OUT;
+			opacity = f.t / FADE_OUT;
 		} else {
 			if (f.action) { f.action(); f.action = null; }
-			m.opacity = Math.max(0, 1 - (f.t - FADE_OUT) / FADE_IN);
-			if (f.t >= FADE_OUT + FADE_IN) { this.fade = null; m.opacity = 0; }
+			opacity = Math.max(0, 1 - (f.t - FADE_OUT) / FADE_IN);
+			if (f.t >= FADE_OUT + FADE_IN) { this.fade = null; opacity = 0; }
 		}
-		this.fadeMesh.visible = m.opacity > 0;
+		this.xr.veil.set('teleport', opacity); // (the one sphere round the eyes, js/veil.js)
 	}
 
 	update(dt) {

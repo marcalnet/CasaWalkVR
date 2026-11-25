@@ -250,10 +250,10 @@ const leftovers = () => page.evaluate(() => {
 	want('session', x.session === null && x.mode === null);
 	want('grab/tele/fade/drag', !x.modes.dollhouse.grab && !x.modes.walk.tele && !x.modes.walk.fade && !x.ui.drag && !x.pendingRecentre);
 	want('menu', x.menu === null && Object.values(x.menus).every((p) => !p.mesh.visible && !p.open) && !x.ui.help && Object.values(x.help).every((c) => !c.mesh.visible) && !x.ui.wrist.open && !x.ui.wrist.cross.visible);
-	want('layers', !x.layerFx && !x.curtain.visible && !x.arrival.mesh.visible);
+	want('layers', !x.layerFx && !(x.veil.amount('layer') > 0) && !x.arrival.mesh.visible);
 	want('welcome', !x.ui.welcome.mesh.visible && !x.ui.welcomeOn);
 	want('hands note', !x.ui.handsNote.mesh.visible);
-	want('photo', !x.photoPending && !x.ui.photoFx && !x.ui.flash.visible && !x.ui.photoNote.mesh.visible && !x.modes.walk.fadeMesh.visible);
+	want('photo', !x.photoPending && !x.ui.photoFx && !x.veil.mesh.visible && !x.ui.photoNote.mesh.visible);
 	want('arc', !x.modes.walk.arc.dots.visible && !x.modes.walk.arc.ring.visible);
 	want('orb', !x.ui.wrist.orb.group.parent && !x.ui.wrist.orb.holder);
 	want('hands', x.handViews.every((v) => !v.group.visible));
@@ -273,7 +273,7 @@ const entry = () => page.evaluate(() => {
 	want('dollhouse', x.mode === 'dollhouse' && x.menu === null && x.ui.welcome.mesh.visible && x.ui.welcomeOn);
 	want('gallery', x.showroom.visible && x.stage.visible && x.gallery.visible && x.pedestal.visible && !x.walkSky.visible && !x.model.layers.ground.visible);
 	want('model reset', x.modes.dollhouse.doll.yaw === 0 && x.modes.dollhouse.doll.zoom === 1 && Math.abs(x.anchor.scale.x - x.baseScale) < 1e-9);
-	want('idle', !x.modes.dollhouse.grab && !x.modes.walk.tele && !x.modes.walk.fade && !x.ui.drag && !x.modes.walk.arc.dots.visible && !x.modes.walk.fadeMesh.visible && x.modes.dollhouse.markers.every((m) => !m.visible));
+	want('idle', !x.modes.dollhouse.grab && !x.modes.walk.tele && !x.modes.walk.fade && !x.ui.drag && !x.modes.walk.arc.dots.visible && !(x.veil.amount('teleport') > 0) && x.modes.dollhouse.markers.every((m) => !m.visible));
 	want('orb on the right grip', x.ui.wrist.orb.holder?.handedness === 'right' && x.ui.wrist.orb.group.parent === x.ui.wrist.orb.holder.grip && !x.ui.wrist.open);
 	want('lasers', x.input.active().length === 2 && x.input.active().every((c) => c.line.visible));
 	want('eyes 1.89', Math.abs(x.headWorld().y - 1.89) < 0.005);
@@ -311,7 +311,7 @@ const FINGERPRINT = async () => {
 	return {
 		mode: x.mode, session: x.sessionMode, view: x.view, menu: x.menu?.title ?? null, welcome: [vis(x.ui.welcome.mesh), x.ui.welcomeOn],
 		busy: [!!x.modes.dollhouse.grab, !!x.modes.walk.tele, !!x.modes.walk.fade, !!x.ui.drag, !!x.pendingRecentre, !!x.photoPending],
-		shown: { ...Object.fromEntries(['showroom', 'stage', 'gallery', 'pedestal', 'walkSky'].map((k) => [k, vis(x[k])])), fadeMesh: vis(x.modes.walk.fadeMesh), flash: vis(x.ui.flash) },
+		shown: { ...Object.fromEntries(['showroom', 'stage', 'gallery', 'pedestal', 'walkSky'].map((k) => [k, vis(x[k])])), fadeMesh: x.veil.amount('teleport') > 0, flash: x.veil.amount('flash') > 0 }, // (one veil since A5: the same facts as the old spheres' visibility)
 		layers: Object.fromEntries(Object.entries(x.model.layers).map(([k, g]) => [k, [g.visible, g.children.filter(vis).length]])), maxStorey: x.maxStorey,
 		markers: x.modes.dollhouse.markers.map(vis), arc: [vis(x.modes.walk.arc.dots), vis(x.modes.walk.arc.ring)], note: vis(x.ui.photoNote.mesh),
 		rig: [...v3(x.rig.position), n(x.rig.rotation.y), n(x.lift), n(x.modes.dollhouse.dollLift)], stage: [...v3(x.stage.position), n(x.stage.rotation.y)],
@@ -893,6 +893,14 @@ check('B closes the board', (await state()).menu === null);
 	await frames(3);
 	check('the safety net: an error shows the calm card, and VR goes on', safe.card && safe.session && safe.message === 'a test error', JSON.stringify(safe));
 	await shot('safety-card');
+	// The interface's layer (A5): both eyes see it; the street camera's viewfinder and a photo's camera don't.
+	const lay = await page.evaluate(async () => {
+		const x = window.__casawalk.xr, { INTERFACE_LAYER: L } = await import('/js/photo.js');
+		const eyes = x.renderer.xr.getCamera().cameras.map((c) => c.layers.isEnabled(L));
+		const THREE = await import('three');
+		return { eyes, view: x.fan.camera.view.layers.isEnabled(L), photo: new THREE.PerspectiveCamera().layers.isEnabled(L), board: x.menus.dollhouse.mesh.layers.isEnabled(L) && !x.menus.dollhouse.mesh.layers.isEnabled(0) };
+	});
+	check('the interface layer: both eyes show it; the viewfinder and a photo\'s camera leave it out', lay.eyes.length === 2 && lay.eyes.every(Boolean) && !lay.view && !lay.photo && lay.board, JSON.stringify(lay));
 	await page.evaluate(() => { const x = window.__casawalk.xr; x.ui.hideError(); x.safety.begin(); delete x.safety.lastError; x.safety.log = (e) => console.error(e); });
 	await page.evaluate(() => window.__casawalk.xr.lessons.finish()); await frames(2);
 	// The hands are drawn with the hand model (the generic hand), once loaded.
@@ -934,7 +942,7 @@ await settled();
 s = await state();
 check('trigger on model enters 1:1 (through the dive)', s.mode === 'walk' && s.anchorScale === 1, JSON.stringify(s.rig.map((v) => +v.toFixed(2))));
 {
-	const arr = await page.evaluate(() => { const x = window.__casawalk.xr; return { shown: x.arrival.mesh.visible, text: x.arrival.text, curtain: x.curtain.visible }; });
+	const arr = await page.evaluate(() => { const x = window.__casawalk.xr; return { shown: x.arrival.mesh.visible, text: x.arrival.text, curtain: x.veil.amount('layer') > 0 }; });
 	check('arriving inside: the room\'s name floats in front of you, the view uncovered', arr.shown && arr.text.length > 0 && !arr.curtain, JSON.stringify(arr));
 }
 {
@@ -1646,14 +1654,15 @@ await aimW('left', L, await modelTop()); await frames(6); // a marker under the 
 await page.evaluate(() => { const x = window.__casawalk.xr; x.lessons.stop(); x.toolsIntro.stop(); x.ui.setWelcome(true); }); // (Help replayed the lesson above: it would hide the welcome card)
 const seen = page.evaluate(() => new Promise((done) => {
 	const S = window.__casawalk, x = S.xr, r = S.renderer, render = r.render;
-	const ui = { menu: Object.values(x.menus).map((p) => p.mesh), welcome: [x.ui.welcome.mesh], feedback: [x.ui.flash, x.ui.photoNote.mesh, x.modes.walk.fadeMesh], arc: [x.modes.walk.arc.dots, x.modes.walk.arc.ring],
+	const ui = { menu: Object.values(x.menus).map((p) => p.mesh), welcome: [x.ui.welcome.mesh], feedback: [x.veil.mesh, x.ui.photoNote.mesh], arc: [x.modes.walk.arc.dots, x.modes.walk.arc.ring],
 		markers: x.modes.dollhouse.markers, orbs: [x.ui.wrist.orb.group, x.ui.wrist.cross], hands: x.input.controllers.flatMap((c) => [c.ray, c.grip]) };
 	const shown = (o) => { for (let a = o; a; a = a.parent) if (!a.visible) return false; return true; };
-	const showing = () => Object.keys(ui).filter((k) => ui[k].some(shown));
+	// (Since A5 nothing is hidden for a photo: the interface is on its own layer, which the photo's camera doesn't show.)
+	const showing = (camera = x.camera) => Object.keys(ui).filter((k) => ui[k].some((o) => { let seen = false; o.traverse((c) => { if (c.isMesh || c.isLine || c.isPoints) seen ||= c.layers.test(camera.layers); }); return shown(o) && seen; }));
 	const before = showing();
 	setTimeout(() => done({ before, timeout: true }), 15000);
 	r.render = function (...args) {
-		if (!r.xr.enabled && args[0] === S.scene) { r.render = render; const during = showing(); setTimeout(() => done({ before, during, after: showing() }), 0); } // the photo's draw
+		if (!r.xr.enabled && args[0] === S.scene) { r.render = render; const during = showing(args[1]); setTimeout(() => done({ before, during, after: showing() }), 0); } // the photo's draw
 		return render.apply(this, args);
 	};
 }));
@@ -1664,7 +1673,7 @@ await page.waitForFunction(async (n) => (await (await import('/js/storage.js')).
 // (The note stays 2.5 s of the app's time, which runs slower than the clock in the emulator.)
 await page.waitForFunction(() => !window.__casawalk.xr.ui.photoFx, null, { timeout: 10000 }).catch(() => {});
 await frames(3);
-const pfx = await page.evaluate(() => { const x = window.__casawalk.xr; return { flash: x.ui.flash.visible, note: x.ui.photoNote.mesh.visible, fx: x.ui.photoFx }; });
+const pfx = await page.evaluate(() => { const x = window.__casawalk.xr; return { flash: x.veil.amount('flash') > 0, note: x.ui.photoNote.mesh.visible, fx: x.ui.photoFx }; });
 check('Photo: no menu, laser, controller, orb, arc, marker, welcome card, flash or note in it; all back after',
 	ph.during?.length === 0 && ph.before.join() === 'menu,welcome,markers,orbs,hands' && ph.after.join() === 'menu,welcome,markers,orbs,hands', JSON.stringify(ph));
 await click('right', 'b-button');
@@ -1736,9 +1745,9 @@ check('wrist menu open: a pull on the floor only closes it', !s.wrist && !s.arc 
 	await button('right', 'trigger', 1); await frames(6);
 	const valid = (await state()).valid;
 	await button('right', 'trigger', 0);
-	const dark = await page.waitForFunction(() => window.__casawalk.xr.modes.walk.fadeMesh.visible, null, { timeout: 1000, polling: 5 }).then(() => true, () => false);
+	const dark = await page.waitForFunction(() => window.__casawalk.xr.veil.amount('teleport') > 0, null, { timeout: 1000, polling: 5 }).then(() => true, () => false);
 	await frames(20);
-	const fd = await page.evaluate(() => { const x = window.__casawalk.xr; return { fade: x.modes.walk.fade !== null, shown: x.modes.walk.fadeMesh.visible, opacity: x.modes.walk.fadeMesh.material.opacity }; });
+	const fd = await page.evaluate(() => { const x = window.__casawalk.xr; return { fade: x.modes.walk.fade !== null, shown: x.veil.amount('teleport') > 0, opacity: x.veil.amount('teleport') }; });
 	check('a teleport fades out and back in', valid && dark && !fd.fade && !fd.shown && fd.opacity === 0, JSON.stringify({ valid, dark, ...fd }));
 }
 

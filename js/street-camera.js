@@ -13,6 +13,7 @@
 // the board's Tools tab (remembered; js/settings.js cameraLens).
 
 import * as THREE from 'three';
+import { canvasTexture } from './canvas-card.js';
 import { DEVICE } from './device.js';
 import { buildCamera } from './tool-models.js';
 import { COLOURS, FONT, GUIDE } from './theme.js';
@@ -173,8 +174,7 @@ export class StreetCamera {
 		this.view.matrixWorld.copy(this.lensPoint.matrixWorld).multiply(new THREE.Matrix4().makeRotationY(Math.PI));
 		this.view.matrixWorld.decompose(this.view.position, this.view.quaternion, this.view.scale);
 		this.view.updateMatrixWorld(true);
-		const hidden = [];
-		for (const o of xr.photoHidden) if (o.visible) { o.visible = false; hidden.push(o); }
+		xr.markInterface(); // (the viewfinder's camera shows the default layer only: no interface, the camera itself included)
 		const xrOn = r.xr.enabled, previous = r.getRenderTarget();
 		try {
 			r.xr.enabled = false;
@@ -184,17 +184,13 @@ export class StreetCamera {
 		} finally {
 			r.setRenderTarget(previous);
 			r.xr.enabled = xrOn;
-			for (const o of hidden) o.visible = true;
 		}
 	}
 }
 
 /** The camera's instruction: one short hand-lettered line in the orange of the thing to press. */
 function makeHint() {
-	const canvas = typeof document !== 'undefined' ? document.createElement('canvas') : null;
-	if (canvas) { canvas.width = 512; canvas.height = 64; }
-	const texture = canvas ? new THREE.CanvasTexture(canvas) : null;
-	if (texture) { texture.colorSpace = THREE.SRGBColorSpace; texture.anisotropy = 4; }
+	const { canvas, texture } = canvasTexture(512, 64);
 	const mesh = new THREE.Mesh(new THREE.PlaneGeometry(0.05, 0.00625), new THREE.MeshBasicMaterial({ map: texture, transparent: true, toneMapped: false }));
 	mesh.name = 'camera-hint';
 	return {
@@ -212,10 +208,7 @@ function makeHint() {
 
 /** A small canvas label (the lens, on the viewfinder). */
 function makeLabel() {
-	const canvas = typeof document !== 'undefined' ? document.createElement('canvas') : null;
-	if (canvas) { canvas.width = 128; canvas.height = 48; }
-	const texture = canvas ? new THREE.CanvasTexture(canvas) : null;
-	if (texture) texture.colorSpace = THREE.SRGBColorSpace;
+	const { canvas, texture } = canvasTexture(128, 48, { anisotropy: 1 });
 	const mesh = new THREE.Mesh(new THREE.PlaneGeometry(0.016, 0.006), new THREE.MeshBasicMaterial({ map: texture, transparent: true, toneMapped: false }));
 	mesh.name = 'lens-label';
 	return {

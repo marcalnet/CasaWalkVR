@@ -91,21 +91,14 @@ export async function takePhoto(renderer, scene, eye, { width = 1920, height = 1
 }
 
 /**
- * Hides `objects` (any iterable of Object3Ds) while `draw()` runs, then puts
- * each one back as it was; returns what draw() returned. The Photo button
- * draws the view without the menu, lasers, controllers, orbs and other
- * interface (js/xr.js keeps the list: XRExperience.hideFromPhotos()).
+ * The three.js layer the interface is drawn on (code audit, A5): the menus,
+ * lasers, controllers, orbs, the arc, hands, tools, labels and cards
+ * (XRExperience.hideFromPhotos() puts them there). The headset's camera
+ * shows it; a photo's camera and the street camera's viewfinder are new
+ * cameras on the default layer only, so they leave the interface out without
+ * hiding anything. (Layers 1 and 2 are three.js's own, for the two eyes.)
  */
-export function withHidden(objects, draw) {
-	const was = [];
-	for (const o of objects) { was.push(o.visible); o.visible = false; }
-	try {
-		return draw();
-	} finally {
-		let i = 0;
-		for (const o of objects) o.visible = was[i++];
-	}
-}
+export const INTERFACE_LAYER = 5;
 
 /** A file name like "CasaWalk 2026-11-21 10.42.07.jpg". */
 export function photoName(date = new Date()) {

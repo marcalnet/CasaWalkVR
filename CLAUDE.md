@@ -65,8 +65,10 @@ js/lessons.js     the first-time lessons: a card of steps that tick off, the loo
 js/hand-model.js  the hand model: the generic hand (vendor/generic-hand/) dressed in the hand look, posed from joints or presets
 js/hand-poses.js  preset hand poses (from IWER, MIT) for the lessons' demonstration hand
 js/panel.js       canvas-texture board (switches, options, stepper, Close key), controls and welcome cards, labels
+js/canvas-card.js the one way every drawn card, key and label makes its canvas and texture
+js/veil.js        the one sphere round the eyes: teleport fade, layer change, photo flash
 js/walls.js       solid walls while walking and see-through walls and furniture (headset only)
-js/photo.js       the menu's Photo button: renders the view without the menu and saves a JPEG
+js/photo.js       photos: renders the view without the interface (its own layer, INTERFACE_LAYER) and saves a JPEG
 js/lighting.js    time of day (sun from the compass) and on-demand shadows
 js/depth.js       depth shading (headset only): corner gradients baked per vertex, no post-process
 js/storage.js     IndexedDB recent files and the photos taken in VR (saved to Downloads from the page)

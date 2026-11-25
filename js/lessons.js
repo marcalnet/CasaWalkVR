@@ -15,6 +15,7 @@
 //          (an orange ring at a hotspot ahead); it follows you after each teleport
 
 import * as THREE from 'three';
+import { canvasTexture } from './canvas-card.js';
 import { COLOURS, FONT, GUIDE } from './theme.js';
 import { KeyPad } from './keys.js';
 import { LESSONS } from './xr-menus.js';
@@ -41,10 +42,7 @@ export class Lessons {
 		this.group = new THREE.Group();
 		this.group.name = 'lesson';
 		this.group.visible = false;
-		this.canvas = typeof document !== 'undefined' ? document.createElement('canvas') : null;
-		this.texture = this.canvas ? new THREE.CanvasTexture(this.canvas) : null;
-		if (this.texture) { this.texture.colorSpace = THREE.SRGBColorSpace; this.texture.anisotropy = 4; }
-		if (this.canvas) { this.canvas.width = PX_W; this.canvas.height = PX_H; }
+		({ canvas: this.canvas, texture: this.texture } = canvasTexture(PX_W, PX_H));
 		this.card = new THREE.Mesh(new THREE.PlaneGeometry(CARD_W, CARD_W * PX_H / PX_W), new THREE.MeshBasicMaterial({ map: this.texture, transparent: true, toneMapped: false, depthTest: false }));
 		this.card.renderOrder = 10;
 		this.card.name = 'lesson-card';

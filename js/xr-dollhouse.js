@@ -128,6 +128,7 @@ export class Dollhouse {
 		this.placeDoors();
 		this.clearRay = new THREE.Raycaster();
 		this.clearRay.firstHitOnly = true;
+		this.clearRay.layers.enableAll();
 		// A bare hand's pointing ray (orange, straight), one per hand.
 		this.handRays = xr.input.controllers.map(() => {
 			const l = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3(0, 0, -1)]),

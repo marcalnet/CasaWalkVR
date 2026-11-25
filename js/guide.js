@@ -9,6 +9,7 @@
 // once. Both are keys (js/keys.js): touch, a controller's tip or its laser.
 
 import * as THREE from 'three';
+import { canvasTexture } from './canvas-card.js';
 import { GUIDE, FONT } from './theme.js';
 import { KeyPad } from './keys.js';
 import { GUIDES } from './xr-menus.js';
@@ -23,10 +24,7 @@ export class Guide {
 		this.group = new THREE.Group(); // placed by the caller (beside the wrist menu or the board)
 		this.group.name = 'guide';
 		this.group.visible = false;
-		this.canvas = typeof document !== 'undefined' ? document.createElement('canvas') : null;
-		if (this.canvas) { this.canvas.width = PX_W; this.canvas.height = PX_H; }
-		this.texture = this.canvas ? new THREE.CanvasTexture(this.canvas) : null;
-		if (this.texture) { this.texture.colorSpace = THREE.SRGBColorSpace; this.texture.anisotropy = 4; }
+		({ canvas: this.canvas, texture: this.texture } = canvasTexture(PX_W, PX_H));
 		this.card = new THREE.Mesh(new THREE.PlaneGeometry(GUIDE.width, GUIDE.height),
 			new THREE.MeshBasicMaterial({ map: this.texture, transparent: true, toneMapped: false, depthTest: false }));
 		this.card.name = 'guide-card';

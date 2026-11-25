@@ -76,7 +76,7 @@ export class XRUI {
 		this.buildPhotoFeedback();
 		this.buildHandsNote();
 		this.buildErrorNote();
-		xr.hideFromPhotos(this.welcome.mesh, this.flash, this.photoNote.mesh, this.handsNote.mesh, this.errorNote.mesh);
+		xr.hideFromPhotos(this.welcome.mesh, this.photoNote.mesh, this.handsNote.mesh, this.errorNote.mesh);
 	}
 
 	// -----------------------------------------------------------------------
@@ -144,7 +144,7 @@ export class XRUI {
 		this.errorNote = new WelcomeCard(ERROR_TEXT.title, [{ small: true, text: ERROR_TEXT.line }], { width: 0.6 });
 		this.errorNote.mesh.name = 'error-note';
 		this.errorNote.mesh.position.set(0, -0.05, -0.8);
-		this.errorNote.mesh.renderOrder = 1004; // (over the layer curtain, 1002, and the ?stats line, 1003)
+		this.errorNote.mesh.renderOrder = 1004; // (over the veil round the eyes, 1002, and the ?stats line, 1003)
 		this.errorNote.mesh.visible = false;
 		this.xr.camera.add(this.errorNote.mesh);
 	}
@@ -163,14 +163,9 @@ export class XRUI {
 		this.handsNote.mesh.visible = this.xr.input.handsOnly();
 	}
 
-	/** Photo feedback: a short white flash, and a note in front of you for a few seconds. */
+	/** Photo feedback: a short white flash (the veil, js/veil.js), and a note in front of you for a few seconds. */
 	buildPhotoFeedback() {
 		const camera = this.xr.camera;
-		this.flash = new THREE.Mesh(new THREE.SphereGeometry(0.28, 16, 8), new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.BackSide, transparent: true, opacity: 0, depthTest: false, depthWrite: false }));
-		this.flash.renderOrder = 1001;
-		this.flash.visible = false;
-		this.flash.name = 'photo-flash';
-		camera.add(this.flash);
 		this.photoNote = new WelcomeCard(PHOTO_TEXT.kept.title, [{ small: true, text: PHOTO_TEXT.kept.line }], { width: 0.34 });
 		this.photoNote.mesh.position.set(0, -0.16, -0.7);
 		this.photoNote.mesh.visible = false;
@@ -195,10 +190,9 @@ export class XRUI {
 		const f = this.photoFx;
 		if (!f) return;
 		f.t += dt;
-		this.flash.material.opacity = f.error ? 0 : Math.max(0, 0.75 * (1 - f.t / 0.3));
-		this.flash.visible = this.flash.material.opacity > 0;
+		this.xr.veil.set('flash', f.error ? 0 : Math.max(0, 0.75 * (1 - f.t / 0.3)), 0xffffff);
 		this.photoNote.mesh.visible = f.t < 2.5;
-		if (f.t >= 2.5) { this.photoFx = null; this.flash.visible = false; }
+		if (f.t >= 2.5) { this.photoFx = null; this.xr.veil.set('flash', 0); }
 	}
 
 	// -----------------------------------------------------------------------
@@ -507,7 +501,7 @@ export class XRUI {
 		this.closeMenu();
 		this.setWelcome(false);
 		this.photoFx = null;
-		this.flash.visible = false;
+		this.xr.veil.set('flash', 0);
 		this.photoNote.mesh.visible = false;
 		this.handsNote.mesh.visible = false;
 		this.errorNote.mesh.visible = false;

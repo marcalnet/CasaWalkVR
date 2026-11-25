@@ -43,13 +43,14 @@ import { XRInput } from './xr-input.js';
 import { HandView } from './hands.js';
 import { Lessons } from './lessons.js';
 import { SafetyNet } from './safety.js';
+import { Veil } from './veil.js';
 import { HandReadout } from './hand-readout.js';
 import { FrameStats } from './frame-stats.js';
 import { DEV } from './dev.js';
 import { ToolsIntro } from './tools-intro.js';
 import { attachTransientPointer } from './transient-pointer.js';
 import { SeeThrough, SEE_THROUGH_MAX } from './walls.js';
-import { takePhoto, photoName, saveFile, withHidden } from './photo.js';
+import { takePhoto, photoName, saveFile, INTERFACE_LAYER } from './photo.js';
 import { readSetting } from './settings.js';
 import { buildShowroom, buildStage, fitPlinth, placePlate, buildWalkSky, recolourSphere } from './xr-scene.js';
 import { ScalePlate, Label } from './panel.js';
@@ -105,9 +106,12 @@ export class XRExperience {
 		this.pendingRecentre = false;
 		this.photoPending = false;
 		this.photoHidden = new Set(); // never in a photo: see hideFromPhotos()
+		camera.layers.enable(INTERFACE_LAYER); // (the headset shows the interface; photos don't: js/photo.js)
 		this.raycaster = new THREE.Raycaster();
 		this.raycaster.firstHitOnly = true;
+		this.raycaster.layers.enableAll(); // (lasers hit the interface too; every cast names what it may hit)
 		this.floorRay = new THREE.Raycaster(); // all hits, so the first upward face is found
+		this.floorRay.layers.enableAll();
 		this.input = new XRInput(renderer, rig);
 		this.input.setVisible(false);
 		this.hideFromPhotos(...this.input.controllers.flatMap((c) => [c.ray, c.grip, c.wrist])); // lasers, controllers, and what they carry (orbs, tools)
@@ -131,17 +135,14 @@ export class XRExperience {
 		this.walkSky = buildWalkSky(camera);
 		Object.assign(this, buildMenus(rig)); // menus: the settings boards; help: the help cards
 		this.hideFromPhotos(...Object.values(this.menus).map((p) => p.mesh), ...Object.values(this.help).map((c) => c.mesh));
-		// Moving between layers: a curtain over the eyes (dark for in and back, white for leaving VR) and the arrival title.
-		this.curtain = new THREE.Mesh(new THREE.SphereGeometry(0.3, 16, 8), new THREE.MeshBasicMaterial({ color: 0x000000, side: THREE.BackSide, transparent: true, opacity: 0, depthTest: false, depthWrite: false }));
-		this.curtain.renderOrder = 1002;
-		this.curtain.visible = false;
-		this.curtain.name = 'layer-curtain';
-		camera.add(this.curtain);
+		// The one sphere round the eyes (js/veil.js): the teleport fade, the move between layers
+		// (dark for in and back, white for leaving VR) and the photo flash. Then the arrival title.
+		this.veil = new Veil(camera);
 		this.arrival = new Label({ height: 0.12 });
 		this.arrival.mesh.visible = false;
 		this.arrival.mesh.material.depthTest = false;
 		rig.add(this.arrival.mesh);
-		this.hideFromPhotos(this.curtain, this.arrival.mesh);
+		this.hideFromPhotos(this.veil.mesh, this.arrival.mesh);
 		this.modes = { dollhouse: new Dollhouse(this), walk: new Walk(this) };
 		this.ui = new XRUI(this);
 		this.lessons = new Lessons(this); // the first-time lessons (C0.5)
@@ -159,7 +160,20 @@ export class XRExperience {
 	get menu() { return this.ui.menu; }
 
 	/** Objects never drawn in a photo (the interface); hiding one hides what it carries. */
-	hideFromPhotos(...objects) { for (const o of objects) this.photoHidden.add(o); }
+	/**
+	 * The interface: never in a photo. Puts the objects and everything under
+	 * them on the interface layer (js/photo.js, INTERFACE_LAYER). What is added
+	 * under them later (a key's ring, a tool in a hand, a print) is moved there
+	 * by markInterface(), run before every photo and viewfinder frame.
+	 */
+	hideFromPhotos(...objects) {
+		for (const o of objects) { this.photoHidden.add(o); o.traverse((c) => c.layers.set(INTERFACE_LAYER)); }
+	}
+
+	/** Every object under the interface's roots on the interface layer (cheap: a few hundred objects). */
+	markInterface() {
+		for (const o of this.photoHidden) o.traverse((c) => c.layers.set(INTERFACE_LAYER));
+	}
 
 	/** Sizes the plinth for a model footprint of w x d metres, with the scale plate on it. */
 	setPlinth(w, d) {
@@ -320,7 +334,7 @@ export class XRExperience {
 		this.lessons.stop();
 		this.toolsIntro.stop();
 		this.layerFx = null;
-		this.curtain.visible = false;
+		this.veil.clear();
 		this.arrival.mesh.visible = false;
 		for (const v of this.handViews) v.hide();
 		this.readout?.hide();
@@ -383,7 +397,7 @@ export class XRExperience {
 		if (dir !== 'out' && this.soundLevel !== 'off') this.sound.play(dir === 'in' ? 'dive' : 'surface');
 		const doll = this.modes.dollhouse.doll;
 		this.layerFx = { dir, go, t: 0, done: false, zoom: doll.zoom };
-		this.curtain.material.color.set(dir === 'out' ? 0xffffff : 0x000000);
+		this.layerColour = dir === 'out' ? 0xffffff : 0x000000;
 	}
 
 	/** Advances a move between layers (instead of the mode's update). */
@@ -391,7 +405,7 @@ export class XRExperience {
 		const f = this.layerFx, doll = this.modes.dollhouse;
 		f.t += dt;
 		const GROW = 0.3, OUT = 0.1, IN = 0.15, WHITE = 0.3;
-		const cover = (v) => { this.curtain.material.opacity = v; this.curtain.visible = v > 0; };
+		const cover = (v) => this.veil.set('layer', v, this.layerColour);
 		if (f.dir === 'out') {
 			cover(Math.min(1, f.t / WHITE));
 			if (f.t >= WHITE && !f.done) { f.done = true; this.layerFx = null; f.go(); }
@@ -622,8 +636,9 @@ export class XRExperience {
 
 	/**
 	 * Photo button: the view from your head, level, without the menu, lasers,
-	 * controllers, orbs or arc (everything in photoHidden), as a JPEG
-	 * (js/photo.js), kept in the page's photo roll (onPhoto).
+	 * controllers, orbs or arc (the interface layer: the photo's camera
+	 * leaves it out), as a JPEG (js/photo.js), kept in the page's photo roll
+	 * (onPhoto).
 	 */
 	async capturePhoto({ eye = null, width, height, fov, level, onBlob } = {}) {
 		this.photoPending = false;
@@ -631,10 +646,9 @@ export class XRExperience {
 		this.photoBusy = true;
 		// (Drawn at once; only reading the image back waits.) From your head, or the
 		// street camera's lens (eye: its world matrix; 3:2, its field of view).
-		const job = withHidden(this.photoHidden, () => {
-			this.rig.updateMatrixWorld(true);
-			return takePhoto(this.renderer, this.scene, eye ?? this.camera.matrixWorld.clone(), { near: XR_NEAR, far: XR_FAR, width, height, fov, level });
-		});
+		this.markInterface();
+		this.rig.updateMatrixWorld(true);
+		const job = takePhoto(this.renderer, this.scene, eye ?? this.camera.matrixWorld.clone(), { near: XR_NEAR, far: XR_FAR, width, height, fov, level });
 		let error = null, kept = null;
 		try {
 			const blob = await job;

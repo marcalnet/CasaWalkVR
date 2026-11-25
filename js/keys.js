@@ -13,6 +13,7 @@
 //   flat      not a key: flat, greyed (the "Inside" plate); touching it says no
 
 import * as THREE from 'three';
+import { canvasTexture } from './canvas-card.js';
 import { TOUCH, touchState, stepTouch, reset as resetTouch, ringSize } from './touch.js';
 import { WRIST, DOOR, COLOURS, KEY, FONT } from './theme.js';
 
@@ -251,10 +252,7 @@ function makeKey(name, w, h) {
 	const base = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.004), new THREE.MeshLambertMaterial({ color: WRIST.edge }));
 	base.position.z = 0.002;
 	const pxW = Math.round(PX_H * w / h);
-	const canvas = typeof document !== 'undefined' ? document.createElement('canvas') : null;
-	if (canvas) { canvas.width = pxW; canvas.height = PX_H; }
-	const texture = canvas ? new THREE.CanvasTexture(canvas) : null;
-	if (texture) { texture.colorSpace = THREE.SRGBColorSpace; texture.anisotropy = 4; }
+	const { canvas, texture } = canvasTexture(pxW, PX_H);
 	const face = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: texture, transparent: true, toneMapped: false }));
 	face.position.z = WRIST.raise;
 	face.renderOrder = 40;
