@@ -4,25 +4,27 @@
 // to the right hand (the fan takes the other hand, milestone C). Touching the
 // orb with the other index (or the other controller's tip), pressing A (X
 // when swapped) or pointing at it and pulling the trigger springs out four
-// keys in a cross, floating 7 cm in front of the wrist towards the eyes (so
-// the hand is behind them whichever way it turns), laid out as you see them
-// (view space: right stays on your right whichever wrist wears it and
-// however it is turned):
+// keys in an arc (the design of 24 Nov, item 5), floating 7 cm in front of the
+// wrist towards the eyes (so the hand is behind them whichever way it turns),
+// laid out as you see them (view space: right stays on your right whichever
+// wrist wears it and however it is turned):
 //
-//            Settings
-//   ← Back     orb     Walk in →        (inside: a flat "Inside" plate
-//              Help                      with the room's name)
+//        ← Back  Settings
+//       (orb)          Help
+//                          Walk in →     (inside: a flat "Inside" plate
+//                                         with the room's name)
 //
-// Left to right is forward: the blue doors go one layer back (outline, left)
-// or one layer in (filled, right); no key skips a layer. Keys (js/keys.js,
-// 9 cm) are pressed by touch or by another controller's laser; the hand
-// wearing the menu cannot press it. While a fingertip is within 14 cm the
-// cross holds still in the world, so the wearing hand's jitter cannot move a
-// key under the finger. Help opens its card beside the menu, on the right,
-// and the menu stays. It closes after any other key, when the orb is touched
-// again (not while a finger is over a key), with B/Y,
-// or (opened by a bare hand) when the wrist is out of view for 0.4 s; opened
-// by a controller it stays pinned until a key, B/Y or A again.
+// The arc rises from just above the orb round to its right, like a quarter
+// rainbow, so the orb's left side and underside stay clear for the other
+// index. Left to right is forward: the blue doors go one layer back (outline,
+// left) or one layer in (filled, right); no key skips a layer. Keys
+// (js/keys.js, 7 cm) are pressed by touch or by another controller's laser;
+// the hand wearing the menu cannot press it. The arc is frozen: from the moment
+// it opens it stays where it is in the world (a menu spawned from the wrist
+// is static, HB §3), so the wearing hand can move freely. It closes after any
+// key, when the orb is touched again, with B/Y, when the wrist is out of view
+// for 0.4 s (a bare hand), or after 8 s with no finger within 15 cm; opened by
+// a controller it stays until a key, B/Y or A again, or the 8 s.
 
 import * as THREE from 'three';
 import { WRIST_ORB } from './xr-input.js';
@@ -35,12 +37,10 @@ const ORB_SCALE = 1; // the orb at full size (about 5 cm): easy to notice (the u
 const ORB_TIP_TOUCH = 0.035, ORB_TIP_RELEASE = 0.08; // a fingertip or controller tip touching the orb
 const ORB_GRIP_TOUCH = 0.08, ORB_GRIP_RELEASE = 0.14; // or a whole controller reaching into it
 const TOWARDS_EYES = 0.07; // the cross floats this far from the wrist towards the eyes: the hand is always behind it, never over the keys
-const FREEZE = 0.14; // a fingertip this close to the cross: it holds still
-const CATCH_UP = 0.07; // seconds (time constant): how quickly it follows the wrist again
+const IDLE = 8, IDLE_NEAR = 0.15; // seconds with no finger within this of the arc (m) before it closes: a menu you forgot doesn't hang there
 const OUT_OF_VIEW = 0.4; // seconds with the wrist out of view before it closes
 const VIEW_ANGLE = THREE.MathUtils.degToRad(50); // "in view": within this of where the head looks
-const SLOTS = { up: [0, 1], right: [1, 0], down: [0, -1], left: [-1, 0] };
-const ORDER = ['up', 'right', 'down', 'left']; // the keys spring out clockwise from the top
+const ORDER = ['left', 'up', 'down', 'right']; // along the arc, ← Back first: the keys spring out in that order
 
 /** What each slot holds at each layer. */
 export function keysFor(mode, roomName = '') {
@@ -65,6 +65,7 @@ export class WristMenu {
 		this.openT = 0;
 		this.outT = 0;
 		this.frozen = false;
+		this.idleT = 0;
 		this.cross = new THREE.Group();
 		this.cross.name = 'wrist-menu';
 		this.cross.visible = false;
@@ -103,6 +104,7 @@ export class WristMenu {
 		this.pinned = pinned;
 		this.openT = 0;
 		this.outT = 0;
+		this.idleT = 0;
 		this.frozen = false;
 		this.snap = true;
 		this.roomName = this.xr.roomHere?.() ?? '';
@@ -192,9 +194,9 @@ export class WristMenu {
 	}
 
 	/**
-	 * The cross in front of the wrist (towards the eyes, so the hand is behind
-	 * it whichever way it turns), facing the eyes, laid out as seen; held still
-	 * near a fingertip; springing open.
+	 * The arc in front of the wrist (towards the eyes, so the hand is behind
+	 * it whichever way it turns), facing the eyes, laid out as seen; set once
+	 * as it opens and then frozen in the world; springing open.
 	 */
 	place(dt, p) {
 		const xr = this.xr, cam = xr.camera;
@@ -205,11 +207,10 @@ export class WristMenu {
 		const inView = fwd.angleTo(this._q.subVectors(p, eye)) < VIEW_ANGLE;
 		this.outT = inView ? 0 : this.outT + dt;
 		if (!this.pinned && this.outT > OUT_OF_VIEW) { this.close(true); return; }
-		// A fingertip near: hold still.
+		// Frozen: placed once, as it opens (the wrist may move freely after that).
 		const wearer = this.wearer;
-		// (Also while a fingertip is at a key: the outer half of a side key is further than FREEZE from the centre; the tester's finding.)
-		this.frozen = this.keysHot || xr.input.touches().some((c) => c !== wearer && c.touch.tip.distanceTo(this.cross.position) < FREEZE);
-		if (!this.frozen || this.snap) {
+		this.frozen = !this.snap;
+		if (this.snap) {
 			const z = this._q.subVectors(eye, p).normalize();
 			const at = this._at.copy(p).addScaledVector(z, TOWARDS_EYES);
 			const x = this._x.set(1, 0, 0).transformDirection(cam.matrixWorld);
@@ -217,27 +218,26 @@ export class WristMenu {
 			const y = this._y.crossVectors(z, x);
 			this._m.makeBasis(x, y, z);
 			this._quat.setFromRotationMatrix(this._m);
-			const k = this.snap ? 1 : 1 - Math.exp(-dt / CATCH_UP);
-			this.cross.position.lerp(at, k);
-			this.cross.quaternion.slerp(this._quat, k);
+			this.cross.position.copy(at);
+			this.cross.quaternion.copy(this._quat);
 			this.snap = false;
 		}
-		// Spring out, clockwise from the top.
+		// A menu you forgot doesn't hang there: closed after IDLE seconds with no finger near.
+		const near = this.keysHot || xr.input.touches().some((c) => c !== wearer && c.touch.tip.distanceTo(this.cross.position) < IDLE_NEAR);
+		this.idleT = near ? 0 : this.idleT + dt;
+		if (this.idleT > IDLE) { this.close(true); return; }
+		// Spring out along the arc, ← Back first.
 		this.openT += dt;
+		const arc = WRIST.arc;
 		ORDER.forEach((slot, i) => {
 			const k = this.keys[slot];
 			const t = THREE.MathUtils.clamp((this.openT - 0.05 * i) / 0.1, 0, 1);
 			const e = ease.spring(t); // (a small overshoot)
-			const [sx, sy] = SLOTS[slot];
-			k.group.position.set(sx * WRIST.spacing * e, sy * WRIST.spacing * e, 0);
+			const a = THREE.MathUtils.degToRad(arc.angles[slot]);
+			k.group.position.set(Math.cos(a) * arc.radius * e, Math.sin(a) * arc.radius * e, 0);
 			k.group.scale.setScalar(0.3 + 0.7 * Math.min(e, 1.1));
 			k.out = t >= 1; // pressable once fully out
 		});
-	}
-
-	/** Where a card beside the menu goes (Help, the guide): its left edge 3 cm right of the right key, in the cross's plane. */
-	besideRight(cardWidth) {
-		return new THREE.Vector3(WRIST.spacing + WRIST.key / 2 + 0.03 + cardWidth / 2, 0, 0.002);
 	}
 
 	/** Leaving VR. */

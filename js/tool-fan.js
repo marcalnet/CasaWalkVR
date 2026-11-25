@@ -26,9 +26,15 @@ import { MarkerTool } from './marker-tool.js';
 import { LaserMeter } from './laser-meter.js';
 import { StreetCamera } from './street-camera.js';
 import { ease } from './tween.js';
+import { Label } from './panel.js';
 
 const ABOVE = 0.15; // the fan's middle, above the fan hand (metres)
-const SPACING = 0.1; // between tools in the arc
+const SPACING = 0.115; // between tools in the arc (the marker and the meter lie across it, 9 and 11 cm long)
+// How each tool shows in the fan (the user's note, 24 Nov): the camera from the front, its lens towards you; the meter and
+// the marker from the side, their length across the fan like tools on a pegboard, nib to the left as you see it.
+const VIEW = { camera: Math.PI, meter: Math.PI / 2, marker: Math.PI / 2 };
+const TAG = { height: 0.03, below: -0.05 }; // each tool's name tag (like the tools' first-time show: js/tools-intro.js)
+const NAMES = { camera: 'Camera', meter: 'Meter', marker: 'Marker' };
 const IN_VIEW = THREE.MathUtils.degToRad(35); // the fan hand within this of where you look
 const REACH = 0.05; // a tip this close to a tool touches it
 const BUSY = 0.2; // the taking hand this close to the open fan: the orb ignores touches
@@ -48,8 +54,14 @@ export class ToolFan {
 		this.hot = null; // the slot a tip is touching
 		this.fanBusy = false;
 		const make = (name, object, live, tool = null) => {
-			const slot = { name, object, live, home: new THREE.Group(), wobble: 0, tagGrow: 0, held: false };
-			slot.home.add(object);
+			const slot = { name, object, live, home: new THREE.Group(), pose: new THREE.Group(), wobble: 0, tagGrow: 0, held: false };
+			slot.pose.rotation.y = VIEW[name] ?? 0; // (the pose is the group's, so the tool's own rotation stays free for the wobble)
+			slot.pose.add(object);
+			slot.home.add(slot.pose);
+			slot.label = new Label({ height: TAG.height });
+			slot.label.set(NAMES[name] ?? name);
+			slot.label.mesh.position.y = TAG.below;
+			slot.home.add(slot.label.mesh);
 			this.group.add(slot.home);
 			tool = tool ?? { name, object, live, trigger: () => {}, secondary: () => {} }; // (the meter in milestone E, the marker in F)
 			const own = { take: tool.take?.bind(tool), putBack: tool.putBack?.bind(tool) };
@@ -167,7 +179,10 @@ export class ToolFan {
 			const bob = s.live ? 0.004 * Math.sin(this.t * 2 + i * 1.7) : 0;
 			s.home.position.set((i - 1) * SPACING, Math.cos((i - 1) * 0.5) * 0.02 - 0.02 + lift + bob, 0);
 		});
-		for (const s of this.slots) if (!s.held) s.object.visible = this.alpha > 0.05;
+		for (const s of this.slots) {
+			if (!s.held) s.object.visible = this.alpha > 0.05;
+			s.label.mesh.visible = !s.held && this.alpha > 0.05; // (the name tags go with the fan, and while the tool is in your hand)
+		}
 	}
 
 	/** The inactive camera: a small shake of the head, sound deny, and its tag grows for 2 s. */
@@ -218,7 +233,7 @@ export class ToolFan {
 		const o = slot.object;
 		slot.held = false;
 		if (slot.tool === this.camera) this.camera.clearPrints(); // (no print left floating over the fan)
-		slot.home.add(o);
+		slot.pose.add(o);
 		o.position.set(0, 0, 0);
 		o.rotation.set(0, 0, 0);
 		o.scale.setScalar(o.userData.fanScale);

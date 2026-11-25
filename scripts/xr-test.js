@@ -424,13 +424,17 @@ const crossSeen = () => page.evaluate(() => {
 	const x = window.__casawalk.xr, w = x.ui.wrist, V = x.rig.position.constructor;
 	x.camera.updateMatrixWorld(true);
 	const seen = (slot) => w.keys[slot].face.getWorldPosition(new V()).applyMatrix4(x.camera.matrixWorldInverse);
-	const [up, right, down, left] = ['up', 'right', 'down', 'left'].map(seen);
+	const slots = ['left', 'up', 'down', 'right']; // along the arc, as seen: ← Back, Settings, Help, Walk in →
+	const p = slots.map(seen);
+	const orb = w.orb.group.getWorldPosition(new V()).applyMatrix4(x.camera.matrixWorldInverse);
 	const centre = w.cross.getWorldPosition(new V());
 	const face = new V(0, 0, 1).transformDirection(w.cross.matrixWorld);
 	const toEye = x.camera.getWorldPosition(new V()).sub(centre).normalize();
 	const fwd = new V(0, 0, -1).transformDirection(x.camera.matrixWorld), eye = x.camera.getWorldPosition(new V());
-	return { out: +w.outT.toFixed(2), seenAt: +(fwd.angleTo(w.orb.group.getWorldPosition(new V()).sub(eye)) * 180 / Math.PI).toFixed(1), open: w.open, rightOnRight: right.x > left.x + 0.08, upAbove: up.y > down.y + 0.08, spacing: +(right.distanceTo(left) / 2).toFixed(3),
-		facing: +(Math.acos(Math.min(1, face.dot(toEye))) * 180 / Math.PI).toFixed(1), ids: ['up', 'right', 'down', 'left'].map((k) => w.keys[k].spec?.id ?? null) };
+	const gaps = [0, 1, 2].map((i) => p[i].distanceTo(p[i + 1]));
+	return { out: +w.outT.toFixed(2), seenAt: +(fwd.angleTo(w.orb.group.getWorldPosition(new V()).sub(eye)) * 180 / Math.PI).toFixed(1), open: w.open, frozen: w.frozen,
+		leftToRight: p[0].x < p[1].x && p[1].x < p[2].x && p[2].x < p[3].x, clearBelow: p.every((q) => q.y > orb.y - 0.03), step: +(gaps.reduce((a, b) => a + b) / 3).toFixed(3),
+		facing: +(Math.acos(Math.min(1, face.dot(toEye))) * 180 / Math.PI).toFixed(1), ids: slots.map((k) => w.keys[k].spec?.id ?? null) };
 });
 {
 	// A welcome card above the model says how to open the menu (it no longer opens by itself).
@@ -455,8 +459,8 @@ const crossSeen = () => page.evaluate(() => {
 	await aim('left', [-0.35, 1.0, -0.2], [-0.6, 1.0, -1.5]); await frames(3); // (away from the orb, so the cross doesn't hold still)
 	await page.waitForFunction(() => Object.values(window.__casawalk.xr.ui.wrist.keys).every((k) => k.out), null, { timeout: 2000 }).catch(() => {});
 	const cs = await crossSeen();
-	check('the wrist menu: Settings above, Help below, ← Back on the left, Walk in → on the right, as you see it', cs.open && cs.rightOnRight && cs.upAbove && Math.abs(cs.spacing - 0.105) < 0.006 && cs.facing < 3
-		&& JSON.stringify(cs.ids) === JSON.stringify(['settings', 'in', 'help', 'back']), JSON.stringify(cs));
+	check('the wrist menu: an arc over the orb as you see it: ← Back, Settings, Help, Walk in →, the orb\'s underside clear, frozen', cs.open && cs.leftToRight && cs.clearBelow && cs.frozen && Math.abs(cs.step - 0.0866) < 0.012 && cs.facing < 3
+		&& JSON.stringify(cs.ids) === JSON.stringify(['back', 'settings', 'help', 'in']), JSON.stringify(cs));
 	await shot('wrist-menu');
 	await click('right', 'b-button');
 	check('B closes the wrist menu', !(await state()).wrist);
@@ -709,7 +713,7 @@ check('B closes the board', (await state()).menu === null);
 	await tipPath('hand', 'left', [orbR.map((v, i) => v + [-0.14, 0.02, 0.08][i])]);
 	await page.waitForFunction(() => Object.values(window.__casawalk.xr.ui.wrist.keys).every((k) => k.out), null, { timeout: 2000 }).catch(() => {});
 	const hs = await crossSeen();
-	check('the left index touching the orb opens the wrist menu over the right wrist, laid out as seen', hs.open && hs.rightOnRight && hs.upAbove && !(await page.evaluate(() => window.__casawalk.xr.ui.wrist.pinned)), JSON.stringify(hs));
+	check('the left index touching the orb opens the wrist menu over the right wrist, laid out as seen', hs.open && hs.leftToRight && hs.clearBelow && !(await page.evaluate(() => window.__casawalk.xr.ui.wrist.pinned)), JSON.stringify(hs));
 	await shot('hands-wrist-menu');
 	// Settings, pressed with the left index: the board opens within reach.
 	await pressWristKey('hand', 'left', 'up');
@@ -1138,7 +1142,7 @@ await page.waitForFunction(() => Object.values(window.__casawalk.xr.ui.wrist.key
 {
 	const cs = await crossSeen();
 	const plate = await page.evaluate(() => { const k = window.__casawalk.xr.ui.wrist.keys; return { right: [k.right.spec.look, k.right.spec.label], back: k.left.spec.caption }; });
-	check('inside, the wrist menu: ← Back (to the scale model) on the left, a flat "Inside" plate on the right, no Exit VR', cs.rightOnRight && JSON.stringify(cs.ids) === JSON.stringify(['settings', null, 'help', 'back'])
+	check('inside, the wrist menu: ← Back (to the scale model) on the left, a flat "Inside" plate on the right, no Exit VR', cs.leftToRight && JSON.stringify(cs.ids) === JSON.stringify(['back', 'settings', 'help', null])
 		&& plate.right[0] === 'flat' && plate.right[1] === 'Inside' && plate.back === 'Scale model', JSON.stringify({ ids: cs.ids, plate }));
 	await lookDown(); await aim('right', [0.12, 1.2, -0.4], [-0.1, 0.9, -1.2]); await frames(5);
 	await shot('walk-wrist-menu');

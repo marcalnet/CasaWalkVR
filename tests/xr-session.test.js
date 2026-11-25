@@ -110,6 +110,35 @@ test('the wrist menu: Settings above, Help below, ← Back on the left, Walk in 
 	assert.deepEqual([inside.left.id, inside.left.caption], ['back', 'Scale model']);
 });
 
+test('the wrist menu: an arc over the upper outer side of the orb, frozen once open, closed after 8 s with no finger near', async () => {
+	const { WRIST } = await import('../js/theme.js');
+	const { x, frame, hands } = await setup();
+	hands.left.grip.visible = hands.right.grip.visible = true; // (tracked)
+	frame();
+	const w = x.ui.wrist;
+	w.show({ pinned: true });
+	for (let i = 0; i < 20; i++) frame();
+	assert.ok(w.open && Object.values(w.keys).every((k) => k.out), 'open, every key out');
+	// Along the arc, as seen: ← Back, Settings, Help, Walk in →; 36° apart on a 14 cm radius, 7 cm keys.
+	const at = (slot) => w.keys[slot].group.position;
+	const ang = (slot) => Math.round(THREE.MathUtils.radToDeg(Math.atan2(at(slot).y, at(slot).x)));
+	assert.deepEqual(['left', 'up', 'down', 'right'].map(ang), [100, 64, 28, -8]);
+	for (const slot of ['left', 'up', 'down', 'right']) assert.ok(Math.abs(at(slot).length() - 0.14) < 0.003, slot);
+	assert.equal(WRIST.key, 0.07);
+	assert.ok(['left', 'up', 'down', 'right'].every((s) => at(s).y > -0.03), 'the orb\'s underside stays clear');
+	assert.ok(['left', 'up', 'down', 'right'].every((s) => at(s).distanceTo(new THREE.Vector3()) > 0.1), 'no key over the orb');
+	// Frozen: the cross stays where it opened while the wrist moves.
+	const before = w.cross.position.clone();
+	x.input.controllers.forEach((c) => c.grip.position.x += 0.2);
+	for (let i = 0; i < 5; i++) frame();
+	assert.ok(w.open && w.cross.position.distanceTo(before) < 1e-6, 'world-locked');
+	// 8 s with no finger within 15 cm: it closes.
+	for (let t = 0; t < 7.5; t += 1 / 72) w.update(1 / 72);
+	assert.ok(w.open, 'still open at 7.5 s');
+	for (let t = 0; t < 1; t += 1 / 72) w.update(1 / 72);
+	assert.ok(!w.open, 'closed after 8 s');
+});
+
 test('the tab you left a board on is the one the other board opens on', async () => {
 	const { x, go } = await setup();
 	x.ui.openMenu();
@@ -533,9 +562,20 @@ test('the first-time lessons (switched off for now; kept working): steps tick of
 	assert.equal(L.current().id, 'arc');
 	L.note('arc'); L.note('teleport'); L.note('turn');
 	assert.equal(L.place, 'walk', 'the last step has no gesture: it waits for Got it');
+	assert.ok(L.keys.keys.get('close'), 'the card has its own Close key');
 	assert.ok(L.canClose());
 	L.finish();
 	assert.equal(L.place, null);
+});
+
+test('the fan shows the camera from the front, the meter and the marker from the side, each with a name tag', async () => {
+	const { x } = await setup();
+	const by = Object.fromEntries(x.fan.slots.map((s) => [s.name, s]));
+	assert.equal(by.camera.pose.rotation.y, Math.PI, 'camera: lens towards you');
+	assert.equal(by.meter.pose.rotation.y, Math.PI / 2, 'meter: side on');
+	assert.equal(by.marker.pose.rotation.y, Math.PI / 2, 'marker: side on');
+	assert.deepEqual(x.fan.slots.map((s) => s.label.text), ['Camera', 'Meter', 'Marker']);
+	assert.ok(x.fan.slots.every((s) => s.label.mesh.parent === s.home && s.object.parent === s.pose), 'tags beside the tools, tools in their pose');
 });
 
 test('the tool fan: opens over the raised left hand in view; the right tip touches a tool, the grip takes it, swaps, puts back', async () => {

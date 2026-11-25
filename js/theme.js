@@ -95,8 +95,11 @@ export const WRIST = {
 	icons: 'assets/ui/wrist-keys.png', // (also the plinth's doors: js/keys.js)
 	iconSize: 128, // pixels per icon in the atlas
 	iconOrder: ['settings', 'help', 'in', 'back'],
-	key: 0.09, // key face, metres (square): about double the first draft (the user's Quest 2 test)
-	spacing: 0.105, // from the cross's centre to each key's centre (keys 1.5 cm apart)
+	key: 0.07, // key face, metres (square): 7 cm, well above the 32 mm floor for icon plus text (HB §3)
+	// The keys sit on an arc over the upper outer side of the orb, like a quarter rainbow (the design of 24 Nov, item 5):
+	// the left side and the underside of the orb stay clear for the other index. Angles in degrees from the orb's right, as seen,
+	// counter-clockwise: ← Back just above the orb, then Settings, Help, and Walk in → to its right; 36° apart at 14 cm: about 1.8 cm between keys.
+	arc: { radius: 0.14, angles: { left: 100, up: 64, down: 28, right: -8 } },
 	raise: 0.006, // a key's face above its base
 	face: '#ffffff', edge: '#d3d9df', text: COLOURS.text, flat: COLOURS.off, flatText: COLOURS.offText,
 	labelFont: '"Kalam", "Bradley Hand", cursive', // hand-lettered labels (vendor/kalam)

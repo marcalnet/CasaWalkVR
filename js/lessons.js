@@ -61,6 +61,9 @@ export class Lessons {
 		this.keys.setSpec('start', { id: 'lesson-start', look: 'filled', label: 'Start' });
 		this.keys.add('got', 0.05, 0.05);
 		this.keys.setSpec('got', { id: 'lesson-got', look: 'plain', label: 'Got it' });
+		// The card's own Close key (×), always there in its top-right corner like the board's: closes the card for good.
+		this.keys.add('close', 0.038, 0.038);
+		this.keys.setSpec('close', { id: 'lesson-close', look: 'plain', label: '×' });
 		for (const k of this.keys.keys.values()) this.card.add(k.group);
 		// The first target inside: an orange ring on the floor ahead.
 		this.target = new THREE.Mesh(new THREE.RingGeometry(0.44, 0.5, 48).rotateX(-Math.PI / 2),
@@ -173,9 +176,10 @@ export class Lessons {
 		const step = this.current();
 		this.keys.keys.get('start').group.visible = this.keys.keys.get('start').out = step?.id === 'start';
 		this.keys.keys.get('got').group.visible = this.keys.keys.get('got').out = this.canClose();
+		this.keys.keys.get('close').group.visible = this.keys.keys.get('close').out = true;
 		const { action } = this.keys.update(dt, { active: this.group.visible });
 		if (action?.id === 'lesson-start') this.note('start');
-		if (action?.id === 'lesson-got') this.finish();
+		if (action?.id === 'lesson-got' || action?.id === 'lesson-close') this.finish(); // (Close: not shown again either)
 		this.animateDemo(dt, step);
 		if (this.target.visible) this.target.material.opacity = 0.6 + 0.3 * Math.sin(this.demoT * 4);
 		return null;
@@ -234,8 +238,9 @@ export class Lessons {
 		this.texture.needsUpdate = true;
 		// The keys: Start on the lit first step's row, right; Got it at the bottom right.
 		const H = CARD_W * PX_H / PX_W, px = CARD_W / PX_W;
-		this.keys.keys.get('start').group.position.set(CARD_W / 2 - 0.05, H / 2 - (HEAD + ROW / 2) * px, 0.002);
+		this.keys.keys.get('start').group.position.set(CARD_W / 2 - 0.05, H / 2 - (HEAD + ROW / 2) * px - 0.016, 0.002); // (a little low: the Close key sits above it)
 		this.keys.keys.get('got').group.position.set(CARD_W / 2 - 0.035, H / 2 - h * px + 0.035, 0.002);
+		this.keys.keys.get('close').group.position.set(CARD_W / 2 - 0.03, H / 2 - 0.021, 0.002); // (in the title's row, clear of Start below it)
 	}
 }
 
