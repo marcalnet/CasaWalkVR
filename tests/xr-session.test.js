@@ -721,10 +721,16 @@ test('the development switches (js/dev.js) and the ?hands readout: only with ?ha
 	c.isHand = true; c.isController = false;
 	const eye = x.headWorld().y;
 	c.gesture = { shape: { normal: new THREE.Vector3(0, -1, 0), pinch: 0.012, pinchAt: new THREE.Vector3(0.2, eye - 0.45, -0.35) } };
-	assert.equal(readoutText(x, c), 'R · palm 0° · pinch 1.2 cm · ready');
-	c.gesture.shape.normal.set(1, 0, 0);
-	assert.match(readoutText(x, c), /palm 90° .* palm not down$/);
+	assert.match(readoutText(x, c), /^R · palm \d+° to eyes · pinch 1\.2 cm · pinched$/, 'palm down, pinched: it would aim');
+	c.gesture.shape.pinch = 0.05;
+	assert.match(readoutText(x, c), /· ready: pinch$/);
+	c.gesture.shape.pinch = 0.012;
+	c.gesture.shape.normal.copy(x.headWorld().sub(c.gesture.shape.pinchAt).normalize()); // (the palm straight at the eyes)
+	assert.match(readoutText(x, c), /palm 0° to eyes .* palm towards you$/);
+	c.gesture.shape.pinchAt.y = eye - 1;
 	c.gesture.shape.normal.set(0, -1, 0);
+	assert.match(readoutText(x, c), /below the waist$/);
+	c.gesture.shape.pinchAt.y = eye - 0.45;
 	x.ui.wrist.open = true;
 	assert.match(readoutText(x, c), /blocked: wrist menu$/);
 	x.ui.wrist.open = false;

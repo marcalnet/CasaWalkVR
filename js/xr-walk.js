@@ -7,12 +7,12 @@
 // stand on anything, so stairs work (js/xr-targets.js). With Solid walls on,
 // walls stop you (furniture never does: js/walls.js). B or Y goes back.
 //
-// Bare hands (the Quest 2 design of 24 Nov; js/gestures.js): palm down, pinch
-// and hold 0.25 s: the arc grows from the pinch (aimed from the shoulder
-// through it), its ring white while it moves and blue once steady 0.3 s, red
-// where you can't go. Open the pinch on blue: go; on white or red: nothing
-// (the arc draws back). Turn the palm up or drop the hand below the waist:
-// cancel. A quick wrist flick while aiming turns 30°; the arc stays. A pinch
+// Bare hands (js/gestures.js; eager since 25 Nov): pinch and hold 0.1 s, with
+// any palm but one facing your eyes, the hand in front of you: the arc grows
+// from the pinch (aimed from the shoulder through it), its ring white while it
+// moves and blue once steady 0.3 s, red where you can't go. Open the pinch on
+// blue: go; on white or red: nothing (the arc draws back). Turn the palm
+// towards your eyes or drop the hand below the waist: cancel. A quick wrist flick while aiming turns 30°; the arc stays. A pinch
 // near a key, the fan, the model or a tool never aims (XRExperience.aimBlock).
 // The ring snaps to hotspots (room middles, doorways: js/hotspots.js), for
 // controllers too.
@@ -34,7 +34,7 @@ const FADE_OUT = 0.1, FADE_IN = 0.15; // teleport fade, seconds
 const ARC_CEILING = 1.85;
 const STEADY = 0.3; // a bare hand's ring turns blue once it has stayed put this long (s)
 const STEADY_MOVE = 0.15; // ... within this distance (m)
-const WAIST = 0.8; // a pinching hand this far below the eyes is dropped: the aim cancels (m)
+const WAIST = 0.8; // a pinching hand this far below the eyes is at your side: it never aims, and an aim cancels (m)
 const MAX_DISCS = 48; // hotspot discs shown while aiming
 
 export class Walk {
@@ -203,8 +203,8 @@ export class Walk {
 	}
 
 	/**
-	 * Bare hands: palm down, pinch and hold: aim; open the pinch on a blue
-	 * ring: go; palm up, the hand dropped or lost: cancel; a wrist flick while
+	 * Bare hands: pinch and hold: aim; open the pinch on a blue ring: go; palm
+	 * towards your eyes, the hand dropped or lost: cancel; a wrist flick while
 	 * aiming: turn (see the top of the file).
 	 */
 	handMoves(dt) {
@@ -213,7 +213,7 @@ export class Walk {
 		for (const c of input.gestureHands()) {
 			const mine = this.tele?.c === c;
 			for (const e of c.gestures) {
-				if (e.type === 'pinch' && !this.tele && !this.fade && !xr.aimBlock(c, c.gesture.shape?.pinchAt)) {
+				if (e.type === 'pinch' && !this.tele && !this.fade && !xr.aimBlock(c, c.gesture.shape?.pinchAt) && c.gesture.shape.pinchAt.y >= xr.headWorld().y - WAIST) { // (a hand at your side never aims)
 					this.tele = { c, via: 'hand', steady: 0, anchor: null };
 					xr.sound.play('aim');
 					xr.lessons?.note('arc');

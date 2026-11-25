@@ -675,7 +675,7 @@ export class XRExperience {
 		if (this.hidden) return; // (Meta's menu covers the app: nothing reads input behind it)
 		this.frameDt = dt;
 		this.input.update(); // (also clears every controller's claims)
-		this.input.readGestures(dt); // bare hands: the teleport gesture, the closed hand (C0.4)
+		this.input.readGestures(dt, this.headWorld()); // bare hands: the teleport gesture, the closed hand (C0.4)
 		for (const v of this.handViews) v.near = false; // (a key or the board near a fingertip lights it up again this frame)
 		this.ui.showHandsNote(); // bare hands: "Pick up your controllers" (their pinches are never read)
 		this.tools.claim(); // a held tool's buttons are its own, before the menu and the mode

@@ -21,10 +21,10 @@
 // down to the floor; once hands
 // and controllers are 30 cm away for 4 s (a ring on the plinth fills), it
 // glides home and settles. Bare hands step inside with the teleport gesture
-// (js/gestures.js): palm down, pinch and hold, point at a room (a straight
-// ray from the shoulder through the pinch, the marker hops to the room), and
-// open the pinch once the marker has held still 0.3 s. Palm up, or the hand
-// dropped: cancel. A pinch within 15 cm of the model or a key never aims.
+// (js/gestures.js): pinch and hold, point at a room (a straight ray from the
+// shoulder through the pinch, the marker hops to the room), and open the
+// pinch once the marker has held still 0.3 s. The palm towards your eyes, or
+// the hand dropped: cancel. A pinch within 15 cm of the model or a key never aims.
 
 import * as THREE from 'three';
 import { UP, DOWN } from './xr-targets.js';
@@ -61,7 +61,7 @@ const GRAB_SMOOTH = 0.06, GRAB_SMOOTH_HAND = 0.1; // seconds: a held model follo
 const HAND_TURN_DEAD = THREE.MathUtils.degToRad(3); // a bare hand's turn: changes under 3° are tremor, ignored
 const MAX_FRAME_TURN = THREE.MathUtils.degToRad(20); // a held model turns at most this much in one frame
 const AIM_STEADY = 0.3; // a bare hand steps inside (opening the pinch) once its landing has held still this long
-const WAIST = 0.8; // a pinching hand this far below the eyes is dropped: the aim cancels (m)
+const WAIST = 0.8; // a pinching hand this far below the eyes is at your side: it never aims, and an aim cancels (m)
 const ZOOM_SPEED = 1.2; // e-folds/s at full stick
 // The doors at the scale model, metres (the user's Quest 2 tests): Walk in →
 // is the big one, ← Back about a third as long, the same height, on its left.
@@ -639,8 +639,8 @@ export class Dollhouse {
 				if (e.type === 'fist' && !this.grab && d < HOLD_REACH && !busy && !c.fistClaimed) { this.cancelHandAim(); this.startGrab(c); } // (a fist on a fan tool takes the tool)
 				else if ((e.type === 'fistEnd' || e.type === 'lost') && this.grab?.c === c) this.release();
 				else if ((e.type === 'open' || e.type === 'lost') && this.handAim?.c === c) { this.cancelHandAim(); xr.sound.play('release'); }
-				// The pinch held, palm down, aims; opening it on a steady landing steps inside.
-				else if (e.type === 'pinch' && !this.handAim && !busy && this.grab?.c !== c && !xr.aimBlock(c, c.gesture.shape?.pinchAt)) {
+				// The pinch held aims; opening it on a steady landing steps inside.
+				else if (e.type === 'pinch' && !this.handAim && !busy && this.grab?.c !== c && !xr.aimBlock(c, c.gesture.shape?.pinchAt) && c.gesture.shape.pinchAt.y >= xr.headWorld().y - WAIST) { // (a hand at your side never aims)
 					this.handAim = { c, spot: null, steady: 0, at: new THREE.Vector3(), has: false };
 					xr.sound.play('aim');
 				} else if (e.type === 'pinchEnd' && this.handAim?.c === c) {

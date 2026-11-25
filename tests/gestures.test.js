@@ -27,13 +27,13 @@ function hand({ curled = true, thumb = [4, -3.8, 10.5], clench = false } = {}) {
 const SIDEWAYS = ([x, y, z]) => new THREE.Vector3(y, x, -z).multiplyScalar(0.01).add(new THREE.Vector3(0.2, 1.2, -0.3));
 const PALM_DOWN = ([x, y, z]) => new THREE.Vector3(-x, y, -z).multiplyScalar(0.01).add(new THREE.Vector3(0.2, 1.2, -0.3));
 const world = (j, place = SIDEWAYS) => Object.fromEntries(Object.entries(j).map(([k, v]) => [k, place(v)]));
-const axes = { right: new THREE.Vector3(1, 0, 0), forward: new THREE.Vector3(0, 0, -1) };
+const HEAD = new THREE.Vector3(0, 1.6, 0); // the eyes: 40 cm above and behind the test hand (at 0.2, 1.2, -0.3)
 const DT = 1 / 72;
 
 /** Runs a hand for `seconds` (joints, or a function of time), collecting events. */
 function run(g, seconds, joints) {
 	const events = [];
-	for (let t = 0; t < seconds; t += DT) events.push(...g.step(typeof joints === 'function' ? joints(Math.min(1, (t + DT) / seconds)) : joints, DT, axes));
+	for (let t = 0; t < seconds; t += DT) events.push(...g.step(typeof joints === 'function' ? joints(Math.min(1, (t + DT) / seconds)) : joints, DT, HEAD));
 	return events.map((e) => e.dir ? `${e.type}${e.dir > 0 ? '+' : '-'}` : e.type);
 }
 
@@ -67,28 +67,37 @@ test('the left hand reads the same way', () => {
 	assert.ok(run(g, 0.3, world(mirror(hand({ thumb: [3, -2, 6], clench: true })), LEFT)).includes('fist'));
 });
 
-// The Quest 2 teleport (the design of 24 Nov): palm down, pinch and hold.
+// The teleport (eager since 25 Nov): any pinch held 0.1 s aims, unless the palm faces the eyes.
 const PINCHED = [2.5, 0.5, 17.5], OPENED = [6, -1, 7];
 /** A palm-down hand, turned by yaw (radians, about the vertical through the wrist; positive: to the left). */
 const palmDown = (thumb, yaw = 0) => world(hand({ curled: false, thumb }), (v) => PALM_DOWN(v).sub(PALM_DOWN([0, 0, 0])).applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw).add(PALM_DOWN([0, 0, 0])));
 
-test('the teleport: palm down, pinch held 0.25 s aims; opening the pinch goes', () => {
+test('the teleport: a pinch held 0.1 s aims, palm down or sideways; opening it goes', () => {
 	const g = new HandGestures('right');
 	const s = handShape(palmDown(PINCHED), 'right');
-	assert.ok(s.normal.y < -GESTURE.PALM_DOWN && s.pinch < GESTURE.PINCH_ON, 'palm down, pinched');
+	assert.ok(s.pinch < GESTURE.PINCH_ON, 'pinched');
 	assert.ok(s.pinchAt.distanceTo(palmDown(PINCHED)['thumb-tip']) < 0.01, 'the pinch point between thumb and index');
-	assert.deepEqual(run(g, 0.15, palmDown(PINCHED)), [], 'not yet: held under 0.25 s');
-	assert.deepEqual(run(g, 0.2, palmDown(PINCHED)), ['pinch']);
+	assert.deepEqual(run(g, 0.05, palmDown(PINCHED)), [], 'not yet: held under 0.1 s');
+	assert.deepEqual(run(g, 0.1, palmDown(PINCHED)), ['pinch']);
 	assert.deepEqual(run(g, 0.1, palmDown(OPENED)), ['pinchEnd']);
 	g.reset();
-	assert.deepEqual(run(g, 0.5, world(hand({ curled: false, thumb: PINCHED }))), [], 'sideways: never aims');
+	assert.deepEqual(run(g, 0.3, world(hand({ curled: false, thumb: PINCHED }))), ['pinch'], 'sideways (the natural pinch): aims too');
+	g.reset();
+	// A looser pinch closes it: thumb and index 2 cm apart.
+	assert.deepEqual(run(g, 0.3, palmDown([2.5, 2, 17.5])), ['pinch'], 'a loose 2 cm pinch aims');
 });
 
-test('the teleport: turning the palm up cancels, and the pinch must open before it aims again', () => {
+test('the teleport: a palm facing your eyes never aims (Meta\'s menu gesture)', () => {
+	const UP = ([x, y, z]) => new THREE.Vector3(x, -y, -z).multiplyScalar(0.01).add(new THREE.Vector3(0.2, 1.2, -0.3));
+	const g = new HandGestures('right');
+	assert.deepEqual(run(g, 0.5, world(hand({ curled: false, thumb: PINCHED }), UP)), [], 'palm up, towards the eyes');
+	assert.ok(g.shape.toEyes > GESTURE.TO_EYES);
+});
+
+test('the teleport: turning the palm towards your eyes cancels, and the pinch must open before it aims again', () => {
 	const g = new HandGestures('right');
 	run(g, 0.4, palmDown(PINCHED));
 	const UP = ([x, y, z]) => new THREE.Vector3(x, -y, -z).multiplyScalar(0.01).add(new THREE.Vector3(0.2, 1.2, -0.3));
-	assert.ok(handShape(world(hand({ curled: false, thumb: PINCHED }), UP), 'right').normal.y > GESTURE.PALM_UP, '(the test hand is palm up)');
 	assert.deepEqual(run(g, 0.1, world(hand({ curled: false, thumb: PINCHED }), UP)), ['open']);
 	assert.deepEqual(run(g, 0.5, palmDown(PINCHED)), [], 'palm down again, still pinched: no aim');
 	assert.deepEqual(run(g, 0.1, palmDown(OPENED)), [], 'opened: nothing to end');
@@ -111,7 +120,7 @@ test('a still pinch with ±6 mm jitter on every joint: no turns, no letting go i
 	let seed = 7;
 	const rnd = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296 - 0.5) * 0.012;
 	const g = new HandGestures('right');
-	const base = palmDown([2.5, 0.2, 17.6]); // (thumb and index 2 mm apart: jitter never opens it past 3 cm)
+	const base = palmDown([2.5, 0.2, 17.6]); // (thumb and index 2 mm apart: jitter never opens it past 4 cm)
 	const ev = run(g, 10, () => Object.fromEntries(Object.entries(base).map(([k, v]) => [k, v.clone().add(new THREE.Vector3(rnd(), rnd(), rnd()))])));
 	assert.deepEqual(ev.filter((e) => e !== 'fist' && e !== 'fistEnd'), ['pinch'], JSON.stringify(ev));
 });

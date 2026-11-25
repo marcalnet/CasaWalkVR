@@ -14,26 +14,28 @@ import { GESTURE } from './gestures.js';
 
 const ABOVE = 0.06; // the card this far above the wrist (m)
 const HEIGHT = 0.018; // the card's height (m): about 12 cm wide, small enough to keep the view clear
-const WAIST = 0.8, CHEST = 0.2; // "ready" between these distances below the eyes (m)
+const WAIST = 0.8; // a hand this far below the eyes is at your side: it never aims (m)
 
 /** What the readout says for bare hand c (pure enough to test: xr supplies the rest). */
 export function readoutText(xr, c) {
 	const s = c.gesture?.shape;
 	if (!s) return '';
-	const palm = Math.round(THREE.MathUtils.radToDeg(Math.acos(THREE.MathUtils.clamp(-s.normal.y, -1, 1))));
+	// The palm's angle to the eyes: under 60° it faces you (Meta's menu gesture) and never aims.
+	const head = xr.headWorld();
+	const toEyes = s.normal.dot(head.clone().sub(s.pinchAt).normalize());
+	const palm = Math.round(THREE.MathUtils.radToDeg(Math.acos(THREE.MathUtils.clamp(toEyes, -1, 1))));
 	const pinch = (s.pinch * 100).toFixed(1);
 	let state;
 	if (xr.modes.walk.tele?.c === c || xr.modes.dollhouse.handAim?.c === c) state = 'aiming';
 	else {
 		const block = xr.aimBlock(c, s.pinchAt);
-		const eye = xr.headWorld().y;
 		if (block) state = `blocked: ${block}`;
-		else if (s.normal.y >= -GESTURE.PALM_DOWN) state = 'palm not down';
-		else if (s.pinchAt.y < eye - WAIST) state = 'below the waist';
-		else if (s.pinchAt.y > eye - CHEST) state = 'above the chest';
-		else state = 'ready';
+		else if (toEyes > GESTURE.TO_EYES) state = 'palm towards you';
+		else if (s.pinchAt.y < head.y - WAIST) state = 'below the waist';
+		else if (s.pinch >= GESTURE.PINCH_ON) state = 'ready: pinch';
+		else state = 'pinched';
 	}
-	return `${c.handedness === 'left' ? 'L' : 'R'} · palm ${palm}° · pinch ${pinch} cm · ${state}`;
+	return `${c.handedness === 'left' ? 'L' : 'R'} · palm ${palm}° to eyes · pinch ${pinch} cm · ${state}`;
 }
 
 export class HandReadout {

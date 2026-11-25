@@ -3,10 +3,14 @@
 // positions in, events out, so it runs in Node tests. Never reads the Quest's
 // "select" (a pinch never clicks a key).
 //
-//   pinch    palm down, thumb and index pinched and held PINCH_HOLD: aim
+//   pinch    thumb and index pinched and held PINCH_HOLD, with any palm but
+//            one facing your eyes (that pinch is Meta's own menu gesture):
+//            aim. Eager on purpose (the user, 25 Nov 2026: "I prefer to
+//            invoke the arc accidentally rather than pinch several times";
+//            a stray arc moves nothing unless let go on a steady blue ring)
 //   pinchEnd the pinch opens (over PINCH_OFF): go, if the landing is steady
-//   open     the palm turns up while the pinch is held: cancel (the pinch must
-//            open before it can aim again)
+//   open     the palm turns towards your eyes while the pinch is held: cancel
+//            (the pinch must open before it can aim again)
 //   turn     while the pinch is held: a quick sideways flick of the wrist (the
 //            hand turns over FLICK about the vertical within FLICK_TIME; dir +1
 //            is to the right as you see it)
@@ -24,13 +28,12 @@
 import * as THREE from 'three';
 
 export const GESTURE = {
-	PALM_DOWN: Math.SQRT1_2, // palm normal y below -this: palm down (within 45° of straight down)
-	PALM_UP: 0.3, // palm normal y above this while pinching: turned up, cancel
+	TO_EYES: 0.5, // a palm whose normal is within 60° of the direction to the eyes (cos 60°) faces you: never aims, and cancels
 	FLICK: THREE.MathUtils.degToRad(25), FLICK_TIME: 0.25, // a wrist flick: the hand turns this much about the vertical, this fast
 	FIST_ON: 0.045, // three fingertips this close to their knuckles: a closed hand
 	FIST_OFF: 0.06, // two over this: open again
 	FIST_HOLD: 0.15,
-	PINCH_ON: 0.015, PINCH_OFF: 0.03, PINCH_HOLD: 0.25, // pinched under 1.5 cm, held 0.25 s; open over 3 cm
+	PINCH_ON: 0.025, PINCH_OFF: 0.04, PINCH_HOLD: 0.1, // pinched under 2.5 cm, held 0.1 s; open over 4 cm (was 1.5 / 3 cm, 0.25 s: missed too often)
 	TRACKED: 3, // frames a hand must have been tracked before it counts
 	SMOOTH: 0.03, // seconds: joint smoothing (light: a flick is quick)
 };
@@ -87,7 +90,9 @@ export class HandGestures {
 		this.shape = null;
 	}
 
-	step(joints, dt) {
+	/** head: the eyes' world position (a palm facing them never aims), or null. */
+	step(joints, dt, head = null) {
+		this.head = head;
 		const G = GESTURE, out = [];
 		this.clock += dt;
 		if (!joints) {
@@ -123,12 +128,15 @@ export class HandGestures {
 	}
 
 	/**
-	 * Palm down, pinch and hold: aim; open the pinch: go. Turning the palm up
-	 * cancels (open), and the pinch must open before it can aim again. While
-	 * held, a quick wrist flick turns (turn).
+	 * Pinch and hold (any palm but one facing your eyes): aim; open the pinch:
+	 * go. Turning the palm towards your eyes cancels (open), and the pinch must
+	 * open before it can aim again. While held, a quick wrist flick turns (turn).
 	 */
 	pinchGesture(s, dt, out) {
 		const G = GESTURE;
+		// How much the palm faces the eyes (1: straight at them), for the gate and the ?hands card.
+		s.toEyes = this.head ? s.normal.dot(_a.subVectors(this.head, s.pinchAt).normalize()) : -1;
+		const facing = s.toEyes > G.TO_EYES;
 		if (!this.pinch) {
 			if (s.pinch < G.PINCH_ON) { this.pinch = true; this.pinchTime = 0; }
 		} else if (s.pinch > G.PINCH_OFF) {
@@ -139,12 +147,12 @@ export class HandGestures {
 		if (!this.pinch || this.pinchSpent) return;
 		if (!this.pinchHeld) {
 			this.pinchTime += dt;
-			// (The palm must be down all through the hold: a pinch while palm up or sideways never aims.)
-			if (s.normal.y >= -G.PALM_DOWN) this.pinchTime = 0;
+			// (A palm facing your eyes is Meta's menu gesture: it never aims.)
+			if (facing) this.pinchTime = 0;
 			if (this.pinchTime >= G.PINCH_HOLD) { this.pinchHeld = true; this.flick.length = 0; out.push({ type: 'pinch' }); }
 			return;
 		}
-		if (s.normal.y > G.PALM_UP) { this.pinchHeld = false; this.pinchSpent = true; out.push({ type: 'open' }); return; }
+		if (facing) { this.pinchHeld = false; this.pinchSpent = true; out.push({ type: 'open' }); return; }
 		// A wrist flick: the hand's heading (its length, seen from above) turns over FLICK within FLICK_TIME.
 		if (Math.hypot(s.along.x, s.along.z) < 0.3) return; // (pointing up or down: no heading)
 		const yaw = Math.atan2(-s.along.x, -s.along.z);
