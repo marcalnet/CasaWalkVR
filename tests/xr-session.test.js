@@ -14,6 +14,7 @@ import { prepareObjText } from '../js/formats.js';
 import { optimiseModel, unmergedModel } from '../js/optimise.js';
 import { readoutText } from '../js/hand-readout.js';
 import { devFlags } from '../js/dev.js';
+import { FIRST_TIME_CARDS } from '../js/lessons.js';
 import { XRExperience } from '../js/xr.js';
 import { HOLD } from '../js/xr-tools.js';
 
@@ -473,7 +474,19 @@ test('Walk in on the plinth: the laser presses it on letting go over it', async 
 	assert.equal(x.mode, 'walk', 'on letting go over it');
 });
 
-test('the first-time lessons: steps tick off in order; stepping inside starts the next; controllers skip the hand-only step', async () => {
+test('the first-time cards are off for now: no lesson card, no welcome card, at the scale model or inside', async () => {
+	const { x, go } = await setup();
+	assert.equal(FIRST_TIME_CARDS.on, false);
+	x.setMode('dollhouse');
+	x.ui.setWelcome(true);
+	assert.ok(x.lessons.place === null && !x.lessons.group.visible && !x.ui.welcome.mesh.visible, 'scale model: nothing');
+	go('in');
+	assert.ok(x.lessons.place === null && !x.lessons.group.visible, 'inside: nothing');
+});
+
+test('the first-time lessons (switched off for now; kept working): steps tick off in order; stepping inside starts the next; controllers skip the hand-only step', async (t) => {
+	FIRST_TIME_CARDS.on = true;
+	t.after(() => { FIRST_TIME_CARDS.on = false; });
 	const { x, go } = await setup();
 	const L = x.lessons;
 	assert.equal(L.place, 'scale', 'shown at the scale model on entry');

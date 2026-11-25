@@ -363,6 +363,10 @@ check('welcome notes sit under the two cards on the empty page', wl.shown && wl.
 await shot('welcome');
 await page.goto(`http://localhost:${PORT}/?test&model=${encodeURIComponent(fixture)}${process.env.XR_QUERY ? `&${process.env.XR_QUERY}` : ''}`); // (XR_QUERY=hands: the bare-hand readout in the shots)
 check('model loads', await page.evaluate(() => window.__casawalk.ready));
+// The first-time cards (lessons, welcome card) are off for now (the user's call, 25 Nov 2026).
+// Switched on here so their checks below keep the code working.
+check('the first-time cards are off by default', await page.evaluate(async () => (await import('/js/lessons.js')).FIRST_TIME_CARDS.on === false));
+await page.evaluate(async () => { (await import('/js/lessons.js')).FIRST_TIME_CARDS.on = true; });
 {
 	await frames(10);
 	const b = await page.evaluate(() => { const el = document.getElementById('build'), r = el.getBoundingClientRect(); return { text: el.textContent, left: r.left, bottom: innerHeight - r.bottom, button: !!el.querySelector('button') }; });

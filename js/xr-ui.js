@@ -33,6 +33,7 @@ import { readSetting, writeSetting } from './settings.js';
 import { PLINTH_REST } from './xr-scene.js';
 import { WristMenu } from './wrist-menu.js';
 import { handsHelp } from './xr-menus.js';
+import { FIRST_TIME_CARDS } from './lessons.js';
 
 // The board within reach: 40 cm in front, 30 cm below the eyes, tilted back
 // 25° like a lectern; at the scale model 30° to the left.
@@ -108,7 +109,7 @@ export class XRUI {
 		if (on) { this.welcome.lines = this.welcomeLines(); this.welcome.draw(); }
 		this.welcomeOn = on;
 		// (A first-time lesson replaces it: js/lessons.js.)
-		this.welcome.mesh.visible = on && this.xr.mode === 'dollhouse' && !this.xr.lessons?.place;
+		this.welcome.mesh.visible = on && FIRST_TIME_CARDS.on && this.xr.mode === 'dollhouse' && !this.xr.lessons?.place; // (off for now: js/lessons.js)
 	}
 
 	/**

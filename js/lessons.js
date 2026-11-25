@@ -32,6 +32,14 @@ const DEMO_AHEAD = 0.6, DEMO_SCALE = 1.3, DEMO_LEFT = 0.14; // the demonstration
 /** The settings key for a place and input kind ('scale' | 'walk', 'hands' | 'controllers'). */
 export const lessonSetting = (place, kind) => `lesson${place === 'scale' ? 'Scale' : 'Walk'}${kind === 'hands' ? 'Hands' : 'Controllers'}`;
 
+/**
+ * The first-time cards (the lessons' card and the welcome card), off for now
+ * (the user's call, 25 Nov 2026, after a Quest 2 test: they piled up with the
+ * guide and the board; the UX/UI Designer is designing a replacement, a
+ * looping pinch hand). The code stays; tests switch it on to keep it working.
+ */
+export const FIRST_TIME_CARDS = { on: false };
+
 export class Lessons {
 	/** xr: the XRExperience. */
 	constructor(xr) {
@@ -84,6 +92,7 @@ export class Lessons {
 
 	/** Starts this place's lesson unless it was done before with this input kind (again: always, for Help). */
 	start(place, { again = false } = {}) {
+		if (!FIRST_TIME_CARDS.on) return false; // (switched off for now: see FIRST_TIME_CARDS)
 		const kind = this.inputKind();
 		if (!again && readSetting(lessonSetting(place, kind))) { if (this.place === place) this.stop(); return false; }
 		this.place = place; this.kind = kind; this.done.clear();
