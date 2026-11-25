@@ -104,7 +104,7 @@ export class ToolsIntro {
 		// Waiting: once you have been here a second (Help: at once) and look towards the model, they appear.
 		if (s.waiting) {
 			// (Never while the board or the wrist menu is open: it would play unseen behind it.)
-			if (xr.menu || xr.ui.wrist.open) return;
+			if (xr.boardOpen || xr.ui.wrist.open) return;
 			const seen = this.lookingAtModel() && s.t >= (this.again ? 0 : SETTLE) || this.lookingAtModel(LOOK_WIDE) && s.t >= WIDE_AFTER || s.t >= TIMED_AFTER;
 			if (seen) this.begin();
 			return;

@@ -1034,7 +1034,7 @@ test('the tools show also starts on a wider look after 4 s, and by itself after 
 	x.ui.openMenu();
 	for (let t = 0; t < 2; t += 1 / 72) intro.update(1 / 72, () => {});
 	assert.ok(intro.state.waiting, 'the board is open: it waits');
-	x.ui.closeMenu();
+	x.ui.closeAll();
 	intro.update(1 / 72, () => {});
 	assert.ok(!intro.state.waiting && intro.group.visible, 'timed: it begins');
 	intro.stop();

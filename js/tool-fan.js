@@ -44,6 +44,7 @@ const BUSY = 0.2; // the taking hand this close to the open fan: the orb ignores
 const KEEP_CLEAR = 0.2; // the fan hand's index this close to any key (the orb, the doors and levels, the wrist keys, the wings): the fan stays closed
 const WATCH = 0.5; // the fan opens only with the hand's palm (a controller's face) within 60 degrees of the direction to your eyes: "look at your watch"
 const FIELD = 0.45, KEEP = 0.2, FIELD_PUSH = 0.1, FIELD_SPRING = 0.08; // the orb's field: felt from 45 cm, tools nudged out of the way and never nearer than 20 cm (a spring of about 0.25 s)
+const REACHING = 0.35; // the taking hand's fingertip this close to the fan: it is reaching into the fan (its orb is not a key the fan hand reaches for)
 const YIELD_NEAR = 0.2; // the taking hand's fingertip this close to the open fan: its orb shrinks and fades
 const RETURN = 0.08; // a bare hand bringing its tool this close to its place puts it back
 const FADE = 0.2; // seconds
@@ -132,7 +133,9 @@ export class ToolFan {
 			to.copy(anchor).sub(head).normalize();
 			const raised = anchor.y > head.y - 0.55;
 			xr.ui.wrist.orb.group.getWorldPosition(orb);
-			const indexNear = fan.touch.tracked && xr.nearKey(fan.touch.tip, KEEP_CLEAR);
+			// (The orb's own hand reaching into the fan brings its orb past the fan hand's index: that is not the fan hand reaching for the orb.)
+			const reaching = !!take?.touch.tracked && take.touch.tip.distanceTo(anchor) < REACHING;
+			const indexNear = fan.touch.tracked && xr.nearKey(fan.touch.tip, KEEP_CLEAR, reaching);
 			// The "look at your watch" pose: a palm (or a controller's face) turned to your eyes. A hand reaching to press a key has its palm down or forward.
 			const watching = this.palmToEyes(fan, head) > WATCH;
 			// (Closed over a bare hand that is aiming: it would sit in the arc's way; the tester's finding. Not

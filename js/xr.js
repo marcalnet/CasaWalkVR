@@ -608,9 +608,9 @@ export class XRExperience {
 	 * orb, the plinth doors and levels, the wrist keys, a lesson's keys, an
 	 * open wing): the fan stays closed over a hand reaching for one.
 	 */
-	nearKey(p, margin) {
+	nearKey(p, margin, ignoreOrb = false) {
 		const wrist = this.ui.wrist, orb = wrist.orb?.group;
-		if (orb?.visible && orb.getWorldPosition(this._nk ??= new THREE.Vector3()).distanceTo(p) < margin) return true;
+		if (!ignoreOrb && orb?.visible && orb.getWorldPosition(this._nk ??= new THREE.Vector3()).distanceTo(p) < margin) return true;
 		if (this.modes.dollhouse.doors.near(p, margin)) return true;
 		if (wrist.open && wrist.pad.near(p, margin)) return true;
 		if (this.lessons?.keys?.near(p, margin)) return true;

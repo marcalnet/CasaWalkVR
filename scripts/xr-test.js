@@ -1443,7 +1443,7 @@ check('back from walking: eyes at 1.89 m again, gallery shown, lasers on', Math.
 
 // The tools' first-time show (C3; placed above the model 25 Nov): once you look towards the model they hang above it, then fly to the fan's wrist, and the fan opens for 2 s.
 {
-	await page.evaluate(() => { localStorage.removeItem('casawalk.toolsIntro'); const x = window.__casawalk.xr; x.lessons.stop(); x.toolsIntro.start(); });
+	await page.evaluate(() => { localStorage.removeItem('casawalk.toolsIntro'); const x = window.__casawalk.xr; x.lessons.stop(); x.ui.closeAll(); x.toolsIntro.start(); }); // (it never plays behind an open wing or the wrist menu)
 	await page.waitForFunction(() => !window.__casawalk.xr.toolsIntro.state?.waiting, null, { timeout: 15000, polling: 'raf' }).catch(() => {});
 	await frames(10);
 	const i0 = await page.evaluate(() => { const x = window.__casawalk.xr, t = x.toolsIntro, V = x.rig.position.constructor, h = x.headWorld(), p = t.group.getWorldPosition(new V()); return { playing: t.playing, shown: t.group.visible, away: +p.distanceTo(h).toFixed(2), below: +(Math.asin((h.y - p.y) / p.distanceTo(h)) * 180 / Math.PI).toFixed(0), names: t.items.map((i) => i.name) }; });
