@@ -1008,13 +1008,20 @@ test('the fan: opens only on the "look at your watch" pose; tools slide aside fr
 	const meter = fan.slots.find((s) => s.name === 'meter');
 	meter.home.getWorldPosition(p);
 	x.ui.wrist.wearer ?? null;
-	hands.right.grip.position.copy(x.rig.worldToLocal(p.clone().add(new THREE.Vector3(0.15, 0, 0)))); // (the wrist, 15 cm from the meter)
+	hands.right.grip.position.copy(x.rig.worldToLocal(p.clone().add(new THREE.Vector3(0.3, 0, 0)))); // (the orb's wrist 30 cm from the meter, the fan hand's fingertip near it)
 	for (let i = 0; i < 40; i++) frame();
 	orb.getWorldPosition(o);
 	meter.home.getWorldPosition(p);
 	assert.ok(fan.group.visible, 'the fan stays open');
+	assert.ok(meter.pushWorld.length() > 0.01, 'the tools were pushed aside');
 	assert.ok(p.distanceTo(o) >= 0.19, `the meter keeps its distance: ${p.distanceTo(o).toFixed(3)}`);
-	assert.ok(meter.pushWorld.length() > 0.01, 'it was pushed aside');
+	// The orb's own hand reaching into the fan: no push; the orb shrinks and fades instead.
+	meter.home.getWorldPosition(p);
+	hands.right.grip.position.copy(x.rig.worldToLocal(p.clone().add(new THREE.Vector3(0.05, 0, 0.05))));
+	for (let i = 0; i < 60; i++) frame();
+	assert.ok(x.ui.wrist.orbYield && x.ui.wrist.orb.yieldK > 0.9, 'the orb yields');
+	assert.ok(x.ui.wrist.orb.body.scale.x < 0.7 && x.ui.wrist.orb.shellMat.opacity < 0.3, 'half size, a third of the strength');
+	assert.ok(meter.pushWorld.length() < 0.01, 'the tools stay put');
 });
 
 test('the tools show also starts on a wider look after 4 s, and by itself after 10 s, never behind an open board', async () => {

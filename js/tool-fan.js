@@ -251,7 +251,7 @@ export class ToolFan {
 			want.set(0, 0, 0);
 			// (Only while the other hand reaches for the orb: the orb's own hand reaching into the fan makes the orb yield instead.)
 			const fanHand = this.hands().fan;
-			if (xr.ui.wrist.wearer && !s.held && fanHand?.touch.tracked && fanHand.touch.tip.distanceTo(o) < FIELD) {
+			if (xr.ui.wrist.wearer && !s.held && !xr.ui.wrist.orbYield && fanHand?.touch.tracked && fanHand.touch.tip.distanceTo(o) < FIELD) { // (the orb's own hand in the fan: the orb yields, the tools stay put)
 				s.home.getWorldPosition(p); // (its place without the push: place() has just set it)
 				const away = this._a2 ??= new THREE.Vector3();
 				away.subVectors(p, o);
