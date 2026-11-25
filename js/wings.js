@@ -15,7 +15,8 @@ export const WING = {
 	drop: D(15), // centre below eye level
 	tilt: D(20), // leaned back
 	margin: D(5), // keep-clear margin round the model
-	maxSide: D(55),
+	maxSide: D(48), // (the Quest's view reaches about 50° to a side: further out a wing is mostly out of sight)
+	maxDist: 0.9, // the last resort: further away a wing covers less of the view (lasers reach it; touch does not)
 	maxUp: D(-5), // the centre never higher than this
 };
 
@@ -65,13 +66,17 @@ export function overlaps(r, zone, margin = 0) {
 /**
  * Where a wing goes: side +1 (left) or -1 (right); w, h its size (m); zone
  * the model's points in view (zoneOf; or null: nothing in the way, as inside the home).
- * Returns { az, el } of its centre, relative to where the head looks.
+ * Returns { az, el, dist, clear } of its centre, relative to where the head
+ * looks: outward first, then up, then further from the eyes (a last resort:
+ * a far wing covers less of the view). clear is false when even that cannot
+ * keep the model uncovered (a model zoomed up to fill the view).
  */
 export function placeWing(side, w, h, zone) {
-	let az = side * WING.side, el = -WING.drop;
-	if (!zone) return { az, el };
-	const hits = () => overlaps(wingRect(az, el, w, h), zone, WING.margin);
+	let az = side * WING.side, el = -WING.drop, dist = WING.dist;
+	if (!zone) return { az, el, dist, clear: true };
+	const hits = () => overlaps(wingRect(az, el, w, h, dist), zone, WING.margin);
 	while (hits() && Math.abs(az) < WING.maxSide) az += side * D(1); // outward first
 	while (hits() && el < WING.maxUp) el += D(1); // then up
-	return { az, el };
+	while (hits() && dist < WING.maxDist) dist += 0.05; // then back
+	return { az, el, dist, clear: !hits() };
 }

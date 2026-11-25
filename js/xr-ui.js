@@ -243,9 +243,9 @@ export class XRUI {
 			rigBox.setFromPoints(pts);
 			zone = zoneOf(rigBox, head, yaw);
 		}
-		const { az, el } = placeWing(side, g.width, g.height, zone);
+		const { az, el, dist } = placeWing(side, g.width, g.height, zone);
 		const heading = yaw + az; // (a positive angle turns left)
-		mesh.position.set(-Math.sin(heading) * Math.cos(el), Math.sin(el), -Math.cos(heading) * Math.cos(el)).multiplyScalar(WING.dist).add(head);
+		mesh.position.set(-Math.sin(heading) * Math.cos(el), Math.sin(el), -Math.cos(heading) * Math.cos(el)).multiplyScalar(dist).add(head);
 		xr.rig.updateMatrixWorld(true);
 		mesh.lookAt(xr.rig.localToWorld(head.clone()));
 		mesh.rotateX(-WING.tilt);

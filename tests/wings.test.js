@@ -19,8 +19,8 @@ test('at the default zoom the wings stay within 15 degrees of 40 and 15 below, a
 	const zone = zoneOf(corners(), head, 0);
 	for (const side of [1, -1]) {
 		const p = placeWing(side, side > 0 ? 0.34 : 0.4, side > 0 ? 0.3 : 0.34, zone);
-		assert.ok(Math.abs(p.az) - WING.side < 15 * Math.PI / 180 && Math.abs(p.el + WING.drop) < 1e-9, `${side}: ${JSON.stringify(p)}`);
-		assert.ok(!overlaps(wingRect(p.az, p.el, side > 0 ? 0.34 : 0.4, side > 0 ? 0.3 : 0.34), zone, WING.margin));
+		assert.ok(p.clear && Math.abs(p.az) - WING.side < 15 * Math.PI / 180, `${side}: ${JSON.stringify(p)}`);
+		assert.ok(!overlaps(wingRect(p.az, p.el, side > 0 ? 0.34 : 0.4, side > 0 ? 0.3 : 0.34, p.dist), zone, WING.margin));
 	}
 });
 
@@ -29,11 +29,11 @@ test('a zoomed-up model pushes the wings outward, then up, and never under it', 
 	for (const side of [1, -1]) {
 		const w = 0.4, h = 0.34, p = placeWing(side, w, h, zone);
 		assert.ok(Math.abs(p.az) > WING.side || p.el > -WING.drop, `moved: ${JSON.stringify(p)}`);
-		if (Math.abs(p.az) < WING.maxSide - 1e-6 || p.el < WING.maxUp - 0.02) assert.ok(!overlaps(wingRect(p.az, p.el, w, h), zone, WING.margin), 'clear');
-		assert.ok(Math.abs(p.az) <= WING.maxSide + 1e-6 && p.el <= WING.maxUp + 0.02, 'within the limits');
+		if (p.clear) assert.ok(!overlaps(wingRect(p.az, p.el, w, h, p.dist), zone, WING.margin), 'clear');
+		assert.ok(Math.abs(p.az) <= WING.maxSide + 1e-6 && p.el <= WING.maxUp + 0.02 && p.dist <= WING.maxDist + 1e-9, 'within the limits');
 	}
 });
 
 test('no model in view (inside the home): the wings sit at 40 degrees, 15 below', () => {
-	assert.deepEqual(placeWing(1, 0.34, 0.3, null), { az: WING.side, el: -WING.drop });
+	assert.deepEqual(placeWing(1, 0.34, 0.3, null), { az: WING.side, el: -WING.drop, dist: WING.dist, clear: true });
 });

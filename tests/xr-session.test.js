@@ -995,8 +995,8 @@ test('the fan: opens only on the "look at your watch" pose; tools slide aside fr
 	hands.left.grip.visible = hands.right.grip.visible = true;
 	hands.left.grip.position.set(-0.1, 1.3, -0.45);
 	hands.right.grip.position.set(0.3, 0.8, 0);
-	// The left controller's face turned away from your eyes (face down): the fan stays closed.
-	hands.left.grip.rotation.set(Math.PI, 0, 0);
+	// The left controller's face turned sideways, away from your eyes: the fan stays closed.
+	hands.left.grip.rotation.set(0, 0, Math.PI / 2);
 	for (let i = 0; i < 20; i++) frame();
 	assert.ok(!fan.group.visible, 'a hand held face down: no fan');
 	hands.left.grip.rotation.set(0, 0, 0.0);

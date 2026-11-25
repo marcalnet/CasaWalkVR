@@ -281,6 +281,7 @@ export class Dollhouse {
 		const plate = xr.plate?.mesh;
 		if (plate) plate.position.y = h + (plate.userData.tiltHalf ?? 0.03);
 		if (resting) { this.doll.pos.y = h + 0.004; this.apply(); }
+		else if (this.grab) this.keepAbove(); // (a model in the hand is never left inside the rising plinth)
 	}
 
 	/** At once (entering): the height for the input in hand. */

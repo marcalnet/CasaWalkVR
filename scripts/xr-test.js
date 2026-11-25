@@ -1372,7 +1372,7 @@ check('back from walking: eyes at 1.89 m again, gallery shown, lasers on', Math.
 	const hot = await page.evaluate(() => window.__casawalk.xr.fan.hot?.name ?? null);
 	await click('right', 'squeeze'); await frames(10);
 	const held = await page.evaluate(() => { const x = window.__casawalk.xr; return { tool: x.tools.held?.tool.name ?? null, grab: !!x.modes.dollhouse.grab, laser: x.input.hands.right.line.visible }; });
-	check('the right tip touches the meter, the grip takes it (not the model); its laser goes', hot === 'meter' && held.tool === 'meter' && !held.grab && !held.laser, JSON.stringify({ hot, ...held }));
+	check('the right tip touches the meter, the grip takes it (not the model); its laser goes', hot === 'meter' && held.tool === 'meter' && !held.grab && !held.laser, JSON.stringify({ hot, ...held, fan: await page.evaluate(() => { const x = window.__casawalk.xr, f = x.fan; return { alpha: f.alpha, busy: f.fanBusy, tip: x.input.hands.right.touch.tracked && x.input.hands.right.touch.tip.toArray().map((v) => +v.toFixed(2)), slots: f.slots.map((q) => q.home.getWorldPosition(new (x.rig.position.constructor)()).toArray().map((v) => +v.toFixed(2))), push: f.slots.map((q) => q.pushWorld?.length().toFixed(2)), orbYield: x.ui.wrist.orbYield, hands: f.hands().fan?.handedness }; }) }));
 	await shot('tool-held');
 	// The laser meter (milestone E): its beam and dot on the model, the reading on its screen; two triggers: a line.
 	{
@@ -1407,7 +1407,7 @@ check('back from walking: eyes at 1.89 m again, gallery shown, lasers on', Math.
 		await button('right', 'trigger', 0); await frames(4);
 		await click('right', 'thumbstick'); await frames(4);
 		const mk = await page.evaluate(() => { const m = window.__casawalk.xr.fan.marker; return { strokes: m.strokes.length, points: m.strokes[0]?.n ?? 0, ink: m.ink }; });
-		check('the marker: holding the trigger draws a stroke; the stick press changes colour', held === 'marker' && mk.strokes === 1 && mk.points > 5 && mk.ink === 1, JSON.stringify({ held, ...mk }));
+		check('the marker: holding the trigger draws a stroke; the stick press changes colour', held === 'marker' && mk.strokes === 1 && mk.points > 5 && mk.ink === 1, JSON.stringify({ held, ...mk, open: await page.evaluate(() => [!!window.__casawalk.xr.ui.menu, !!window.__casawalk.xr.ui.guide, window.__casawalk.xr.ui.wrist.open, window.__casawalk.xr.tools.held?.tool.name, window.__casawalk.xr.fan.group.visible]) }));
 		await shot('marker-stroke');
 		await page.evaluate(() => window.__casawalk.xr.fan.marker.clear());
 	}
@@ -1574,7 +1574,7 @@ check('example home: two storeys, all shown', lv.count === 2 && lv.multi && lv.h
 		for (const k of Object.values(x.ui.wrist.keys)) texts.push(k.spec?.label ?? '', k.spec?.caption ?? '');
 		return { bad: texts.filter((t) => /dollhouse/i.test(t)), exit: texts.filter((t) => /exit vr/i.test(t)), titles: Object.values(x.menus).map((p) => p.title), tabs: x.menus.dollhouse.tabs.map((t) => t.label) };
 	});
-	check('the words: "scale model", never "dollhouse", no "Exit VR"; boards titled by layer; tabs How to move, View, Walk, Tools, General', !words.bad.length && !words.exit.length && words.titles.join() === 'Settings \u00b7 Scale model,Settings \u00b7 Inside' && words.tabs.join() === 'How to move,View,Walk,Tools,General', JSON.stringify(words));
+	check('the words: "scale model", never "dollhouse", no "Exit VR"; boards titled by layer; tabs View, Walk, Tools, General', !words.bad.length && !words.exit.length && words.titles.join() === 'Settings \u00b7 Scale model,Settings \u00b7 Inside' && words.tabs.join() === 'View,Walk,Tools,General', JSON.stringify(words));
 	check('the page says "scale model" too', !/dollhouse/i.test(await page.evaluate(() => document.querySelector('meta[name=description]').content + document.body.innerText)));
 	// The plinth stands 60 cm in front of you, and its plate shows the true scale.
 	const pl = await page.evaluate(() => {
@@ -1592,7 +1592,8 @@ check('example home: two storeys, all shown', lv.count === 2 && lv.multi && lv.h
 	});
 	await aim('right', await toLocal(room.above), await toLocal(room.aim)); await frames(8); // (from straight above the room)
 	const mk = await page.evaluate(() => { const x = window.__casawalk.xr, d = x.modes.dollhouse, i = x.input.hands.right.index, m = d.markers[i];
-		return { shown: m.visible, at: m.position.toArray(), yaw: m.rotation.y, label: d.labels[i].text, labelShown: d.labels[i].mesh.visible, clear: d.isClear(m.position.x, m.position.y, m.position.z) }; });
+		const c = x.input.controllers.find((k) => k.handedness === 'right'); x.input.setRaycaster(c, x.raycaster); const ray = [x.raycaster.ray.origin.toArray().map((v) => +v.toFixed(2)), x.raycaster.ray.direction.toArray().map((v) => +v.toFixed(2))];
+		return { shown: m.visible, at: m.position.toArray(), yaw: m.rotation.y, label: d.labels[i].text, labelShown: d.labels[i].mesh.visible, clear: d.isClear(m.position.x, m.position.y, m.position.z), ray, scale: x.anchor.scale.x, plinthH: x.plinthH, doll: d.doll.pos.toArray() }; });
 	check('pointing at a room: the marker hops to its clear middle, named', mk.shown && Math.hypot(mk.at[0] - room.spot[0], mk.at[2] - room.spot[2]) < 1e-6 && mk.label === 'Living room' && mk.labelShown && mk.clear, JSON.stringify(mk));
 	await shot('example-landing');
 	await click('right', 'trigger'); await settled(); await frames(5);

@@ -273,10 +273,11 @@ export class Panel {
 			// The How to move key: a "?" and the words, at the tabs' left end, a raised key (not a tab).
 			const b = this.leadBox, hot = this.hover === `${this.lead.id}|`, on = !!this.lead.on;
 			roundRect(ctx, b.x, b.y, b.w, b.h, 18);
-			ctx.fillStyle = on ? COLOURS.accent : hot ? COLOURS.hover : COLOURS.cell;
+			// (Not blue-filled like a chosen tab: a key. Open: a light blue face and a blue edge.)
+			ctx.fillStyle = hot ? COLOURS.hover : on ? '#eaf1fe' : COLOURS.cell;
 			ctx.fill();
-			ctx.lineWidth = hot ? 4 : 2; ctx.strokeStyle = hot ? COLOURS.hoverEdge : COLOURS.edge; ctx.stroke();
-			ctx.fillStyle = on ? COLOURS.accentText : COLOURS.text;
+			ctx.lineWidth = on || hot ? 5 : 2; ctx.strokeStyle = on || hot ? COLOURS.hoverEdge : COLOURS.edge; ctx.stroke();
+			ctx.fillStyle = on ? COLOURS.accent : COLOURS.text;
 			ctx.textAlign = 'center';
 			fitFont(ctx, this.lead.label, b.w - 18, 26, 14, 600);
 			ctx.fillText(this.lead.label, b.x + b.w / 2, b.y + b.h / 2 + 2);

@@ -213,7 +213,7 @@ export class ToolFan {
 		c.grip.updateMatrixWorld(true);
 		n.set(0, 1, 0).transformDirection(c.grip.matrixWorld);
 		d.subVectors(head, this.xr.input.wristOf(c).getWorldPosition(this._d2 ??= new THREE.Vector3())).normalize();
-		return n.dot(d);
+		return Math.abs(n.dot(d)); // (either face: the grip's axis differs a little between the Touch controllers, and a controller is looked at from either side)
 	}
 
 	/** The arc above the fan hand, turned to face you; tools bob gently (not the inactive camera). */
@@ -249,7 +249,9 @@ export class ToolFan {
 			s.push ??= new THREE.Vector3();
 			const want = this._w ??= new THREE.Vector3();
 			want.set(0, 0, 0);
-			if (xr.ui.wrist.wearer && !s.held) {
+			// (Only while the other hand reaches for the orb: the orb's own hand reaching into the fan makes the orb yield instead.)
+			const fanHand = this.hands().fan;
+			if (xr.ui.wrist.wearer && !s.held && fanHand?.touch.tracked && fanHand.touch.tip.distanceTo(o) < FIELD) {
 				s.home.getWorldPosition(p); // (its place without the push: place() has just set it)
 				const away = this._a2 ??= new THREE.Vector3();
 				away.subVectors(p, o);
