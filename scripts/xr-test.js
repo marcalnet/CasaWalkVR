@@ -1270,6 +1270,23 @@ const walkUntil = async (pred, arg, timeout = 15000) => {
 		pt = await portal();
 		check('pulled back 15 cm, the portal closes', pt.r === 0, JSON.stringify(pt));
 		await restRight();
+		// The eye portal: move the eyes to 0.35, 0.25 and 0.20 m from the wall ahead.
+		const eyesAt = async (gap) => {
+			await page.evaluate(({ a, gap }) => {
+				const x = window.__casawalk.xr, V = x.rig.position.constructor, head = x.headWorld();
+				const dir = new V(-Math.sin(a), 0, -Math.cos(a));
+				x.raycaster.set(head, dir);
+				x.raycaster.far = 5;
+				const hit = x.raycaster.intersectObjects(x.model.layers.walls.children, false)[0];
+				if (hit) x.rig.position.addScaledVector(dir, hit.distance - gap);
+			}, { a: w.a, gap });
+			await frames(3);
+			return page.evaluate(() => +window.__casawalk.xr.portals.uniforms.cwPortalEye.value.w.toFixed(3));
+		};
+		const eye = [await eyesAt(0.35), await eyesAt(0.25), await eyesAt(0.2)];
+		check('the eye portal: none at 0.35 m, opening at 0.25 m, 0.40 m radius at 0.20 m', eye[0] === 0 && eye[1] > 0 && eye[1] < 0.4 && eye[2] === 0.4, JSON.stringify(eye));
+		await shot('walk-eye-portal');
+		await eyesAt(0.6);
 		await walkUntil(({ start, a, d }) => {
 			const h = window.__casawalk.xr.headWorld();
 			return (h.x - start[0]) * -Math.sin(a) + (h.z - start[2]) * -Math.cos(a) > d + 0.05;

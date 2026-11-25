@@ -12,7 +12,13 @@
 //                instead. Never from a hand holding a tool, or one at a key,
 //                the open board or the fan. A soft `portal` sound on opening;
 //                closing is silent.
-//   Eye portal   (the next step) the eyes within 0.30 m of a wall.
+//   Eye portal   the eyes within 0.30 m of a wall or door open a circle round
+//                the point of it nearest the eyes, growing with closeness
+//                (eased in): 0 at 0.30 m, 0.40 m radius at 0.20 m and closer,
+//                so the near plane never cuts the wall in a hard edge. It
+//                follows the head (no tween), is silent, and is set at once
+//                behind a teleport's fade. Not needed with Solid walls on (the
+//                body stops 0.2 m from walls).
 //
 // How it is drawn: one small shader chunk on the wall and opening materials
 // (no extra draw calls, one shader variant), chained after the depth-shading
@@ -37,6 +43,7 @@ export const PORTAL = {
 	HAND_R: 0.35, HAND_OPEN: 0.25, HAND_CLOSE: 0.4, // radius (m), opening and closing (s)
 	TOUCH: 0.03, LEAVE: 0.15, // a fingertip opens it this close (m), and lets go this far
 	FOLLOW: 0.1, // seconds: the centre's smoothing
+	EYE_OPEN: 0.3, EYE_FULL: 0.2, EYE_R: 0.4, // the eyes this close start it (m), fully open this close, its radius
 	TICK_EVERY: 1, // seconds: a touch's vibration at most this often
 	RING_TIME: 0.3, // seconds: the Solid walls touch ring
 };
@@ -118,6 +125,12 @@ export function handRadius(open, from, t) {
 	return from * (1 - ease.inOut(Math.min(1, t / P.HAND_CLOSE)));
 }
 
+/** How open the eye portal is (0..1) with the eyes `d` metres from a wall: eased in from EYE_OPEN, full at EYE_FULL. */
+export function eyeOpening(d) {
+	const t = THREE.MathUtils.clamp((PORTAL.EYE_OPEN - d) / (PORTAL.EYE_OPEN - PORTAL.EYE_FULL), 0, 1);
+	return t * t;
+}
+
 const _p = new THREE.Vector3(), _m = new THREE.Matrix4(), _tri = new THREE.Triangle();
 const _a = new THREE.Vector3(), _b = new THREE.Vector3(), _c = new THREE.Vector3();
 
@@ -166,6 +179,8 @@ export class Portals {
 		this.lastTick = -Infinity;
 		this.clock = 0;
 		this._s = { point: new THREE.Vector3(), normal: new THREE.Vector3(), distance: 0, mesh: null, behind: false };
+		this._e = { point: new THREE.Vector3(), normal: new THREE.Vector3(), distance: 0, mesh: null, behind: false };
+		this._head = new THREE.Vector3();
 		this.ring = null;
 		this.hidden = 0;
 	}
@@ -252,9 +267,11 @@ export class Portals {
 		if (this.hidden) return;
 		if (xr.mode !== 'walk' || !this.meshes.length) { if (this.hand.radius || this.hand.c || this.touching.size || this.uniforms.cwPortalEye.value.w) this.reset(); return; }
 		this.prepare(xr.seeThrough);
-		// A jump (the teleport's fade, a layer change): the hand portal shuts at once, never carried across.
+		// A jump (the teleport's fade, a layer change): the hand portal shuts at
+		// once; the eye portal is set for the new head position behind the fade.
 		if (xr.modes.walk?.fade || xr.layerFx) { if (this.hand.radius || this.hand.c) this.resetHand(); }
 		else this.updateHand(xr, dt);
+		this.updateEye(xr);
 		this.updateRing(dt);
 	}
 
@@ -294,6 +311,18 @@ export class Portals {
 		if (!h.open && h.t >= P.HAND_CLOSE) { h.radius = 0; h.from = 0; }
 		const u = this.uniforms.cwPortalHand.value;
 		u.set(h.centre.x, h.centre.y, h.centre.z, h.radius);
+	}
+
+	/** The eye portal: its size from how close the eyes are to a wall (no tween: it follows the head). */
+	updateEye(xr) {
+		const P = PORTAL, u = this.uniforms.cwPortalEye.value;
+		if (xr.solid) { u.w = 0; return; }
+		xr.rig.updateMatrixWorld(true);
+		const head = this._head.setFromMatrixPosition(xr.camera.matrix).applyMatrix4(xr.rig.matrixWorld);
+		const s = nearestSurface(this.meshes, head, P.EYE_OPEN, this._e);
+		const k = s ? eyeOpening(s.behind ? 0 : s.distance) : 0;
+		if (!k) { u.w = 0; return; }
+		u.set(s.point.x - s.normal.x * P.INSET, s.point.y - s.normal.y * P.INSET, s.point.z - s.normal.z * P.INSET, P.EYE_R * k);
 	}
 
 	/** Solid walls on: a small soft ring on the surface where a fingertip touched (0.3 s). */

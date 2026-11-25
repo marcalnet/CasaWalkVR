@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import '../js/optimise.js'; // (installs computeBoundsTree)
-import { Portals, PORTAL, portalShader, portalUniforms, handRadius, nearestSurface } from '../js/portal.js';
+import { Portals, PORTAL, portalShader, portalUniforms, handRadius, nearestSurface, eyeOpening } from '../js/portal.js';
 
 const V = (...a) => new THREE.Vector3(...a);
 const DT = 1 / 72;
@@ -132,3 +132,28 @@ test('a jump shuts the hand portal at once; a photo sees the walls whole', () =>
 	assert.equal(u.w, 0, 'the teleport fade: shut at once');
 });
 
+test('the eye portal: none at 0.35 m, opening from 0.30 m, 0.40 m radius at 0.20 m; none with Solid walls; set at once behind a fade', () => {
+	assert.equal(eyeOpening(0.35), 0);
+	assert.equal(eyeOpening(0.3), 0);
+	assert.ok(eyeOpening(0.29) > 0 && eyeOpening(0.29) < 0.02, 'eased in: a small hole first');
+	assert.equal(eyeOpening(0.2), 1);
+	const r = room(), xr = fakeXR(r, V(0.5, 1.3, 2)), p = new Portals();
+	p.setModel(r.layers);
+	const u = p.uniforms.cwPortalEye.value;
+	xr.eyes(0.35); p.update(xr, DT);
+	assert.equal(u.w, 0, '35 cm: the wall whole');
+	xr.eyes(0.25); p.update(xr, DT);
+	assert.ok(u.w > 0 && u.w < PORTAL.EYE_R, `25 cm: opening (${u.w})`);
+	assert.ok(Math.abs(u.z + PORTAL.INSET) < 1e-6 && Math.abs(u.y - 1.6) < 1e-6, 'centred on the point nearest the eyes, 0.1 m inside');
+	xr.eyes(0.2); p.update(xr, DT);
+	assert.ok(Math.abs(u.w - PORTAL.EYE_R) < 1e-9, '20 cm: fully open');
+	xr.eyes(-0.05); p.update(xr, DT);
+	assert.ok(Math.abs(u.w - PORTAL.EYE_R) < 1e-9, 'inside the wall: fully open');
+	xr.solid = true; p.update(xr, DT);
+	assert.equal(u.w, 0, 'Solid walls: not needed');
+	xr.solid = false; xr.eyes(2); p.update(xr, DT);
+	xr.modes.walk.fade = { t: 0 }; xr.eyes(0.2); p.update(xr, DT);
+	assert.ok(Math.abs(u.w - PORTAL.EYE_R) < 1e-9, 'landing next to a wall: already open behind the fade');
+	xr.mode = 'dollhouse'; p.update(xr, DT);
+	assert.equal(u.w, 0, 'never at the scale model');
+});
