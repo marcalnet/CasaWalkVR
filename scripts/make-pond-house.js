@@ -327,9 +327,9 @@ furniture('Bookshelf', 'bookshelf', P, 1600, 378, { angle: PI });
 furniture('Bed', 'bed', P, 1686, 572, { angle: PI / 2 });
 furniture('Wardrobe', 'wardrobe', P, 1650, 438);
 // Terrace over the pond
-furniture('Lounger', 'lounger', P, 200, 900, { angle: PI });
-furniture('Lounger', 'lounger', P, 320, 900, { angle: PI });
-furniture('Side table', 'sideTable', P, 420, 830);
+furniture('Lounger', 'lounger', P, 110, 900, { angle: PI }); // (at the terrace's west end: its middle stays clear for landing)
+furniture('Lounger', 'lounger', P, 210, 900, { angle: PI });
+furniture('Side table', 'sideTable', P, 290, 790);
 furniture('Planter', 'planter', P, 800, 1010);
 furniture('Planter', 'planter', P, 60, 1010);
 
@@ -404,9 +404,9 @@ room('Bathroom', G, SLATE, rect(1200, 300, 1500, 570));
 room('Garage', G, PAVING, rect(1500, 100, 2100, 700));
 // The deck, all the way round the house: separate pieces that never overlap (no coplanar floors), stopping at the
 // pond's stone coping (y 800 west of x 625, y 900 to x 1300), wider east of the pond.
-room('Deck', G, PAVING, rect(-420, 700, 625, 800), open);
+room('', G, PAVING, rect(-420, 700, 625, 800), open);
 room('', G, PAVING, rect(625, 700, 1300, 900), open);
-room('', G, PAVING, rect(1300, 700, 2400, 1100), open);
+room('Deck', G, PAVING, rect(1300, 700, 2400, 1100), open); // the name on the largest piece (the garage's deck door opens onto it)
 room('', G, PAVING, rect(1200, 570, 1500, 700)); // the covered corner by the bathroom (under the upper floor)
 room('', G, PAVING, rect(-420, -150, -160, 700), open); // west, past the outdoor stair
 room('', G, PAVING, rect(-160, -150, 1500, 100), open); // north, the path to the front door
