@@ -78,13 +78,13 @@ test('the settings boards: the same tabs at both layers, a Close key, every targ
 		assert.deepEqual(p.tabs.map((t) => t.label), ['How to move', 'View', 'Walk', 'Tools', 'General']);
 		assert.deepEqual(p.tabs[0].rows.flat().map((c) => `${c.id}:${c.type}`), ['guide:drawn'], 'How to move: the guide, drawn, never pressed');
 		assert.deepEqual(shape(p.tabs[1].rows), ['light:choice:Time of day:Morning:Noon:Sunset:Night', 'shadows:switch:Shadows | depth:switch:Depth shading',
-			'ceilings:switch:Ceilings | view:switch:Passthrough', 'seethrough:switch:Transparent walls', `levels:choice:Levels${p === x.menus.dollhouse ? ':All levels (2):Up to Ground floor' : ''}`]);
+			'ceilings:switch:Ceilings | view:switch:Passthrough', 'seethrough:switch:Transparent walls']);
 		assert.deepEqual(shape(p.tabs[2].rows), ['height:choice:Height:Yours:1.4 m:1.7 m:2.0 m', 'solid:switch:Solid walls']);
 		assert.deepEqual(shape(p.tabs[3].rows), ['lens:choice:Camera lens:24 mm:28 mm:35 mm:50 mm']);
 		assert.deepEqual(shape(p.tabs[4].rows), ['toolFan:choice:Tool fan:Left hand:Right hand', 'sound:choice:Sound:Off:Effects']);
 		assert.equal(p.actions.length, 0, 'no actions on the board: the doors are on the wrist');
 		assert.ok(p.rects().some((r) => r.id === 'close'), 'a Close key');
-		assert.ok(p.get('levels').stepper, 'Levels is a ‹ › stepper');
+		assert.ok(!p.get('levels'), 'Levels is not on the board: a stack of keys beside the doors');
 		// Touch targets: at least 4 cm (the board is 52 cm wide).
 		const m = p.mesh.geometry.parameters.width / p.size.w;
 		for (const r of p.rects()) assert.ok(Math.min(r.w, r.h) * m >= 0.04 - 1e-9, `${r.id} ${r.value ?? ''}: ${(Math.min(r.w, r.h) * m * 100).toFixed(1)} cm`);
@@ -92,7 +92,6 @@ test('the settings boards: the same tabs at both layers, a Close key, every targ
 	assert.equal(x.menus.dollhouse.title, 'Settings \u00b7 Scale model');
 	assert.equal(x.menus.walk.title, 'Settings \u00b7 Inside');
 	// Scale-model settings are greyed out inside; the boards are the same size whatever the tab.
-	assert.ok(x.menus.walk.get('levels').disabled && /scale model/i.test(x.menus.walk.get('levels').note));
 	assert.ok(Object.values(x.menus).every((p) => !p.get('figure') && !p.get('photo') && !p.get('recentre') && !p.get('exit')), 'no figure, Photo, Recentre or Exit VR');
 	const h = x.menus.dollhouse.size.h;
 	for (const tab of ['general', 'move']) { x.menus.dollhouse.setTab(tab); assert.equal(x.menus.dollhouse.size.h, h, tab); }
@@ -137,6 +136,84 @@ test('the wrist menu: an arc over the upper outer side of the orb, frozen once o
 	assert.ok(w.open, 'still open at 7.5 s');
 	for (let t = 0; t < 1; t += 1 / 72) w.update(1 / 72);
 	assert.ok(!w.open, 'closed after 8 s');
+});
+
+test('the levels stack beside the doors: one key per level, ground at the bottom, the chosen one filled; one level has none', async () => {
+	const { x } = await setup();
+	const d = x.modes.dollhouse, key = (i) => d.doors.keys.get(`level${i}`), back = d.doors.keys.get('back');
+	assert.equal(d.levelCount, 2, 'the example home has two levels');
+	assert.deepEqual([0, 1].map((i) => [key(i).spec.id, key(i).spec.look, key(i).spec.label, key(i).group.visible]), [['level:0', 'plain', 'Ground floor', true], ['level:1', 'chosen', 'First floor', true]], 'the top key means all levels');
+	assert.ok(key(0).group.position.y < key(1).group.position.y, 'ground at the bottom');
+	assert.ok(key(0).group.position.x < back.group.position.x - 0.1 && Math.abs(key(0).group.position.x - key(1).group.position.x) < 1e-9, 'a stack to the left of ← Back');
+	assert.deepEqual([key(0).w, key(0).h], [0.08, 0.04]);
+	assert.ok(d.levelTitle.mesh.visible && d.levelTitle.text === 'Levels');
+	x.menuAction({ id: 'levels', value: 0 });
+	assert.equal(x.maxStorey, 0);
+	assert.deepEqual([key(0).spec.look, key(1).spec.look], ['chosen', 'plain'], 'the level chosen is filled');
+	x.menuAction({ id: 'levels', value: 1 });
+	assert.equal(x.maxStorey, null);
+	// A one-level home has no stack.
+	x.model.storeys = 1; d.buildLevels();
+	assert.ok(d.levelCount === 0 && !key(0).group.visible && !d.levelTitle.mesh.visible);
+});
+
+test('the first time inside: a looping hand with its arc and ring, no card; the first teleport ends it and is remembered; 15 s ends it unremembered; 40 s stuck: once more', async (t) => {
+	const { loopAt, DEMO } = await import('../js/pinch-demo.js');
+	const { writeSetting } = await import('../js/settings.js');
+	const store = new Map(); // (Node has no localStorage: a small one for this test)
+	globalThis.localStorage = { getItem: (k) => store.get(k) ?? null, setItem: (k, v) => store.set(k, String(v)), removeItem: (k) => store.delete(k) };
+	t.after(() => { delete globalThis.localStorage; });
+	assert.deepEqual([0, 0.6, 1.5, 2.0, 2.4, 2.9].map((t) => { const m = loopAt(t); return [+m.pinch.toFixed(1), +m.arc.toFixed(1), m.blue]; }),
+		[[0, 0, false], [0.2, 0, false], [1, 0.8, false], [1, 1, true], [0.3, 0.3, false], [0, 0, false]], 'one loop: pinch, arc grows, ring blue, hand opens');
+	const { x, go, frame } = await setup();
+	const demo = x.pinchDemo;
+	for (const k of ['lessonWalkControllers', 'lessonWalkHands']) writeSetting(k, false);
+	go('in');
+	assert.ok(demo.playing && demo.group.visible && !x.lessons.group.visible, 'the loop plays; no lesson card');
+	assert.ok(demo.ring.position.distanceTo(x.headWorld()) > 1.4, 'its ring is on the floor ahead');
+	const spot = demo.spot.clone(), head = x.headWorld();
+	assert.ok(Math.abs(spot.y - head.y + 0.42) < 0.02 && spot.distanceTo(head) < 1.05 && spot.distanceTo(head) > 0.95, 'about 1 m ahead, 25° below the eyes');
+	demo.update(0.5); demo.update(0.5);
+	assert.ok(demo.state.fade === 1, 'faded in');
+	x.lessons.note('teleport');
+	for (let i = 0; i < 40; i++) demo.update(1 / 72);
+	assert.ok(!demo.playing && !demo.group.visible, 'gone after the first teleport');
+	const { readSetting } = await import('../js/settings.js');
+	assert.equal(readSetting('lessonWalkControllers') || readSetting('lessonWalkHands'), true, 'remembered');
+	// Another visit: not shown again.
+	go('back'); go('in');
+	assert.ok(!demo.playing, 'not again');
+	// Not remembered after only a timeout: 15 s, then it goes; 40 s stuck, once more.
+	for (const k of ['lessonWalkControllers', 'lessonWalkHands']) writeSetting(k, false);
+	go('back'); go('in');
+	assert.ok(demo.playing);
+	for (let t = 0; t < 15.6; t += 0.1) demo.update(0.1);
+	assert.ok(!demo.playing, '15 s: faded away');
+	for (let t = 15.6; t < 40.2; t += 0.1) demo.update(0.1);
+	assert.ok(demo.playing, '40 s inside with no teleport: once more');
+	for (let t = 0; t < 16; t += 0.1) demo.update(0.1);
+	for (let t = 0; t < 60; t += 0.1) demo.update(0.1);
+	assert.ok(!demo.playing, 'then never again that visit');
+	assert.equal(DEMO.SHOW, 15);
+});
+
+test('the tools show waits for you to look at the model, plays above it 15° below the eyes, and opens the fan for 2 s as they land', async () => {
+	const { x, frame } = await setup();
+	const intro = x.toolsIntro;
+	assert.ok(intro.start({ again: true }) && intro.state.waiting, 'waiting for a look');
+	x.camera.rotation.x = 0; x.camera.updateMatrixWorld(true);
+	assert.ok(!intro.lookingAtModel(), 'looking straight ahead, 38° above the model: not yet');
+	intro.update(0.1, () => {});
+	assert.ok(intro.state.waiting && !intro.group.visible, 'it waits');
+	x.camera.rotation.x = -0.6; x.camera.updateMatrixWorld(true); // (looking down at the model)
+	assert.ok(intro.lookingAtModel(), 'the head looks towards the model');
+	intro.update(0.1, () => {});
+	assert.ok(!intro.state.waiting && intro.group.visible, 'begins once looked at');
+	const head = x.headWorld(), p = intro.group.getWorldPosition(new THREE.Vector3());
+	assert.ok(Math.abs(p.y - (head.y - 1.3 * Math.sin(THREE.MathUtils.degToRad(15)))) < 0.01, '15° below eye level');
+	for (let t = 0; t < 5.2; t += 1 / 72) intro.update(1 / 72, () => {});
+	assert.ok(x.fan.force > 0, 'the fan is told to open as they fly');
+	intro.stop();
 });
 
 test('the tab you left a board on is the one the other board opens on', async () => {

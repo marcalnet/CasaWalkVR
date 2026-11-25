@@ -59,7 +59,8 @@ js/hand-readout.js the bare-hand tuning readout over each wrist, only with ?hand
 js/frame-stats.js the headset's fps and draw-call counter, only with ?stats on the page URL (measuring)
 js/hotspots.js    teleport hotspots: room middles and doorways, and snapping to them (pure, Node-testable)
 js/guide.js       How to move, the board's first tab: pictures and lines for hands or controllers, the build at its foot
-js/tools-intro.js the tools' first-time introduction: large in front of you, then flying to the wrist
+js/tools-intro.js the tools' first-time show above the scale model, then flying to the wrist (the fan opens 2 s)
+js/pinch-demo.js  the looping pinch hand shown the first time inside (arc, ring, three words), no card
 js/transient-pointer.js Apple Vision Pro's look-and-pinch: one pinch acts along its ray (isolated)
 js/lessons.js     the first-time lessons: a card of steps that tick off, the looping 3D hand, the first target
 js/hand-model.js  the hand model: the generic hand (vendor/generic-hand/) dressed in the hand look, posed from joints or presets

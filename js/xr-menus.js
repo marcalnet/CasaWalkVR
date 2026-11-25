@@ -49,7 +49,6 @@ const CELLS = {
 	ceilings: sw('ceilings', 'Ceilings'),
 	solid: sw('solid', 'Solid walls'),
 	seethrough: sw('seethrough', 'Transparent walls'),
-	levels: { type: 'choice', stepper: true, id: 'levels', label: 'Levels', options: [], disabled: true, note: 'One level' },
 	view: sw('view', 'Passthrough'), // on: the room around you; off: the VR world
 	toolFan: { type: 'choice', id: 'toolFan', label: 'Tool fan', options: [{ value: 'left', label: 'Left hand' }, { value: 'right', label: 'Right hand' }], value: 'left' },
 	lens: { type: 'choice', id: 'lens', label: 'Camera lens', options: [24, 28, 35, 50].map((mm) => ({ value: mm, label: `${mm} mm` })), value: 28 },
@@ -62,7 +61,7 @@ const CELLS = {
 /** The board's tabs (the same at both layers), each with rows of cell ids. Camera lens joins General in milestone D. */
 export const TABS = [
 	{ id: 'move', label: 'How to move', rows: [['guide']] }, // (the guide, since 25 Nov: no card beside the board)
-	{ id: 'view', label: 'View', rows: [['light'], ['shadows', 'depth'], ['ceilings', 'view'], ['seethrough'], ['levels']] },
+	{ id: 'view', label: 'View', rows: [['light'], ['shadows', 'depth'], ['ceilings', 'view'], ['seethrough']] },
 	{ id: 'walk', label: 'Walk', rows: [['height'], ['solid']] }, // (Turn left the board: 30° stays, the user's call)
 	{ id: 'tools', label: 'Tools', rows: [['lens']] }, // (the street camera's lens: wide for interiors; to get closer, walk closer)
 	{ id: 'general', label: 'General', rows: [['toolFan'], ['sound']] },
@@ -168,19 +167,8 @@ export function updateLabels(xr) {
 	walk.set('height', { value: xr.personHeight });
 	const walls = (xr.model?.layers.walls?.children.length ?? 0) > 0;
 	walk.set('solid', walls ? { disabled: false, value: xr.solid } : { disabled: true, note: 'No walls', value: false });
-	// Levels: a ‹ › stepper, since a home can have many. "All levels" first,
-	// then from the top down, each meaning "show up to this storey"
-	// (named as in Sweet Home 3D when the levels have names).
-	const storeys = xr.model?.storeys ?? 1;
-	const names = xr.model?.storeyNames ?? [];
-	const upTo = (i) => `Up to ${names[i] || `level ${i + 1}`}`;
-	// (Levels belong to the scale model: greyed out while walking.)
-	walk.set('levels', { disabled: true, note: 'Scale model only', options: [] });
-	doll.set('levels', storeys < 2 ? { disabled: true, note: 'One level' } : {
-		disabled: false,
-		options: [{ value: storeys - 1, label: `All levels (${storeys})` }, ...Array.from({ length: storeys - 1 }, (_, k) => storeys - 2 - k).map((i) => ({ value: i, label: upTo(i) }))],
-		value: xr.maxStorey ?? storeys - 1,
-	});
+	// (Levels are not here: a stack of keys beside the doors at the scale model, js/xr-dollhouse.js.)
+	xr.modes.dollhouse?.refreshLevels?.();
 }
 
 /**
@@ -240,7 +228,7 @@ export function menuAction(xr, target) {
 			const top = value ?? ((xr.maxStorey ?? -1) + 1) % count; // (bare id: the next one)
 			xr.maxStorey = top >= count - 1 ? null : top;
 			xr.applyStoreys();
-			updateLabels(xr);
+			updateLabels(xr); // (also refreshes the level keys)
 			break;
 		}
 		case 'light':

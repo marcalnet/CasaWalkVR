@@ -5,6 +5,8 @@
 // © Meta Platforms, Inc. and affiliates; its hand pose presets), rounded to 0.1 mm. The right
 // hand is the mirror image (mirrorPose in js/hand-model.js).
 
+import { presetJoints } from './hand-model.js';
+
 export const HAND_POSES = {
 	'fist': {
 		'wrist': { m: [0.9617,-0.1381,0.2368,0,0.0005,0.8649,0.502,0,-0.2741,-0.4827,0.8318,0,-0.0491,0.0021,0.117,1], r: 0.0215 },
@@ -61,3 +63,18 @@ export const HAND_POSES = {
 		'pinky-finger-tip': { m: [0.9092,0.3887,-0.149,0,-0.3347,0.8954,0.2935,0,0.2475,-0.217,0.9443,0,-0.0857,0.0583,-0.0265,1], r: 0.0054 },
 	},
 };
+
+/**
+ * A pinch, closed by k (0..1), from the open and fist presets (joint maps from
+ * presetJoints's input shape: pass the preset poses): thumb and index are
+ * taken 70% and 85% of the way to the fist, the other fingers 20%; the tips
+ * then meet within 2.5 cm. Joints in the hand's own space.
+ */
+export function pinchJoints(open, fist, k) {
+	const o = presetJoints(open), f = presetJoints(fist), out = {};
+	for (const n of Object.keys(o)) {
+		const w = n.startsWith('thumb') ? 0.7 : n.startsWith('index') ? 0.85 : n === 'wrist' ? 0 : 0.2;
+		out[n] = { position: o[n].position.clone().lerp(f[n].position, w * k), quaternion: o[n].quaternion.clone().slerp(f[n].quaternion, w * k) };
+	}
+	return out;
+}

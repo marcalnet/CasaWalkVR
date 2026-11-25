@@ -53,6 +53,7 @@ export class ToolFan {
 		this.t = 0;
 		this.hot = null; // the slot a tip is touching
 		this.fanBusy = false;
+		this.force = 0; // seconds the fan stays open by itself (the tools' show: js/tools-intro.js)
 		const make = (name, object, live, tool = null) => {
 			const slot = { name, object, live, home: new THREE.Group(), pose: new THREE.Group(), wobble: 0, tagGrow: 0, held: false };
 			slot.pose.rotation.y = VIEW[name] ?? 0; // (the pose is the group's, so the tool's own rotation stays free for the wobble)
@@ -128,6 +129,7 @@ export class ToolFan {
 			// merely in the ready pose: a curled hand raised to look at the fan reads as ready.)
 			const aiming = xr.modes.walk?.tele?.c === fan || xr.modes.dollhouse?.handAim?.c === fan;
 			open = raised && look.angleTo(to) < IN_VIEW && !xr.ui.wrist.open && !indexNear && !aiming && forward.lengthSq() > 0;
+			if (this.force > 0) { this.force -= dt; open = true; } // (the tools' show: the one time it opens without a look)
 		}
 		this.alpha = THREE.MathUtils.clamp(this.alpha + (open ? dt : -dt) / FADE, 0, 1);
 		this.group.visible = this.alpha > 0;

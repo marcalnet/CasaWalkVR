@@ -75,6 +75,8 @@ const DOOR_AHEAD = 0.3; // in front of where you stand
 // Nearly upright (70° from flat, facing you): a push from the front is a push forward;
 // a hand lowered onto it from above is far off its normal and never presses it.
 const DOOR_TILT = 70;
+// The levels: a stack of keys to the left of the doors, ground at the bottom like the building's section (the UX design of 25 Nov).
+const LEVEL_KEY = [0.08, 0.04], LEVEL_KEY_MANY = 0.03, LEVEL_GAP = 0.012, LEVELS_LEFT = 0.12; // key size (m); with more than six levels they are 3 cm tall; the stack's middle this far left of ← Back
 const BACK_HOLD = 0.6; // ← Back (leave VR) is held this long, a ring filling (the Lead's decision)
 const DOORS_FADE = 0.15; // seconds: the doors fade out while the board is open (they showed through it), and back
 const DOOR_FOLLOW = 0.08; // the doors move to a new head height once it differs by this much
@@ -124,6 +126,10 @@ export class Dollhouse {
 		this.doorGroup.add(this.doors.add('back', ...DOOR_BACK).group, this.doors.add('in', ...DOOR_IN).group);
 		this.doors.setSpec('back', { id: 'back', look: 'outline', icon: 'back', label: '\u2190 Back', caption: 'Hold: leave VR', hold: BACK_HOLD });
 		this.doors.setSpec('in', { id: 'in', look: 'filled', icon: 'in', label: 'Walk in \u2192', caption: 'Inside the home' });
+		this.levelCount = 0; // the keys in the stack now (level keys are slots 'level0', 'level1'... of the doors' pad)
+		this.levelTitle = new Label({ height: 0.026 });
+		this.levelTitle.set('Levels');
+		this.doorGroup.add(this.levelTitle.mesh);
 		xr.stage.add(this.doorGroup);
 		xr.hideFromPhotos(this.doorGroup);
 		this.doorAlpha = 1; // 0 while the settings board is open (the Quest 2 design's item 7)
@@ -166,6 +172,10 @@ export class Dollhouse {
 		const both = DOOR_IN[0] + DOOR_BACK[0] + 0.03;
 		this.doors.keys.get('in').group.position.set(both / 2 - DOOR_IN[0] / 2, 0, 0);
 		this.doors.keys.get('back').group.position.set(-both / 2 + DOOR_BACK[0] / 2, 0, 0);
+		// The levels: left of ← Back, the stack's middle LEVELS_LEFT from its edge, at the doors' height.
+		const n = this.levelCount, h = n > 6 ? LEVEL_KEY_MANY : LEVEL_KEY[1], x = -both / 2 - LEVELS_LEFT;
+		for (let i = 0; i < n; i++) this.doors.keys.get(`level${i}`).group.position.set(x, (i - (n - 1) / 2) * (h + LEVEL_GAP), 0);
+		this.levelTitle.mesh.position.set(x, ((n - 1) / 2) * (h + LEVEL_GAP) + h / 2 + 0.02, 0.002);
 		this.doorGroup.position.set(0, eyeY - DOOR_BELOW_EYES, -DOOR_AHEAD);
 		this.doorGroup.rotation.set(-(Math.PI / 2 - THREE.MathUtils.degToRad(DOOR_TILT)), 0, 0);
 		this.doorEyes = eyeY;
@@ -178,9 +188,36 @@ export class Dollhouse {
 		if (eye > 0.5 && Math.abs(eye - this.doorEyes) > DOOR_FOLLOW) this.placeDoors(eye);
 	}
 
-	/** A new model: the markers go into model space (they turn and zoom with it). */
+	/** A new model: the markers go into model space (they turn and zoom with it); the levels stack follows the home. */
 	setModel() {
 		this.xr.centerer.add(...this.markers);
+		this.buildLevels();
+	}
+
+	/** One key per level (a home with two or more), ground at the bottom; keys left over from a taller home stay hidden. */
+	buildLevels() {
+		const n = (this.xr.model?.storeys ?? 1) >= 2 ? this.xr.model.storeys : 0;
+		const h = n > 6 ? LEVEL_KEY_MANY : LEVEL_KEY[1];
+		for (let i = 0; i < n; i++) {
+			if (!this.doors.keys.has(`level${i}`)) this.doorGroup.add(this.doors.add(`level${i}`, LEVEL_KEY[0], h).group);
+			else { const k = this.doors.keys.get(`level${i}`); k.h = h; }
+		}
+		this.levelCount = n;
+		this.doorMaterials = null; // (the faded materials are collected again)
+		this.refreshLevels();
+		this.placeDoors(this.doorEyes);
+	}
+
+	/** What each level key shows: its name, the chosen one filled; hidden when the home has no such level. */
+	refreshLevels() {
+		const xr = this.xr, n = this.levelCount, names = xr.model?.storeyNames ?? [], chosen = xr.maxStorey ?? n - 1;
+		for (const [slot, k] of this.doors.keys) {
+			if (!slot.startsWith('level')) continue;
+			const i = Number(slot.slice(5)), on = i < n;
+			k.group.visible = k.out = on;
+			if (on) this.doors.setSpec(slot, { id: `level:${i}`, look: i === chosen ? 'chosen' : 'plain', label: String(names[i] || `Level ${i}`).slice(0, 12) });
+		}
+		this.levelTitle.mesh.visible = n >= 2;
 	}
 
 	/** A new session: the model back in the middle, and the view lift for the first frames. */
@@ -358,7 +395,11 @@ export class Dollhouse {
 		// front of the model, pressed and let go over it; ← Back is held 0.6 s.
 		const door = this.doors.update(dt, { active: !xr.menu, rules: DELIBERATE, blockers: xr.targets().pointable, laserOnRelease: true });
 		this.followDoors(door);
-		const action = point.action ?? door.action;
+		let action = point.action ?? door.action;
+		if (action?.id?.startsWith('level:')) { // a level key: show the home up to that level (the chosen one does nothing)
+			const i = Number(action.id.slice(6));
+			action = i === (xr.maxStorey ?? this.levelCount - 1) ? null : { id: 'levels', value: i };
+		}
 		const { pointable } = xr.targets();
 		let jumpTo = null;
 		const spots = [];

@@ -51,6 +51,7 @@ import { ToolsIntro } from './tools-intro.js';
 import { attachTransientPointer } from './transient-pointer.js';
 import { SeeThrough, SEE_THROUGH_MAX } from './walls.js';
 import { Portals } from './portal.js';
+import { PinchDemo } from './pinch-demo.js';
 import { takePhoto, photoName, saveFile, INTERFACE_LAYER } from './photo.js';
 import { readSetting } from './settings.js';
 import { buildShowroom, buildStage, fitPlinth, placePlate, buildWalkSky, recolourSphere } from './xr-scene.js';
@@ -149,6 +150,7 @@ export class XRExperience {
 		this.ui = new XRUI(this);
 		this.lessons = new Lessons(this); // the first-time lessons (C0.5)
 		this.toolsIntro = new ToolsIntro(this); // the tools' first-time introduction (C3)
+		this.pinchDemo = new PinchDemo(this); // the looping hand the first time inside (js/pinch-demo.js)
 		this.tools = new ToolSystem(this);
 		this.fan = new ToolFan(this); // the tool fan over the left hand (milestone C)
 		this.tweens = new Tweens();
@@ -334,6 +336,7 @@ export class XRExperience {
 		this.pendingRecentre = false;
 		this.ui.reset(); // menus, welcome card, notes, the wrist menu
 		this.lessons.stop();
+		this.pinchDemo.stop();
 		this.toolsIntro.stop();
 		this.layerFx = null;
 		this.veil.clear();
@@ -379,6 +382,7 @@ export class XRExperience {
 		this.lessons.stop();
 		if (this.session && !(name === 'dollhouse' && this.toolsIntro?.playing)) this.lessons.start(name === 'walk' ? 'walk' : 'scale'); // (the tools' introduction first)
 		if (name !== 'dollhouse') this.toolsIntro?.stop();
+		if (name === 'walk' && this.session) this.pinchDemo.start(); else this.pinchDemo.stop();
 		this.ui.setWelcome(this.ui.welcomeOn);
 	}
 
@@ -700,6 +704,7 @@ export class XRExperience {
 		if (this.layerFx) this.runLayerFx(dt); // moving between layers: the modes wait
 		else this.modes[this.mode]?.update(dt);
 		this.runArrival(dt);
+		this.pinchDemo.update(dt);
 		this.portals.update(this, dt); // the wall portal: after the mode, so a jump this frame shuts it
 		for (const v of this.handViews) v.update(dt, { passthrough: !this.vrView });
 		this.readout?.update();

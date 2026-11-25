@@ -124,6 +124,7 @@ export class Lessons {
 
 	/** The app says what you did: 'start', 'wrist', 'held', 'inside', 'arc', 'teleport', 'turn'. */
 	note(event) {
+		this.xr.pinchDemo?.note(event); // (the looping hand inside goes after the first teleport: js/pinch-demo.js)
 		if (!this.place) return;
 		const step = this.current();
 		// Steps tick off in order; a later step done early counts too.

@@ -485,7 +485,7 @@ const crossSeen = () => page.evaluate(() => {
 		const g = (p) => p.mesh.geometry.parameters;
 		return { doll: kinds(x.menus.dollhouse), walk: kinds(x.menus.walk), heights: Object.values(x.menus).map((p) => +g(p).height.toFixed(2)), width: g(x.menus.walk).width };
 	});
-	const want = { shadows: 'switch', depth: 'switch', ceilings: 'switch', light: 'choice', view: 'switch', seethrough: 'switch', levels: 'choice', toolFan: 'choice', sound: 'choice', solid: 'switch', height: 'choice' };
+	const want = { shadows: 'switch', depth: 'switch', ceilings: 'switch', light: 'choice', view: 'switch', seethrough: 'switch', toolFan: 'choice', sound: 'choice', solid: 'switch', height: 'choice' };
 	const ok = Object.entries(want).every(([id, t]) => kinds.doll[id] === t && kinds.walk[id] === t) && !Object.values(kinds.doll).includes('button');
 	check('the board: switches, options and a stepper, 52 cm wide, within reach', ok && Math.abs(kinds.width - 0.52) < 1e-6 && Math.max(...kinds.heights) < 0.5, JSON.stringify({ heights: kinds.heights, width: kinds.width }));
 }
@@ -896,6 +896,18 @@ check('B closes the board', (await state()).menu === null);
 	const demo = await page.evaluate(() => { const L = window.__casawalk.xr.lessons; return { kind: L.kind, step: L.current()?.id, demo: !!L.demo && Object.values(L.demo).some((d) => d.visible), loaded: !!L.demo }; });
 	check('the lesson with bare hands: a looping 3D hand shows the step\'s gesture', demo.kind === 'hands' && demo.step === 'hold' && demo.demo, JSON.stringify(demo));
 	await shot('lesson-hands-demo');
+	// The looping hand shown inside the first time (js/pinch-demo.js), frozen here at its steady-blue moment to look at it.
+	const pd = await page.evaluate(async () => {
+		const x = window.__casawalk.xr, d = x.pinchDemo;
+		await d.loaded;
+		d.update = () => {};
+		d.play('hands'); d.state.t = 2.0; d.state.fade = 1; d.draw(d.state);
+		return { hand: Object.values(d.hands ?? {}).some((h) => h.visible), label: d.label.text, arc: d.arcGeometry.drawRange.count, away: +d.spot.distanceTo(x.headWorld()).toFixed(2) };
+	});
+	await frames(3);
+	check('the looping pinch hand: the hand model, its arc to the ring, the three words, about 1 m away', pd.hand && pd.label === 'Pinch · aim · let go' && pd.arc > 10 && Math.abs(pd.away - 1) < 0.05, JSON.stringify(pd));
+	await shot('pinch-demo-hand');
+	await page.evaluate(() => { const d = window.__casawalk.xr.pinchDemo; d.stop(); delete d.update; });
 	// The safety net (A1): an error shows the calm card in front of you; the app goes on.
 	const safe = await page.evaluate(() => {
 		const x = window.__casawalk.xr;
@@ -1402,13 +1414,17 @@ check('back from walking: eyes at 1.89 m again, gallery shown, lasers on', Math.
 	check('the fan closes when the hand is lowered', await page.evaluate(() => !window.__casawalk.xr.fan.group.visible));
 }
 
-// The tools' first-time introduction (C3): large in front of you, then they fly to the fan's wrist; the lesson follows.
+// The tools' first-time show (C3; placed above the model 25 Nov): once you look towards the model they hang above it, then fly to the fan's wrist, and the fan opens for 2 s.
 {
 	await page.evaluate(() => { localStorage.removeItem('casawalk.toolsIntro'); const x = window.__casawalk.xr; x.lessons.stop(); x.toolsIntro.start(); });
+	await page.waitForFunction(() => !window.__casawalk.xr.toolsIntro.state?.waiting, null, { timeout: 15000, polling: 'raf' }).catch(() => {});
 	await frames(10);
-	const i0 = await page.evaluate(() => { const t = window.__casawalk.xr.toolsIntro, V = window.__casawalk.xr.rig.position.constructor, h = window.__casawalk.xr.headWorld(); return { playing: t.playing, shown: t.group.visible, away: +t.group.getWorldPosition(new V()).distanceTo(h).toFixed(2), names: t.items.map((i) => i.name) }; });
-	check('the tools\' introduction: the three tools large, about 1.5 m in front of you, named', i0.playing && i0.shown && Math.abs(i0.away - 1.5) < 0.1 && i0.names.join() === 'Street camera,Meter,Marker', JSON.stringify(i0));
+	const i0 = await page.evaluate(() => { const x = window.__casawalk.xr, t = x.toolsIntro, V = x.rig.position.constructor, h = x.headWorld(), p = t.group.getWorldPosition(new V()); return { playing: t.playing, shown: t.group.visible, away: +p.distanceTo(h).toFixed(2), below: +(Math.asin((h.y - p.y) / p.distanceTo(h)) * 180 / Math.PI).toFixed(0), names: t.items.map((i) => i.name) }; });
+	check('the tools\' show: the three tools about 1.3 m away, 15° below your eyes (above the model), named, once you look at the model', i0.playing && i0.shown && Math.abs(i0.away - 1.3) < 0.1 && Math.abs(i0.below - 15) <= 1 && i0.names.join() === 'Street camera,Meter,Marker', JSON.stringify(i0));
 	await shot('tools-intro');
+	const fanOpened = await page.waitForFunction(() => { const f = window.__casawalk.xr.fan; return f.force > 0 && f.alpha > 0.5 && f.group.visible; }, null, { timeout: 30000, polling: 'raf' }).then(() => true).catch(() => false);
+	check('as the tools fly, the fan opens by itself', fanOpened);
+	if (fanOpened) await shot('tools-fan-opens');
 	await page.waitForFunction(() => !window.__casawalk.xr.toolsIntro.playing, null, { timeout: 30000, polling: 'raf' }).catch(() => {});
 	const i1 = await page.evaluate(() => ({ playing: window.__casawalk.xr.toolsIntro.playing, remembered: localStorage.getItem('casawalk.toolsIntro') }));
 	check('after a few seconds they fly to the wrist and it is remembered', !i1.playing && i1.remembered === '1', JSON.stringify(i1));
@@ -1442,6 +1458,9 @@ check('back from walking: eyes at 1.89 m again, gallery shown, lasers on', Math.
 	const remembered = await page.evaluate(() => localStorage.getItem('casawalk.welcome.scale.controllers'));
 	check('stepping inside finishes the scale model\'s lesson (remembered) and starts the one inside, with a target ring ahead', remembered === '1' && l4.place === 'walk' && l4.step === 'arc' && l4.shown && l4.target, JSON.stringify({ remembered, ...l4 }));
 	await shot('lesson-walk');
+	const pc = await page.evaluate(() => { const d = window.__casawalk.xr.pinchDemo; return { playing: d.playing, kind: d.kind, label: d.label.text, ring: d.ring.visible && d.group.visible }; });
+	check('the first time inside, with controllers: the loop plays (arc and ring, "Trigger · aim · let go")', pc.playing && pc.kind === 'controllers' && pc.label === 'Trigger · aim · let go' && pc.ring, JSON.stringify(pc));
+	await shot('pinch-demo');
 	await page.evaluate(() => window.__casawalk.xr.lessons.finish()); await frames(2);
 	check('Got it (or the last step) puts it away for good', (await lesson()).place === null && await page.evaluate(() => localStorage.getItem('casawalk.welcome.walk.controllers')) === '1');
 	await page.evaluate(() => window.__casawalk.xr.menuAction('back')); await settled(); await frames(6);
@@ -1510,12 +1529,12 @@ const storeys = () => page.evaluate(() => {
 	const x = window.__casawalk.xr, shown = new Set(), hidden = new Set();
 	for (const g of [...Object.values(x.model.layers), x.model.lamps]) for (const m of g?.children ?? []) (m.visible ? shown : hidden).add(m.userData.storey ?? 0);
 	const topCeilings = x.model.layers.ceilings.children.filter((m) => m.visible).map((m) => m.userData.storey);
-	return { count: x.model.storeys, shown: [...shown].sort(), hidden: [...hidden].sort(), topCeilings, level: x.menus.dollhouse.get('levels').value, levelOptions: x.menus.dollhouse.get('levels').options.map((o) => o.label).join(' '),
+	return { count: x.model.storeys, shown: [...shown].sort(), hidden: [...hidden].sort(), topCeilings, level: x.maxStorey ?? x.model.storeys - 1, keys: [...x.modes.dollhouse.doors.keys].filter(([k, v]) => k.startsWith('level') && v.group.visible).map(([, v]) => `${v.spec.label}:${v.spec.look}`).join(),
 		pointable: x.targets().pointable.every((m) => m.visible), lamps: x.model.lamps?.children.length ?? 0, lampsOn: !!x.model.lamps?.visible, multi: x.model.multiLevel };
 });
 let lv = await storeys();
 await fingerprint('example-entry');
-check('example home: two storeys, all shown', lv.count === 2 && lv.multi && lv.hidden.length === 0 && lv.level === 1 && lv.levelOptions === 'All levels (2) Up to Ground floor', JSON.stringify(lv));
+check('example home: two storeys, all shown', lv.count === 2 && lv.multi && lv.hidden.length === 0 && lv.level === 1 && lv.keys === 'Ground floor:plain,First floor:chosen', JSON.stringify(lv));
 {
 	// Milestone B. Words: the scale model, never "dollhouse", on any headset text.
 	const words = await page.evaluate(() => {
@@ -1572,8 +1591,8 @@ check('example home: two storeys, all shown', lv.count === 2 && lv.multi && lv.h
 }
 await openBoard();
 await shot('example-menu');
-check('Levels: a ‹ › stepper showing "All levels (2)"', await page.evaluate(() => { const c = window.__casawalk.xr.menu.get('levels'); return c.stepper && c.value === 1 && !c.disabled; }));
-await clickMenu('levels', 0); // the › arrow: down to the ground floor
+check('Levels are not on the board', await page.evaluate(() => !window.__casawalk.xr.menu.get('levels')));
+await page.evaluate(() => window.__casawalk.xr.menuAction({ id: 'levels', value: 0 })); // the ground floor key
 await frames(5);
 lv = await storeys();
 check('Levels shows the ground floor only, without its ceilings', lv.shown.join() === '0' && lv.hidden.includes(1) && lv.topCeilings.length === 0 && lv.level === 0 && lv.pointable, JSON.stringify(lv));
@@ -1582,11 +1601,12 @@ await page.evaluate(() => window.__casawalk.lighting.setTime('night'));
 await frames(5);
 lv = await storeys();
 check('lamps glow at night', lv.lamps > 0 && lv.lampsOn, JSON.stringify(lv));
-await click('right', 'b-button');
+await click('right', 'b-button'); await frames(10); // (the board closes: the doors, and the levels beside them, come back)
 await shot('example-ground-floor-night');
+await shot('levels-stack');
 await page.evaluate(() => window.__casawalk.lighting.setTime('morning'));
 await openBoard();
-await clickMenu('levels', 1); // the ‹ arrow: all levels again
+await page.evaluate(() => window.__casawalk.xr.menuAction({ id: 'levels', value: 1 })); // the top key: all levels again
 await frames(5);
 lv = await storeys();
 check('Levels: All shows every storey again', lv.hidden.length === 0 && lv.level === 1 && !lv.lampsOn, JSON.stringify(lv));
@@ -1620,7 +1640,7 @@ await page.waitForFunction(() => window.__casawalk.depth.state === 'ready', null
 await frames(5);
 let dp = await depth();
 check('Depth shading is prepared and shown in the headset', dp.on && dp.state === 'ready' && dp.uniform === 1 && dp.switched === true && dp.label === 'Depth shading', JSON.stringify(dp));
-await clickMenu('levels', 0); // ground floor only, then walk in: every storey comes back
+await page.evaluate(() => window.__casawalk.xr.menuAction({ id: 'levels', value: 0 })); // ground floor only, then walk in: every storey comes back
 await click('right', 'b-button'); await frames(3);
 await pressWrist('right');
 await frames(15);
