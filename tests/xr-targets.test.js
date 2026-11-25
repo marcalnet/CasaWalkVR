@@ -68,6 +68,29 @@ test('walls stop the arc and are never a landing; hidden storeys are left out', 
 	assert.equal(hitSegment(ray, V(0, 1.2, 0), V(0, 1.2, -4), t), null);
 });
 
+// Stairs (several levels): the arc meeting a step's front (the riser) lands on
+// its top (the tread); only walls stay red.
+test('stairs: an arc meeting a riser lands on the tread above it', () => {
+	const h = home({ multiLevel: true });
+	// Five steps going away from you (towards -z): treads 25 cm deep, risers 18 cm high.
+	const steps = [];
+	for (let i = 0; i < 5; i++) steps.push(box(1, 0.18 * (i + 1), 0.25, -2, 0.09 * (i + 1), 1 - 0.25 * i));
+	h.model.layers.main.add(...steps);
+	const t = targetSets(h.model);
+	// Flat at 0.30 m, towards the stair: meets the second step's riser (from 0.18 to 0.36 m) at z = 0.875.
+	const seg = hitSegment(ray, V(-2, 0.3, 3), V(-2, 0.3, 0), t);
+	assert.ok(seg.valid, 'the riser lands');
+	assert.ok(Math.abs(seg.point.y - 0.36) < 1e-6 && seg.point.z < 0.875 && seg.point.z > 0.85, JSON.stringify(seg.point));
+	assert.ok(seg.normal.y > 0.99, 'the ring lies flat on the tread');
+	// A wall is never a landing, even with a floor behind its top.
+	const wall = hitSegment(ray, V(0, 1.2, 0), V(0, 1.2, -4), t);
+	assert.ok(wall && !wall.valid);
+	// Too tall to be a step (the wall-like side of a 1 m block): red.
+	h.model.layers.main.add(box(1, 1, 1, 2, 0.5, 2));
+	const tall = hitSegment(ray, V(2, 0.3, 4), V(2, 0.3, 0), targetSets(h.model));
+	assert.ok(tall && !tall.valid);
+});
+
 test('findFloor takes the first upward-facing floor below a point', () => {
 	const h = home();
 	const t = targetSets(h.model);

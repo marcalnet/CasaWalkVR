@@ -1630,6 +1630,20 @@ check('the welcome card turns to face you as you move', faceAngle < 1, `${faceAn
 await aimW('right', R, await modelTop()); await frames(6); await click('right', 'trigger'); await settled();
 // (Shown: visible, and every parent too.)
 const welcomeShown = () => page.evaluate(() => { for (let a = window.__casawalk.xr.ui.welcome.mesh; a; a = a.parent) if (!a.visible) return false; return true; });
+	// Stairs: an arc meeting a step's front (the riser) lands on its top (the tread), not red.
+	const st = await page.evaluate(() => {
+		const x = window.__casawalk.xr, t = x.targets(), V = x.rig.position.constructor;
+		const W = (px, h, pz) => x.centerer.localToWorld(new V(px, h, pz)); // plan metres to world (the example home's Stairs at 7.45, 5.35)
+		const out = [];
+		for (const s of [1, -1]) for (const h of [0.1, 0.3]) {
+			const seg = x.modes.walk.hitSegment(W(7.45, h, 5.35 + 2 * s), W(7.45, h, 5.35 - 2 * s), t);
+			if (!seg) continue;
+			const local = x.centerer.worldToLocal(seg.point.clone());
+			out.push({ from: s, h, valid: seg.valid, y: +local.y.toFixed(3), up: +seg.normal.y.toFixed(2) });
+		}
+		return out;
+	});
+	check('stairs: an arc meeting a riser lands on the tread above it', st.some((r) => r.valid && r.up > 0.7 && r.y > r.h && r.y < r.h + 0.25), JSON.stringify(st));
 const wk = { mode: (await state()).mode, shown: await welcomeShown(), on: await page.evaluate(() => window.__casawalk.xr.ui.welcomeOn) };
 await restRight(); await click('right', 'b-button'); await settled(); await frames(3);
 s = await state();

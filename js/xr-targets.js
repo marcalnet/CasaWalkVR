@@ -70,10 +70,17 @@ export function findFloor(raycaster, floors, worldPoint, lift) {
 	return h && !isWater(h.object) ? h.point : null; // (water over the ground: no floor there)
 }
 
+// Stairs: the arc meeting a step's steep front (the riser) lands on its top
+// (the tread). Look down from this far above the hit, this far behind the face.
+const STEP_UP = 0.25, STEP_IN = 0.02;
+
 /**
  * First solid hit between two world points (`t`: targetSets()), with its
  * world normal turned to the side the segment came from; valid only on a
- * walkable, upward-facing surface.
+ * walkable, upward-facing surface. A steep face of something walkable (a
+ * stair's riser; walls never are walkable) lands on the walkable top found
+ * just above and behind it, if there is one within STEP_UP: so only real
+ * walls stay red.
  */
 export function hitSegment(raycaster, a, b, t) {
 	const dir = b.clone().sub(a);
@@ -85,5 +92,19 @@ export function hitSegment(raycaster, a, b, t) {
 	if (!h) return null;
 	const normal = worldNormal(h);
 	if (normal.dot(dir) > 0) normal.negate(); // the side the arc came from
-	return { point: h.point, normal, valid: normal.y > 0.7 && t.walkable.has(h.object) };
+	if (normal.y > 0.7 || !t.walkable.has(h.object) || normal.y < -0.3) return { point: h.point, normal, valid: normal.y > 0.7 && t.walkable.has(h.object) };
+	return treadAbove(raycaster, h.point, normal, t) ?? { point: h.point, normal, valid: false };
+}
+
+/** The walkable top just above and behind a steep face at `point` (normal: towards the arc), or null. */
+function treadAbove(raycaster, point, normal, t) {
+	const back = new THREE.Vector3(-normal.x, 0, -normal.z);
+	if (back.lengthSq() < 1e-6) return null;
+	back.normalize();
+	raycaster.set(point.clone().addScaledVector(back, STEP_IN).addScaledVector(UP, STEP_UP), DOWN);
+	raycaster.far = STEP_UP;
+	const h = raycaster.intersectObjects(t.solid, false)[0];
+	if (!h || !t.walkable.has(h.object)) return null;
+	const n = worldNormal(h);
+	return n.y > 0.7 ? { point: h.point, normal: n, valid: true } : null;
 }
