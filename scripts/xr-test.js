@@ -411,14 +411,14 @@ await enterVR.click();
 // Wait until the session is up: the orb is on the right wrist and the plinth was placed.
 await waitXR();
 {
-	// The dark after Enter VR (js/pause.js): how long it really lasted, in wall time and in frames. It ends when the room draws
-	// smoothly; the pause's own cap (READY_LIMIT, in frame time) ending it means the room never drew smoothly.
+	// The dark after Enter VR (js/pause.js): how long it really lasted, in wall time and in frames. It ends when the room is
+	// ready (its frames steady); the pause's own cap (READY_LIMIT, 3 s of frame time) ending it means they never were.
 	const last = await page.evaluate(() => window.__casawalk.xr.pause.last ?? null);
 	const wall = (Date.now() - enteredAt) / 1000;
-	console.log(`Enter VR: the dark lasted ${last ? last.t.toFixed(2) : '?'} s of frame time over ${last?.frames ?? '?'} frames (${wall.toFixed(1)} s wall time)${last?.capped ? ', ended by the 10 s cap' : ''}`);
-	// (Here every frame is software-rendered and slow, so "ready" — ten frames under 1.5 x the 72 Hz budget — never comes and the
-	// cap ends it: the log line says so. What can fail here is the dark outlasting its cap. The real time needs a headset.)
-	check('Enter VR: the dark never outlasts the pause\'s 10 s cap (frame time)', !!last && last.transition === 'enter' && last.t <= 10 + 0.1 + 1e-6, JSON.stringify({ ...last, wall }));
+	console.log(`Enter VR: the dark lasted ${last ? last.t.toFixed(2) : '?'} s of frame time over ${last?.frames ?? '?'} frames (${wall.toFixed(1)} s wall time)${last?.capped ? ', ended by the 3 s cap' : ''}`);
+	// (Here every frame is software-rendered, slow and uneven, so the cap often ends it: the log line says so. What can fail
+	// here is the dark outlasting its cap. The real time needs a headset.)
+	check('Enter VR: the dark never outlasts the pause\'s 3 s cap (frame time)', !!last && last.transition === 'enter' && last.t <= 3 + 0.1 + 1e-6, JSON.stringify({ ...last, wall }));
 }
 await frames(10);
 let s = await state();

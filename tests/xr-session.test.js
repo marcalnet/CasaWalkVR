@@ -73,6 +73,43 @@ test('?nomerge (the model as loaded, for debugging): the headset takes it, shado
 	assert.equal(x.mode, 'dollhouse');
 });
 
+test('the pause with no tip left (§1, revised): a steady place is the plain fade\'s short dark; an unsteady one shows the void, the rings and the place\'s name past 0.3 s, and fades in at 3 s', async () => {
+	const { x, frame } = await setup();
+	const { PAUSE } = await import('../js/pause.js');
+	frame();
+	// Steady: Walk in, then ten even frames after the move and it lifts; nothing shows.
+	x.menuAction('in');
+	let shown = false, n = 0;
+	while (x.layerFx && !x.pause.fx.pause && n++ < 400) frame();
+	n = 0;
+	while (x.pause.fx?.pause && n++ < 400) { frame(1 / 36); shown ||= x.pause.group.visible; }
+	assert.ok(!shown && n <= 11 && x.mode === 'walk', `steady: lifted after ${n} frames, nothing shown`);
+	while (x.layerFx) frame();
+	// Unsteady (every other frame twice as long): the void and the rings with the room's name, then in at the cap.
+	x.menuAction('back');
+	n = 0;
+	while (x.layerFx && !x.pause.fx.pause && n++ < 400) frame();
+	let t = 0, at = null;
+	while (x.pause.fx?.pause && t < 10) {
+		const dt = (n++ % 2) ? 1 / 36 : 1 / 72;
+		frame(dt); t += dt;
+		if (at === null && x.pause.group.visible) at = { t, floor: x.pause.floor.visible };
+	}
+	assert.ok(at && at.t > PAUSE.GAP && at.t < PAUSE.GAP + 0.05 && at.floor, `past the 0.3 s gap: the void and the rings (${JSON.stringify(at)})`);
+	assert.ok(Math.abs(t - PAUSE.READY_LIMIT) < 0.05, `the cap: in at 3 s (${t.toFixed(2)} s)`);
+	assert.equal(x.pause.last.capped, true);
+	while (x.layerFx) frame();
+	assert.equal(x.mode, 'dollhouse');
+	// Inside, the name is the room's.
+	x.menuAction('in');
+	n = 0;
+	while (x.layerFx && !x.pause.fx.pause && n++ < 400) frame();
+	t = 0;
+	while (x.pause.fx?.pause && t < 1) { const dt = (n++ % 2) ? 1 / 36 : 1 / 72; frame(dt); t += dt; }
+	assert.ok(x.roomHere() && x.pause.tipLabel.text === x.roomHere() && x.pause.tipLabel.mesh.visible, `Walk in: the room's name where the tip would be ("${x.pause.tipLabel.text}")`);
+	while (x.layerFx) frame();
+});
+
 test('the settings wing: the same three tabs at both layers (How to move, View, General), no Close key (the foot says how to close), every target big enough to touch, 34 cm tall', async () => {
 	const { x } = await setup();
 	for (const p of Object.values(x.menus)) {
@@ -213,8 +250,17 @@ test('the pause, pure: which tip (in order, once a session, per input kind), rea
 	assert.ok(Math.abs(gestureAt('flick', 1.1).turn - 0.6) < 1e-9 && gestureAt('flick', 2).turn === 0, 'flick: aside and back');
 	const all = newRecord(), ids = Array.from({ length: 6 }, () => nextTip('in', all, 'hands', { all: true }).id);
 	assert.deepEqual(ids, ['walkin', 'teleport', 'turn', 'portal', 'grab', 'walkin'], '?tips: every tip in turn, never retired');
-	assert.ok(!isReady([0.01, 0.01]) && isReady(Array(10).fill(1 / 72)) && !isReady([...Array(9).fill(1 / 72), 0.03]), 'ready: 10 smooth frames (under 1.5x the budget)');
-	assert.equal(PAUSE.READY_LIMIT, 10, 'never stuck: 10 s at most');
+	// Ready (§1, revised 26 Nov): steady, not fast. Ten frames each within 25% of their median, none 100 ms or more.
+	assert.ok(!isReady([0.01, 0.01]) && isReady(Array(10).fill(1 / 72)), 'ten even frames at 72 Hz: ready');
+	const fps36 = Array(10).fill(1 / 36);
+	assert.ok(isReady(fps36), 'an even 36 fps counts as ready after 10 frames (slow but steady)');
+	const spiked = [...fps36, 0.1]; // (a 150 ms spike reads 0.1: the frame clock caps a frame there)
+	assert.ok(!isReady(spiked), 'a 150 ms spike: not ready');
+	const after = [...spiked];
+	for (let i = 1; i <= 10; i++) { after.push(1 / 36); assert.equal(isReady(after), i >= 10, `the spike restarts the count: ${i} steady frames after it`); }
+	assert.ok(!isReady([...Array(9).fill(1 / 72), 0.03]), 'one frame twice the others: not steady');
+	assert.ok(!isReady(Array(10).fill(0.1)), 'none 100 ms or more (an even 10 fps is a stall, not steady)');
+	assert.equal(PAUSE.READY_LIMIT, 3, 'never stuck: 3 s from the first draw at most');
 	const { land } = practiceArc(new THREE.Vector3(0, 1.4, 0), new THREE.Vector3(0, -0.3, -1), 0);
 	assert.ok(land && Math.abs(land.y) < 1e-9 && land.z < -1, `the practice arc lands ahead on the floor (${land?.z.toFixed(2)} m)`);
 });

@@ -294,7 +294,7 @@ async function load(files, label, source = { type: 'file' }) {
 		// level), the headset's model (see-through, portal), then depth shading (not in the ?nomerge debug view).
 		applyMaterialPasses(model.layers, !!merged.stats, {
 			liftCeilings: (ceilings) => lighting.liftCeilings(ceilings),
-			headset: () => xr.setModel({ group: model.root, layers: model.layers, lamps, storeys: result.storeys ?? 1, storeyNames: result.storeyNames ?? [], bounds: model.bounds, observer: model.observer, skyColor: result.home?.skyColor, multiLevel: elevations.size > 1, plan: result.plan ?? null }),
+			headset: () => xr.setModel({ name: (label || '').replace(/\.[a-z0-9]+$/i, ''), group: model.root, layers: model.layers, lamps, storeys: result.storeys ?? 1, storeyNames: result.storeyNames ?? [], bounds: model.bounds, observer: model.observer, skyColor: result.home?.skyColor, multiLevel: elevations.size > 1, plan: result.plan ?? null }),
 			depth: (layers) => depth.setModel(layers),
 		});
 		prepareTextures(model.root);

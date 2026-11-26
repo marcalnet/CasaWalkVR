@@ -3,16 +3,25 @@
 // while there is something left to learn, holds a short pause in the dark on
 // the way: a floor ring, one short tip, and for the moves a looping hand.
 //
-//   Enter VR  the pause from the first frame (black, the floor ring, the
-//             "walk in" tip), until the scale-model room draws smoothly;
-//             then a fade into it.
+//   Enter VR  the pause from the first frame (the void, the floor ring, the
+//             "walk in" tip), until the scale-model room is ready (ready:
+//             below); then a fade into it.
 //   Walk in   the tunnel to black (or the model grows: WALK_IN_ZOOM), then
 //             the pause with the room's name over the tip; the teleport tip
 //             can be practised on the floor ring: the practice jump is the
-//             step inside. With no tip left: the room's name for 1.5 s.
+//             step inside. With no tip left: the room's name for 1.5 s, after it.
 //   ← Back    a fade; the grab tip while it is unlearnt and unseen this
 //             session; then the home settles onto the plinth.
 //   leaving   a gentle fade to white, then the page. Never a tip.
+//
+// Ready (the next-build asks §1, revised 26 Nov): the place has drawn behind
+// the veil and its last 10 frames are steady, each within ±25% of their
+// median and none of 100 ms or more (a shader compile or a texture upload
+// restarts the count). Steady, not fast: a home running at an even 36 fps is
+// ready. At most 3 s from its first draw, then it fades in anyway. Every move
+// waits for it; with no tip left that is the plain fade's dark gap, and only
+// past 0.3 s does the wait show the void, the rings and the place's name (the
+// home's at Enter VR and ← Back, the room's at Walk in): never plain black.
 //
 // A tip is learnt once you have done its action (anywhere: note()); each
 // shows at most once a session, learnt or not; each Enter VR starts fresh
@@ -41,7 +50,8 @@ export const PAUSE = {
 	NEXT: 8, MAX_TIPS: 2, // still loading after this long: the next tip of the transition cross-fades in (two at most)
 	SKIP_AFTER: 0.8, // a press (or the tip's own action) ends it from then on
 	TIP_OUT: 0.3, REVEAL: 0.2, // the tip fades out, then the place fades in
-	READY_LIMIT: 10, READY_FRAMES: 10, READY_SLOW: 1.5 / 72, // ready: drawn once and the last 10 frames each under 1.5 x the frame budget; never more than 10 s
+	READY_LIMIT: 3, READY_FRAMES: 10, READY_SPREAD: 0.25, READY_SPIKE: 0.1, // ready: drawn once and the last 10 frames steady (each within 25% of their median, none 100 ms or more); never more than 3 s from the first draw
+	GAP: 0.3, // with no tip, the dark gap a plain fade has anyway: only a longer wait shows the void, the rings and the place's name
 	AHEAD: 1.4, BELOW: 10, NAME_ABOVE: 0.8, // the tip: 1.4 m ahead, its centre 10° below eye level; the room's name 0.8° above it
 	AWAY: 40, AWAY_FOR: 1, FOLLOW: 0.4, // turned more than 40° away for over 1 s: the tip glides back in front of you over 0.4 s
 	RINGS: [[0.75, 0.25], [2, 0.1]], // the floor rings: radius (m), opacity
@@ -79,10 +89,16 @@ export function nextTip(transition, store, kind, { all = false } = {}) {
 	return (TIPS[transition] ?? []).find((t) => !seen.has(tipKey(t.id, kind)) && !learnt.has(tipKey(t.id, kind))) ?? null;
 }
 
-/** Ready (pure): drawn at least once and the last READY_FRAMES frame times each under READY_SLOW. */
+/**
+ * Ready (pure): drawn at least once, and the last READY_FRAMES frame times are
+ * steady: each within READY_SPREAD of their median, none READY_SPIKE or more
+ * (the frame clock caps a frame at 0.1 s, so a longer spike reads 0.1).
+ */
 export function isReady(frameTimes) {
 	const n = PAUSE.READY_FRAMES;
-	return frameTimes.length >= n && frameTimes.slice(-n).every((dt) => dt < PAUSE.READY_SLOW);
+	if (frameTimes.length < n) return false;
+	const last = frameTimes.slice(-n), median = [...last].sort((a, b) => a - b)[n >> 1];
+	return last.every((dt) => dt < PAUSE.READY_SPIKE && Math.abs(dt - median) <= PAUSE.READY_SPREAD * median);
 }
 
 /**
@@ -182,7 +198,7 @@ export class Pause {
 	 * scale-model room draws smoothly (at most READY_LIMIT), then a fade in.
 	 */
 	enter() {
-		this.colour = 0x000000;
+		this.colour = VOID.color;
 		this.fx = { dir: 'enter', go: () => {}, t: 0, done: true };
 		this.xr.veil.set('layer', 1, this.colour);
 		this.startPause('enter');
@@ -206,7 +222,7 @@ export class Pause {
 			// (Where the zoom centres: the landing spot in the world, and what it scales from.)
 			this.fx.tunnel = { at: xr.centerer.localToWorld(spot.clone()), stage: xr.stage.position.clone(), anchor: xr.anchor.position.clone(), scale: xr.anchor.scale.x };
 		}
-		this.colour = dir === 'out' ? 0xffffff : 0x000000;
+		this.colour = dir === 'out' ? 0xffffff : VOID.color;
 	}
 
 	/** Once a frame: the move in progress (the modes wait meanwhile), the room's name, the first-target ring. */
@@ -267,7 +283,7 @@ export class Pause {
 		// Every arrival at the scale model puts the plinth in front of you, the model
 		// level on it, here behind the dark (you may have turned and walked inside).
 		if (f.dir === 'back' && xr.mode === 'dollhouse') xr.recentreHere();
-		if (!this.startPause(f.dir) && f.dir === 'in') this.showArrival(xr.roomHere() || 'Inside');
+		this.startPause(f.dir); // (with a tip, or only until the place is ready: the plain fade's dark gap)
 	}
 
 	/**
@@ -301,15 +317,14 @@ export class Pause {
 	// -----------------------------------------------------------------------
 
 	/**
-	 * Begins the pause for a transition, if a tip is left (or always for Enter
-	 * VR, which holds the dark until the room is ready). Returns true if a
-	 * pause began.
+	 * Begins the pause for a transition: with a tip if one is left, else only
+	 * until the place is ready (the plain fade's dark gap; past it, the void,
+	 * the rings and the place's name). Returns true if a tip shows.
 	 */
 	startPause(transition) {
 		const xr = this.xr, f = this.fx, kind = this.kind();
 		const tip = this.tipsOn ? nextTip(transition, this.record, kind, { all: DEV.tips }) : null;
-		if (!tip && transition !== 'enter') return false;
-		f.pause = { transition, tip, kind, t: 0, count: 0, shown: 0, tips: tip ? 1 : 0, frames: [], waited: 0, ending: null, aim: null, away: 0, follow: null };
+		f.pause = { transition, tip, kind, t: 0, count: 0, shown: 0, tips: tip ? 1 : 0, frames: [], waited: 0, ending: null, aim: null, away: 0, follow: null, waiting: false };
 		this.cover(1);
 		if (tip) {
 			this.record.tips.seen.add(tipKey(tip.id, kind));
@@ -317,7 +332,13 @@ export class Pause {
 			this.showTip(tip, kind);
 		}
 		this.floor.visible = !!tip;
-		return true;
+		return !!tip;
+	}
+
+	/** The place's name, shown while a tip-less wait runs long: the room's at Walk in, the home's otherwise. */
+	placeName(transition) {
+		const xr = this.xr;
+		return (transition === 'in' ? xr.roomHere() : '') || xr.model?.name || '';
 	}
 
 	/** The tip in front of you, world-locked: 1.4 m ahead, 10° below eye level; the room's name above it. */
@@ -357,8 +378,16 @@ export class Pause {
 		if (p.frames.length > PAUSE.READY_FRAMES) p.frames.shift();
 		const ready = isReady(p.frames) || p.t >= PAUSE.READY_LIMIT;
 		this.demo.update(dt);
-		if (!p.tip) { // (Enter VR with no tip: the dark until the room is ready)
-			if (ready) this.reveal();
+		if (!p.tip) { // (no tip: the dark until the place is ready)
+			if (ready) { this.reveal(); return; }
+			// Longer than the plain fade's dark gap: the void, the rings and the place's name where a tip would be (never plain black).
+			if (p.t > PAUSE.GAP && !p.waiting) {
+				p.waiting = true;
+				this.placeTip('');
+				this.tipLabel.set(this.placeName(p.transition));
+				this.group.visible = this.floor.visible = true;
+			}
+			if (p.waiting) this.setTipAlpha(Math.min(1, (p.t - PAUSE.GAP) / PAUSE.TIP_IN));
 			return;
 		}
 		// The tip fades in, is shown, fades out; the place then fades in.
@@ -409,6 +438,7 @@ export class Pause {
 		this.group.visible = this.floor.visible = this.arc.visible = false;
 		this.demo.stop();
 		if (f.dir === 'enter') f.dir = 'in'; // (the same fade in as stepping inside)
+		else if (p.transition === 'in' && !p.tip) this.showArrival(this.xr.roomHere() || 'Inside'); // (no tip left: the room's name, 1.5 s)
 	}
 
 	/**
