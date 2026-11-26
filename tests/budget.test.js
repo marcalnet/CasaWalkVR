@@ -105,7 +105,8 @@ test('one place for the development switches and the device (code audit, A4)', a
 	assert.ok(isHeadsetBrowser(q2) && isHeadsetBrowser(q3) && !isHeadsetBrowser(mac));
 	assert.ok(isQuest2(q2) && !isQuest2(q3) && !isQuest2(mac));
 	// Nothing else reads the address's switches or the browser's name.
-	const js = fs.readdirSync(path.join(ROOT, 'js')).filter((f) => f.endsWith('.js') && f !== 'dev.js' && f !== 'device.js');
+	const js = fs.readdirSync(path.join(ROOT, 'js'), { recursive: true }).filter((f) => f.endsWith('.js') && f !== 'dev.js' && f !== 'device.js'); // (js/page/ too)
+	assert.ok(js.some((f) => f.startsWith('page')), 'the page\'s parts are read too');
 	for (const f of js) {
 		const src = fs.readFileSync(path.join(ROOT, 'js', f), 'utf8');
 		assert.ok(!/\.has\('(test|hands|stats|nomerge|sw)'\)/.test(src), `${f} reads a development switch itself`);
