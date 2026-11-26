@@ -84,6 +84,21 @@ test('walls stop the arc: the landing is the floor at their foot, on your side; 
 	assert.equal(hitSegment(ray, V(0, 1.2, 0), V(0, 1.2, -4), t), null);
 });
 
+test('a wall with furniture against it: never a landing inside a sofa or under a low shelf; the clear floor nearest your side (the audit\'s S2)', () => {
+	// A sofa 0.9 m deep against the wall (its face at z = -2.925): aimed at the wall above it.
+	let h = home();
+	h.model.layers.main.add(box(2, 0.45, 0.9, 0, 0.225, -2.48));
+	let t = targetSets(h.model);
+	let seg = hitSegment(ray, V(0, 1.2, 0), V(0, 1.2, -4), t);
+	assert.ok(seg?.valid && seg.land && seg.land.z > -2.03 + 0.2 && Math.abs(seg.land.y) < 1e-6, `in front of the sofa, not in it: ${JSON.stringify(seg?.land)}`);
+	// A shelf 1.0 m up against the wall: aimed at the wall under it.
+	h = home();
+	h.model.layers.main.add(box(2, 0.05, 0.4, 0, 1.0, -2.725));
+	t = targetSets(h.model);
+	seg = hitSegment(ray, V(0, 0.9, 0), V(0, 0.4, -4), t);
+	assert.ok(seg?.valid && seg.land && seg.land.z > -2.525 + 0.2, `in front of the shelf, with headroom: ${JSON.stringify(seg?.land)}`);
+});
+
 test('red only where it makes no sense: a ceiling or underside, outside the site', () => {
 	const h = home();
 	h.model.layers.main.add(box(2, 0.05, 2, -2, 2.6, 2)); // (a slab overhead)

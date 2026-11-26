@@ -3,7 +3,9 @@
 // ends where it hit; the ring shows where you will land (hit.land).
 //
 //   1. A wall, door, window or glass: step back 0.3 m towards where the arc
-//      came from (your side), then look down for a floor within 3 m.
+//      came from (your side), then look down for a floor within 3 m. It must
+//      be clear (3): against a sofa or under a low shelf, the ring search (2)
+//      from there finds the clear floor nearest your side (the code audit's S2).
 //   2. Furniture (its side or top): clear floor round the piece, on rings
 //      0.3, 0.6 and 1.0 m out from the hit, nearest first, the side facing you
 //      first.
@@ -128,10 +130,13 @@ export function landFor(raycaster, hit, from, t) {
 	towards.normalize();
 	const dir = towards.clone();
 	if (t.wallLike.has(hit.object)) {
-		// A wall, door, window or glass: back to your side, then the floor below.
+		// A wall, door, window or glass: back to your side, then the floor below, if it is clear
+		// (not inside a sofa or under a shelf against the wall); else the clear floor nearest it.
 		const back = hit.point.clone().addScaledVector(dir, LAND.BACK);
 		const f = floorBelow(raycaster, back, LAND.DOWN, t);
-		return f ? { land: f } : null;
+		if (f && standable(raycaster, f, t)) return { land: f };
+		const near = ringSearch(raycaster, f ?? back, dir, t);
+		return near ? { land: near } : null;
 	}
 	const f = ringSearch(raycaster, hit.point, dir, t);
 	return f ? { land: f } : null;
