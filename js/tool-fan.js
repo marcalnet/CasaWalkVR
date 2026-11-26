@@ -23,7 +23,7 @@
 // the tag swings forward and grows for 2 s.
 //
 // Keeping the two wrists apart: while the taking hand is within reach of the
-// fan (fanBusy), the orb ignores touches and makes room (WristMenu reads it).
+// tools (fanBusy: the reach, 0.25 m, let go at 0.35 m), the orb ignores touches (WristMenu reads it).
 
 import * as THREE from 'three';
 import { MarkerTool } from './marker-tool.js';
@@ -31,7 +31,6 @@ import { LaserMeter } from './laser-meter.js';
 import { StreetCamera } from './street-camera.js';
 import { ease } from './tween.js';
 import { Label } from './panel.js';
-import { CLAIM } from './xr-targets.js';
 import { TOOLS, edgeSpot, keepFromEyes, dampTowards } from './zones.js';
 
 export const ABOVE = 0.15; // the fan's middle, above the fan hand (metres)
@@ -45,7 +44,6 @@ const REACH = 0.05; // a controller's tip this close to a tool touches it
 const REACH_HAND = 0.07; // a bare fingertip: tracking is looser, and the tools are small (the marker is 9 cm)
 const PALM_REACH = 0.09; // a closing bare hand: its palm this close to a tool still takes it (the fingers curl away from the tool as the hand closes)
 const MEMORY = 0.6; // seconds a touched tool stays the one a closing hand takes
-const BUSY = CLAIM.near, BUSY_CLEAR = CLAIM.clear; // the taking hand this close to the open fan: the orb ignores touches, until it is BUSY_CLEAR away
 const OUT = 0.08; // the open fan sits this far to the fan hand's outer side, beside its ABOVE
 const RETURN = 0.08; // a bare hand bringing its tool this close to its place puts it back
 const FADE = 0.2; // seconds: the fan appears and goes (tracking found or lost)
@@ -157,8 +155,7 @@ export class ToolFan {
 			if (hot && !hot.live) this.refuse(hot, take);
 			this.hot = hot;
 		}
-		const takeD = this.alpha > 0.5 && take?.touch.tracked ? take.touch.tip.distanceTo(this.pos ?? anchor) : Infinity; // (where the tools are: home or waiting)
-		this.fanBusy = takeD < (this.fanBusy ? BUSY_CLEAR : BUSY);
+		this.fanBusy = this.alpha > 0.5 && this.reach; // (within reach of the tools, 0.25 m in, 0.35 m out: the orb ignores touches; the next-build asks 5.4)
 		// A closing bare hand takes the tool it touched (a moment ago: the fingers curl away as the hand closes) or holds in its palm.
 		this.target = this.hot;
 		if (take?.isHand && this.alpha > 0.5 && take.touch.tracked) {

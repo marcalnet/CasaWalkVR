@@ -32,13 +32,18 @@ export const DIAL = {
 	RADIUS: 0.06, STOP: 0.022, GAP: 0.012, // the half circle and its stops (m)
 	OPEN_FOR: 3, STEP_SHOW: 1.5, LABEL_FOR: 1, // seconds: untouched it closes; a stick step shows it; the label
 	ZONE: 0.022, // a touch on the control part counts within this of its middle (the 22 mm floor)
+	TURN: Math.PI / 3, // the half circle opens up and this far towards the other hand, away from the holding wrist and its orb (the audit's S8: the camera's and the meter's stops 10 cm or more from the orb)
 	PULSE: 0.8, // seconds: the cue's one soft pulse on the first take
 };
 
-/** The angles (radians, 0 to the right, counter-clockwise) of n stops on the dial's top half, centred, STOP + GAP apart. */
-export function stopAngles(n) {
+/**
+ * The angles (radians, 0 to the right as you see it, counter-clockwise) of n
+ * stops on the dial's half circle, centred on `mid` (straight up by default),
+ * STOP + GAP apart.
+ */
+export function stopAngles(n, mid = Math.PI / 2) {
 	const step = (DIAL.STOP + DIAL.GAP) / DIAL.RADIUS;
-	return Array.from({ length: n }, (_, i) => Math.PI / 2 + ((n - 1) / 2 - i) * step);
+	return Array.from({ length: n }, (_, i) => mid + ((n - 1) / 2 - i) * step);
 }
 
 /** The next stop's value after `value` in stops (wrapping). */
@@ -80,13 +85,16 @@ export class ToolDial {
 		const toEye = this._e.copy(eye).sub(at).normalize();
 		this.group.position.copy(at).addScaledVector(toEye, 0.03);
 		this.group.lookAt(eye);
-		const angles = stopAngles(stops.length);
+		// Its half circle opens up and towards the other hand (as seen), away from the holding wrist and the orb on it.
+		const holder = xr.tools?.held?.tool === tool ? xr.tools.held.c : null;
+		const mid = Math.PI / 2 + (holder?.handedness === 'left' ? -DIAL.TURN : DIAL.TURN);
+		const angles = stopAngles(stops.length, mid);
 		const current = tool.option.get();
 		for (let i = 0; i < 4; i++) {
 			const k = this.pad.keys.get(`stop${i}`), s = stops[i];
 			k.group.visible = !!s;
 			if (!s) continue;
-			k.group.position.set(Math.cos(angles[i]) * DIAL.RADIUS, Math.sin(angles[i]) * DIAL.RADIUS - DIAL.RADIUS / 2, 0);
+			k.group.position.set((Math.cos(angles[i]) - Math.cos(mid) / 2) * DIAL.RADIUS, (Math.sin(angles[i]) - Math.sin(mid) / 2) * DIAL.RADIUS, 0);
 			this.pad.setSpec(`stop${i}`, { id: `stop:${i}`, look: s.value === current ? 'chosen' : 'plain', label: s.label });
 		}
 		this.group.visible = true;

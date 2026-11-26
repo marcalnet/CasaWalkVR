@@ -96,8 +96,12 @@ export class WristMenu {
 	}
 
 
-	/** The orb makes room (half size, 30%): for the hand reaching into the fan, a fingertip at a live key, or a live key behind it. */
-	get orbYield() { return !!this.xr.fan?.fanBusy || this.keyYield || this.sightYield; } // (fanBusy: the other hand within reach of the tools)
+	/**
+	 * The orb makes room (half size, 30%): a fingertip at a live key, a live key
+	 * behind it (the tools too, while a hand is within their reach), or a tool's
+	 * dial open (at most 3 s: it sits beside the dial's stops).
+	 */
+	get orbYield() { return this.keyYield || this.sightYield || !!this.xr.dial?.open; }
 
 	/**
 	 * The orb between the eyes and a live key (the next-build asks 5.8): it
@@ -197,7 +201,7 @@ export class WristMenu {
 			if (tip < ORB_TIP_RELEASE || grip < ORB_GRIP_RELEASE) clear = false;
 		}
 		// (Not while the other hand is busy at the tool fan: the fans' hands cross over each other's wrists.)
-		if (touching && o.armed && !this.keysHot && !this.keyYield && !this.xr.fan?.fanBusy) { toggle = true; o.armed = false; }
+		if (touching && o.armed && !this.keysHot && !this.keyYield && !this.xr.fan?.fanBusy && !this.xr.dial?.open) { toggle = true; o.armed = false; } // (within reach of the tools, or a dial open: touches are theirs)
 		if (clear) o.armed = true;
 		if (!clear) hot = true;
 

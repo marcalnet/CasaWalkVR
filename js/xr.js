@@ -559,8 +559,8 @@ export class XRExperience {
 	 */
 	liveKeys() {
 		const out = [];
-		if (this.mode === 'dollhouse' && this.modes.dollhouse.doorsLive) {
-			for (const k of this.modes.dollhouse.doors.list) {
+		for (const pad of this.livePads()) {
+			for (const k of pad.list) {
 				let o = k.group, shown = true;
 				while (o) { if (!o.visible) { shown = false; break; } o = o.parent; }
 				if (shown) out.push({ p: k.face.getWorldPosition(new THREE.Vector3()), r: Math.hypot(k.w, k.h) / 2 });
@@ -570,6 +570,21 @@ export class XRExperience {
 			const g = panel.mesh.geometry.parameters;
 			out.push({ p: panel.mesh.getWorldPosition(new THREE.Vector3()), r: Math.hypot(g.width, g.height) / 2 });
 		}
+		// While a hand is within reach of the tools, they are live keys for the orb's line of sight: it never hides the tool you reach for.
+		if (this.fan?.reach) for (const s of this.fan.slots) if (!s.held) out.push({ p: s.home.getWorldPosition(new THREE.Vector3()), r: TOOL_SIGHT_R });
+		return out;
+	}
+
+	/**
+	 * The keys that take presses now, as pads (one source for liveKeys and
+	 * nearKey: the next-build asks 5.8, the code audit's S8): the plinth's
+	 * doors and levels while they are live, and an open tool dial's stops.
+	 */
+	livePads() {
+		const out = this._livePads ??= [];
+		out.length = 0;
+		if (this.mode === 'dollhouse' && this.modes.dollhouse.doorsLive) out.push(this.modes.dollhouse.doors);
+		if (this.dial?.open) out.push(this.dial.pad);
 		return out;
 	}
 
@@ -584,7 +599,7 @@ export class XRExperience {
 	nearKey(p, margin, { orb: withOrb = true, wristKeys = true, by = null } = {}) {
 		const wrist = this.ui.wrist, orb = wrist.orb?.group, own = !!by && wrist.wearer === by;
 		if (withOrb && !own && orb?.visible && orb.getWorldPosition(this._nk ??= new THREE.Vector3()).distanceTo(p) < margin) return true;
-		if (this.mode === 'dollhouse' && this.modes.dollhouse.doorsLive && this.modes.dollhouse.doors.near(p, margin)) return true; // (only live keys: faded doors guard nothing)
+		for (const pad of this.livePads()) if (pad.near(p, margin)) return true; // (only live keys: faded doors guard nothing; an open dial's stops do)
 		if (wristKeys && !own && wrist.open && wrist.pad.near(p, margin)) return true;
 		const q = this._nk2 ??= new THREE.Vector3();
 		for (const panel of this.ui.openPanels()) {
@@ -750,6 +765,7 @@ export class XRExperience {
 	}
 }
 
+const TOOL_SIGHT_R = 0.06; // a tool in the fan, as a live key for the orb's line of sight: its size at fan scale (m)
 const _fwd = new THREE.Vector3();
 /** Yaw of a matrix's forward (-Z) direction. */
 function yawOfMatrix(m) {

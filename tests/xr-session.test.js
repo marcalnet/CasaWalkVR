@@ -415,6 +415,42 @@ test('one option per tool, on one dial: the stick steps it (the dial shows 1.5 s
 	x.store.start();
 });
 
+test('the dial and the orb (the audit\'s S8): its half circle opens away from the holding wrist; every stop 10 cm or more from the orb; while open, the orb yields and ignores touches, and the stops are live keys', async () => {
+	const { x, frame, hands } = await setup();
+	const { DIAL } = await import('../js/tool-dial.js');
+	if (process.env.DIAL_PROBE) DIAL.TURN = Number(process.env.DIAL_PROBE) * Math.PI / 180;
+	hands.left.grip.visible = hands.right.grip.visible = true;
+	const rows = [];
+	for (const main of ['right', 'left']) {
+		x.menuAction({ id: 'mainHand', value: main });
+		const c = hands[main], side = main === 'right' ? 1 : -1;
+		for (const o of [c.grip, c.ray]) { o.position.set(0.2 * side, 1.15, -0.35); o.rotation.set(-0.5, 0, 0); } // (held in front, at the chest, pointing a little down; a tool rides the ray)
+		hands[main === 'right' ? 'left' : 'right'].grip.position.set(-0.45 * side, 0.9, 0.05);
+		for (const tool of [x.fan.camera, x.fan.meter, x.fan.marker]) {
+			x.tools.take(tool, c);
+			frame(); frame();
+			x.dial.show(tool);
+			x.scene.updateMatrixWorld(true);
+			const orb = x.ui.wrist.orb.group.getWorldPosition(new THREE.Vector3());
+			let least = Infinity;
+			for (const [, k] of x.dial.pad.keys) if (k.group.visible) least = Math.min(least, k.group.getWorldPosition(new THREE.Vector3()).distanceTo(orb));
+			rows.push(`${main} ${tool.name} ${(least * 100).toFixed(1)} cm`);
+			if (process.env.DIAL_PROBE) { x.dial.close(); x.tools.putBack(); continue; }
+			// (The marker's cap is at its back end, by the holding wrist: about 2 cm whatever the turn; the Designer decides. The orb yields and ignores touches meanwhile.)
+			if (tool !== x.fan.marker) assert.ok(least >= 0.10, `${main} hand, ${tool.name}: the nearest stop ${(least * 100).toFixed(1)} cm from the orb (10 cm or more)`);
+			// While open: the orb yields, and its stops are live keys (for the orb's sight and the touch guard).
+			frame();
+			assert.ok(x.ui.wrist.orbYield && x.liveKeys().length >= tool.option.stops.length, 'the orb yields; the stops are live keys');
+			const stop = x.dial.pad.keys.get('stop0').group.getWorldPosition(new THREE.Vector3());
+			assert.ok(x.nearKey(stop.clone().add(new THREE.Vector3(0, 0, 0.05)), 0.15), 'a fingertip near a stop is near a live key');
+			x.dial.close();
+			x.tools.putBack();
+		}
+	}
+	console.log(`# the nearest stop to the orb: ${rows.join('; ')}`);
+	x.menuAction({ id: 'mainHand', value: 'right' });
+});
+
 test('the framing guide: while the camera is held, a red frame where the photo\'s edges fall (its depth 0.3-8 m), 3:2 for the lens; hidden while the shutter fires; never in photos', async () => {
 	const { x, frame, hands } = await setup();
 	const { frameAt, GUIDE } = await import('../js/framing-guide.js');
@@ -1408,6 +1444,11 @@ test('the areas: the tools home over the left hand in the left area; the hand ov
 	hands.left.grip.position.set(-0.45, 1.2, -0.3);
 	for (let i = 0; i < 30; i++) frame();
 	assert.ok(fan.reach && fan.group.position.distanceTo(waiting) < 0.01, 'within reach: they stay where the hand reaches');
+	// Within reach (0.25 m, let go at 0.35 m): the orb ignores touches (fanBusy follows the reach), and the tools are live keys for its line of
+	// sight, so it never hides the tool you reach for; it no longer shrinks for the reach itself (the Designer, after the audit).
+	assert.ok(fan.fanBusy, 'fanBusy is the reach');
+	assert.ok(x.liveKeys().filter((k) => Math.abs(k.r - 0.06) < 1e-9).length === fan.slots.filter((s) => !s.held).length, 'the tools are live keys for the orb\'s sight');
+	assert.equal(x.ui.wrist.orbYield, x.ui.wrist.keyYield || x.ui.wrist.sightYield, 'the orb makes room only for a key or by sight');
 	hands.right.grip.position.set(0.4, 0.8, 0.1);
 	for (let i = 0; i < 72; i++) frame();
 	assert.ok(!fan.reach && fan.mode === 'home' && fan.group.position.distanceTo(fan._anchor) < 0.02, 'the hand gone: home again');
