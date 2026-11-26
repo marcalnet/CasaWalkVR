@@ -1066,13 +1066,16 @@ check('at the scale model, a short B press does nothing (held, it would leave VR
 	});
 	check('the door at the scale model: a big Walk in → (no ← Back since 26 Nov 2026), at waist height within reach, under the line to the model, shown without opening a menu',
 		doors.shown && doors.iw > 0.25 && !doors.back && doors.ahead < 0.45 && doors.below > 0.55 && doors.below < 0.75 && doors.topDown > doors.modelDown, JSON.stringify(doors));
-	// Seated: the doors stay at waist height (65 cm below the eyes).
+	// Seated: the doors stay at waist height (62 cm below the eyes). (The left hand at your side first: resting in front at the
+	// waist, its tip hovers over the level keys, and the doors rightly never move under a fingertip.)
+	await aim('left', [-0.45, 0.75, 0.05], [-0.6, 0.7, -1]); await frames(5);
 	await page.evaluate(() => window.__device.position.set(0, 1.1, 0)); await frames(10);
 	await page.waitForFunction(() => { const x = window.__casawalk.xr, d = x.modes.dollhouse; return Math.abs(x.stage.worldToLocal(x.headWorld()).y - d.doorEyes) < 0.08; }, null, { timeout: 5000, polling: 'raf' }).catch(() => {});
 	const seatedInfo = await page.evaluate(() => { const x = window.__casawalk.xr, V = x.rig.position.constructor, d = x.modes.dollhouse; return { seated: +(x.headWorld().y - d.doors.keys.get('in').face.getWorldPosition(new V()).y).toFixed(2), eye: +x.stage.worldToLocal(x.headWorld()).y.toFixed(2), doorEyes: +d.doorEyes.toFixed(2), hot: d.doors.list.filter((k) => k.hot).map((k) => k.slot), rings: d.doors.rings.map((r) => !!r?.visible) }; });
 	const seated = seatedInfo.seated;
 	check('seated, the doors are still at waist height', seated > 0.55 && seated < 0.75, JSON.stringify(seatedInfo));
 	await page.evaluate(() => window.__device.position.set(0, 1.6, 0)); await frames(10);
+	await restLeft(); await frames(3);
 	await lookDown(-0.85); await frames(3);
 	await shot('plinth-doors');
 	await lookDown(); await frames(3);
@@ -1475,6 +1478,9 @@ check('back from walking: eyes at 1.89 m again, gallery shown, lasers on', Math.
 	const pz = await page.evaluate(() => { const P = window.__casawalk.xr.pause, p = P.fx?.pause; return { tip: p?.tip?.id ?? null, words: P.tipLabel.text, name: P.nameLabel.mesh.visible ? P.nameLabel.text : null, ring: P.floor.visible, dark: window.__casawalk.xr.veil.amount('layer'), demo: P.demo.playing, mode: window.__casawalk.xr.mode }; });
 	check('the pause on the first Walk in: the dark, the floor ring and the teleport tip, inside already', pz.tip === 'teleport' && pz.words === 'Hold the trigger, aim, let go.' && pz.ring && pz.dark === 1 && pz.demo && pz.mode === 'walk', JSON.stringify(pz));
 	await shot('pause-walk-in');
+	// (Pointing up, so no arc lands: a trigger held 0.3 s with the arc on the floor ring is the practice jump, which the slower
+	// emulated Quest 2 can make of a click.)
+	await aim('right', R, [0.3, 3.0, -1.5]); await frames(2);
 	await click('right', 'trigger'); await settled(); await frames(4);
 	const after = await page.evaluate(() => { const x = window.__casawalk.xr; return { fx: !!x.layerFx, dark: x.veil.amount('layer'), learnt: x.pause.record.tips.learnt.has('teleport:controllers'), seen: x.pause.record.tips.seen.has('teleport:controllers'), target: x.pause.target.visible }; });
 	check('a pull skips it (seen, not learnt); the room fades in, the first-target ring ahead', !after.fx && after.dark === 0 && !after.learnt && after.seen && after.target, JSON.stringify(after));
@@ -1562,7 +1568,7 @@ check('example home: two storeys, all shown', lv.count === 2 && lv.multi && lv.h
 		for (const k of Object.values(x.ui.wrist.keys)) texts.push(k.spec?.label ?? '', k.spec?.caption ?? '');
 		return { bad: texts.filter((t) => /dollhouse/i.test(t)), exit: texts.filter((t) => /exit vr/i.test(t)), titles: Object.values(x.menus).map((p) => p.title), tabs: x.menus.dollhouse.tabs.map((t) => t.label) };
 	});
-	check('the words: "scale model", never "dollhouse", no "Exit VR"; one title, Settings, at both layers; tabs View, Walk, Tools, General', !words.bad.length && !words.exit.length && words.titles.join() === 'Settings,Settings' && words.tabs.join() === 'View,Walk,Tools,General', JSON.stringify(words));
+	check('the words: "scale model", never "dollhouse", no "Exit VR"; one title, Settings, at both layers; tabs How to move, View, General', !words.bad.length && !words.exit.length && words.titles.join() === 'Settings,Settings' && words.tabs.join() === 'How to move,View,General', JSON.stringify(words));
 	check('the page says "scale model" too', !/dollhouse/i.test(await page.evaluate(() => document.querySelector('meta[name=description]').content + document.body.innerText)));
 	// The plinth stands 60 cm in front of you, and its plate shows the true scale.
 	const pl = await page.evaluate(() => {
