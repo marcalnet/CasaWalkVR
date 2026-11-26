@@ -102,15 +102,10 @@ test('a fingertip touching a wall opens a 0.42 m portal in 0.25 s, centred on th
 	assert.deepEqual(xr.played, ['portal'], 'closing is silent');
 });
 
-test('no hand portal with Solid walls (a ring and a tick instead), from a hand at a tool or key, or at the scale model', () => {
+test('no hand portal from a hand at a tool or key, or at the scale model', () => {
 	const r = room(), tip = V(0.5, 1.3, 0.02), xr = fakeXR(r, tip), p = new Portals();
 	p.setModel(r.layers);
-	xr.solid = true;
-	run(p, xr, 0.3);
-	assert.equal(p.uniforms.cwPortalHand.value.w, 0);
-	assert.deepEqual(xr.played, ['tick']);
-	assert.ok(p.ring && p.ring.parent === r.scene);
-	xr.solid = false; xr.block = 'tool'; tip.z = 0.5; run(p, xr, 0.1); tip.z = 0.02;
+	xr.block = 'tool'; tip.z = 0.5; run(p, xr, 0.1); tip.z = 0.02;
 	run(p, xr, 0.3);
 	assert.equal(p.uniforms.cwPortalHand.value.w, 0, 'a hand holding a tool');
 	xr.block = null; xr.mode = 'dollhouse';
@@ -132,7 +127,7 @@ test('a jump shuts the hand portal at once; a photo sees the walls whole', () =>
 	assert.equal(u.w, 0, 'the teleport fade: shut at once');
 });
 
-test('the eye portal: none at 0.35 m, opening from 0.30 m, 0.48 m radius at 0.20 m; none with Solid walls; set at once behind a fade', () => {
+test('the eye portal: none at 0.35 m, opening from 0.30 m, 0.48 m radius at 0.20 m; set at once behind a fade', () => {
 	assert.equal(eyeOpening(0.35), 0);
 	assert.equal(eyeOpening(0.3), 0);
 	assert.ok(eyeOpening(0.29) > 0 && eyeOpening(0.29) < 0.02, 'eased in: a small hole first');
@@ -149,9 +144,7 @@ test('the eye portal: none at 0.35 m, opening from 0.30 m, 0.48 m radius at 0.20
 	assert.ok(Math.abs(u.w - PORTAL.EYE_R) < 1e-9, '20 cm: fully open');
 	xr.eyes(-0.05); p.update(xr, DT);
 	assert.ok(Math.abs(u.w - PORTAL.EYE_R) < 1e-9, 'inside the wall: fully open');
-	xr.solid = true; p.update(xr, DT);
-	assert.equal(u.w, 0, 'Solid walls: not needed');
-	xr.solid = false; xr.eyes(2); p.update(xr, DT);
+	xr.eyes(2); p.update(xr, DT);
 	xr.modes.walk.fade = { t: 0 }; xr.eyes(0.2); p.update(xr, DT);
 	assert.ok(Math.abs(u.w - PORTAL.EYE_R) < 1e-9, 'landing next to a wall: already open behind the fade');
 	xr.mode = 'dollhouse'; p.update(xr, DT);

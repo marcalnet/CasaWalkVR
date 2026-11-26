@@ -24,7 +24,8 @@ export const SETTINGS = {
 	height: { key: 'casawalk.height', options: [0, 1.4, 1.7, 2.0], fallback: 0 }, // person height, metres (0 = your own)
 	// (The scale figure and its 'casawalk.figure' switch were removed in Nov 2026:
 	// the landing markers show a person's size. A stored value is simply never read.)
-	solid: { key: 'casawalk.solidWalls', flag: true, fallback: false }, // walls stop you while walking
+	// (Solid walls and its 'casawalk.solidWalls' setting went on 26 Nov 2026: the stick walk always stops at walls,
+	// your real body never. A stored value is simply never read.)
 	seeThrough: { key: 'casawalk.seeThrough', range: true, fallback: 0 }, // 0 = as modelled, 1 = glass house
 	mainHand: { key: 'casawalk.mainHand', options: ['right', 'left'], fallback: 'right' }, // the hand that wears the wrist menu and takes tools from the fan (the fan floats over the other)
 	sound: { key: 'casawalk.sound', options: ['off', 'effects', 'all'], fallback: 'all' }, // all: effects and the ambience (milestone H)

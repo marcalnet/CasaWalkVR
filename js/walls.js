@@ -1,13 +1,14 @@
 // Walls in the headset (SPEC.md, "XR 1:1 walk mode"): no DOM, Node-testable.
 //
-// WallCollider  "Solid walls": keeps the walker's body out of the walls.
-//               Only walls are solid (the user's choice): furniture, doors
+// WallCollider  keeps the stick walk out of the walls (js/xr-walk.js; your
+//               real body is never stopped). Only walls are solid (the
+//               user's choice): furniture, doors
 //               and windows stay walk-through, so doorways and stairs work.
 //               The body is a column of spheres from just above the feet up
 //               to the eyes; each one is pushed out of the nearest wall
 //               (closest point on the wall's BVH), sideways only, so you
 //               slide along walls. Moves are taken in short steps, so a fast
-//               pull can never carry the body through a thin wall.
+//               move can never carry the body through a thin wall.
 //
 // SeeThrough    "See-through": fades walls and furniture towards glass.
 //               Floors, ceilings and the ground stay as they are. The

@@ -328,7 +328,7 @@ const FINGERPRINT = async () => {
 		hands: x.input.controllers.map((c) => [c.handedness, vis(c.ray), vis(c.grip), vis(c.line), vis(c.dot), x.ui.wrist.orb.group.parent === c.grip]),
 		wrist: [x.ui.wrist.side, x.ui.wrist.open, false], // (the third: Help's card, gone since 25 Nov; kept false so old fingerprints still compare)
 		menus: { dollhouse: menu(x.menus.dollhouse), walk: menu(x.menus.walk) },
-		settings: [x.snapAngle, x.personHeight, x.solid, x.seeThroughAmount, S.lighting.time, S.lighting.shadows, S.depth.enabled],
+		settings: [x.snapAngle, x.personHeight, false, x.seeThroughAmount, S.lighting.time, S.lighting.shadows, S.depth.enabled],
 		draw: [r.info.render.calls, r.info.render.triangles, r.info.memory.geometries, r.info.memory.textures],
 		census, children: [S.scene.children.length, x.rig.children.length, x.stage.children.length, x.centerer.children.length],
 		storage: Object.fromEntries(KEYS.map((k) => [k, localStorage.getItem(k)])),
@@ -485,7 +485,7 @@ const crossSeen = () => page.evaluate(() => {
 		const g = (p) => p.mesh.geometry.parameters;
 		return { doll: kinds(x.menus.dollhouse), walk: kinds(x.menus.walk), heights: Object.values(x.menus).map((p) => +g(p).height.toFixed(3)), width: g(x.menus.walk).width };
 	});
-	const want = { shadows: 'switch', depth: 'switch', ceilings: 'switch', light: 'choice', view: 'switch', seethrough: 'switch', mainHand: 'choice', sound: 'choice', solid: 'switch', height: 'choice' };
+	const want = { shadows: 'switch', depth: 'switch', ceilings: 'switch', light: 'choice', view: 'switch', seethrough: 'switch', mainHand: 'choice', sound: 'choice', height: 'choice' };
 	const ok = Object.entries(want).every(([id, t]) => kinds.doll[id] === t && kinds.walk[id] === t) && !Object.values(kinds.doll).includes('button');
 	check('the settings wing: switches and options, 40 cm wide', ok && Math.abs(kinds.width - 0.4) < 1e-6 && Math.max(...kinds.heights) < 0.5, JSON.stringify({ heights: kinds.heights, width: kinds.width }));
 }
@@ -1254,17 +1254,13 @@ const walkUntil = async (pred, arg, timeout = 15000) => {
 			const l = roomLanding(r);
 			if (!l) return false;
 			x.modes.walk.placeUser(x.centerer.localToWorld(new (x.rig.position.constructor)(l.x, r.floorY, l.z)), null);
-			x.modes.walk.body = null;
 			return true;
 		}, i);
 		if (moved) { await frames(5); w = await wallAt(null); }
 	}
 	if (!w) {
-		check('Solid walls (needs a flat wall 0.5-2 m away)', false);
+		check('the stick stops at walls (needs a flat wall 0.5-2 m away)', false);
 	} else {
-		await clickMenu('solid');
-		check('Solid walls switch turns on', (await cell('walk', 'solid')).value === true && await page.evaluate(() => window.__casawalk.xr.solid));
-		await click('right', 'b-button');
 		await page.evaluate((a) => { // face the wall
 			const x = window.__casawalk.xr, V = x.rig.position.constructor;
 			x.rig.updateMatrixWorld(true);
@@ -1281,7 +1277,7 @@ const walkUntil = async (pred, arg, timeout = 15000) => {
 		}, { start: w.head, need: w.d - 0.35 });
 		const stopped = await wallAt(w.a);
 		const walked = Math.hypot(stopped.head[0] - w.head[0], stopped.head[2] - w.head[2]);
-		check('Solid walls: you stop a body\'s width in front of a wall', stopped.d !== null && stopped.d > 0.17 && stopped.d < 0.3 && walked > w.d - 0.35, `wall was ${w.d.toFixed(2)} m away; walked ${walked.toFixed(2)} m, now ${stopped.d?.toFixed(2)} m from it`);
+		check('the stick walk stops a body\'s width in front of a wall (always, since 26 Nov 2026)', stopped.d !== null && stopped.d > 0.17 && stopped.d < 0.3 && walked > w.d - 0.35, `wall was ${w.d.toFixed(2)} m away; walked ${walked.toFixed(2)} m, now ${stopped.d?.toFixed(2)} m from it`);
 		await shot('walk-solid-wall');
 		// The wall portal: the right controller's tip touches the wall in front, 1.3 m up.
 		// (Placed by reading the tip back and correcting twice: the grip pose sits apart from the device's position.)
@@ -1309,15 +1305,10 @@ const walkUntil = async (pred, arg, timeout = 15000) => {
 			}
 			return at;
 		};
-		const portal = () => page.evaluate(() => { const p = window.__casawalk.xr.portals; const u = p.uniforms.cwPortalHand.value; return { r: +u.w.toFixed(3), at: [u.x, u.y, u.z].map((v) => +v.toFixed(2)), ring: !!p.ring?.visible, touching: p.touching.size, hidden: p.hidden, meshes: p.meshes.length, mode: window.__casawalk.xr.mode }; });
+		const portal = () => page.evaluate(() => { const p = window.__casawalk.xr.portals; const u = p.uniforms.cwPortalHand.value; return { r: +u.w.toFixed(3), at: [u.x, u.y, u.z].map((v) => +v.toFixed(2)), touching: p.touching.size, hidden: p.hidden, meshes: p.meshes.length, mode: window.__casawalk.xr.mode }; });
 		await touchWall(0.3); await frames(5); // (the resting controller reaches into the wall this close: away first)
-		let touched = await touchWall(0.02); await frames(2);
+		const touched = await touchWall(0.02); await frames(30);
 		let pt = await portal();
-		check('Solid walls on: touching the wall opens no portal (a small ring instead)', touched && pt.r === 0 && pt.ring, JSON.stringify({ pt, touched }));
-		await page.evaluate(() => window.__casawalk.xr.menuAction('solid')); // off
-		await touchWall(0.3); await frames(5);
-		touched = await touchWall(0.02); await frames(30);
-		pt = await portal();
 		check('a fingertip touching a wall opens a 0.42 m portal, centred on the touch (0.1 m inside)', touched && pt.r === 0.42 && Math.hypot(pt.at[0] - touched.wall[0], pt.at[1] - touched.wall[1], pt.at[2] - touched.wall[2]) < 0.13, JSON.stringify({ pt, touched }));
 		await shot('walk-portal');
 		await touchWall(0.3); await frames(40);
@@ -1809,7 +1800,7 @@ const wm = await page.evaluate(() => { const x = window.__casawalk.xr, V = x.rig
 check('the inside wing: 0.55 m from the eyes (0.53 m across), 15° below, facing you', Math.abs(wm.dist - 0.53) < 0.02 && Math.abs(wm.drop - 0.142) < 0.02 && wm.facing < 1, JSON.stringify(wm));
 {
 	const stays = [];
-	for (const [id, v] of [['height', 1.7], ['height', 0], ['solid'], ['solid'], ['ceilings']]) { await clickMenu(id, v); if ((await state()).menu !== 'walk') stays.push(id); }
+	for (const [id, v] of [['height', 1.7], ['height', 0], ['ceilings']]) { await clickMenu(id, v); if ((await state()).menu !== 'walk') stays.push(id); }
 	const agree = await page.evaluate(() => { const { dollhouse: d, walk: k } = window.__casawalk.xr.menus;
 		return ['light', 'shadows', 'depth', 'ceilings', 'seethrough', 'view'].filter((id) => d.get(id).value !== k.get(id).value || !!d.get(id).disabled !== !!k.get(id).disabled); });
 	await clickMenu('ceilings');

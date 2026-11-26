@@ -78,7 +78,7 @@ test('the settings boards: the same tabs at both layers, no Close key (the foot 
 		assert.equal(p.lead.label, '? How to move', 'the How to move key at the tabs\' left end');
 		assert.deepEqual(shape(p.tabs[0].rows), ['light:choice:Time of day:Morning:Noon:Sunset:Night', 'shadows:switch:Shadows | ceilings:switch:Ceilings',
 			'depth:switch:Depth shading', 'view:switch:Passthrough', 'seethrough:switch:Transparent walls']);
-		assert.deepEqual(shape(p.tabs[1].rows), ['height:choice:Height:Yours:1.4 m:1.7 m:2.0 m', 'solid:switch:Solid walls']);
+		assert.deepEqual(shape(p.tabs[1].rows), ['height:choice:Height:Yours:1.4 m:1.7 m:2.0 m']);
 		assert.deepEqual(shape(p.tabs[2].rows), ['lens:choice:Camera lens:24 mm:28 mm:35 mm:50 mm']);
 		assert.deepEqual(shape(p.tabs[3].rows), ['mainHand:choice:Main hand:Right:Left', 'sound:choice:Sound:Off:Effects']);
 		assert.equal(p.actions, undefined, 'no action rows on the board: the doors are on the wrist');
@@ -288,7 +288,7 @@ test('settings keep the board open; the doors move one layer at a time', async (
 	x.ui.openMenu();
 	go('in');
 	assert.ok(x.mode === 'walk' && x.menu === null && !x.layerFx);
-	for (const [id, v] of [['height', 1.7], ['height', 0], ['solid'], ['solid']]) assert.equal(stays(id, v), true, id);
+	for (const [id, v] of [['height', 1.7], ['height', 0]]) assert.equal(stays(id, v), true, id);
 	x.ui.closeMenu();
 	go('in');
 	assert.equal(x.mode, 'walk', 'In does nothing inside: you are as deep as it goes');

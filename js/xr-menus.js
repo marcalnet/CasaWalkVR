@@ -47,7 +47,6 @@ const CELLS = {
 	shadows: sw('shadows', 'Shadows'),
 	depth: sw('depth', 'Depth shading'),
 	ceilings: sw('ceilings', 'Ceilings'),
-	solid: sw('solid', 'Solid walls'),
 	seethrough: sw('seethrough', 'Transparent walls'),
 	view: sw('view', 'Passthrough'), // on: the room around you; off: the VR world
 	mainHand: { type: 'choice', id: 'mainHand', label: 'Main hand', options: [{ value: 'right', label: 'Right' }, { value: 'left', label: 'Left' }], value: 'right' }, // flips the wrist menu and the tool fan together
@@ -63,7 +62,7 @@ const CELLS = {
 /** The board's tabs (the same at both layers), each with rows of cell ids. Camera lens joins General in milestone D. */
 export const TABS = [
 	{ id: 'view', label: 'View', rows: [['light'], ['shadows', 'ceilings'], ['depth'], ['view'], ['seethrough']] }, // (the long words on full rows: half a row clipped "Depth shading" and "Passthrough", build 120)
-	{ id: 'walk', label: 'Walk', rows: [['height'], ['solid']] }, // (Turn left the board: 30° stays, the user's call)
+	{ id: 'walk', label: 'Walk', rows: [['height']] }, // (Solid walls left it on 26 Nov 2026; Turn left the board: 30° stays, the user's call)
 	{ id: 'tools', label: 'Tools', rows: [['lens']] }, // (the street camera's lens: wide for interiors; to get closer, walk closer)
 	{ id: 'general', label: 'General', rows: [['mainHand'], ['sound']] },
 ];
@@ -162,8 +161,6 @@ export function updateLabels(xr) {
 	xr.guides.walk.set('replayTools', { disabled: true, note: 'At the scale model' });
 	const walk = xr.menus.walk, doll = xr.menus.dollhouse;
 	walk.set('height', { value: xr.personHeight });
-	const walls = (xr.model?.layers.walls?.children.length ?? 0) > 0;
-	walk.set('solid', walls ? { disabled: false, value: xr.solid } : { disabled: true, note: 'No walls', value: false });
 	// (Levels are not here: a stack of keys beside the doors at the scale model, js/xr-dollhouse.js.)
 	xr.modes.dollhouse?.refreshLevels?.();
 }
@@ -255,12 +252,6 @@ export function menuAction(xr, target) {
 			updateLabels(xr);
 			break;
 		case 'depth': xr.depth?.setEnabled(!xr.depth.enabled); updateLabels(xr); break;
-		case 'solid':
-			xr.solid = !xr.solid;
-			writeSetting('solid', xr.solid);
-			xr.modes.walk.body = null; // start again from where you stand
-			updateLabels(xr);
-			break;
 		case 'seethrough': {
 			// A switch: on is 75%. (A number, from a test or an old setting: any amount above 0 is on.)
 			const on = typeof value === 'number' ? value > 0 : typeof value === 'boolean' ? value : !(xr.seeThroughAmount > 0);

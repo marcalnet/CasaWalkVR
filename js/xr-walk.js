@@ -4,8 +4,9 @@
 // trigger aims a teleport arc (release to go, with a short fade). The grip only
 // takes and holds tools (the grip-and-pull slide went on 26 Nov 2026). In a one-level home you
 // stay on the floor and walk through furniture; with more levels you can
-// stand on anything, so stairs work (js/xr-targets.js). With Solid walls on,
-// walls stop you (furniture never does: js/walls.js). B or Y goes back.
+// stand on anything, so stairs work (js/xr-targets.js). The stick walk always
+// stops at walls (furniture never does: js/walls.js); your real body is never
+// stopped (the wall portal opens instead: js/portal.js). B or Y goes back.
 //
 // Bare hands (js/gestures.js; eager since 25 Nov): pinch and hold 0.1 s, with
 // any palm but one facing your eyes, the hand in front of you: the arc grows
@@ -49,8 +50,7 @@ export class Walk {
 		this.tele = null; // teleport being aimed: { c, via: 'stick' | 'trigger', result }
 		this.fade = null; // { t, action }
 		this.snapReady = true;
-		this.collider = new WallCollider(); // Solid walls
-		this.body = null; // where the body was last frame (null: just placed)
+		this.collider = new WallCollider(); // the walls the stick walk stops at
 		this.arc = new TeleportArc(xr.scene);
 		// Hotspots: faint discs on the floor while aiming, and the room's name over the one the ring snaps to.
 		this.discs = new THREE.InstancedMesh(new THREE.RingGeometry(0.12, 0.16, 32).rotateX(-Math.PI / 2),
@@ -110,7 +110,7 @@ export class Walk {
 		xr.applyView();
 		xr.applyStoreys();
 		this.setWalkTransform();
-		// Solid walls: the walls as they stand now, at 1:1 (every storey is shown while walking).
+		// The walls the stick stops at, as they stand now, at 1:1 (every storey is shown while walking).
 		this.collider.setMeshes((xr.model.layers.walls?.children ?? []).filter((m) => m.visible));
 		xr.lift = this.personLift();
 		const target = xr.centerer.localToWorld(modelPt.clone());
@@ -298,27 +298,30 @@ export class Walk {
 		const off = new THREE.Vector3(headLocal.x, 0, headLocal.z).applyAxisAngle(UP, rig.rotation.y);
 		rig.position.set(target.x - off.x, target.y + xr.lift, target.z - off.z);
 		rig.updateMatrixWorld(true);
-		this.body = null; // (solid walls: only pushed out from here, never swept from the old spot)
 	}
 
 	/**
-	 * Solid walls: whatever moved the head this frame (the stick, a grip
-	 * pull, or walking for real in the room), the body slides along walls
-	 * instead of entering them; the rig is shifted back by the difference.
+	 * The stick walk stops at walls (always, since 26 Nov 2026: the Solid
+	 * walls setting went): the stick's move from `from` (the head before it)
+	 * slides along walls instead of entering them; the rig is shifted back by
+	 * the difference. Only the stick's move: walking for real in the room is
+	 * never stopped, and a body already in a wall (leaning through a portal)
+	 * is never pushed out, only kept from going further in.
 	 * Only walls: furniture, doors and windows stay walk-through.
 	 */
-	keepOutOfWalls() {
+	stickStopsAtWalls(from) {
 		const xr = this.xr;
-		const now = xr.headWorld();
-		if (!xr.solid || !this.collider.active) { this.body = now; return; }
-		const feet = xr.rig.position.y - xr.lift;
-		const to = this.collider.move(this.body ?? now, now, feet, now.y);
-		if (to.x !== now.x || to.z !== now.z) {
-			xr.rig.position.x += to.x - now.x;
-			xr.rig.position.z += to.z - now.z;
+		if (!this.collider.active) return;
+		xr.rig.updateMatrixWorld(true);
+		const now = xr.headWorld(), feet = xr.rig.position.y - xr.lift;
+		const rest = this.collider.move(from, from, feet, now.y); // (where the walls would push the body as it stands: not done)
+		const to = this.collider.move(from, now, feet, now.y);
+		const x = from.x + to.x - rest.x, z = from.z + to.z - rest.z;
+		if (x !== now.x || z !== now.z) {
+			xr.rig.position.x += x - now.x;
+			xr.rig.position.z += z - now.z;
 			xr.rig.updateMatrixWorld(true);
 		}
-		this.body = to;
 	}
 
 	/** First solid hit between two world points (`t`: XRExperience.targets()); valid only on walkable floors. */
@@ -327,7 +330,7 @@ export class Walk {
 	/**
 	 * Floor following: cast down from STEP above the feet; adopt a walkable
 	 * surface (see js/xr-targets.js) within ±STEP, which handles stairs and
-	 * levels. (Walls block movement only with Solid walls on: keepOutOfWalls().)
+	 * levels. (Walls stop only the stick's move: stickStopsAtWalls().)
 	 */
 	followFloor(dt) {
 		const xr = this.xr;
@@ -433,12 +436,11 @@ export class Walk {
 			const rightDir = new THREE.Vector3(Math.cos(yaw), 0, -Math.sin(yaw));
 			const move = fwd.multiplyScalar(-ls.y).addScaledVector(rightDir, ls.x);
 			if (move.lengthSq() > 1) move.normalize();
+			const from = xr.headWorld();
 			rig.position.addScaledVector(move, WALK_SPEED * dt);
+			this.stickStopsAtWalls(from);
 		}
 
-		if (!this.fade) {
-			this.keepOutOfWalls();
-			this.followFloor(dt);
-		}
+		if (!this.fade) this.followFloor(dt);
 	}
 }

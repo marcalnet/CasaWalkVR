@@ -109,13 +109,12 @@ export class XRExperience {
 		this.snapAngle = 30; // snap turn, degrees (fixed: the Turn setting left the board, the user's call)
 		this.personHeight = readSetting('height');
 		// Walking: walls stop you (off by default). Furniture never does.
-		this.solid = readSetting('solid');
 		// See-through walls and furniture (headset only): 0 = as modelled, 1 = glass house.
 		this.seeThroughAmount = readSetting('seeThrough') > 0 ? SEE_THROUGH_ON : 0; // (a switch: an older stored amount counts as on)
 		this.seeThrough = new SeeThrough();
 		this.portals = new Portals(); // the wall portal (js/portal.js)
 		this.soundLevel = readSetting('sound'); // off | effects | all (effects and ambience)
-		this.toolFan = readSetting('mainHand') === 'left' ? 'right' : 'left'; // the hand the tool fan floats over: the one that is not the main hand (the main hand wears the wrist menu, takes tools, teleports)
+		this.toolFan = readSetting('mainHand') === 'left' ? 'right' : 'left'; // the hand the tool fan floats over: the one that is not the main hand (the main hand wears the wrist menu and takes tools)
 		this.cameraLens = readSetting('cameraLens'); // the street camera's lens, mm (milestone D)
 		this.layerFx = null; // a move between layers in progress (goLayer())
 		this.frameDt = 1 / 72;

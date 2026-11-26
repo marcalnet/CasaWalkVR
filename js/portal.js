@@ -7,10 +7,9 @@
 //                circle there: 0.42 m radius over 0.25 s (ease-out), following
 //                the fingertip along the wall (smoothed 0.1 s). It closes over
 //                0.4 s once the fingertip is more than 15 cm from the surface.
-//                Each hand opens its own (two at most).
-//                Never with Solid walls on (a window on a room you can't walk
-//                into would be a lie): a touch gives a small ring and a tick
-//                instead. Never from a hand holding a tool, or one at a key,
+//                Each hand opens its own (two at most). (Solid walls, which
+//                had a ring instead, went on 26 Nov 2026: your real body is
+//                never stopped.) Never from a hand holding a tool, or one at a key,
 //                the open board or the fan. A soft `portal` sound on opening;
 //                closing is silent.
 //   Eye portal   the eyes within 0.30 m of a wall or door open a circle round
@@ -18,8 +17,7 @@
 //                (eased in): 0 at 0.30 m, 0.48 m radius at 0.20 m and closer,
 //                so the near plane never cuts the wall in a hard edge. It
 //                follows the head (no tween), is silent, and is set at once
-//                behind a teleport's fade. Not needed with Solid walls on (the
-//                body stops 0.2 m from walls).
+//                behind a teleport's fade.
 //
 // How it is drawn: one small shader chunk on the wall and opening materials
 // (no extra draw calls, one shader variant), chained after the depth-shading
@@ -47,7 +45,6 @@ export const PORTAL = {
 	FOLLOW: 0.1, // seconds: the centre's smoothing
 	EYE_OPEN: 0.3, EYE_FULL: 0.2, EYE_R: 0.48, // the eyes this close start it (m), fully open this close, its radius
 	TICK_EVERY: 1, // seconds: a touch's vibration at most this often
-	RING_TIME: 0.3, // seconds: the Solid walls touch ring
 };
 
 /** The uniforms every hooked material shares (one object: updated in place). */
@@ -189,7 +186,6 @@ export class Portals {
 		this._s = { point: new THREE.Vector3(), normal: new THREE.Vector3(), distance: 0, mesh: null, behind: false };
 		this._e = { point: new THREE.Vector3(), normal: new THREE.Vector3(), distance: 0, mesh: null, behind: false };
 		this._head = new THREE.Vector3();
-		this.ring = null;
 		this.hidden = 0;
 	}
 
@@ -263,7 +259,6 @@ export class Portals {
 	reset() {
 		this.resetHand();
 		this.uniforms.cwPortalEye.value.w = 0;
-		if (this.ring) this.ring.visible = false;
 	}
 
 	/** The hand portal shut at once (a jump: never carried across). */
@@ -283,7 +278,7 @@ export class Portals {
 	}
 
 	/**
-	 * Once a frame. `xr`: the experience (mode, input, tools, solid, sound,
+	 * Once a frame. `xr`: the experience (mode, input, tools, sound,
 	 * haptics, aimBlock). Portals open only while walking (inside, at 1:1).
 	 */
 	update(xr, dt) {
@@ -297,7 +292,6 @@ export class Portals {
 		if (xr.modes.walk?.fade || xr.layerFx) { if (this.hands.some((h) => h.radius || h.c)) this.resetHand(); }
 		else this.updateHand(xr, dt);
 		this.updateEye(xr);
-		this.updateRing(dt);
 	}
 
 	updateHand(xr, dt) {
@@ -314,15 +308,13 @@ export class Portals {
 			const mine = hs.find((h) => h.c === c);
 			if (now && mine) mine.target.copy(near.point).addScaledVector(near.normal, -P.INSET);
 			if (now && !was) {
-				// A first touch: the vibration (at most once a second), and the portal or, with Solid walls, the ring.
+				// A first touch: the vibration (at most once a second), and the portal.
 				if (c.isController && this.clock - this.lastTick > P.TICK_EVERY) { xr.haptics?.play(c, 'tick'); this.lastTick = this.clock; }
-				if (xr.solid) { xr.sound?.play('tick'); this.showRing(near.point, near.normal); }
-				else if (!mine) firsts.push({ c, point: near.point.clone(), normal: near.normal.clone() });
+				if (!mine) firsts.push({ c, point: near.point.clone(), normal: near.normal.clone() });
 			}
 		}
 		for (const h of hs) if (h.c && !this.touching.has(h.c)) { h.c = null; h.open = false; h.from = h.radius; h.t = 0; } // let go: it closes
-		for (const h of hs) if (xr.solid && h.radius) { h.c = null; h.open = false; h.radius = 0; }
-		if (!xr.solid) for (const first of firsts) {
+		for (const first of firsts) {
 			// The hand's own portal: a free one (preferring one fully shut), else none.
 			const h = hs.find((x) => !x.c && x.radius === 0) ?? hs.find((x) => !x.c);
 			if (!h) break;
@@ -346,37 +338,12 @@ export class Portals {
 	/** The eye portal: its size from how close the eyes are to a wall (no tween: it follows the head). */
 	updateEye(xr) {
 		const P = PORTAL, u = this.uniforms.cwPortalEye.value;
-		if (xr.solid) { u.w = 0; return; }
 		xr.rig.updateMatrixWorld(true);
 		const head = this._head.setFromMatrixPosition(xr.camera.matrix).applyMatrix4(xr.rig.matrixWorld);
 		const s = nearestSurface(this.meshes, head, P.EYE_OPEN, this._e);
 		const k = s ? eyeOpening(s.behind ? 0 : s.distance) : 0;
 		if (!k) { u.w = 0; return; }
 		u.set(s.point.x - s.normal.x * P.INSET, s.point.y - s.normal.y * P.INSET, s.point.z - s.normal.z * P.INSET, P.EYE_R * k);
-	}
-
-	/** Solid walls on: a small soft ring on the surface where a fingertip touched (0.3 s). */
-	showRing(point, normal) {
-		if (!this.ring) {
-			this.ring = new THREE.Mesh(new THREE.RingGeometry(0.012, 0.02, 32), new THREE.MeshBasicMaterial({ color: LOOK.rim, transparent: true, depthWrite: false, side: THREE.DoubleSide }));
-			this.ring.name = 'portal-touch-ring';
-			this.ring.raycast = () => {};
-			this.ring.visible = false;
-		}
-		if (this.ring.parent !== this.xr.scene) { this.xr.scene.add(this.ring); this.xr.hideFromPhotos?.(this.ring); }
-		this.ring.position.copy(point).addScaledVector(normal, 0.002);
-		this.ring.quaternion.setFromUnitVectors(_a.set(0, 0, 1), normal);
-		this.ring.visible = true;
-		this.ringT = 0;
-	}
-
-	updateRing(dt) {
-		if (!this.ring?.visible) return;
-		this.ringT += dt;
-		const k = this.ringT / PORTAL.RING_TIME;
-		this.ring.scale.setScalar(1 + k);
-		this.ring.material.opacity = LOOK.rimStrength * 2 * (1 - k);
-		if (k >= 1) this.ring.visible = false;
 	}
 }
 
