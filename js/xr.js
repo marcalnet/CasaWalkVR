@@ -348,13 +348,16 @@ export class XRExperience {
 		this.photoPending = false;
 		this.tools.end(); // tools back in the fan; measurements and drawings cleared
 		this.fan.reset();
+		this.dial.close(); this.dial.label.mesh.visible = false; // (an open dial would stay drawn on the 2D page: the audit's C1)
 		this.tweens.clear();
+		this.shadowsBusy = false; // (its tween just went: the switch would read "Shadows …" and ignore presses: the audit's C2)
 		this.haptics.stop();
 		this.sound.suspend();
 		this.walkSky.visible = false;
 		this.input.setVisible(false);
 		this.showroom.visible = false;
 		this.stage.visible = false;
+		this.stage.scale.setScalar(1); // (a session ended mid walk-in, in the tunnel zoom: the gallery would come back too big: the audit's S5)
 		this.applyStoreys(); // the 2D page shows every storey
 		this.rig.position.set(0, 0, 0);
 		this.rig.rotation.set(0, 0, 0);

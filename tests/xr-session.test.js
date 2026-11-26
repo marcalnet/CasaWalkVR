@@ -126,6 +126,29 @@ test('the pause with no tip left (§1, revised): a steady place is the plain fad
 	while (x.layerFx) frame();
 });
 
+test('leaving VR leaves nothing stuck: mid walk-in the gallery\'s scale, an open dial, a Shadows switch still switching on (the audit\'s S5, C1, C2)', async () => {
+	const { x, frame, hands } = await setup();
+	frame();
+	// Mid walk-in: the tunnel zoom scales the gallery up; the session ends.
+	x.menuAction('in');
+	for (let i = 0; i < 60 && x.stage.scale.x <= 1.05; i++) frame();
+	assert.ok(x.stage.scale.x > 1.05, `the tunnel scales the gallery (${x.stage.scale.x.toFixed(2)})`);
+	x.handleEnd();
+	assert.equal(x.stage.scale.x, 1, 'back to its size');
+	// A dial open (and its label), Shadows switching on: the session ends.
+	const { x: y, frame: f2 } = await setup();
+	f2();
+	y.tools.take(y.fan.camera, y.input.hands.right);
+	y.dial.step(y.fan.camera);
+	assert.ok(y.dial.group.visible && y.dial.label.mesh.visible, 'the dial and its label shown');
+	y.lighting ??= { shadows: false, time: 'morning', setShadows(v) { this.shadows = v; }, refresh() {}, setTime() {}, nextTime() {} }; // (no lighting in these tests: a stand-in)
+	y.menuAction('shadows');
+	assert.equal(y.shadowsBusy, true, 'Shadows switching on');
+	y.handleEnd();
+	assert.ok(!y.dial.open && !y.dial.group.visible && !y.dial.label.mesh.visible, 'the dial is gone from the 2D page');
+	assert.equal(y.shadowsBusy, false, 'the switch is free again');
+});
+
 test('the settings wing: the same three tabs at both layers (How to move, View, General), no Close key (the foot says how to close), every target big enough to touch, 34 cm tall', async () => {
 	const { x } = await setup();
 	for (const p of Object.values(x.menus)) {
