@@ -24,7 +24,7 @@
 // 'ui'), so the mode leaves those alone.
 
 import * as THREE from 'three';
-import { NoteCard, Label } from './panel.js';
+import { NoteCard } from './panel.js';
 import { BUILD } from './version.js';
 import { buildLabel } from './build-label.js';
 import { headHeading } from './xr-dollhouse.js';
@@ -66,8 +66,6 @@ export class XRUI {
 		this.guide = null; // the open How to move wing, on the left (a Panel), or null
 		this.tab = null; // the settings tab last shown (kept between the two layers' boards); null: none yet this session
 		this.opened = false; // Settings has opened this session
-		this.pinchNotes = 0; // the wrong-hand notes shown this session (at most 3)
-		this.pinchNote = null;
 		this.teleports = 0; // this session's teleports
 		this.wrist = new WristMenu(xr);
 		guideSheet.onLoad = () => this.guide?.draw(); // (the How to move pictures, once loaded)
@@ -76,9 +74,7 @@ export class XRUI {
 		this.buildPhotoFeedback();
 		this.buildHandsNote();
 		this.buildErrorNote();
-		this.pinchLabel = new Label({ height: 0.035 });
-		this.pinchLabel.mesh.visible = false;
-		xr.hideFromPhotos(this.pinchLabel.mesh, this.photoNote.mesh, this.handsNote.mesh, this.errorNote.mesh);
+		xr.hideFromPhotos(this.photoNote.mesh, this.handsNote.mesh, this.errorNote.mesh);
 	}
 
 	// -----------------------------------------------------------------------
@@ -112,33 +108,6 @@ export class XRUI {
 	}
 
 	hideError() { this.errorNote.mesh.visible = false; }
-
-	/**
-	 * A pinch from the hand that does not teleport right now: a quiet no and a
-	 * small note at that hand for 1.5 s, saying which hand to use ("Pinch with
-	 * your right hand to move"); only the first 3 times in a session, then silent.
-	 */
-	noteWrongHand(c, at) {
-		const xr = this.xr;
-		if (this.pinchNotes >= 3 || this.pinchNote?.visible) return;
-		this.pinchNotes++;
-		const label = this.pinchLabel;
-		label.set(`Pinch with your ${xr.teleportHand({ handedness: 'left' }) ? 'left' : 'right'} hand to move`); // (the hand that can: the main hand, or the other while it holds a tool)
-		label.mesh.position.copy(at).y += 0.12;
-		label.mesh.lookAt(xr.headWorld());
-		if (label.mesh.parent !== xr.scene) xr.scene.add(label.mesh);
-		label.mesh.visible = true;
-		this.pinchNote = { visible: true, t: 0 };
-		if (xr.soundLevel !== 'off') xr.sound.play('deny', 0.5);
-	}
-
-	/** Advances the wrong-hand note. */
-	runPinchNote(dt) {
-		const n = this.pinchNote;
-		if (!n) return;
-		n.t += dt;
-		if (n.t > 1.5) { n.visible = false; this.pinchNote = null; if (this.pinchLabel) this.pinchLabel.mesh.visible = false; }
-	}
 
 	/** Shows the hands note while only bare hands are reported (called every frame). */
 	showHandsNote() {
@@ -400,7 +369,6 @@ export class XRUI {
 	point(dt = this.xr.frameDt ?? 1 / 72) {
 		const xr = this.xr, input = xr.input, raycaster = xr.raycaster;
 		let hover = null;
-		this.runPinchNote(dt);
 		let { action } = this.wrist.update(dt);
 		const active = input.active();
 		let panels = this.openPanels();
@@ -551,9 +519,6 @@ export class XRUI {
 		this.tab = null;
 		this.opened = false;
 		this.teleports = 0;
-		this.pinchNotes = 0;
-		this.pinchNote = null;
-		if (this.pinchLabel) this.pinchLabel.mesh.visible = false;
 		for (const row of this.touches) for (const st of row?.values() ?? []) { resetTouch(st.s); st.ring.visible = false; }
 	}
 }

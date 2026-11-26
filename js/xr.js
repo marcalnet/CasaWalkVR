@@ -668,18 +668,15 @@ export class XRExperience {
 	}
 
 	/**
-	 * Bare hands teleport (and point at a room) with ONE hand: the main hand
-	 * while it is empty, the other while the main hand holds a tool (Settings,
-	 * General: Main hand, right by default). Both may still open a wall portal.
+	 * Bare hands teleport (and point at a room) with either empty hand: one
+	 * that holds no tool (the user's decision, 26 Nov 2026; until then only the
+	 * main hand). Keys, the model and the wings still claim a hand first
+	 * (aimBlock, the places' own checks); while one hand aims, the other's
+	 * pinch does nothing.
 	 */
-	teleportHand(c) {
-		const main = this.mainHand, held = this.tools?.held?.c;
-		// (The main hand takes tools from the fan, so it often holds one: then the other hand teleports. One hand always can.)
-		const side = held && held.handedness === main ? this.toolFan : main;
-		return c.handedness === side;
-	}
+	emptyHand(c) { return this.tools?.held?.c !== c; }
 
-	/** The hand that wears the wrist menu, takes tools and teleports ('right' by default; the Main hand setting). */
+	/** The hand that wears the wrist menu and takes tools ('right' by default; the Main hand setting). */
 	get mainHand() { return this.toolFan === 'right' ? 'left' : 'right'; }
 
 	/**

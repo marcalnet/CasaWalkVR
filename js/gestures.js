@@ -187,6 +187,19 @@ export class HandGestures {
  * pinch that closes the wings (M1) and the hover ray; never by the teleport
  * pinch, which keeps its own checks (the user's wish).
  */
+/**
+ * Looking back at an aim (build 120, B6): letting go of a pinch flicks the hand,
+ * so the landing taken is the one shown `back` seconds before. `past` holds
+ * the aim's recent moments ({ age, ... }, oldest first); returns the latest one
+ * at least `back` old, else the oldest (a young aim), else null.
+ */
+export function momentBefore(past, age, back) {
+	const want = age - back;
+	let best = null;
+	for (const e of past) if (e.age <= want + 1e-6) best = e;
+	return best ?? past[0] ?? null;
+}
+
 export function pinchGate(shape, head, forward) {
 	const G = GESTURE, at = shape.pinchAt;
 	if (shape.toEyes > G.TO_EYES) return false;

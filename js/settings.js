@@ -26,7 +26,7 @@ export const SETTINGS = {
 	// the landing markers show a person's size. A stored value is simply never read.)
 	solid: { key: 'casawalk.solidWalls', flag: true, fallback: false }, // walls stop you while walking
 	seeThrough: { key: 'casawalk.seeThrough', range: true, fallback: 0 }, // 0 = as modelled, 1 = glass house
-	mainHand: { key: 'casawalk.mainHand', options: ['right', 'left'], fallback: 'right' }, // the hand that wears the wrist menu, takes tools from the fan and teleports (the fan floats over the other)
+	mainHand: { key: 'casawalk.mainHand', options: ['right', 'left'], fallback: 'right' }, // the hand that wears the wrist menu and takes tools from the fan (the fan floats over the other)
 	sound: { key: 'casawalk.sound', options: ['off', 'effects', 'all'], fallback: 'all' }, // all: effects and the ambience (milestone H)
 	// (The guide's 'casawalk.walkGuide' setting went in Nov 2026: nothing read it. A stored value is simply never read.)
 	cameraLens: { key: 'casawalk.cameraLens', options: [24, 28, 35, 50], fallback: 28 }, // the street camera's lens, mm (milestone D)

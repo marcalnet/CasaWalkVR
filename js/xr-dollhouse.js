@@ -36,7 +36,7 @@ import { DELIBERATE } from './touch.js';
 import { roomAt, roomLanding, alongAxis, clearOfWalls, headingOf } from './rooms.js';
 import { Label } from './panel.js';
 import { ease } from './tween.js';
-import { handAimRay, pinchGate } from './gestures.js';
+import { handAimRay, pinchGate, momentBefore } from './gestures.js';
 import { HAND } from './theme.js';
 
 const DOLLHOUSE_PERSON = 2.0; // metres
@@ -796,25 +796,27 @@ export class Dollhouse {
 
 	/**
 	 * Before any pinch (build 120's design, item 5: hover before select): the
-	 * bare main hand between the eyes and the model, for 2 frames, shows a
+	 * an empty bare hand between the eyes and the model, for 2 frames, shows a
 	 * faint aim ray and the marker on the room, at once; a pinch then makes it
-	 * the aim. Not with the hand at the model (it holds), at a key, holding a
-	 * tool, or the fan hand, nor while a controller is in use (its laser
-	 * points); it goes 0.2 s after the hand leaves. A ray that
+	 * the aim. Either hand (since 26 Nov 2026); the one already showing keeps it.
+	 * Not with the hand at the model (it holds), at a key, or holding a tool,
+	 * nor while a controller is in use (its laser points); it goes 0.2 s after the hand leaves. A ray that
 	 * slips off the floor for a moment (a wall) keeps the room it was on.
 	 */
 	hoverAim(dt, spots, busy, box) {
 		const xr = this.xr, head = xr.headWorld();
-		const c = busy || this.grab || xr.input.active().length ? null : xr.input.gestureHands().find((h) => h.touch.tracked && xr.teleportHand(h)) ?? null;
-		const shape = c?.gesture?.shape, through = shape?.pinchAt ?? null;
-		let inZone = false;
+		const h = this.hover ??= { c: null, frames: 0, gone: 0, spot: null, slip: 0 };
 		// (The pinch gate: palm not towards you, 20 cm in front, between the waist and the eyes; the harmony's conflict 4.)
-		if (c && through && pinchGate(shape, head, xr.viewAxes().forward) && !xr.aimBlock(c, through) && box.distanceToPoint(through) >= HOVER.away) {
+		const zone = (c) => {
+			const shape = c.gesture?.shape, through = shape?.pinchAt;
+			if (!through || !pinchGate(shape, head, xr.viewAxes().forward) || xr.aimBlock(c, through) || box.distanceToPoint(through) < HOVER.away) return false;
 			const ray = this._hoverRay ??= new THREE.Ray();
 			ray.origin.copy(head); ray.direction.subVectors(through, head).normalize();
-			inZone = ray.intersectsBox(box);
-		}
-		const h = this.hover ??= { c: null, frames: 0, gone: 0, spot: null, slip: 0 };
+			return ray.intersectsBox(box);
+		};
+		const hands = busy || this.grab || xr.input.active().length ? [] : xr.input.gestureHands().filter((c) => c.touch.tracked && xr.emptyHand(c));
+		hands.sort((a, b) => (b === h.c) - (a === h.c)); // (the hand already showing first: the first one wins)
+		const c = hands.find(zone) ?? null, inZone = !!c;
 		if (inZone) { if (h.c !== c) { this.endHover(); h.c = c; } h.frames++; h.gone = 0; } else h.gone += dt;
 		if (!h.c || h.frames < HOVER.frames) { if (!inZone) h.frames = 0; return; }
 		if (h.gone > HOVER.linger) { this.endHover(); return; }
@@ -869,11 +871,10 @@ export class Dollhouse {
 				else if ((e.type === 'fistEnd' || e.type === 'lost') && this.grab?.c === c) this.release();
 				else if ((e.type === 'open' || e.type === 'lost') && this.handAim?.c === c) { this.cancelHandAim(); xr.sound.play('release'); }
 				// The pinch held aims; opening it steps inside (once shown SHOWN_FOR, the landing from LOOK_BACK before).
-				else if (e.type === 'pinch' && !this.handAim && !busy && this.grab?.c !== c && xr.teleportHand(c) && !xr.aimBlock(c, c.gesture.shape?.pinchAt) && c.gesture.shape.pinchAt.y >= xr.headWorld().y - WAIST) { // (a hand at your side never aims)
+				// (Either empty hand aims; while one aims, the other's pinch does nothing: the first one wins.)
+				else if (e.type === 'pinch' && !this.handAim && !busy && this.grab?.c !== c && xr.emptyHand(c) && !xr.aimBlock(c, c.gesture.shape?.pinchAt) && c.gesture.shape.pinchAt.y >= xr.headWorld().y - WAIST) { // (a hand at your side never aims)
 					this.handAim = { c, spot: null, age: 0, past: [] };
 					xr.sound.play('aim');
-				} else if (e.type === 'pinch' && !this.handAim && !busy && this.grab?.c !== c && !xr.teleportHand(c) && !xr.aimBlock(c, c.gesture.shape?.pinchAt) && c.gesture.shape?.pinchAt) {
-					xr.ui.noteWrongHand(c, c.gesture.shape.pinchAt);
 				} else if (e.type === 'pinchEnd' && this.handAim?.c === c) {
 					const spot = this.spotBefore(this.handAim, LOOK_BACK);
 					if (spot && this.handAim.age >= SHOWN_FOR) jump = spot;
@@ -910,10 +911,7 @@ export class Dollhouse {
 
 	/** The landing a hand's aim showed `back` seconds ago (or its oldest kept), else now's. */
 	spotBefore(a, back) {
-		const want = a.age - back;
-		let best = null;
-		for (const e of a.past) if (e.age <= want + 1e-6) best = e;
-		return (best ?? a.past[0])?.spot ?? a.spot;
+		return momentBefore(a.past, a.age, back)?.spot ?? a.spot;
 	}
 }
 

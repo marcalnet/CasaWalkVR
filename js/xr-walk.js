@@ -23,7 +23,7 @@ import { TeleportArc, yawOf } from './xr-input.js';
 import { WallCollider } from './walls.js';
 import { UP, DOWN, worldNormal, hitSegment, firstHit } from './xr-targets.js';
 import { EYE_BELOW_TOP } from './xr-scene.js';
-import { handAimRay } from './gestures.js';
+import { handAimRay, momentBefore } from './gestures.js';
 import { hotspots, snapTo, HOTSPOT } from './hotspots.js';
 import { Label } from './panel.js';
 
@@ -226,11 +226,10 @@ export class Walk {
 		for (const c of input.gestureHands()) {
 			const mine = this.tele?.c === c;
 			for (const e of c.gestures) {
-				if (e.type === 'pinch' && !this.tele && !this.fade && xr.teleportHand(c) && !xr.aimBlock(c, c.gesture.shape?.pinchAt) && c.gesture.shape.pinchAt.y >= xr.headWorld().y - WAIST) { // (a hand at your side never aims)
+				// (Either empty hand aims; while one aims, the other's pinch does nothing: the first one wins.)
+				if (e.type === 'pinch' && !this.tele && !this.fade && xr.emptyHand(c) && !xr.aimBlock(c, c.gesture.shape?.pinchAt) && c.gesture.shape.pinchAt.y >= xr.headWorld().y - WAIST) { // (a hand at your side never aims)
 					this.tele = { c, via: 'hand', age: 0, dir: null, past: [] };
 					xr.sound.play('aim');
-				} else if (e.type === 'pinch' && !this.tele && !xr.teleportHand(c) && !xr.aimBlock(c, c.gesture.shape?.pinchAt) && c.gesture.shape?.pinchAt) {
-					xr.ui.noteWrongHand(c, c.gesture.shape.pinchAt); // (the other hand moves you)
 				} else if (!mine) {
 					continue;
 				} else if (e.type === 'pinchEnd') {
@@ -274,10 +273,7 @@ export class Walk {
 
 	/** The landing a hand's aim showed `back` seconds ago (or its oldest kept), else now's. */
 	landingBefore(tele, back) {
-		const want = tele.age - back;
-		let best = null;
-		for (const e of tele.past) if (e.age <= want + 1e-6) best = e;
-		best ??= tele.past[0];
+		const best = momentBefore(tele.past, tele.age, back);
 		if (!best) return tele.result ?? null;
 		return { valid: best.valid, point: best.has === false ? null : best.point };
 	}

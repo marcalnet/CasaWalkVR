@@ -250,7 +250,7 @@ test('the tab you left a board on is the one the other board opens on', async ()
 	assert.equal(x.menu.tab, 'walk');
 });
 
-test('Main hand: the wrist menu, the tool fan and the teleport hand flip together, remembered', async () => {
+test('Main hand: the wrist menu and the tool fan flip together, remembered', async () => {
 	const { x } = await setup();
 	assert.equal(x.ui.wrist.side, 'right');
 	x.menuAction({ id: 'mainHand', value: 'left' });
@@ -574,7 +574,7 @@ test('a bare hand\'s teleport lands where the ring was 0.1 s before the release 
 	assert.equal(w.landingBefore({ age: 0.05, past: [{ age: 0.05, valid: true, point: P(-1) }] }, 0.1).point.z, -1, 'a young aim: its oldest');
 });
 
-test('bare hands: the main hand between the eyes and the model shows a faint aim and the marker before any pinch (build 120, item 5)', async () => {
+test('bare hands: an empty hand between the eyes and the model shows a faint aim and the marker before any pinch (build 120, item 5)', async () => {
 	const { x, frame } = await setup();
 	frame();
 	const d = x.modes.dollhouse, c = x.input.hands.right, left = x.input.hands.left, leftSource = left.source;
@@ -1088,17 +1088,31 @@ test('round scales only, one per visit: the plate and the model rest on 1:5, 1:1
 	assert.ok(d.doll.yaw !== yaw && Math.abs(ratio() - before) < 1e-9, 'stick right: it turns, at the same scale');
 });
 
-test('bare hands teleport with one hand: the main hand while it is empty, the other while it holds a tool; Main hand flips them', async () => {
-	const { x } = await setup();
-	const L = { handedness: 'left' }, R = { handedness: 'right' };
-	assert.equal(x.mainHand, 'right');
-	assert.ok(!x.teleportHand(L) && x.teleportHand(R), 'main hand right: the right hand teleports');
+test('bare hands teleport with either empty hand; while one aims, the other\'s pinch does nothing (the first one wins)', async () => {
+	const { momentBefore } = await import('../js/gestures.js');
+	assert.equal(momentBefore([{ age: 0.85 }, { age: 0.9 }, { age: 1 }], 1, 0.1).age, 0.9, 'the moment 0.1 s before');
+	assert.equal(momentBefore([], 1, 0.1), null);
+	const { x, go } = await setup();
+	go('in');
+	const L = x.input.hands.left, R = x.input.hands.right;
+	for (const [c, xPos] of [[L, -0.25], [R, 0.25]]) {
+		c.isHand = true; c.isController = false; c.touch.tracked = true;
+		c.gesture = { shape: { pinchAt: new THREE.Vector3(xPos, 1.15, -0.35) } };
+		c.gestures = [];
+	}
+	x.input._gh = [L, R];
+	assert.ok(x.emptyHand(L) && x.emptyHand(R), 'both empty: both may teleport');
 	x.tools.held = { c: R, tool: {} };
-	assert.ok(x.teleportHand(L) && !x.teleportHand(R), 'the right hand holds a tool: the left one teleports');
+	assert.ok(x.emptyHand(L) && !x.emptyHand(R), 'a hand holding a tool does not');
 	x.tools.held = null;
-	x.menuAction({ id: 'mainHand', value: 'left' });
-	assert.ok(x.teleportHand(L) && !x.teleportHand(R), 'main hand left: the left hand teleports');
-	x.menuAction({ id: 'mainHand', value: 'right' });
+	// The left hand pinches first: it aims; the right's pinch then does nothing.
+	L.gestures = [{ type: 'pinch' }];
+	x.modes.walk.handMoves(1 / 72);
+	assert.equal(x.modes.walk.tele?.c, L, 'the left (not the main) hand aims');
+	L.gestures = []; R.gestures = [{ type: 'pinch' }];
+	x.modes.walk.handMoves(1 / 72);
+	assert.equal(x.modes.walk.tele?.c, L, 'the right\'s pinch while the left aims: nothing');
+	x.input._gh = null;
 });
 
 test('the fan: a controller raised in view opens it, a key near closes it; the fan slides outward as a group from the orb (25 cm kept); the orb yields to its own hand', async () => {
