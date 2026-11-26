@@ -1561,7 +1561,7 @@ test('harmony, live keys only (rule 4; conflicts 2 and 11): the wrist arc fades 
 	assert.equal(put(new THREE.Vector3(0, 0.05, 0)), true, 'a tip at a live key: the orb yields');
 	assert.equal(put(new THREE.Vector3(0, 0.2, 0)), true, '20 cm: still (released at 25 cm)');
 	assert.equal(put(new THREE.Vector3(0, 0.4, 0)), false, '40 cm: the orb is back');
-	assert.ok(!w.fanYield && w.orbYield === w.keyYield);
+	assert.ok(!x.fan.fanBusy && w.orbYield === w.keyYield);
 });
 
 

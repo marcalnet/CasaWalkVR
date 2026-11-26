@@ -97,10 +97,7 @@ export class WristMenu {
 
 
 	/** The orb makes room (half size, 30%): for the hand reaching into the fan, a fingertip at a live key, or a live key behind it. */
-	get orbYield() { return this.fanYield || this.keyYield || this.sightYield; }
-
-	/** The orb's own hand within reach of the tools (the fan's fanBusy: CLAIM.near, let go at CLAIM.clear): it makes room. */
-	get fanYield() { return !!this.xr.fan?.fanBusy; }
+	get orbYield() { return !!this.xr.fan?.fanBusy || this.keyYield || this.sightYield; } // (fanBusy: the other hand within reach of the tools)
 
 	/**
 	 * The orb between the eyes and a live key (the next-build asks 5.8): it
