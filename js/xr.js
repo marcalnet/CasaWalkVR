@@ -74,6 +74,15 @@ const XR_NEAR = 0.05, XR_FAR = 300;
 const DOLLHOUSE_SIZE = 1.4; // metres across at most (build 120's design, item 8: was 1.2 m; wider pushes the wings to their limit)
 /** Stepping inside: how long the model grows towards you (s), eased in and out, before the fade. 0.8 is the fallback if the slow growth is uncomfortable (build 111's design, item 4), 0.3 the old blink. */
 export const WALK_IN_GROW = 1.3;
+/**
+ * Stepping inside as a tunnel zoom (build 120's design, item 7, waiting for the user's word): a
+ * vignette closes to a 45° circle on the landing spot, and inside it the whole room and the model
+ * scale up x1 -> x3 about that spot, then the circle fades to black. Off: the model grows (above).
+ * The motion most likely to make people sick on a Quest 2: it ships on only after two comfortable
+ * tries by someone prone to it, seated and standing.
+ */
+export const WALK_IN_ZOOM = false;
+const ZOOM = { close: 0.4, from: 0.3, to: 1.1, x: 3, black: 1.0, end: 1.3 }; // (seconds, and the scale at the end)
 
 export class XRExperience {
 	/**
@@ -403,13 +412,44 @@ export class XRExperience {
 	 * surface) or 'out' (a gentle fade to white, then the page). Menus close;
 	 * the modes wait until it is over. The arrival title follows.
 	 */
-	goLayer(dir, go) {
+	goLayer(dir, go, spot = null) {
 		if (this.layerFx || !this.session) return;
 		this.ui.closeAll();
 		if (dir !== 'out' && this.soundLevel !== 'off') this.sound.play(dir === 'in' ? 'dive' : 'surface');
 		const doll = this.modes.dollhouse.doll;
 		this.layerFx = { dir, go, t: 0, done: false, zoom: doll.zoom };
+		if (dir === 'in' && WALK_IN_ZOOM && spot && this.mode === 'dollhouse') {
+			// (Where the zoom centres: the landing spot in the world, and what it scales from.)
+			this.layerFx.tunnel = { at: this.centerer.localToWorld(spot.clone()), stage: this.stage.position.clone(), anchor: this.anchor.position.clone(), scale: this.anchor.scale.x };
+		}
 		this.layerColour = dir === 'out' ? 0xffffff : 0x000000;
+	}
+
+	/**
+	 * The tunnel zoom (WALK_IN_ZOOM): the vignette closes to a 45° circle on
+	 * the landing spot (0-0.4 s), the room and the model scale x1 -> x3 about
+	 * it (0.3-1.1 s, eased in), the circle fades to black (1.0-1.3 s), then
+	 * inside the fade lifts as usual. The floor under your feet never moves:
+	 * the spot is ahead of you, below the eyes.
+	 */
+	runTunnel(f, cover) {
+		const z = f.tunnel, t = f.t;
+		const k = Math.min(1, Math.max(0, (t - ZOOM.from) / (ZOOM.to - ZOOM.from))), s = 1 + (ZOOM.x - 1) * k * k; // (eased in: a slow start, a quick end)
+		this.stage.scale.setScalar(s);
+		this.stage.position.copy(z.stage).sub(z.at).multiplyScalar(s).add(z.at);
+		this.anchor.position.copy(z.anchor).sub(z.at).multiplyScalar(s).add(z.at);
+		this.anchor.scale.setScalar(z.scale * s);
+		this.anchor.updateMatrixWorld(true);
+		this.veil.setTunnel(Math.min(1, t / ZOOM.close), this.camera.worldToLocal(z.at.clone()));
+		cover(THREE.MathUtils.clamp((t - ZOOM.black) / (ZOOM.end - ZOOM.black), 0, 1));
+		if (t >= ZOOM.end) {
+			this.veil.setTunnel(0);
+			this.stage.scale.setScalar(1); this.stage.position.copy(z.stage); // (the scale model as you left it)
+			this.modes.dollhouse.apply();
+			f.done = true; f.t = 0; f.tunnel = null;
+			f.go();
+			this.showArrival(this.roomHere() || 'Inside');
+		}
 	}
 
 	/** Advances a move between layers (instead of the mode's update). */
@@ -425,6 +465,7 @@ export class XRExperience {
 		}
 		if (f.dir === 'in') {
 			// The model grows towards you, then the fade; inside, the fade lifts.
+			if (!f.done && f.tunnel) { this.runTunnel(f, cover); return; }
 			if (!f.done) {
 				// Only the model grows (the gallery stays still, a fixed frame), eased in and out, with a soft vignette; then the fade.
 				const g = Math.min(1, f.t / GROW);

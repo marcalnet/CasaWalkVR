@@ -588,6 +588,22 @@ test('bare hands: the main hand between the eyes and the model shows a faint aim
 	x.input._gh = null; c.isHand = false; c.isController = true; left.source = leftSource;
 });
 
+test('the tunnel zoom (off by default): the room and the model scale x3 about the spot, the view goes black, then inside; the scale model as it was (build 120, item 7)', async () => {
+	const { WALK_IN_ZOOM } = await import('../js/xr.js');
+	assert.equal(WALK_IN_ZOOM, false, 'off until the user says so');
+	const { x, frame } = await setup();
+	frame();
+	const spot = x.centerer.localToWorld(x.model.bounds.getCenter(new THREE.Vector3()));
+	const stage0 = x.stage.position.clone(), scale0 = x.anchor.scale.x;
+	let went = 0, maxScale = 0;
+	x.layerFx = { dir: 'in', t: 0, done: false, zoom: 1, go: () => { went++; }, tunnel: { at: spot, stage: stage0.clone(), anchor: x.anchor.position.clone(), scale: scale0 } };
+	const cover = () => {};
+	for (let i = 0; i < 72 * 1.4 && x.layerFx?.tunnel; i++) { x.layerFx.t += 1 / 72; x.runTunnel(x.layerFx, cover); maxScale = Math.max(maxScale, x.stage.scale.x); }
+	assert.ok(maxScale > 2.9 && went === 1, `scaled to x${maxScale.toFixed(2)}, then inside`);
+	assert.ok(x.stage.scale.x === 1 && x.stage.position.distanceTo(stage0) < 1e-9, 'the room back as it was');
+	x.layerFx = null;
+});
+
 test('the wrist key opens both wings and closes both; each Close closes its own; How to move reopens from its key every time; the tab you left is kept', async () => {
 	const { x } = await setup();
 	x.menuAction('settings');

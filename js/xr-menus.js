@@ -197,7 +197,7 @@ export function menuAction(xr, target) {
 	switch (id) {
 		// The doors: one layer at a time (no key skips a layer; SPEC.md C0, "Layers").
 		case 'in': case 'walk':
-			if (xr.mode === 'dollhouse') xr.goLayer('in', () => xr.modes.walk.walkIn());
+			if (xr.mode === 'dollhouse') xr.goLayer('in', () => xr.modes.walk.walkIn(), xr.modes.walk.walkInPoint().modelPt);
 			break;
 		case 'back':
 			if (xr.mode === 'walk') xr.goLayer('back', () => xr.setMode('dollhouse'));

@@ -63,7 +63,7 @@ export function act(xr, origin, dir) {
 		const floor = hit ? xr.findFloor(hit.point, 0.01) : null;
 		if (!floor) return null;
 		const spot = d.landing(floor);
-		xr.goLayer('in', () => xr.setMode('walk', spot.model, spot.yaw));
+		xr.goLayer('in', () => xr.setMode('walk', spot.model, spot.yaw), spot.model);
 		return 'inside';
 	}
 	if (xr.mode === 'walk') {

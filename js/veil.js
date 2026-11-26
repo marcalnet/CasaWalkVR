@@ -7,6 +7,10 @@
 
 import * as THREE from 'three';
 
+const TUNNEL_AT = 0.25, TUNNEL_HALF = 1; // the tunnel's plane: this far from the eyes, this half-size (m)
+const TUNNEL_HOLE = Math.tan(THREE.MathUtils.degToRad(22.5)) * TUNNEL_AT / TUNNEL_HALF; // its clear circle, 45° across (as a fraction of the half-size)
+const TUNNEL_OPEN = 6; // how much larger it starts (the circle beyond the view's edge)
+
 export class Veil {
 	constructor(camera) {
 		this.mesh = new THREE.Mesh(new THREE.SphereGeometry(0.3, 16, 8),
@@ -33,6 +37,35 @@ export class Veil {
 			camera.add(this.vignette);
 		}
 		this.vignetteAmount = 0;
+		// The tunnel (WALK_IN_ZOOM, js/xr.js): black all round a clear circle 45° across, turned to a spot.
+		this.tunnel = null;
+		if (typeof document !== 'undefined') {
+			const c = document.createElement('canvas');
+			c.width = c.height = 256;
+			const g = c.getContext('2d'), hole = TUNNEL_HOLE * 128, grad = g.createRadialGradient(128, 128, hole * 0.75, 128, 128, hole * 1.25);
+			grad.addColorStop(0, 'rgba(0,0,0,0)'); grad.addColorStop(1, 'rgba(0,0,0,1)');
+			g.fillStyle = grad; g.fillRect(0, 0, 256, 256);
+			this.tunnel = new THREE.Mesh(new THREE.PlaneGeometry(2 * TUNNEL_HALF, 2 * TUNNEL_HALF), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(c), transparent: true, opacity: 0, depthTest: false, depthWrite: false }));
+			this.tunnel.renderOrder = 1001;
+			this.tunnel.visible = false;
+			this.tunnel.name = 'tunnel';
+			camera.add(this.tunnel);
+		}
+	}
+
+	/**
+	 * The tunnel: 0 hidden, 1 closed to its 45° circle (it closes in from the
+	 * view's edge as it grows); dirLocal: the spot in the camera's space.
+	 */
+	setTunnel(amount, dirLocal = null) {
+		const m = this.tunnel;
+		if (!m) return;
+		m.visible = amount > 0.001;
+		if (!m.visible) return;
+		if (dirLocal) m.position.copy(dirLocal).normalize().multiplyScalar(TUNNEL_AT);
+		m.lookAt(0, 0, 0);
+		m.scale.setScalar(1 + (TUNNEL_OPEN - 1) * (1 - amount)); // (a wide hole at first: the circle closes in from the edge)
+		m.material.opacity = Math.min(1, amount * 2);
 	}
 
 	/** who ('teleport', 'layer', 'flash'): cover the view this much (0..1) in this colour; 0 withdraws the request. */
@@ -54,7 +87,7 @@ export class Veil {
 	amount(who) { return this.requests.get(who)?.opacity ?? 0; }
 
 	/** Withdraws every request (the session ended). */
-	clear() { this.requests.clear(); this.setVignette(0); this.apply(); }
+	clear() { this.requests.clear(); this.setVignette(0); this.setTunnel(0); this.apply(); }
 
 	apply() {
 		let top = null;

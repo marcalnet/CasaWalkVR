@@ -67,8 +67,14 @@ export class Walk {
 
 	/** Walk in at the Sweet Home 3D observer camera (or the model's centre). */
 	walkIn() {
-		const xr = this.xr;
+		const { modelPt, yaw } = this.walkInPoint();
 		this.setWalkTransform();
+		this.xr.setMode('walk', modelPt, yaw);
+	}
+
+	/** Where Walk in → lands: the Sweet Home 3D camera's place (model space), or the middle of the home. */
+	walkInPoint() {
+		const xr = this.xr;
 		const obs = xr.model.observer;
 		let modelPt, yaw = null;
 		if (obs) {
@@ -83,7 +89,7 @@ export class Walk {
 			const floor = xr.findFloor(eye, 0.01) || eye.setY(0);
 			modelPt = xr.centerer.worldToLocal(floor.clone());
 		}
-		xr.setMode('walk', modelPt, yaw);
+		return { modelPt, yaw };
 	}
 
 	setWalkTransform() {
