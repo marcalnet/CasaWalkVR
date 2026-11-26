@@ -1030,19 +1030,19 @@ check('at the scale model, B never leaves VR', (await state()).presenting && (aw
 	const doors = await page.evaluate(async () => {
 		const x = window.__casawalk.xr, V = x.rig.position.constructor, d = x.modes.dollhouse.doors;
 		const w = (slot) => d.keys.get(slot).face.getWorldPosition(new V());
-		const head = x.headWorld(), back = w('back'), inn = w('in');
+		const head = x.headWorld(), inn = w('in');
 		const size = (slot) => { const g = d.keys.get(slot).face.geometry; g.computeBoundingBox(); const b = g.boundingBox; return +(b.max.x - b.min.x).toFixed(3); };
-		const bw = size('back'), iw = size('in'), gap = +((inn.x - iw / 2) - (back.x + bw / 2)).toFixed(3);
+		const iw = size('in'), back = d.keys.has('back');
 		// Under the line from the eyes to the model: the doors' top edge is further below the horizon than any corner of the model.
 		const down = (p) => Math.atan2(head.y - p.y, Math.hypot(p.x - head.x, p.z - head.z)) * 180 / Math.PI;
 		const top = d.keys.get('in').face.localToWorld(new V(0, d.keys.get('in').h / 2, 0));
 		const B = x.model.bounds, corners = [];
 		for (const cx of [B.min.x, B.max.x]) for (const cy of [B.min.y, B.max.y]) for (const cz of [B.min.z, B.max.z]) corners.push(down(x.centerer.localToWorld(new V(cx, cy, cz))));
-		return { back: back.toArray(), in: inn.toArray(), bw, iw, gap, shown: x.modes.dollhouse.doorGroup.visible && x.stage.visible,
+		return { back, in: inn.toArray(), iw, shown: x.modes.dollhouse.doorGroup.visible && x.stage.visible,
 			ahead: +Math.hypot(inn.x - head.x, inn.z - head.z).toFixed(2), below: +(head.y - inn.y).toFixed(2), topDown: +down(top).toFixed(1), modelDown: +Math.max(...corners).toFixed(1) };
 	});
-	check('the doors at the scale model: a big Walk in →, a small ← Back to its left, at waist height within reach, under the line to the model, shown without opening a menu',
-		doors.shown && doors.iw > 0.25 && doors.bw <= doors.iw / 2 && doors.gap >= 0.02 && doors.ahead < 0.45 && doors.below > 0.55 && doors.below < 0.75 && doors.topDown > doors.modelDown, JSON.stringify(doors));
+	check('the door at the scale model: a big Walk in → (no ← Back since 26 Nov 2026), at waist height within reach, under the line to the model, shown without opening a menu',
+		doors.shown && doors.iw > 0.25 && !doors.back && doors.ahead < 0.45 && doors.below > 0.55 && doors.below < 0.75 && doors.topDown > doors.modelDown, JSON.stringify(doors));
 	// Seated: the doors stay at waist height (65 cm below the eyes).
 	await page.evaluate(() => window.__device.position.set(0, 1.1, 0)); await frames(10);
 	await page.waitForFunction(() => { const x = window.__casawalk.xr, d = x.modes.dollhouse; return Math.abs(x.stage.worldToLocal(x.headWorld()).y - d.doorEyes) < 0.08; }, null, { timeout: 5000, polling: 'raf' }).catch(() => {});

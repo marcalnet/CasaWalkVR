@@ -81,21 +81,23 @@ const MAX_FRAME_TURN = THREE.MathUtils.degToRad(20); // a held model turns at mo
 const SHOWN_FOR = 0.3, LOOK_BACK = 0.1;
 const HOVER = { frames: 2, linger: 0.2, away: CLAIM.near, faint: 0.36, solid: 0.9 }; // the hover ray before a pinch: shown after 2 frames in the zone, gone 0.2 s after; not within 15 cm of the model; its opacity, and the aim's
 const WAIST = 0.8; // a pinching hand this far below the eyes is at your side: it never aims, and an aim cancels (m)
-// The doors at the scale model, metres (the user's Quest 2 tests): Walk in →
-// is the big one, ← Back about a third as long, the same height, on its left.
+// The door at the scale model, metres (the user's Quest 2 tests): Walk in →.
+// (Its ← Back, held 0.6 s to leave VR, went on 26 Nov 2026: leaving is the
+// wrist's ← Back, or the Meta button. Walk in → and the levels kept their places.)
 // They float at waist height in front of you (on the plinth's edge you had to
 // crouch to touch them with bare hands), close enough to touch, and low enough
 // to stay under the line from the eyes to the model (65° below the horizon at
 // their middle; the model's near edge is about 58° down from where you stand).
-const DOOR_IN = [0.32, 0.09], DOOR_BACK = [0.1, 0.09];
+const DOOR_IN = [0.32, 0.09];
+const DOOR_IN_X = 0.065; // Walk in →'s middle, right of where you stand (where it was beside ← Back)
+const LEVELS_X = -0.345; // the levels stack's middle, left of where you stand (unchanged)
 const DOOR_BELOW_EYES = 0.65; // waist height (the user's word), standing or seated (the lift keeps the eyes at the same height)
 const DOOR_AHEAD = 0.3; // in front of where you stand
 // Nearly upright (70° from flat, facing you): a push from the front is a push forward;
 // a hand lowered onto it from above is far off its normal and never presses it.
 const DOOR_TILT = 70;
 // The levels: a stack of keys to the left of the doors, ground at the bottom like the building's section (the UX design of 25 Nov).
-const LEVEL_KEY = [0.08, 0.04], LEVEL_KEY_MANY = 0.03, LEVEL_GAP = 0.012, LEVELS_LEFT = 0.12; // key size (m); with more than six levels they are 3 cm tall; the stack's middle this far left of ← Back
-const BACK_HOLD = 0.6; // ← Back (leave VR) is held this long, a ring filling (the Lead's decision)
+const LEVEL_KEY = [0.08, 0.04], LEVEL_KEY_MANY = 0.03, LEVEL_GAP = 0.012; // key size (m); with more than six levels they are 3 cm tall
 const DOORS_FADE = 0.15; // seconds: the doors fade out while the board is open (they showed through it), and back
 const DOORS_ARC = 0.3; // ... and to this while the wrist arc is open (still seen, never pressed)
 const DOOR_FOLLOW = 0.08; // the doors move to a new head height once it differs by this much
@@ -135,15 +137,14 @@ export class Dollhouse {
 		this.labels = this.markers.map(() => new Label());
 		for (const l of this.labels) xr.scene.add(l.mesh);
 		xr.hideFromPhotos(...this.markers, ...this.labels.map((l) => l.mesh));
-		// The doors at the scale model (the user's Quest 2 tests): always there,
-		// without opening the orb. A big Walk in → in front of you at elbow
-		// height, a small ← Back (leave VR) on its left, tilted up towards you.
-		// Pressed by touch, a controller's tip or its laser.
+		// The door at the scale model (the user's Quest 2 tests): always there,
+		// without opening the orb. A big Walk in → in front of you at waist
+		// height, tilted up towards you, the levels on its left. Pressed by
+		// touch, a controller's tip or its laser.
 		this.doors = new KeyPad(xr, 'plinth-door');
 		this.doorGroup = new THREE.Group();
 		this.doorGroup.name = 'plinth-doors';
-		this.doorGroup.add(this.doors.add('back', ...DOOR_BACK).group, this.doors.add('in', ...DOOR_IN).group);
-		this.doors.setSpec('back', { id: 'back', look: 'outline', icon: 'back', label: '\u2190 Back', caption: 'Hold: leave VR', hold: BACK_HOLD });
+		this.doorGroup.add(this.doors.add('in', ...DOOR_IN).group);
 		this.doors.setSpec('in', { id: 'in', look: 'filled', icon: 'in', label: 'Walk in \u2192', caption: 'Inside the home' });
 		this.levelCount = 0; // the keys in the stack now (level keys are slots 'level0', 'level1'... of the doors' pad)
 		this.levelTitle = new Label({ height: 0.026 });
@@ -185,14 +186,12 @@ export class Dollhouse {
 	/**
 	 * The doors in front of where you stand, at waist height for eyes at
 	 * eyeY (stage space; by default where the lift puts them), tilted up
-	 * towards you: Walk in → in the middle, ← Back 3 cm to its left.
+	 * towards you: Walk in → a little right of the middle, the levels on the left.
 	 */
 	placeDoors(eyeY = DOLLHOUSE_PERSON - EYE_BELOW_TOP) {
-		const both = DOOR_IN[0] + DOOR_BACK[0] + 0.03;
-		this.doors.keys.get('in').group.position.set(both / 2 - DOOR_IN[0] / 2, 0, 0);
-		this.doors.keys.get('back').group.position.set(-both / 2 + DOOR_BACK[0] / 2, 0, 0);
-		// The levels: left of ← Back, the stack's middle LEVELS_LEFT from its edge, at the doors' height.
-		const n = this.levelCount, h = n > 6 ? LEVEL_KEY_MANY : LEVEL_KEY[1], x = -both / 2 - LEVELS_LEFT;
+		this.doors.keys.get('in').group.position.set(DOOR_IN_X, 0, 0);
+		// The levels: at the doors' height, their stack's middle at LEVELS_X.
+		const n = this.levelCount, h = n > 6 ? LEVEL_KEY_MANY : LEVEL_KEY[1], x = LEVELS_X;
 		for (let i = 0; i < n; i++) this.doors.keys.get(`level${i}`).group.position.set(x, (i - (n - 1) / 2) * (h + LEVEL_GAP), 0);
 		this.levelTitle.mesh.position.set(x, ((n - 1) / 2) * (h + LEVEL_GAP) + h / 2 + 0.02, 0.002);
 		this.doorGroup.position.set(0, eyeY - DOOR_BELOW_EYES, -DOOR_AHEAD);
@@ -501,7 +500,7 @@ export class Dollhouse {
 		// The doors (not while a menu is open in front of them). They sit where hands and
 		// controllers rest (the tester's finding; the Lead's rules): by touch only a
 		// deliberate push from the front (DELIBERATE); a laser only when the door is in
-		// front of the model, pressed and let go over it; ← Back is held 0.6 s.
+		// front of the model, pressed and let go over it.
 		const door = this.doors.update(dt, { active: this.doorsLive, rules: DELIBERATE, blockers: xr.targets().pointable, laserOnRelease: true });
 		this.followDoors(door);
 		let action = point.action ?? door.action;

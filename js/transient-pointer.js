@@ -5,8 +5,8 @@
 // the decisions are tested in Node (act()).
 //
 //   the open settings board: presses what the ray is on
-//   the doors at the scale model: presses the door (← Back needs its hold: a
-//                                 pinch can't, so it does nothing)
+//   the doors at the scale model: presses the door (a held key needs its
+//                                 hold: a pinch can't, so it does nothing)
 //   at the scale model: on a room, steps inside there (the dive)
 //   inside: on a floor you can stand on, teleports there (the fade)
 
@@ -54,7 +54,7 @@ export function act(xr, origin, dir) {
 		const door = ray.intersectObjects(faces, false)[0];
 		if (door) {
 			const k = door.object.userData.key;
-			if (k.spec?.hold) return null; // (← Back is held: a single pinch never leaves VR)
+			if (k.spec?.hold) return null; // (a held key: a single pinch never presses it)
 			const a = d.doors.press(k, null);
 			if (a) xr.menuAction(a.id);
 			return 'door';

@@ -178,7 +178,7 @@ export function menuAction(xr, target) {
 			break;
 		case 'back':
 			if (xr.mode === 'walk') xr.goLayer('back', () => xr.setMode('dollhouse'));
-			else xr.goLayer('out', () => xr.end()); // from the scale model, Back leaves VR (the door on the plinth is held 0.6 s; the wrist menu's, opened on purpose, is one press)
+			else xr.goLayer('out', () => xr.end()); // from the scale model, Back leaves VR (the wrist menu's, opened on purpose: one press)
 			break;
 		case 'settings': ui.toggleBoard(); break;
 		case 'guideKey': ui.toggleHelp(); break; // (How to move: the left wing)

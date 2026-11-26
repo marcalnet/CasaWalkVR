@@ -146,11 +146,12 @@ test('the wrist menu: an arc over the upper outer side of the orb, frozen once o
 
 test('the levels stack beside the doors: one key per level, ground at the bottom, the chosen one filled; one level has none', async () => {
 	const { x } = await setup();
-	const d = x.modes.dollhouse, key = (i) => d.doors.keys.get(`level${i}`), back = d.doors.keys.get('back');
+	const d = x.modes.dollhouse, key = (i) => d.doors.keys.get(`level${i}`), inn = d.doors.keys.get('in');
 	assert.equal(d.levelCount, 2, 'the example home has two levels');
 	assert.deepEqual([0, 1].map((i) => [key(i).spec.id, key(i).spec.look, key(i).spec.label, key(i).group.visible]), [['level:0', 'plain', 'Ground floor', true], ['level:1', 'chosen', 'First floor', true]], 'the top key means all levels');
 	assert.ok(key(0).group.position.y < key(1).group.position.y, 'ground at the bottom');
-	assert.ok(key(0).group.position.x < back.group.position.x - 0.1 && Math.abs(key(0).group.position.x - key(1).group.position.x) < 1e-9, 'a stack to the left of ← Back');
+	assert.ok(key(0).group.position.x < inn.group.position.x - inn.w / 2 - 0.1 && Math.abs(key(0).group.position.x - key(1).group.position.x) < 1e-9, 'a stack to the left of Walk in, where it was');
+	assert.ok(Math.abs(key(0).group.position.x + 0.345) < 1e-9 && Math.abs(inn.group.position.x - 0.065) < 1e-9, 'the stack and Walk in where they were beside the old ← Back');
 	assert.deepEqual([key(0).w, key(0).h], [0.08, 0.04]);
 	assert.ok(d.levelTitle.mesh.visible && d.levelTitle.text === 'Levels');
 	x.menuAction({ id: 'levels', value: 0 });
@@ -480,17 +481,13 @@ test('mirrored: a tool in the left hand has Y as its second button', async () =>
 	assert.ok(x.ui.wrist.open && x.ui.wrist.pinned, 'A opens the wrist menu, pinned');
 });
 
-test('the doors at the scale model: a big Walk in →, a small ← Back on its left; Walk in goes inside', async () => {
+test('the door at the scale model: one big Walk in → (no ← Back since 26 Nov 2026); Walk in goes inside', async () => {
 	const { x, go, frame, settle } = await setup();
 	const d = x.modes.dollhouse.doors;
-	const back = d.keys.get('back'), inn = d.keys.get('in');
-	assert.deepEqual([back.spec.id, back.spec.look, inn.spec.id, inn.spec.look], ['back', 'outline', 'in', 'filled']);
-	x.stage.updateMatrixWorld(true);
-	const at = (k) => k.group.getWorldPosition(new THREE.Vector3());
-	assert.ok(at(back).x < at(inn).x, 'Back on the left of Walk in');
-	assert.ok(Math.min(inn.w, inn.h, back.w, back.h) >= 0.07, 'big enough to touch');
-	assert.ok(inn.w >= 2 * back.w && back.h === inn.h, 'Walk in is the big one; Back half as long or less, the same height');
-	assert.ok(at(inn).x - inn.w / 2 - (at(back).x + back.w / 2) >= 0.02, 'apart');
+	const inn = d.keys.get('in');
+	assert.ok(!d.keys.has('back'), 'no ← Back door: leaving is the wrist\'s ← Back, or the Meta button');
+	assert.deepEqual([inn.spec.id, inn.spec.look], ['in', 'filled']);
+	assert.ok(Math.min(inn.w, inn.h) >= 0.07, 'big enough to touch');
 	// The laser presses it like any key: Walk in goes inside, as the wrist menu's does.
 	assert.equal(d.press(inn, null).id, 'in');
 	go('in');
@@ -724,7 +721,7 @@ test('holding the model: it follows the grip, level (turned only about the verti
 	assert.ok(d.grab && !d.floating, 'touched again: the countdown stops');
 });
 
-test('the doors at the scale model: ← Back is held 0.6 s; let go early, nothing', async () => {
+test('a held key (the held-key code kept for the wrist\'s round ← Back, next build step 5): pressed once held 0.6 s; let go early, nothing', async () => {
 	const { x, ended, press, frame, settle, hands } = await setup();
 	const d = x.modes.dollhouse;
 	frame();
@@ -740,14 +737,20 @@ test('the doors at the scale model: ← Back is held 0.6 s; let go early, nothin
 		ray.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, -1), at.clone().sub(from).normalize());
 		ray.updateMatrixWorld(true);
 	};
-	aimAt('back');
+	// (No door is held today: Walk in → is made a held key for this test.)
+	const spec = d.doors.keys.get('in').spec;
+	d.doors.setSpec('in', { ...spec, hold: 0.6 });
+	for (let i = 0; i < 15; i++) frame(); // (the laser rests on it first: a laser only passing over never presses)
+	aimAt('in');
+	for (let i = 0; i < 15; i++) frame();
 	press('right', 'trigger'); for (let i = 0; i < 25; i++) frame(); // 0.35 s
 	press('right', 'trigger', false); for (let i = 0; i < 10; i++) frame();
-	assert.ok(x.mode === 'dollhouse' && ended() === 0 && !x.layerFx, 'let go early: nothing');
+	assert.ok(x.mode === 'dollhouse' && !x.layerFx, 'let go early: nothing');
 	press('right', 'trigger'); for (let i = 0; i < 50; i++) frame(); // 0.7 s
-	assert.ok(x.layerFx?.dir === 'out', 'held 0.6 s: leaving VR');
+	assert.ok(x.layerFx?.dir === 'in', 'held 0.6 s: pressed');
 	press('right', 'trigger', false); settle();
-	assert.equal(ended(), 1);
+	assert.equal(x.mode, 'walk');
+	d.doors.setSpec('in', spec);
 });
 
 test('Walk in on the plinth: the laser presses it on letting go over it', async () => {
@@ -1024,15 +1027,18 @@ test('the marker: hold the trigger and move to draw; the stick press changes col
 	x.tools.putBack();
 });
 
-test('Vision Pro look-and-pinch: a pinch on a room steps inside; inside, on the floor, teleports; never leaves VR by the held door', async () => {
+test('Vision Pro look-and-pinch: a pinch on a room steps inside; inside, on the floor, teleports; never presses a held key', async () => {
 	const { act } = await import('../js/transient-pointer.js');
 	const { x, ended, frame, settle } = await setup();
 	frame();
 	const head = x.headWorld();
-	// ← Back on the plinth needs a hold: a single pinch on it does nothing.
-	const back = x.modes.dollhouse.doors.keys.get('back').face.getWorldPosition(new THREE.Vector3());
-	assert.equal(act(x, head, back.clone().sub(head)), null);
+	// A held key needs its hold: a single pinch on it does nothing (Walk in → made one for this check).
+	const doors = x.modes.dollhouse.doors, spec = doors.keys.get('in').spec;
+	doors.setSpec('in', { ...spec, hold: 0.6 });
+	const door = doors.keys.get('in').face.getWorldPosition(new THREE.Vector3());
+	assert.equal(act(x, head, door.clone().sub(head)), null);
 	assert.equal(ended(), 0);
+	doors.setSpec('in', spec);
 	// A room of the scale model.
 	const room = x.modes.walk.spots().find((s) => s.kind === 'room');
 	const at = x.centerer.localToWorld(new THREE.Vector3(room.x, room.y, room.z));
