@@ -75,14 +75,17 @@ const DOLLHOUSE_SIZE = 1.4; // metres across at most (build 120's design, item 8
 /** Stepping inside: how long the model grows towards you (s), eased in and out, before the fade. 0.8 is the fallback if the slow growth is uncomfortable (build 111's design, item 4), 0.3 the old blink. */
 export const WALK_IN_GROW = 1.3;
 /**
- * Stepping inside as a tunnel zoom (build 120's design, item 7, waiting for the user's word): a
- * vignette closes to a 45° circle on the landing spot, and inside it the whole room and the model
- * scale up x1 -> x3 about that spot, then the circle fades to black. Off: the model grows (above).
- * The motion most likely to make people sick on a Quest 2: it ships on only after two comfortable
- * tries by someone prone to it, seated and standing.
+ * Stepping inside as a tunnel zoom (build 120, item 7; on since the user's word of 26 Nov 2026, made
+ * subtle by the UX/UI Designer's M2): a dim closes in from the view's edge to a clear circle 60°
+ * across on the landing spot (dimmed to half, never black: js/veil.js), and inside it the whole room
+ * and the model scale up x1 -> x1.4 about that spot (smootherstep: a soft start and stop), then the
+ * view fades to black on the dive chime's last ringing note. Off: the model grows (above). The one
+ * place it is decided (a Settings switch could set it later). Fallbacks: x1.6 if it feels like too
+ * little; x1.25, then off, if anyone feels discomfort. Comfort acceptance: the user, seated and
+ * standing, on the Quest 2.
  */
-export const WALK_IN_ZOOM = false;
-const ZOOM = { close: 0.4, from: 0.3, to: 1.1, x: 3, black: 1.0, end: 1.3 }; // (seconds, and the scale at the end)
+export const WALK_IN_ZOOM = true;
+const ZOOM = { close: 0.5, from: 0.2, to: 1.3, x: 1.4, black: 1.25, end: 1.6 }; // (seconds, and the scale at the end)
 
 export class XRExperience {
 	/**
@@ -426,21 +429,21 @@ export class XRExperience {
 	}
 
 	/**
-	 * The tunnel zoom (WALK_IN_ZOOM): the vignette closes to a 45° circle on
-	 * the landing spot (0-0.4 s), the room and the model scale x1 -> x3 about
-	 * it (0.3-1.1 s, eased in), the circle fades to black (1.0-1.3 s), then
-	 * inside the fade lifts as usual. The floor under your feet never moves:
-	 * the spot is ahead of you, below the eyes.
+	 * The tunnel zoom (WALK_IN_ZOOM): the dim closes in to a 60° circle on the
+	 * landing spot (0-0.5 s, eased out), the room and the model scale x1 ->
+	 * x1.4 about it (0.2-1.3 s, smootherstep), the view fades to black
+	 * (1.25-1.6 s), then inside the fade lifts as usual. The floor under your
+	 * feet never moves: the spot is ahead of you, below the eyes.
 	 */
 	runTunnel(f, cover) {
 		const z = f.tunnel, t = f.t;
-		const k = Math.min(1, Math.max(0, (t - ZOOM.from) / (ZOOM.to - ZOOM.from))), s = 1 + (ZOOM.x - 1) * k * k; // (eased in: a slow start, a quick end)
+		const k = Math.min(1, Math.max(0, (t - ZOOM.from) / (ZOOM.to - ZOOM.from))), s = 1 + (ZOOM.x - 1) * ease.smooth(k); // (smootherstep: no jolt at either end)
 		this.stage.scale.setScalar(s);
 		this.stage.position.copy(z.stage).sub(z.at).multiplyScalar(s).add(z.at);
 		this.anchor.position.copy(z.anchor).sub(z.at).multiplyScalar(s).add(z.at);
 		this.anchor.scale.setScalar(z.scale * s);
 		this.anchor.updateMatrixWorld(true);
-		this.veil.setTunnel(Math.min(1, t / ZOOM.close), this.camera.worldToLocal(z.at.clone()));
+		this.veil.setTunnel(ease.out(Math.min(1, t / ZOOM.close)), this.camera.worldToLocal(z.at.clone())); // (closes in eased out)
 		cover(THREE.MathUtils.clamp((t - ZOOM.black) / (ZOOM.end - ZOOM.black), 0, 1));
 		if (t >= ZOOM.end) {
 			this.veil.setTunnel(0);

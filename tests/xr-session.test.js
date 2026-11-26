@@ -53,7 +53,7 @@ async function setup({ nomerge = false } = {}) {
 	const press = (hand, name, v = true) => { pads[hand].buttons[BUTTON[name]].pressed = v; };
 	const frame = (dt = 1 / 72) => x.update(dt);
 	// Moving between layers takes a few frames (the dive or surface transition).
-	const settle = () => { for (let i = 0; i < 120 && x.layerFx; i++) frame(); };
+	const settle = () => { for (let i = 0; i < 240 && x.layerFx; i++) frame(); }; // (the tunnel zoom takes 1.6 s, then the fade lifts)
 	const go = (id) => { x.menuAction(id); settle(); };
 	return { x, ended: () => ended, press, frame, settle, go, hands: x.input.hands };
 }
@@ -588,18 +588,23 @@ test('bare hands: the main hand between the eyes and the model shows a faint aim
 	x.input._gh = null; c.isHand = false; c.isController = true; left.source = leftSource;
 });
 
-test('the tunnel zoom (off by default): the room and the model scale x3 about the spot, the view goes black, then inside; the scale model as it was (build 120, item 7)', async () => {
+test('the tunnel zoom (on, subtle: build 120, M2): the room and the model scale x1.4 about the spot with a soft start and stop, the view goes black from 1.25 s, then inside; the scale model as it was', async () => {
 	const { WALK_IN_ZOOM } = await import('../js/xr.js');
-	assert.equal(WALK_IN_ZOOM, false, 'off until the user says so');
+	assert.equal(WALK_IN_ZOOM, true, 'on since the user\'s word (26 Nov 2026)');
 	const { x, frame } = await setup();
 	frame();
 	const spot = x.centerer.localToWorld(x.model.bounds.getCenter(new THREE.Vector3()));
 	const stage0 = x.stage.position.clone(), scale0 = x.anchor.scale.x;
-	let went = 0, maxScale = 0;
+	let went = 0, maxScale = 0, blackAt = null;
+	const scales = [];
 	x.layerFx = { dir: 'in', t: 0, done: false, zoom: 1, go: () => { went++; }, tunnel: { at: spot, stage: stage0.clone(), anchor: x.anchor.position.clone(), scale: scale0 } };
-	const cover = () => {};
-	for (let i = 0; i < 72 * 1.4 && x.layerFx?.tunnel; i++) { x.layerFx.t += 1 / 72; x.runTunnel(x.layerFx, cover); maxScale = Math.max(maxScale, x.stage.scale.x); }
-	assert.ok(maxScale > 2.9 && went === 1, `scaled to x${maxScale.toFixed(2)}, then inside`);
+	const cover = (v) => { if (v > 0 && blackAt === null) blackAt = x.layerFx.t; };
+	for (let i = 0; i < 72 * 1.8 && x.layerFx?.tunnel; i++) { x.layerFx.t += 1 / 72; x.runTunnel(x.layerFx, cover); maxScale = Math.max(maxScale, x.stage.scale.x); scales.push(x.stage.scale.x); }
+	assert.ok(Math.abs(maxScale - 1.4) < 0.005 && went === 1, `scaled to x${maxScale.toFixed(3)}, then inside`);
+	assert.ok(blackAt > 1.24 && blackAt < 1.28, `the fade to black from ${blackAt?.toFixed(2)} s`);
+	// Smootherstep: the first and last steps of the zoom are tiny (no jolt at either end).
+	const steps = scales.slice(1).map((v, i) => v - scales[i]).filter((d) => d > 0);
+	assert.ok(steps[0] < 1e-4 && steps.at(-1) < 1e-4 && Math.max(...steps) > 0.005, `steps ${steps[0].toExponential(1)} … ${steps.at(-1).toExponential(1)}`);
 	assert.ok(x.stage.scale.x === 1 && x.stage.position.distanceTo(stage0) < 1e-9, 'the room back as it was');
 	x.layerFx = null;
 });

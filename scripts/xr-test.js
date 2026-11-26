@@ -1020,10 +1020,18 @@ check('B closes the board', (await state()).menu === null);
 // Trigger on the model: jump in at 1:1.
 await aimW('right', R, await modelTop()); await frames(6);
 const mark = await page.evaluate(() => { const x = window.__casawalk.xr, m = x.modes.dollhouse.markers[x.input.hands.right.index]; return m.visible ? m.position.toArray() : null; });
+// (The tunnel zoom, build 120's M2: watched every frame while it runs.)
+await page.evaluate(() => {
+	const x = window.__casawalk.xr, w = window.__tunnelSeen = { scale: 1, dim: 0, shown: false, black: null };
+	const run = x.runTunnel.bind(x);
+	x.runTunnel = (f, cover) => { run(f, cover); const m = x.veil.tunnel; w.scale = Math.max(w.scale, x.stage.scale.x); if (m?.visible) { w.shown = true; w.dim = Math.max(w.dim, m.material.opacity); } if (w.black === null && x.veil.amount('layer') > 0) w.black = +f.t.toFixed(2); };
+});
 await click('right', 'trigger');
 await settled();
 s = await state();
 check('trigger on model enters 1:1 (through the dive)', s.mode === 'walk' && s.anchorScale === 1, JSON.stringify(s.rig.map((v) => +v.toFixed(2))));
+const tunnel = await page.evaluate(() => { const x = window.__casawalk.xr; delete x.runTunnel; return window.__tunnelSeen; });
+check('walking in: the tunnel zoom, subtle (x1.4, dimmed to half at most, black from 1.25 s; build 120, M2)', tunnel.shown && Math.abs(tunnel.scale - 1.4) < 0.01 && tunnel.dim > 0.45 && tunnel.dim <= 0.5 && tunnel.black >= 1.24 && tunnel.black <= 1.36, JSON.stringify(tunnel)); // (seen on the first frame past 1.25 s: headless frames can be 0.1 s apart)
 {
 	const arr = await page.evaluate(() => { const x = window.__casawalk.xr; return { shown: x.arrival.mesh.visible, text: x.arrival.text, curtain: x.veil.amount('layer') > 0 }; });
 	check('arriving inside: the room\'s name floats in front of you, the view uncovered', arr.shown && arr.text.length > 0 && !arr.curtain, JSON.stringify(arr));
