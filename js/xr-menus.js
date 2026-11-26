@@ -82,16 +82,16 @@ export const WING_SIZE = { settings: 0.40, guide: 0.34 }; // widths, metres
 export const GUIDES = {
 	'walk-hands': { title: 'How to move', row: 0,
 		frames: ['Pinch your fingers', 'Hold: aim', 'Point at the floor', 'Let go on blue: go'],
-		lines: ['While aiming, flick your wrist: turn', 'Let go on white or red: nothing happens', 'Palm towards you: cancel', 'Pinch outside the panels: close them', 'The Meta button leaves VR at any moment'] },
+		lines: ['While aiming, flick your wrist: turn', 'Let go on white or red: nothing happens', 'Palm towards you: cancel', 'The Meta button leaves VR at any moment'] },
 	'walk-controllers': { title: 'How to move', row: 1,
 		frames: ['Right stick forward', 'or hold a trigger', 'Aim at the floor', 'Let go on blue: go'],
-		lines: ['Right stick left or right: turn', 'Left stick: walk', 'Hold B or Y: back', 'Trigger outside the panels: close them', 'The Meta button leaves VR at any moment'] },
+		lines: ['Right stick left or right: turn', 'Left stick: walk', 'Hold B or Y: back', 'The Meta button leaves VR at any moment'] },
 	'dollhouse-hands': { title: 'The scale model', row: 2,
 		frames: ['Close your hand on it: hold', 'Let go: it floats, then goes home', 'Pinch and hold, point at a room', 'Let go when it holds still: step inside'],
-		lines: ['Lift it and turn it: it stays level', 'Palm towards you: cancel', 'Pinch outside the panels: close them', 'Hold \u2190 Back: one step back'] },
+		lines: ['Lift it and turn it: it stays level', 'Palm towards you: cancel', 'Hold \u2190 Back: one step back'] },
 	'dollhouse-controllers': { title: 'The scale model', row: 3,
 		frames: ['Grip: hold it', 'Stick: turn', 'Point at a room', 'Pull the trigger: step inside'],
-		lines: ['Lift it and turn it: it stays level', 'Let go in the air: it goes home by itself', 'Trigger outside the panels: close them', 'Hold B or Y: back'] },
+		lines: ['Lift it and turn it: it stays level', 'Let go in the air: it goes home by itself', 'Hold B or Y: back'] },
 };
 
 /**
