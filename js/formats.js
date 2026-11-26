@@ -439,37 +439,56 @@ export async function loadModelEntry(store, path) {
  *    into a fan from the first corner, which only works for convex shapes:
  *    on a U-shaped face (e.g. Sweet Home 3D's door frame) the fan fills in
  *    the doorway. Concave quads and all larger polygons go through earcut.
+ *
+ * Light on memory (heavy homes, step 2): one pass over
+ * the text, line by line, without splitting it into an array of lines; the
+ * vertices kept as numbers in one typed array (no object per vertex); and
+ * the text returned untouched when nothing changes, else built once from
+ * slices of it round the changed lines. (Before, a 364 MB OBJ became a list
+ * of lines, an object per vertex and a second whole text: 2 GB at the peak.)
  */
 export function prepareObjText(text) {
-	const verts = [];
+	if (text.includes('\r\n')) text = text.replace(/\r\n/g, '\n'); // (as OBJLoader would: the material names must match its own; one copy, Windows files only)
+	let xyz = new Float64Array(3 * 4096), nv = 0;
 	let vtCount = 0, vnCount = 0;
-	const out = [];
+	const chunks = [];
+	let kept = 0; // the text before this index is already in chunks
+	const replace = (from, to, by) => { chunks.push(text.slice(kept, from)); if (by) chunks.push(by); kept = to; };
+	const vert = (i) => { const k = i < 0 ? nv + i : i - 1; return k >= 0 && k < nv ? new THREE.Vector3(xyz[3 * k], xyz[3 * k + 1], xyz[3 * k + 2]) : null; };
 	const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3();
-	for (const line of text.split(/\r?\n/)) {
-		const t = line.trimStart();
-		if (t.startsWith('v ')) {
-			const p = t.split(/\s+/);
-			verts.push(new THREE.Vector3(+p[1], +p[2], +p[3]));
-		} else if (t.startsWith('vt ')) {
-			vtCount++;
-		} else if (t.startsWith('vn ')) {
-			vnCount++;
-		} else if (/^[lp]\s/.test(t)) {
-			continue;
-		} else if (t.startsWith('f ')) {
-			let toks = t.split(/\s+/).slice(1).filter(Boolean);
-			if (t.includes('/')) {
+	const blank = (ch) => ch === 32 || ch === 9;
+	const n = text.length;
+	for (let start = 0; start < n;) {
+		let end = text.indexOf('\n', start);
+		if (end < 0) end = n;
+		const lineEnd = end > start && text.charCodeAt(end - 1) === 13 ? end - 1 : end; // (before a CR)
+		let i = start;
+		while (i < lineEnd && blank(text.charCodeAt(i))) i++;
+		const c0 = text.charCodeAt(i), c1 = text.charCodeAt(i + 1), c2 = text.charCodeAt(i + 2);
+		if (c0 === 118 && blank(c1)) { // v
+			const p = text.slice(i + 2, lineEnd).trim().split(/\s+/);
+			if (3 * nv + 3 > xyz.length) { const grown = new Float64Array(xyz.length * 2); grown.set(xyz); xyz = grown; }
+			xyz[3 * nv] = +p[0]; xyz[3 * nv + 1] = +p[1]; xyz[3 * nv + 2] = +p[2];
+			nv++;
+		} else if (c0 === 118 && c1 === 116 && blank(c2)) vtCount++; // vt
+		else if (c0 === 118 && c1 === 110 && blank(c2)) vnCount++; // vn
+		else if ((c0 === 108 || c0 === 112) && blank(c1)) replace(start, end + 1, null); // l, p: the whole line goes
+		else if (c0 === 102 && blank(c1)) { // f
+			let toks = text.slice(i + 2, lineEnd).split(/\s+/).filter(Boolean), done = false;
+			if (toks.some((t) => t.includes('/'))) {
 				const clean = cleanFaceRefs(toks, vtCount, vnCount);
-				if (clean !== toks) { toks = clean; if (toks.length < 4) { out.push(`f ${toks.join(' ')}`); continue; } }
+				if (clean !== toks) { toks = clean; if (toks.length < 4) { replace(start, lineEnd, `f ${toks.join(' ')}`); done = true; } }
 			}
-			if (toks.length >= 4) {
-				const tris = triangulateFace(toks, verts, a, b, c);
-				if (tris) { for (const tri of tris) out.push(`f ${tri.join(' ')}`); continue; }
+			if (!done && toks.length >= 4) {
+				const tris = triangulateFace(toks, vert, a, b, c);
+				if (tris) replace(start, lineEnd, tris.map((tri) => `f ${tri.join(' ')}`).join('\n'));
 			}
 		}
-		out.push(line);
+		start = end + 1;
 	}
-	return out.join('\n');
+	if (!chunks.length) return text;
+	chunks.push(text.slice(kept));
+	return chunks.join('');
 }
 
 /**
@@ -494,12 +513,9 @@ function cleanFaceRefs(toks, vtCount, vnCount) {
 	return parts.map((p) => p[0] + (keepVt ? `/${p[1]}` : keepVn ? '/' : '') + (keepVn ? `/${p[2]}` : ''));
 }
 
-/** Returns triangles (arrays of 3 face tokens) for an OBJ polygon, or null to keep it as is. */
-function triangulateFace(toks, verts, a, b, c) {
-	const pts = toks.map((tok) => {
-		const i = parseInt(tok, 10);
-		return verts[i < 0 ? verts.length + i : i - 1];
-	});
+/** Returns triangles (arrays of 3 face tokens) for an OBJ polygon, or null to keep it as is. vert(i): OBJ vertex i (1-based, or negative from the end) as a Vector3, or null. */
+function triangulateFace(toks, vert, a, b, c) {
+	const pts = toks.map((tok) => vert(parseInt(tok, 10)));
 	if (pts.some((p) => !p)) return null;
 	// Polygon normal (Newell's method)
 	const n = new THREE.Vector3();
