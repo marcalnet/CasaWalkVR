@@ -267,6 +267,34 @@ test('the pause: practising the teleport (hold the trigger, an arc onto the floo
 	for (let i = 0; i < 200 && P.fx; i++) frame();
 	assert.ok(!P.fx && x.veil.amount('layer') === 0, 'the room fades in');
 });
+test('the framing guide: while the camera is held, a red frame where the photo\'s edges fall (its depth 0.3-8 m), 3:2 for the lens; hidden while the shutter fires; never in photos', async () => {
+	const { x, frame, hands } = await setup();
+	const { frameAt, GUIDE } = await import('../js/framing-guide.js');
+	const { lensFov } = await import('../js/street-camera.js');
+	const cam = x.fan.camera, g = cam.guide;
+	hands.right.grip.visible = true;
+	frame();
+	assert.ok(!g.group.visible, 'not while the camera rests in the fan');
+	x.tools.take(cam, hands.right);
+	for (let i = 0; i < 30; i++) frame();
+	assert.ok(g.group.visible && g.alpha === 1, 'held: the frame shows');
+	assert.ok(g.dist >= GUIDE.NEAR && g.dist <= GUIDE.FAR, `its depth ${g.dist.toFixed(2)} m`);
+	const pos = g.outline.geometry.attributes.position.array, xs = [], ys = [];
+	for (let i = 0; i < pos.length; i += 3) { xs.push(pos[i]); ys.push(pos[i + 1]); }
+	const { hw, hh } = frameAt(g.dist, lensFov(cam.mm));
+	assert.ok(Math.abs(Math.max(...xs) - hw) < 1e-6 && Math.abs(Math.max(...ys) - hh) < 1e-6 && Math.abs(hw / hh - 1.5) < 1e-9, 'the photo\'s 3:2 frame at that depth');
+	assert.ok(x.photoHidden.has(g.group), 'never in a photo');
+	x.capturePhoto = () => {};
+	cam.shoot();
+	for (let i = 0; i < 20; i++) frame();
+	assert.ok(g.alpha === 0, 'hidden while the shutter fires and the print pops');
+	for (let i = 0; i < 40; i++) frame();
+	assert.ok(g.alpha === 1, 'back after 0.4 s');
+	x.tools.putBack();
+	for (let i = 0; i < 30; i++) frame();
+	assert.ok(!g.group.visible, 'put back: gone');
+});
+
 test('Shadows switched on says it works ("Shadows …") before the pause, then settles; off at once', async () => {
 	const { x, frame } = await setup();
 	x.lighting = { shadows: false, time: 'morning', setShadows(v) { this.shadows = v; }, fit() {}, refresh() {} };

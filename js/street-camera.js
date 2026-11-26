@@ -17,6 +17,7 @@ import { canvasTexture } from './canvas-card.js';
 import { DEVICE } from './device.js';
 import { buildCamera } from './tool-models.js';
 import { COLOURS, FONT, GUIDE } from './theme.js';
+import { FramingGuide } from './framing-guide.js';
 
 const SCREEN = [192, 128]; // viewfinder pixels
 // Viewfinder frames: 4 a second, 2 on Quest 2 (a phone GPU); a frame after a slow one is skipped;
@@ -62,6 +63,8 @@ export class StreetCamera {
 		this.held = null; // the hand holding it
 		this.t = 0;
 		this.prints = [];
+		this.guide = new FramingGuide(xr); // the red frame where the photo's edges fall (js/framing-guide.js)
+		this._lens = new THREE.Matrix4(); this._turn = new THREE.Matrix4().makeRotationY(Math.PI);
 		this.setLens(xr.cameraLens ?? 28);
 	}
 
@@ -77,7 +80,7 @@ export class StreetCamera {
 		// (Bare hands: no shutter yet; the button on the camera comes with item 11 of the Quest 2 fixes. Until then, say so.)
 		this.hint.set(c?.isHand ? 'Photos: with a controller, for now' : 'Trigger: take a photo');
 	}
-	putBack() { this.held = null; }
+	putBack() { this.held = null; this.guide.reset(); } // (put back: the frame goes at once; only a held tool is updated, so it can't fade out)
 
 	/** The shutter. */
 	trigger(c, phase) {
@@ -91,6 +94,7 @@ export class StreetCamera {
 		if (xr.soundLevel !== 'off') xr.sound.play('shutter');
 		if (this.held?.isController) xr.haptics.play(this.held, 'click');
 		this.flash = 0.12;
+		this.guide.shutter(); // (hidden while the shutter fires and the print pops)
 		this.object.updateMatrixWorld(true);
 		const eye = this.lensPoint.matrixWorld.clone();
 		// The lens empty's +Z looks out of the lens; a photo camera looks along -Z: turn it round.
@@ -117,6 +121,11 @@ export class StreetCamera {
 	update(dt) {
 		const xr = this.xr;
 		this.t += dt;
+		// The framing guide: only while held (the lens empty's +Z looks out: turned round, as a camera).
+		if (this.held || this.guide.group.visible) {
+			this.object.updateMatrixWorld(true);
+			this.guide.update(dt, !!this.held, this._lens.copy(this.lensPoint.matrixWorld).multiply(this._turn), lensFov(this.mm));
+		}
 		// The viewfinder: only while held and facing you, a few times a second.
 		// (After a slow frame, wait one more frame; never more than once in a row, or a slow device would never see it.)
 		const slow = (xr.frameDt ?? 0) > SLOW_FRAME && !this.skipped;

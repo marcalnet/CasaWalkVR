@@ -23,6 +23,9 @@ export const BADGE = {
 	orb: { fill: '#d9822b', text: '#fff' },
 };
 
+/** The street camera's framing guide (js/framing-guide.js): its outline, red, never a fill (a tint would change the colours you judge the photo by). */
+export const FRAME = { line: '#d64541', opacity: 0.7 };
+
 /** The pause between places (js/pause.js; the next-build asks, "Tip screens"): its dark (black now; grey under a future light theme) and its floor ring's line. */
 export const VOID = { color: 0x000000, line: 0xffffff };
 
