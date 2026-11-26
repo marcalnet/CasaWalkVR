@@ -268,8 +268,9 @@ export class XRUI {
 	notEmpty(c, points = []) {
 		const xr = this.xr, r = xr.raycaster;
 		if (xr.tools?.held?.c === c) return 'tool';
-		if (xr.fan?.alpha > 0.5) return 'fan'; // (the fan open: the bare-hand docked row is never live, the Tester's finding)
-		for (const p of points) if (p && this.nearUsable(c, p)) return 'near';
+		const tools = (xr.claims ?? xr.claimSnapshot()).tools; // (the tools always show: a press is theirs only within reach of one, ladder rule 5)
+		for (const p of points) if (p && tools.some((t) => t.distanceTo(p) < KEEP_CLEAR)) return 'fan';
+		for (const p of points) if (p && xr.nearKey(p, KEEP_CLEAR, { by: c })) return 'near';
 		for (const panel of this.openPanels()) if (r.intersectObject(panel.mesh, false).length) return 'wing';
 		if (this.wrist.cross.visible && r.intersectObject(this.wrist.cross, true).length) return 'wrist';
 		if (this.wrist.wearer !== c && this.wrist.orb.group.visible && r.intersectObject(this.wrist.orb.group, true).length) return 'orb'; // (its own wrist's orb: the ray starts beside it)
@@ -280,24 +281,6 @@ export class XRUI {
 			if (r.ray.intersectsBox(doll.modelBox(this._box ??= new THREE.Box3()))) return 'model';
 		}
 		return null;
-	}
-
-	/** True if world point p (of input c) is within KEEP_CLEAR of a wing, the wrist keys or the orb (on the other wrist: they ride the wearer's own) or a door. */
-	nearUsable(c, p) {
-		const xr = this.xr, v = this._near ??= new THREE.Vector3();
-		for (const panel of this.openPanels()) {
-			const g = panel.mesh.geometry.parameters;
-			panel.mesh.updateMatrixWorld(true);
-			const L = panel.mesh.worldToLocal(v.copy(p));
-			if (Math.hypot(Math.max(0, Math.abs(L.x) - g.width / 2), Math.max(0, Math.abs(L.y) - g.height / 2), L.z) < KEEP_CLEAR) return true;
-		}
-		if (this.wrist.wearer !== c) {
-			if (this.wrist.cross.visible && this.wrist.pad.near(p, KEEP_CLEAR)) return true;
-			const orb = this.wrist.orb.group;
-			if (orb.visible && orb.getWorldPosition(v).distanceTo(p) < KEEP_CLEAR) return true;
-		}
-		if (xr.mode === 'dollhouse' && xr.modes.dollhouse?.doorsLive && xr.modes.dollhouse.doors.near(p, KEEP_CLEAR)) return true;
-		return false;
 	}
 
 	/** A press at empty space: closes what is open, like the orb (sound close; a controller's vibration close). */

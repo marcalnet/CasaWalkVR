@@ -106,9 +106,11 @@ export class ToolFan {
 		const take = this.hands().take;
 		if (this.hot && take?.isController && take.claim.grip === null) take.claim.grip = 'tool';
 		// (A bare hand closing on a tool takes the tool, never the model too: the tester's finding.)
-		this.fistTaken = !!(this.target && take?.isHand);
-		if (this.fistTaken) take.fistClaimed = true; else if (take) take.fistClaimed = false;
+		this.fistTaken = this.target && take?.isHand ? take : null;
 	}
+
+	/** True if bare hand c's closing fist is the fan's this frame (it takes a tool, never the model). */
+	claimsFist(c) { return this.fistTaken === c; }
 
 	/** The fan hand and the taking hand (input entries, or null). */
 	hands() {

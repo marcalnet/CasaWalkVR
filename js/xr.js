@@ -51,13 +51,14 @@ import { SeeThrough, SEE_THROUGH_MAX } from './walls.js';
 import { Portals } from './portal.js';
 import { Pause } from './pause.js';
 import { SessionStore } from './session-store.js';
+import { aimOwner } from './hand-owner.js';
 import { scaleCentre, walkCentre, followBody, areaOf, yawTo } from './zones.js';
 import { takePhoto, photoName, saveFile, INTERFACE_LAYER } from './photo.js';
 import { readSetting } from './settings.js';
 import { buildShowroom, buildStage, fitPlinth, placePlate, buildWalkSky, recolourSphere, PLINTH_HEIGHT } from './xr-scene.js';
 import { ScalePlate } from './panel.js';
 import { roomAt } from './rooms.js';
-import { targetSets, findFloor, CLAIM } from './xr-targets.js';
+import { targetSets, findFloor } from './xr-targets.js';
 import { buildMenus, updateLabels, menuAction, SEE_THROUGH_ON } from './xr-menus.js';
 import { XRUI } from './xr-ui.js';
 import { Dollhouse, roundScaleUp } from './xr-dollhouse.js';
@@ -569,20 +570,23 @@ export class XRExperience {
 	}
 
 	/**
-	 * True if world point p is within `margin` of any key you could press (the
-	 * orb, the plinth doors and levels, the wrist keys, an
-	 * open wing): the fan stays closed over a hand reaching for one.
+	 * True if world point p is within `margin` of any key you could press: the
+	 * orb, the plinth doors and levels, the wrist keys, an open wing (its
+	 * rectangle). by: the input whose point it is: the orb and the wrist keys
+	 * ride the wearer's own wrist, so they never count for the wearer. (One
+	 * check for the orb's yield, the empty-space close and the fan's reach:
+	 * it was two, nearKey and nearUsable, before the hand arbiter.)
 	 */
-	nearKey(p, margin, { orb: withOrb = true, wristKeys = true } = {}) {
-		const wrist = this.ui.wrist, orb = wrist.orb?.group;
-		if (withOrb && orb?.visible && orb.getWorldPosition(this._nk ??= new THREE.Vector3()).distanceTo(p) < margin) return true;
+	nearKey(p, margin, { orb: withOrb = true, wristKeys = true, by = null } = {}) {
+		const wrist = this.ui.wrist, orb = wrist.orb?.group, own = !!by && wrist.wearer === by;
+		if (withOrb && !own && orb?.visible && orb.getWorldPosition(this._nk ??= new THREE.Vector3()).distanceTo(p) < margin) return true;
 		if (this.mode === 'dollhouse' && this.modes.dollhouse.doorsLive && this.modes.dollhouse.doors.near(p, margin)) return true; // (only live keys: faded doors guard nothing)
-		if (wristKeys && wrist.open && wrist.pad.near(p, margin)) return true;
+		if (wristKeys && !own && wrist.open && wrist.pad.near(p, margin)) return true;
 		const q = this._nk2 ??= new THREE.Vector3();
 		for (const panel of this.ui.openPanels()) {
 			panel.mesh.updateMatrixWorld(true);
 			const g = panel.mesh.geometry.parameters, L = panel.mesh.worldToLocal(q.copy(p));
-			if (Math.abs(L.x) < g.width / 2 + margin && Math.abs(L.y) < g.height / 2 + margin && Math.abs(L.z) < margin) return true;
+			if (Math.hypot(Math.max(0, Math.abs(L.x) - g.width / 2), Math.max(0, Math.abs(L.y) - g.height / 2), L.z) < margin) return true;
 		}
 		return false;
 	}
@@ -602,26 +606,40 @@ export class XRExperience {
 	/**
 	 * Why bare hand c's pinch may not aim a teleport here (the design of 24
 	 * Nov: a pinch near something belongs to it), or null. p: the pinch point
-	 * (world). 'board', 'wrist menu', 'key', 'fan', 'model', 'tool'.
+	 * (world). 'board', 'wrist menu', 'key', 'fan', 'model', 'tool': the hand
+	 * arbiter's ladder (js/hand-owner.js), on this frame's snapshot.
 	 */
 	aimBlock(c, p) {
-		const NEAR = CLAIM.near, tools = this.tools, held = tools?.held?.c;
-		if (held === c) return 'tool'; // (a hand holding a tool never aims)
-		if (this.boardOpen) return 'board';
-		if (this.ui.wrist.open) return 'wrist menu';
-		if (!p) return null;
-		if (held) {
-			const q = held.isHand ? this.input.joint(held, 'wrist') : held.grip.getWorldPosition(new THREE.Vector3());
-			if (q && q.distanceTo(p) < NEAR + 0.05) return 'tool';
-		}
-		if (this.handViews[c.index]?.near) return 'key';
-		const orb = this.ui.wrist.orb?.group; // (only the other hand: the orb rides the wearer's own wrist)
-		if (orb?.visible && this.ui.wrist.wearer !== c && orb.getWorldPosition(new THREE.Vector3()).distanceTo(p) < NEAR) return 'wrist menu';
-		if (this.mode === 'dollhouse' && this.modes.dollhouse.doorsLive && this.modes.dollhouse.doors.near(p, NEAR)) return 'key';
-		const fan = this.fan?.group;
-		if (fan?.visible && fan.getWorldPosition(new THREE.Vector3()).distanceTo(p) < NEAR + 0.1) return 'fan'; // (the fan's tools spread about 10 cm round its middle)
-		if (this.mode === 'dollhouse' && this.modes.dollhouse.modelBox().distanceToPoint(p) < NEAR) return 'model';
-		return null;
+		const s = this.claims ?? this.claimSnapshot();
+		// (What can change within the frame is read now: a tool taken, a wing or the wrist menu opened.)
+		return aimOwner(c, p, { ...s, held: this.heldNow(), board: this.boardOpen, wristOpen: this.ui.wrist.open }, !!this.handViews[c.index]?.near);
+	}
+
+	/** The held tool's hand and where it is (world), or null. */
+	heldNow() {
+		const held = this.tools?.held?.c;
+		return held ? { c: held, at: held.isHand ? this.input.joint(held, 'wrist') : held.grip.getWorldPosition(new THREE.Vector3()) } : null;
+	}
+
+	/**
+	 * What can claim a hand this frame (js/hand-owner.js), read once: the held
+	 * tool, an open wing or wrist menu, the orb, the live doors and levels,
+	 * the tools in the fan, the model. Every place asks the arbiter of the same
+	 * picture.
+	 */
+	claimSnapshot() {
+		const wrist = this.ui.wrist, orb = wrist.orb?.group, fan = this.fan;
+		const doll = this.mode === 'dollhouse' ? this.modes.dollhouse : null;
+		const at = (o) => o.getWorldPosition(new THREE.Vector3());
+		return {
+			held: this.heldNow(),
+			board: this.boardOpen,
+			wristOpen: wrist.open,
+			orb: orb?.visible ? { at: at(orb), wearer: wrist.wearer } : null,
+			doors: doll?.doorsLive ? doll.doors : null,
+			tools: fan?.group.visible ? fan.slots.filter((s) => !s.held).map((s) => at(s.home)) : [],
+			model: doll && this.model ? doll.modelBox() : null,
+		};
 	}
 
 	/** The head's yaw in the world (radians, + = turning left): the flick gesture subtracts its change. */
@@ -706,6 +724,7 @@ export class XRExperience {
 				this.modes.dollhouse.recentre(head.clone().premultiply(this.rig.matrix));
 			}
 		}
+		this.claims = this.claimSnapshot(); // (what can claim a hand, read once this frame: js/hand-owner.js)
 		const moving = !!this.layerFx;
 		this.pause.update(dt); // a move between places (the modes wait), the room's name, the first-target ring
 		if (!moving) this.modes[this.mode]?.update(dt);

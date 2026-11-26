@@ -1384,17 +1384,19 @@ test('harmony, conflict 13: no wing corner within 5° of the house as seen (its 
 	}
 });
 
-test('harmony, conflict 14 and the docked row: only the open fan guards the empty-space close; the house box leaves the lawn out', async () => {
+test('ladder rule 5: the tools guard the empty-space close only within 15 cm of a tool (they always show); the house box leaves the lawn out', async () => {
 	const { x, frame } = await setup();
 	frame();
 	x.menuAction('settings');
 	const c = x.input.controllers[1], head = x.headWorld().clone();
 	x.raycaster.set(head, new THREE.Vector3(0, 1, 0)); x.raycaster.far = 5;
-	x.fan.group.visible = true; x.fan.alpha = 0; // (the bare-hand docked row on show)
-	assert.equal(x.ui.notEmpty(c, []), null, 'the docked row is never live: the close goes through');
-	x.fan.alpha = 1;
-	assert.equal(x.ui.notEmpty(c, []), 'fan', 'the open fan guards');
-	x.fan.alpha = 0; x.fan.group.visible = false;
+	x.fan.group.visible = true; x.fan.alpha = 1;
+	x.claims = x.claimSnapshot();
+	const tool = x.claims.tools[0];
+	assert.ok(tool, 'the tools are in the snapshot');
+	assert.equal(x.ui.notEmpty(c, [tool.clone().add(new THREE.Vector3(0, 0.1, 0))]), 'fan', 'a press 10 cm from a tool: the tools\' (never closes the wing)');
+	assert.equal(x.ui.notEmpty(c, [tool.clone().add(new THREE.Vector3(0, 0.6, 0))]), null, '60 cm away: empty space, it closes');
+	x.fan.alpha = 0; x.fan.group.visible = false; x.claims = null;
 	// The house box (example home: no lawn) is within the whole box.
 	const d = x.modes.dollhouse, house = d.houseBox(), all = d.modelBox();
 	assert.ok(all.containsBox(house.expandByScalar(-1e-6)), 'the house is inside the model');

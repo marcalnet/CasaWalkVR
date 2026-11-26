@@ -807,7 +807,7 @@ export class Dollhouse {
 			const palm = this.holdPoint(c, p);
 			const d = palm ? box.distanceToPoint(palm) : Infinity;
 			for (const e of c.gestures) {
-				if (e.type === 'fist' && !this.grab && d < HOLD_REACH && !busy && !c.fistClaimed) { this.cancelHandAim(); this.startGrab(c); } // (a fist on a fan tool takes the tool)
+				if (e.type === 'fist' && !this.grab && d < HOLD_REACH && !busy && !xr.fan?.claimsFist(c)) { this.cancelHandAim(); this.startGrab(c); } // (a fist on a fan tool takes the tool)
 				else if ((e.type === 'fistEnd' || e.type === 'lost') && this.grab?.c === c) this.release();
 				else if ((e.type === 'open' || e.type === 'lost') && this.handAim?.c === c) { this.cancelHandAim(); xr.sound.play('release'); }
 				// The pinch held aims; opening it steps inside (once shown SHOWN_FOR, the landing from LOOK_BACK before).
