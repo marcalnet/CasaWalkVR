@@ -213,7 +213,6 @@ export class ToolFan {
 			}
 		}
 		if (hot !== this.hot) {
-			if (hot) xr.lessons?.note('fan'); // (the lesson's "your tools" step)
 			if (hot && hot.live) this.feel(take, 'tick', 'tick');
 			if (hot && !hot.live) this.refuse(hot, take);
 			this.hot = hot;

@@ -28,15 +28,12 @@ export const SETTINGS = {
 	seeThrough: { key: 'casawalk.seeThrough', range: true, fallback: 0 }, // 0 = as modelled, 1 = glass house
 	mainHand: { key: 'casawalk.mainHand', options: ['right', 'left'], fallback: 'right' }, // the hand that wears the wrist menu, takes tools from the fan and teleports (the fan floats over the other)
 	sound: { key: 'casawalk.sound', options: ['off', 'effects', 'all'], fallback: 'all' }, // all: effects and the ambience (milestone H)
-	// The guide beside the menu (C0.4): auto = open until your 5th teleport, then folded once;
-	// full / tab = as you last left it with its Hide guide key or its Guide tab.
-	guide: { key: 'casawalk.walkGuide', options: ['auto', 'full', 'tab'], fallback: 'auto' },
+	// (The guide's 'casawalk.walkGuide' setting went in Nov 2026: nothing read it. A stored value is simply never read.)
 	cameraLens: { key: 'casawalk.cameraLens', options: [24, 28, 35, 50], fallback: 28 }, // the street camera's lens, mm (milestone D)
-	// The first-time lessons (C0.5): done, per place and input kind (js/lessons.js).
-	lessonScaleHands: { key: 'casawalk.welcome.scale.hands', flag: true, fallback: false },
-	lessonScaleControllers: { key: 'casawalk.welcome.scale.controllers', flag: true, fallback: false },
-	lessonWalkHands: { key: 'casawalk.welcome.walk.hands', flag: true, fallback: false },
-	lessonWalkControllers: { key: 'casawalk.welcome.walk.controllers', flag: true, fallback: false },
+	// The pinch hand was seen, per input kind (js/pinch-demo.js). (The keys are those of the
+	// first-time lessons inside, which it replaced; the lessons' 'casawalk.welcome.scale.*' went in Nov 2026.)
+	pinchSeenHands: { key: 'casawalk.welcome.walk.hands', flag: true, fallback: false },
+	pinchSeenControllers: { key: 'casawalk.welcome.walk.controllers', flag: true, fallback: false },
 	toolsIntro: { key: 'casawalk.toolsIntro', flag: true, fallback: false }, // the tools' first-time introduction was shown (milestone C3)
 };
 

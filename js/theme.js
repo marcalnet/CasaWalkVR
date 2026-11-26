@@ -18,14 +18,9 @@ export const COLOURS = {
 	tab: '#dde3e9', tabText: '#5d6873', tabActive: '#ffffff', tabActiveText: '#1d2329',
 };
 
-/** Badges on the controls card and the welcome card: one colour per kind of control. */
+/** The orange accent, the thing to press (the edge of the note cards and labels, the tools' buttons). (The other badge colours went with the controls and welcome cards.) */
 export const BADGE = {
-	stick: { fill: '#5d6873', text: '#fff' },
-	shot: { fill: '#7a4fd0', text: '#fff' },
-	trigger: { fill: '#3d6fd8', text: '#fff' },
-	grip: { fill: '#2f9e6a', text: '#fff' },
-	button: { fill: '#1d2329', text: '#fff' },
-	orb: { fill: '#d9822b', text: '#fff' }, // the orange accent: the thing to press
+	orb: { fill: '#d9822b', text: '#fff' },
 };
 
 /** Corner radii, in canvas pixels. */

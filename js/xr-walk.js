@@ -211,7 +211,7 @@ export class Walk {
 	/** Teleports to a world floor point, with the short fade (and the step sound). */
 	go(target) {
 		this.xr.sound.play('step');
-		this.xr.lessons?.note('teleport');
+		this.xr.pinchDemo?.note('teleport'); // (the looping pinch hand goes after the first teleport)
 		this.fade = { t: 0, action: () => this.placeUser(target, null) };
 	}
 
@@ -229,7 +229,6 @@ export class Walk {
 				if (e.type === 'pinch' && !this.tele && !this.fade && xr.teleportHand(c) && !xr.aimBlock(c, c.gesture.shape?.pinchAt) && c.gesture.shape.pinchAt.y >= xr.headWorld().y - WAIST) { // (a hand at your side never aims)
 					this.tele = { c, via: 'hand', age: 0, dir: null, past: [] };
 					xr.sound.play('aim');
-					xr.lessons?.note('arc');
 				} else if (e.type === 'pinch' && !this.tele && !xr.teleportHand(c) && !xr.aimBlock(c, c.gesture.shape?.pinchAt) && c.gesture.shape?.pinchAt) {
 					xr.ui.noteWrongHand(c, c.gesture.shape.pinchAt); // (the other hand moves you)
 				} else if (!mine) {
@@ -248,7 +247,6 @@ export class Walk {
 				} else if (e.type === 'turn') {
 					xr.turn(-e.dir * THREE.MathUtils.degToRad(xr.snapAngle));
 					xr.sound.play('tick');
-					xr.lessons?.note('turn');
 				}
 			}
 		}
@@ -400,7 +398,6 @@ export class Walk {
 				const c = input.active().find((c) => c.state.down.trigger && c.claim.trigger === null);
 				if (c) this.tele = { c, via: 'trigger' };
 			}
-			if (this.tele) xr.lessons?.note('arc');
 		}
 		if (this.tele && this.tele.via !== 'hand') {
 			const { c, via } = this.tele;
@@ -427,7 +424,6 @@ export class Walk {
 			if (this.snapReady && Math.abs(x) > 0.7 && Math.abs(x) > Math.abs(right.state.stick.y)) {
 				xr.turn(-Math.sign(x) * THREE.MathUtils.degToRad(xr.snapAngle));
 				this.snapReady = false;
-				xr.lessons?.note('turn');
 			} else if (Math.abs(x) < 0.3) {
 				this.snapReady = true;
 			}

@@ -83,26 +83,6 @@ export const WING_SIZE = { settings: 0.40, guide: 0.34 }; // widths, metres
  * controllers. Each: a title, four frames (row of the sheet image, a word
  * each), and the lines under them.
  */
-export const LESSONS = {
-	// Each step: its words for bare hands and for controllers (none: skipped
-	// for that input), what completes it (done: an event js/lessons.js is told;
-	// none: the step ends with Got it), must (Got it waits for it), demo (the
-	// looping hand: hold).
-	scale: { title: 'Welcome to CasaWalk', steps: [
-		{ id: 'start', done: 'start', must: true, hands: 'Press the Start key with your fingertip.', controllers: 'Press Start: touch it, or point and pull.' },
-		{ id: 'menu', done: 'wrist', must: true, hands: 'Touch your right wrist with your left hand: your menu.', controllers: 'Press A (or touch the orb on your right controller): your menu.' },
-		{ id: 'tools', done: 'fan', must: true, hands: 'Look at your {fan} hand: your tools. Touch one with your {take} hand.', controllers: 'Look at your {fan} controller: your tools. Touch one with your {take} controller.' },
-		{ id: 'hold', done: 'held', demo: 'hold', hands: 'Close your hand on the home to hold it. Let go: it goes home.', controllers: 'Squeeze a grip to hold the home. Let go in the air: it goes home.' },
-		{ id: 'inside', done: 'inside', hands: 'Pinch and hold, point at a room. Let go when it holds still: step inside.', controllers: 'Point at a room and pull the trigger: step inside.' },
-	] },
-	walk: { title: 'Moving around', steps: [
-		{ id: 'arc', done: 'arc', hands: 'Pinch and hold: aim. An arc shows where you\'ll land.', controllers: 'Right stick forward, or hold a trigger: aim.' },
-		{ id: 'go', done: 'teleport', must: true, hands: 'Aim at the orange ring. Let go on blue: go.', controllers: 'Aim at the orange ring. Let go: go.' },
-		{ id: 'turn', done: 'turn', hands: 'While aiming, flick your wrist: turn.', controllers: 'Right stick left or right: turn.' },
-		{ id: 'end', hands: 'Turn your palm towards you to cancel. Help shows how to move.', controllers: 'Left stick: walk. Grip and pull: slide.' },
-	] },
-};
-
 export const GUIDES = {
 	'walk-hands': { title: 'How to move', row: 0,
 		frames: ['Pinch your fingers', 'Hold: aim', 'Point at the floor', 'Let go on blue: go'],
@@ -213,7 +193,7 @@ export function menuAction(xr, target) {
 		case 'help': case 'guideKey': ui.toggleHelp(); break; // (How to move: the left wing)
 		case 'replayTools':
 			ui.closeAll(); // (it must play where it can be seen)
-			if (xr.mode === 'dollhouse' && xr.toolsIntro?.start({ again: true })) { xr.lessons.stop(); xr.introAgain = true; }
+			if (xr.mode === 'dollhouse' && xr.toolsIntro?.start({ again: true })) xr.introAgain = true;
 			break;
 		case 'replayPinch':
 			ui.closeAll();

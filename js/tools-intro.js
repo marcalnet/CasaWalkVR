@@ -58,7 +58,7 @@ export class ToolsIntro {
 		this._v = new THREE.Vector3();
 	}
 
-	/** True while it plays (the lesson waits for it). */
+	/** True while it plays. */
 	get playing() { return !!this.state; }
 
 	/** True while the tools hang in view or fly (not while it waits to be looked at): a teacher is on, so the aims wait. */

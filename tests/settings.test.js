@@ -10,13 +10,14 @@ test('the storage keys never change', () => {
 	const keys = Object.fromEntries(Object.entries(SETTINGS).map(([name, s]) => [name, s.key]));
 	assert.deepEqual(keys, {
 		light: 'casawalk.light', shadows: 'casawalk.shadows', depth: 'casawalk.depth', view: 'casawalk.view',
-		height: 'casawalk.height', solid: 'casawalk.solidWalls', seeThrough: 'casawalk.seeThrough', mainHand: 'casawalk.mainHand', sound: 'casawalk.sound', guide: 'casawalk.walkGuide', cameraLens: 'casawalk.cameraLens',
-		lessonScaleHands: 'casawalk.welcome.scale.hands', lessonScaleControllers: 'casawalk.welcome.scale.controllers',
-		lessonWalkHands: 'casawalk.welcome.walk.hands', lessonWalkControllers: 'casawalk.welcome.walk.controllers', toolsIntro: 'casawalk.toolsIntro',
+		height: 'casawalk.height', solid: 'casawalk.solidWalls', seeThrough: 'casawalk.seeThrough', mainHand: 'casawalk.mainHand', sound: 'casawalk.sound', cameraLens: 'casawalk.cameraLens',
+		pinchSeenHands: 'casawalk.welcome.walk.hands', pinchSeenControllers: 'casawalk.welcome.walk.controllers', toolsIntro: 'casawalk.toolsIntro',
 	});
 });
 
-test('removed settings (the scale figure, Turn) are ignored', () => {
+test('removed settings (the scale figure, Turn, the guide, the lessons) are ignored', () => {
+	assert.equal(SETTINGS.guide, undefined); // nor 'casawalk.walkGuide'
+	assert.ok(!Object.values(SETTINGS).some((s) => s.key.startsWith('casawalk.welcome.scale')), 'nor the scale model\'s lessons');
 	assert.equal(SETTINGS.figure, undefined); // 'casawalk.figure' may still be stored: nothing reads it
 	assert.equal(SETTINGS.turn, undefined); // nor 'casawalk.snapAngle': snap turns are 30°
 });

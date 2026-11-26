@@ -1,5 +1,5 @@
-// Hand poses for the demonstration hand of the first-time lessons (C0.5;
-// holding the model: open, then a fist). Each pose is the 25
+// Hand poses for the looping pinch hand shown the first time inside
+// (js/pinch-demo.js): open and a fist, a pinch between them. Each pose is the 25
 // WebXR joints of a LEFT hand, each a 4 x 4 matrix (column-major, hand space,
 // metres) and a radius. Taken from IWER, Meta's WebXR emulator (MIT licence,
 // © Meta Platforms, Inc. and affiliates; its hand pose presets), rounded to 0.1 mm. The right

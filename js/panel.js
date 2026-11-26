@@ -568,24 +568,24 @@ function roundRect(ctx, x, y, w, h, r) {
 }
 
 // ---------------------------------------------------------------------------
-// Welcome card: floats above the dollhouse when you enter VR and says how to
-// open the menu, until you open it. Lines are { key?, text, small? }; a key
-// draws a coloured badge (like the controls card) before the text.
+// Note card: a title and a line or two of text on a white card (the notes in
+// js/xr-ui.js: "Pick up your controllers", the safety card, a photo kept).
+// Lines are { text, small? }.
 // ---------------------------------------------------------------------------
 
-const WELCOME_W = 1300;
+const NOTE_W = 1300;
 
-export class WelcomeCard {
+export class NoteCard {
 	constructor(title, lines, { width = 0.62 } = {}) {
 		this.title = title;
 		this.lines = lines;
 		const h = 150 + lines.reduce((n, l) => n + (l.small ? 64 : 92), 0) + 40;
-		this.size = { w: WELCOME_W, h };
-		({ canvas: this.canvas, texture: this.texture } = canvasTexture(WELCOME_W, h));
-		// Drawn over the model, so a zoomed-in home never hides it.
-		this.mesh = new THREE.Mesh(new THREE.PlaneGeometry(width, width * h / WELCOME_W),
+		this.size = { w: NOTE_W, h };
+		({ canvas: this.canvas, texture: this.texture } = canvasTexture(NOTE_W, h));
+		// Drawn over everything, so the model never hides it.
+		this.mesh = new THREE.Mesh(new THREE.PlaneGeometry(width, width * h / NOTE_W),
 			new THREE.MeshBasicMaterial({ map: this.texture, transparent: true, toneMapped: false, depthTest: false }));
-		this.mesh.name = 'welcome-card';
+		this.mesh.name = 'note-card';
 		this.mesh.renderOrder = 11;
 		this.draw();
 	}
@@ -608,19 +608,7 @@ export class WelcomeCard {
 		let y = 150;
 		for (const l of this.lines) {
 			const rowH = l.small ? 64 : 92;
-			let x = 60;
-			if (l.key) {
-				const b = BADGE[l.kind] || BADGE.orb;
-				ctx.font = `700 34px ${FONT}`;
-				const bw = Math.max(80, ctx.measureText(l.key).width + 40);
-				roundRect(ctx, x, y + rowH / 2 - 30, bw, 60, 16);
-				ctx.fillStyle = b.fill; ctx.fill();
-				ctx.fillStyle = b.text;
-				ctx.textAlign = 'center';
-				ctx.fillText(l.key, x + bw / 2, y + rowH / 2 + 1);
-				ctx.textAlign = 'left';
-				x += bw + 28;
-			}
+			const x = 60;
 			ctx.fillStyle = l.small ? '#5d6873' : '#1d2329';
 			let px = l.small ? 34 : 46;
 			do ctx.font = `${l.small ? 400 : 500} ${px}px ${FONT}`;

@@ -9,7 +9,7 @@
 // theme.HAND.model ('generic' | 'capsules'), and while the files load.
 //
 // Also poses a hand from the preset poses of js/hand-poses.js: the looping
-// demonstration hand of the first-time lessons.
+// pinch hand shown the first time inside (js/pinch-demo.js).
 
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
@@ -57,7 +57,7 @@ export function handMaterial() {
  * pose(joints), setTip(0..1), setOpacity(a), triangles }.
  */
 export function dressHand(gltf, handedness) {
-	// (A copy each time: both hand views and the lessons' demonstration hand dress the same file.)
+	// (A copy each time: both hand views and the pinch hand dress the same file.)
 	const scene = clone(gltf.scene);
 	const object = scene.getObjectByName('Armature') ?? scene;
 	const source = object.getObjectByProperty('type', 'SkinnedMesh');

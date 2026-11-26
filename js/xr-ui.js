@@ -16,8 +16,6 @@
 //            how to move here, for controllers or bare hands, and the build
 //            at its foot. (The help cards beside the wrist menu went on 25
 //            Nov 2026: one panel instead of two, the Quest 2 design's item 6.)
-//   Welcome  a card above the scale model on every entry, until the wrist
-//            menu is first opened.
 //   Photo    the flash and note of a photo (the street camera, milestone D).
 //   Hands    without hand joints: "Pick up your controllers" (C0.1).
 //
@@ -26,7 +24,7 @@
 // 'ui'), so the mode leaves those alone.
 
 import * as THREE from 'three';
-import { WelcomeCard, Label } from './panel.js';
+import { NoteCard, Label } from './panel.js';
 import { BUILD } from './version.js';
 import { buildLabel } from './build-label.js';
 import { headHeading } from './xr-dollhouse.js';
@@ -35,7 +33,6 @@ import { KEY } from './theme.js';
 import { WING, placeWing, zoneOf } from './wings.js';
 import { guideSheet } from './guide.js';
 import { WristMenu } from './wrist-menu.js';
-import { FIRST_TIME_CARDS } from './lessons.js';
 import { handAimRay, pinchGate } from './gestures.js';
 import { CLAIM } from './xr-targets.js';
 import { CLOSE_HINT } from './xr-menus.js';
@@ -77,69 +74,21 @@ export class XRUI {
 		guideSheet.onLoad = () => this.guide?.draw(); // (the How to move pictures, once loaded)
 		this.touches = []; // per input entry: its touch on the open board (js/touch.js)
 		this.spent = new Set(); // controllers whose trigger closed the wings: claimed until let go
-		this.buildWelcome();
 		this.buildPhotoFeedback();
 		this.buildHandsNote();
 		this.buildErrorNote();
 		this.pinchLabel = new Label({ height: 0.035 });
 		this.pinchLabel.mesh.visible = false;
-		xr.hideFromPhotos(this.pinchLabel.mesh, this.welcome.mesh, this.photoNote.mesh, this.handsNote.mesh, this.errorNote.mesh);
+		xr.hideFromPhotos(this.pinchLabel.mesh, this.photoNote.mesh, this.handsNote.mesh, this.errorNote.mesh);
 	}
 
 	// -----------------------------------------------------------------------
-	// Welcome card and photo feedback
+	// Notes and photo feedback
 	// -----------------------------------------------------------------------
-
-	/**
-	 * Welcome card above the dollhouse (replaces the menu opening by itself):
-	 * how to open the menu, shown on every entry until the menu is opened.
-	 */
-	buildWelcome() {
-		this.welcome = new WelcomeCard('Welcome to CasaWalk', this.welcomeLines(), { width: 1.1 }); // (read from as far as the model)
-		this.welcome.mesh.visible = false;
-		this.welcomeOn = false; // until the menu is first opened
-	}
-
-	/** The welcome card's lines, for the wrist that wears the menu. */
-	welcomeLines() {
-		const side = this.wrist?.side ?? 'right', other = side === 'right' ? 'left' : 'right';
-		// (Minimal until the first-time message with the hand animation replaces it, C0.5.)
-		return [
-			{ key: 'Wrist', kind: 'orb', text: `Touch your ${side} wrist with your ${other} hand: menu` },
-			{ key: 'Trigger', kind: 'trigger', text: 'Point at a room and pull: step inside' },
-		];
-	}
-
-	/** Shows or hides the welcome card (only ever in the dollhouse). */
-	setWelcome(on) {
-		if (on) { this.welcome.lines = this.welcomeLines(); this.welcome.draw(); }
-		this.welcomeOn = on;
-		// (A first-time lesson replaces it: js/lessons.js.)
-		this.welcome.mesh.visible = on && FIRST_TIME_CARDS.on && this.xr.mode === 'dollhouse' && !this.xr.lessons?.place; // (off for now: js/lessons.js)
-	}
-
-	/**
-	 * Puts the welcome card over the back half of the plinth, well above the
-	 * model's top, so from where you stand it shows above the home, not on it.
-	 */
-	placeWelcome() {
-		const xr = this.xr, card = this.welcome.mesh;
-		const size = xr.model ? xr.model.bounds.getSize(new THREE.Vector3()).multiplyScalar(xr.baseScale) : new THREE.Vector3(1, 0.4, 1);
-		const top = xr.plinthH + 0.004 + size.y;
-		const h = card.geometry.parameters.height;
-		// As far away as the model, floating well above its back edge (not in front of the eyes).
-		card.position.set(0, top + 0.45 + h / 2, -xr.plinthDistance - (xr.plinthSize?.D ?? size.z) / 2);
-		if (card.parent !== xr.stage) xr.stage.add(card);
-	}
-
-	/** The welcome card turns to face you (called every dollhouse frame). */
-	faceWelcome() {
-		if (this.welcome.mesh.visible) this.welcome.mesh.lookAt(this.xr.camera.getWorldPosition(new THREE.Vector3()));
-	}
 
 	/** The "Pick up your controllers" note, a little below eye level, in front of you. */
 	buildHandsNote() {
-		this.handsNote = new WelcomeCard(HANDS_TEXT.title, [{ small: true, text: HANDS_TEXT.line }], { width: 0.6 });
+		this.handsNote = new NoteCard(HANDS_TEXT.title, [{ small: true, text: HANDS_TEXT.line }], { width: 0.6 });
 		this.handsNote.mesh.name = 'hands-note';
 		this.handsNote.mesh.position.set(0, -0.08, -0.85);
 		this.handsNote.mesh.visible = false;
@@ -148,7 +97,7 @@ export class XRUI {
 
 	/** The safety net's card, in front of you at eye level, over everything (it must show even when the world is broken). */
 	buildErrorNote() {
-		this.errorNote = new WelcomeCard(ERROR_TEXT.title, [{ small: true, text: ERROR_TEXT.line }], { width: 0.6 });
+		this.errorNote = new NoteCard(ERROR_TEXT.title, [{ small: true, text: ERROR_TEXT.line }], { width: 0.6 });
 		this.errorNote.mesh.name = 'error-note';
 		this.errorNote.mesh.position.set(0, -0.05, -0.8);
 		this.errorNote.mesh.renderOrder = 1004; // (over the veil round the eyes, 1002, and the ?stats line, 1003)
@@ -200,7 +149,7 @@ export class XRUI {
 	/** Photo feedback: a short white flash (the veil, js/veil.js), and a note in front of you for a few seconds. */
 	buildPhotoFeedback() {
 		const camera = this.xr.camera;
-		this.photoNote = new WelcomeCard(PHOTO_TEXT.kept.title, [{ small: true, text: PHOTO_TEXT.kept.line }], { width: 0.34 });
+		this.photoNote = new NoteCard(PHOTO_TEXT.kept.title, [{ small: true, text: PHOTO_TEXT.kept.line }], { width: 0.34 });
 		this.photoNote.mesh.position.set(0, -0.16, -0.7);
 		this.photoNote.mesh.visible = false;
 		camera.add(this.photoNote.mesh);
@@ -455,7 +404,6 @@ export class XRUI {
 		let hover = null;
 		this.runPinchNote(dt);
 		let { action } = this.wrist.update(dt);
-		if (this.wrist.open) { this.setWelcome(false); this.xr.lessons?.note('wrist'); } // found it: the welcome card has done its job
 		const active = input.active();
 		if (this.drag && (!this.menu || !this.drag.c.source || !this.drag.c.state.trigger)) this.drag = null; // let go
 		let panels = this.openPanels();
@@ -603,7 +551,7 @@ export class XRUI {
 		const wearer = this.wrist.wearer;
 		for (const c of this.xr.input.active()) {
 			if (c.state.down.a && !c.claim.a && c === wearer && (this.menu || this.guide)) { this.closeAll(); this.feel(c, 'close'); return true; } // (with a wing open, like the orb: closes everything)
-			if (c.state.down.a && !c.claim.a && c === wearer) { this.wrist.toggle({ pinned: true }); if (this.wrist.open) { this.setWelcome(false); this.xr.lessons?.note('wrist'); } return true; }
+			if (c.state.down.a && !c.claim.a && c === wearer) { this.wrist.toggle({ pinned: true }); return true; }
 			if (c.state.down.b && !c.claim.b && this.anyOpen) { this.closeMenu(); this.closeGuide(); this.wrist.close(true); return true; }
 		}
 		return false;
@@ -615,7 +563,6 @@ export class XRUI {
 		this.spent.clear();
 		this.closeMenu();
 		this.closeGuide();
-		this.setWelcome(false);
 		this.photoFx = null;
 		this.xr.veil.set('flash', 0);
 		this.photoNote.mesh.visible = false;

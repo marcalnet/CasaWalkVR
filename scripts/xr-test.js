@@ -264,7 +264,6 @@ const leftovers = () => page.evaluate(() => {
 	want('grab/tele/fade/drag', !x.modes.dollhouse.grab && !x.modes.walk.tele && !x.modes.walk.fade && !x.ui.drag && !x.pendingRecentre);
 	want('menu', x.menu === null && Object.values(x.menus).every((p) => !p.mesh.visible && !p.open) && !x.ui.wrist.open && !x.ui.wrist.cross.visible);
 	want('layers', !x.layerFx && !(x.veil.amount('layer') > 0) && !x.arrival.mesh.visible);
-	want('welcome', !x.ui.welcome.mesh.visible && !x.ui.welcomeOn);
 	want('hands note', !x.ui.handsNote.mesh.visible);
 	want('photo', !x.photoPending && !x.ui.photoFx && !x.veil.mesh.visible && !x.ui.photoNote.mesh.visible);
 	want('arc', !x.modes.walk.arc.dots.visible && !x.modes.walk.arc.ring.visible);
@@ -283,7 +282,7 @@ const leftovers = () => page.evaluate(() => {
 /** A fresh dollhouse (head at 1.6 m, hands at rest): returns what is wrong. */
 const entry = () => page.evaluate(() => {
 	const x = window.__casawalk.xr, bad = [], want = (n, ok) => ok || bad.push(n);
-	want('dollhouse', x.mode === 'dollhouse' && x.menu === null && x.ui.welcome.mesh.visible && x.ui.welcomeOn);
+	want('dollhouse', x.mode === 'dollhouse' && x.menu === null);
 	want('gallery', x.showroom.visible && x.stage.visible && x.gallery.visible && x.pedestal.visible && !x.walkSky.visible && !x.model.layers.ground.visible);
 	want('model reset', x.modes.dollhouse.doll.yaw === 0 && x.modes.dollhouse.doll.zoom === 1 && Math.abs(x.anchor.scale.x - x.baseScale) < 1e-9);
 	want('idle: grab', !x.modes.dollhouse.grab); want('idle: aim', !x.modes.walk.tele); want('idle: fade', !x.modes.walk.fade && !(x.veil.amount('teleport') > 0));
@@ -294,12 +293,6 @@ const entry = () => page.evaluate(() => {
 	return bad;
 });
 const lasers = () => page.evaluate(() => window.__casawalk.xr.input.active().map((c) => `${c.handedness}:${c.line.visible ? 'on' : 'off'}`).sort().join(' '));
-/** Angle (radians) between the welcome card's face and the direction to the eyes. */
-const facing = () => page.evaluate(() => {
-	const x = window.__casawalk.xr, V = x.rig.position.constructor, card = x.ui.welcome.mesh;
-	const to = x.camera.getWorldPosition(new V()).sub(card.getWorldPosition(new V())).normalize();
-	return Math.acos(Math.min(1, new V(0, 0, 1).transformDirection(card.matrixWorld).dot(to)));
-});
 /** World point at (u, v) on the open menu (0..1 across, 0..1 up). */
 const panelPoint = (u, v) => page.evaluate(async ({ u, v }) => {
 	const THREE = await import('three'), p = window.__casawalk.xr.menu, g = p.mesh.geometry.parameters;
@@ -323,14 +316,14 @@ const FINGERPRINT = async () => {
 		rows: p.rows.map((row) => row.map((c) => [c.id, c.type, c.label, c.value ?? null, !!c.disabled, c.note ?? null, !!c.primary, (c.options ?? []).map((o) => `${o.value}=${o.label}`).join(',')].join('|'))) });
 	const KEYS = ['casawalk.snapAngle', 'casawalk.height', 'casawalk.view', 'casawalk.solidWalls', 'casawalk.seeThrough', 'casawalk.light', 'casawalk.shadows', 'casawalk.depth', 'casawalk.mainHand'];
 	return {
-		mode: x.mode, session: x.sessionMode, view: x.view, menu: x.menu?.title ?? null, welcome: [vis(x.ui.welcome.mesh), x.ui.welcomeOn],
+		mode: x.mode, session: x.sessionMode, view: x.view, menu: x.menu?.title ?? null,
 		busy: [!!x.modes.dollhouse.grab, !!x.modes.walk.tele, !!x.modes.walk.fade, !!x.ui.drag, !!x.pendingRecentre, !!x.photoPending],
 		shown: { ...Object.fromEntries(['showroom', 'stage', 'gallery', 'pedestal', 'walkSky'].map((k) => [k, vis(x[k])])), fadeMesh: x.veil.amount('teleport') > 0, flash: x.veil.amount('flash') > 0 }, // (one veil since A5: the same facts as the old spheres' visibility)
 		layers: Object.fromEntries(Object.entries(x.model.layers).map(([k, g]) => [k, [g.visible, g.children.filter(vis).length]])), maxStorey: x.maxStorey,
 		markers: x.modes.dollhouse.markers.map(vis), arc: [vis(x.modes.walk.arc.dots), vis(x.modes.walk.arc.ring)], note: vis(x.ui.photoNote.mesh),
 		rig: [...v3(x.rig.position), n(x.rig.rotation.y), n(x.lift), n(x.modes.dollhouse.dollLift)], stage: [...v3(x.stage.position), n(x.stage.rotation.y)],
 		anchor: [...v3(x.anchor.position), n(x.anchor.rotation.y), n(x.anchor.scale.x)], doll: [...v3(x.modes.dollhouse.doll.pos), n(x.modes.dollhouse.doll.yaw), n(x.modes.dollhouse.doll.zoom)],
-		plinth: [n(x.plinthSize.W), n(x.plinthSize.D), n(x.plinthDistance), n(x.baseScale)], welcomeAt: v3(x.ui.welcome.mesh.position),
+		plinth: [n(x.plinthSize.W), n(x.plinthSize.D), n(x.plinthDistance), n(x.baseScale)],
 		clip: [x.camera.near, x.camera.far], background: S.scene.background?.getHex?.() ?? S.scene.background,
 		hands: x.input.controllers.map((c) => [c.handedness, vis(c.ray), vis(c.grip), vis(c.line), vis(c.dot), x.ui.wrist.orb.group.parent === c.grip]),
 		wrist: [x.ui.wrist.side, x.ui.wrist.open, false], // (the third: Help's card, gone since 25 Nov; kept false so old fingerprints still compare)
@@ -377,10 +370,6 @@ check('welcome notes sit under the two cards on the empty page', wl.shown && wl.
 await shot('welcome');
 await page.goto(`http://localhost:${PORT}/?test&model=${encodeURIComponent(fixture)}${process.env.XR_QUERY ? `&${process.env.XR_QUERY}` : ''}`); // (XR_QUERY=hands: the bare-hand readout in the shots)
 check('model loads', await page.evaluate(() => window.__casawalk.ready));
-// The first-time cards (lessons, welcome card) are off for now (the user's call, 25 Nov 2026).
-// Switched on here so their checks below keep the code working.
-check('the first-time cards are off by default', await page.evaluate(async () => (await import('/js/lessons.js')).FIRST_TIME_CARDS.on === false));
-await page.evaluate(async () => { (await import('/js/lessons.js')).FIRST_TIME_CARDS.on = true; });
 {
 	await frames(10);
 	const b = await page.evaluate(() => { const el = document.getElementById('build'), r = el.getBoundingClientRect(); return { text: el.textContent, left: r.left, bottom: innerHeight - r.bottom, button: !!el.querySelector('button') }; });
@@ -405,10 +394,10 @@ check('one Enter VR button', await enterVR.count() === 1 && await page.locator('
 }
 
 // Head 1.6 m up, looking slightly down at the plinth.
-// The first-time lessons (C0.5) are marked done for the whole run (they would stand
-// in front of the other checks); their own checks clear them below.
-const LESSON_KEYS = ['casawalk.welcome.scale.hands', 'casawalk.welcome.scale.controllers', 'casawalk.welcome.walk.hands', 'casawalk.welcome.walk.controllers', 'casawalk.toolsIntro'];
-await page.evaluate((keys) => { for (const k of keys) localStorage.setItem(k, '1'); }, LESSON_KEYS);
+// The first-time teachers (the tools' show, the pinch hand inside) are marked seen for the whole run
+// (they would stand in front of the other checks); their own checks clear them below.
+const SEEN_KEYS = ['casawalk.welcome.walk.hands', 'casawalk.welcome.walk.controllers', 'casawalk.toolsIntro'];
+await page.evaluate((keys) => { for (const k of keys) localStorage.setItem(k, '1'); }, SEEN_KEYS);
 await page.evaluate(() => window.__device.position.set(0, 1.6, 0));
 await lookDown();
 await restRight();
@@ -446,26 +435,14 @@ const crossSeen = () => page.evaluate(() => {
 		facing: +(Math.acos(Math.min(1, face.dot(toEye))) * 180 / Math.PI).toFixed(1), ids: slots.map((k) => w.keys[k].spec?.id ?? null), shown: slots.length };
 });
 {
-	// A welcome card above the model says how to open the menu (it no longer opens by itself).
-	const w = await page.evaluate(() => {
-		const x = window.__casawalk.xr, V = x.rig.position.constructor, card = x.ui.welcome.mesh;
-		const p = card.getWorldPosition(new V()), top = x.centerer.localToWorld(new V(0, x.model.bounds.max.y, 0)).y;
-		const head = x.headWorld(), plinth = x.stage.localToWorld(new V(0, 0, -x.plinthDistance));
-		return { shown: card.visible && card.parent === x.stage, above: +(p.y - top).toFixed(2), menu: x.menu !== null, title: x.ui.welcome.title, first: x.ui.welcome.lines[0].text,
-			away: +Math.hypot(p.x - head.x, p.z - head.z).toFixed(2), model: +Math.hypot(plinth.x - head.x, plinth.z - head.z).toFixed(2) };
-	});
-	check('welcome card as far as the model, floating above it, menu closed', w.shown && w.above > 0.3 && w.away >= w.model && !w.menu && /right wrist/i.test(w.first), JSON.stringify(w));
-	check('the welcome card faces you', THREE_deg(await facing()) < 1, `${THREE_deg(await facing()).toFixed(2)}°`);
 	await fingerprint('doll-entry');
-	await shot('welcome-card');
 	// Raise the right wrist into view, clear of the waist-height doors (a tip within 15 cm of a live key makes the orb
-	// yield and ignore touches: the interaction harmony's conflict 11); the left controller touches its orb: the wrist menu opens and the card goes.
+	// yield and ignore touches: the interaction harmony's conflict 11); the left controller touches its orb: the wrist menu opens.
 	await aim('right', [0.12, 1.5, -0.4], [-0.1, 1.2, -1.2]); await frames(3);
 	const orb = await toLocal(await orbPoint());
 	await aim('left', orb, [orb[0], orb[1], orb[2] - 1]); await frames(5);
 	s = await state();
-	const gone = await page.evaluate(() => !window.__casawalk.xr.ui.welcome.mesh.visible);
-	check('the left controller touching the orb opens the wrist menu, and the welcome card goes', s.wrist && gone && s.menu === null, JSON.stringify({ wrist: s.wrist, gone }));
+	check('the left controller touching the orb opens the wrist menu', s.wrist && s.menu === null, JSON.stringify({ wrist: s.wrist }));
 	await aim('left', [-0.35, 1.0, -0.2], [-0.6, 1.0, -1.5]); await frames(3); // (away from the orb, so the cross doesn't hold still)
 	await page.waitForFunction(() => Object.values(window.__casawalk.xr.ui.wrist.keys).every((k) => k.out), null, { timeout: 2000 }).catch(() => {});
 	const cs = await crossSeen();
@@ -949,13 +926,6 @@ check('B closes the board', (await state()).menu === null);
 		return { floating: !!d.floating, wait: d.floating?.wait, going: !!d.floating?.going, grab: !!d.grab, level: d.level(), y: +d.doll.pos.y.toFixed(3),
 			near: x.input.controllers.map((c) => { const p = d.holdPoint(c, new V()); return [c.handedness, c.isHand, c.isController, c.touch.tracked, p ? +b.distanceToPoint(p).toFixed(2) : null]; }) }; });
 	check('with hands away, the floating model goes home by itself and settles, level', !homeAgain.floating && homeAgain.level && Math.abs(homeAgain.y - (await page.evaluate(() => window.__casawalk.xr.plinthH)) - 0.004) < 0.002, JSON.stringify(homeAgain));
-	// The lesson with bare hands: the looping 3D hand shows the gesture of the current step (here: holding the model).
-	await page.evaluate(() => { localStorage.removeItem('casawalk.welcome.scale.hands'); const L = window.__casawalk.xr.lessons; L.start('scale'); L.note('start'); L.note('wrist'); L.note('fan'); });
-	await page.waitForFunction(() => !!window.__casawalk.xr.lessons.demo, null, { timeout: 5000 }).catch(() => {});
-	await frames(6);
-	const demo = await page.evaluate(() => { const L = window.__casawalk.xr.lessons; return { kind: L.kind, step: L.current()?.id, demo: !!L.demo && Object.values(L.demo).some((d) => d.visible), loaded: !!L.demo }; });
-	check('the lesson with bare hands: a looping 3D hand shows the step\'s gesture', demo.kind === 'hands' && demo.step === 'hold' && demo.demo, JSON.stringify(demo));
-	await shot('lesson-hands-demo');
 	// The looping hand shown inside the first time (js/pinch-demo.js), frozen here at its steady-blue moment to look at it.
 	const pd = await page.evaluate(async () => {
 		const x = window.__casawalk.xr, d = x.pinchDemo;
@@ -987,7 +957,6 @@ check('B closes the board', (await state()).menu === null);
 	});
 	check('the interface layer: both eyes show it; the viewfinder and a photo\'s camera leave it out', lay.eyes.length === 2 && lay.eyes.every(Boolean) && !lay.view && !lay.photo && lay.board, JSON.stringify(lay));
 	await page.evaluate(() => { const x = window.__casawalk.xr; x.ui.hideError(); x.safety.begin(); delete x.safety.lastError; x.safety.log = (e) => console.error(e); });
-	await page.evaluate(() => window.__casawalk.xr.lessons.finish()); await frames(2);
 	// The hands are drawn with the hand model (the generic hand), once loaded.
 	const model = await page.evaluate(() => window.__casawalk.xr.handViews.map((v) => ({ side: v.c.handedness, model: !!v.model, capsules: v.colourMesh.visible })));
 	check('bare hands are drawn with the hand model (the capsules are the fallback)', model.every((m) => m.model && !m.capsules), JSON.stringify(model));
@@ -1488,7 +1457,7 @@ check('back from walking: eyes at 1.89 m again, gallery shown, lasers on', Math.
 
 // The tools' first-time show (C3; placed above the model 25 Nov): once you look towards the model they hang above it, then fly to the fan's wrist, and the fan opens for 2 s.
 {
-	await page.evaluate(() => { localStorage.removeItem('casawalk.toolsIntro'); const x = window.__casawalk.xr; x.lessons.stop(); x.ui.closeAll(); x.toolsIntro.start(); }); // (it never plays behind an open wing or the wrist menu)
+	await page.evaluate(() => { localStorage.removeItem('casawalk.toolsIntro'); const x = window.__casawalk.xr; x.ui.closeAll(); x.toolsIntro.start(); }); // (it never plays behind an open wing or the wrist menu)
 	await page.waitForFunction(() => !window.__casawalk.xr.toolsIntro.state?.waiting, null, { timeout: 15000, polling: 'raf' }).catch(() => {});
 	await frames(10);
 	const i0 = await page.evaluate(async () => { const x = window.__casawalk.xr, t = x.toolsIntro, V = x.rig.position.constructor, h = x.headWorld(), p = t.group.getWorldPosition(new V()), d = p.distanceTo(h);
@@ -1505,40 +1474,17 @@ check('back from walking: eyes at 1.89 m again, gallery shown, lasers on', Math.
 	check('after a few seconds they fly to the wrist and it is remembered', !i1.playing && i1.remembered === '1', JSON.stringify(i1));
 }
 
-// The first-time lessons (C0.5), with controllers: the scale model's, then inside.
+// The pinch hand the first time inside, with controllers: the arc and the ring alone; the first teleport ends it (remembered).
 {
-	await page.evaluate((keys) => { for (const k of keys) localStorage.removeItem(k); }, LESSON_KEYS.filter((k) => k.endsWith('controllers')));
-	const lesson = () => page.evaluate(() => { const L = window.__casawalk.xr.lessons; return { place: L.place, kind: L.kind, shown: L.group.visible, step: L.current()?.id ?? null, got: L.canClose(), target: L.target.visible, welcome: window.__casawalk.xr.ui.welcome.mesh.visible }; });
-	await page.evaluate(() => { const x = window.__casawalk.xr; x.lessons.start('scale'); x.ui.setWelcome(x.ui.welcomeOn); });
-	await frames(3);
-	const l0 = await lesson();
-	check('the scale model\'s lesson: a card of steps in front of you, Start first, the welcome card gone', l0.place === 'scale' && l0.kind === 'controllers' && l0.shown && l0.step === 'start' && !l0.got && !l0.welcome, JSON.stringify(l0));
-	await shot('lesson-scale');
-	// Start (pressed with the laser), then the wrist menu with A, then holding the model with a grip.
-	const startKey = await page.evaluate(() => { const k = window.__casawalk.xr.lessons.keys.keys.get('start'); k.face.updateMatrixWorld(true); return k.face.getWorldPosition(new (k.face.position.constructor)()).toArray(); });
-	await aimW('right', R, startKey); await frames(4);
-	await click('right', 'trigger'); await frames(4);
-	const l1 = await lesson();
-	await click('right', 'a-button'); await frames(4); await click('right', 'a-button'); await frames(4);
-	const l2 = await lesson();
-	await page.evaluate(() => window.__casawalk.xr.lessons.note('fan')); await frames(2); // (the fan itself is checked below)
-	const l2b = await lesson();
-	await restRight(); await frames(3);
-	await button('right', 'squeeze', 1); await frames(6); await button('right', 'squeeze', 0); await frames(6);
-	const l3 = await lesson();
-	check('steps tick off as you do them: Start, the wrist menu, the tools, holding the model (Got it once the musts are done)', l1.step === 'menu' && l2.step === 'tools' && !l2.got && l2b.step === 'hold' && l2b.got && l3.step === 'inside', JSON.stringify({ l1: l1.step, l2: l2.step, l2b: l2b.step, got: l2b.got, l3: l3.step }));
-	// Stepping inside ends it (remembered) and starts the lesson inside, with the orange target.
+	await page.evaluate(() => localStorage.removeItem('casawalk.welcome.walk.controllers'));
 	await page.evaluate(() => { window.__casawalk.xr.menuAction('in'); }); await settled(); await frames(6);
-	const l4 = await lesson();
-	const remembered = await page.evaluate(() => localStorage.getItem('casawalk.welcome.scale.controllers'));
-	check('stepping inside finishes the scale model\'s lesson (remembered) and starts the one inside, with a target ring ahead', remembered === '1' && l4.place === 'walk' && l4.step === 'arc' && l4.shown && l4.target, JSON.stringify({ remembered, ...l4 }));
-	await shot('lesson-walk');
 	await page.waitForFunction(() => window.__casawalk.xr.pinchDemo.playing, null, { timeout: 5000, polling: 'raf' }).catch(() => {}); await frames(3); // (it starts once the room's name has faded: one teacher at a time)
 	const pc = await page.evaluate(() => { const d = window.__casawalk.xr.pinchDemo; return { playing: d.playing, kind: d.kind, label: d.label.text, ring: d.ring.visible && d.group.visible }; });
 	check('the first time inside, with controllers: the loop plays (arc and ring, "Trigger · aim · let go")', pc.playing && pc.kind === 'controllers' && pc.label === 'Trigger · aim · let go' && pc.ring, JSON.stringify(pc));
 	await shot('pinch-demo');
-	await page.evaluate(() => window.__casawalk.xr.lessons.finish()); await frames(2);
-	check('Got it (or the last step) puts it away for good', (await lesson()).place === null && await page.evaluate(() => localStorage.getItem('casawalk.welcome.walk.controllers')) === '1');
+	await page.evaluate(() => { const x = window.__casawalk.xr; x.modes.walk.go(x.headWorld()); });
+	await page.waitForFunction(() => !window.__casawalk.xr.pinchDemo.playing, null, { timeout: 5000, polling: 'raf' }).catch(() => {});
+	check('the first teleport puts it away for good', await page.evaluate(() => !window.__casawalk.xr.pinchDemo.playing && localStorage.getItem('casawalk.welcome.walk.controllers') === '1'));
 	await page.evaluate(() => window.__casawalk.xr.menuAction('back')); await settled(); await frames(6);
 	await restRight(); await restLeft(); await lookDown(); await frames(4);
 }
@@ -1568,7 +1514,7 @@ await frames(30);
 s = await state();
 check('re-entering puts the plinth in front of you', Math.abs(s.stage[0] - 1.2) < 0.02 && Math.abs(s.stage[2] - 0.8) < 0.02 && Math.abs(s.stage[3] - 0.9) < 0.02,
 	`stage ${s.stage.map((v) => v.toFixed(2))}`);
-check('menu does not open by itself on re-entry; the welcome card is back', s.menu === null && await page.evaluate(() => window.__casawalk.xr.ui.welcome.mesh.visible));
+check('menu does not open by itself on re-entry', s.menu === null);
 check('sitting down: the eyes are still at 1.89 m', Math.abs(s.head[1] - 1.89) < 0.005 && Math.abs(s.rig[1] - 0.74) < 0.005, `eyes ${s.head[1].toFixed(3)} m, raised ${s.rig[1].toFixed(3)} m`);
 // Stand up and recentre with the headset (the Meta button): measured again.
 await page.evaluate(() => window.__device.position.set(1.2, 1.75, 0.8));
@@ -1619,7 +1565,7 @@ check('example home: two storeys, all shown', lv.count === 2 && lv.multi && lv.h
 			texts.push(p.title, p.hint, ...p.tabs.map((t) => t.label));
 			for (const c of p.cells.values()) texts.push(c.label, c.note ?? '', ...(c.options ?? []).map((o) => o.label));
 		}
-		for (const w of [x.ui.welcome, x.ui.photoNote]) texts.push(w.title, ...w.lines.map((l) => l.text));
+		for (const w of [x.ui.photoNote]) texts.push(w.title, ...w.lines.map((l) => l.text));
 		for (const k of Object.values(x.ui.wrist.keys)) texts.push(k.spec?.label ?? '', k.spec?.caption ?? '');
 		return { bad: texts.filter((t) => /dollhouse/i.test(t)), exit: texts.filter((t) => /exit vr/i.test(t)), titles: Object.values(x.menus).map((p) => p.title), tabs: x.menus.dollhouse.tabs.map((t) => t.label) };
 	});
@@ -1791,24 +1737,13 @@ check('re-entering after leaving from walk mode: a clean dollhouse', !bad.length
 const fpA = await fingerprint('reentry-after-walk');
 const lv0 = await page.evaluate(() => window.__casawalk.xr.maxStorey); // (the level picked in the last session stays)
 
-// Welcome card: follows your head, waits while you walk, is back in the dollhouse.
-await page.evaluate(() => window.__device.position.set(0.4, 1.6, 0.1));
-await page.waitForFunction(() => { // (until the card has turned, or 3 s)
-	const x = window.__casawalk.xr, V = x.rig.position.constructor, card = x.ui.welcome.mesh;
-	const to = x.camera.getWorldPosition(new V()).sub(card.getWorldPosition(new V())).normalize();
-	return new V(0, 0, 1).transformDirection(card.matrixWorld).dot(to) > Math.cos(Math.PI / 180);
-}, null, { timeout: 3000 }).catch(() => {});
-const faceAngle = THREE_deg(await facing());
-await page.evaluate(() => window.__device.position.set(0, 1.6, 0)); await frames(5);
-check('the welcome card turns to face you as you move', faceAngle < 1, `${faceAngle.toFixed(2)}°`);
+// Walking in and back: the lasers are on again at the scale model.
 await aimW('right', R, await modelTop()); await frames(6); await click('right', 'trigger'); await settled();
-// (Shown: visible, and every parent too.)
-const welcomeShown = () => page.evaluate(() => { for (let a = window.__casawalk.xr.ui.welcome.mesh; a; a = a.parent) if (!a.visible) return false; return true; });
-const wk = { mode: (await state()).mode, shown: await welcomeShown(), on: await page.evaluate(() => window.__casawalk.xr.ui.welcomeOn) };
+const wkMode = (await state()).mode;
 await restRight(); await click('right', 'b-button'); await settled(); await frames(3);
 s = await state();
-const back = { shown: await welcomeShown(), lasers: await lasers() };
-check('welcome card hides while walking and is back in the dollhouse; lasers on', wk.mode === 'walk' && !wk.shown && wk.on && s.mode === 'dollhouse' && back.shown && back.lasers === 'left:on right:on' && Math.abs(s.head[1] - 1.89) < 0.005, JSON.stringify({ wk, back }));
+const backLasers = await lasers();
+check('walking in and back: lasers on at the scale model', wkMode === 'walk' && s.mode === 'dollhouse' && backLasers === 'left:on right:on' && Math.abs(s.head[1] - 1.89) < 0.005, JSON.stringify({ wkMode, backLasers }));
 
 // Trigger ownership, and A closing what it opened.
 await click('right', 'a-button');
@@ -1837,10 +1772,10 @@ await page.evaluate(() => window.__casawalk.xr.menuAction('help')); // (Help is 
 // Photo: nothing of the interface in the picture, all of it back afterwards.
 await openBoard();
 await aimW('left', L, await modelTop()); await frames(6); // a marker under the left laser
-await page.evaluate(() => { const x = window.__casawalk.xr; x.lessons.stop(); x.toolsIntro.stop(); x.ui.setWelcome(true); }); // (Help replayed the lesson above: it would hide the welcome card)
+await page.evaluate(() => window.__casawalk.xr.toolsIntro.stop());
 const seen = page.evaluate(() => new Promise((done) => {
 	const S = window.__casawalk, x = S.xr, r = S.renderer, render = r.render;
-	const ui = { menu: Object.values(x.menus).map((p) => p.mesh), welcome: [x.ui.welcome.mesh], feedback: [x.veil.mesh, x.ui.photoNote.mesh], arc: [x.modes.walk.arc.dots, x.modes.walk.arc.ring],
+	const ui = { menu: Object.values(x.menus).map((p) => p.mesh), feedback: [x.veil.mesh, x.ui.photoNote.mesh], arc: [x.modes.walk.arc.dots, x.modes.walk.arc.ring],
 		markers: x.modes.dollhouse.markers, orbs: [x.ui.wrist.orb.group, x.ui.wrist.cross], hands: x.input.controllers.flatMap((c) => [c.ray, c.grip]) };
 	const shown = (o) => { for (let a = o; a; a = a.parent) if (!a.visible) return false; return true; };
 	// (Since A5 nothing is hidden for a photo: the interface is on its own layer, which the photo's camera doesn't show.)
@@ -1860,11 +1795,11 @@ await page.waitForFunction(async (n) => (await (await import('/js/storage.js')).
 await page.waitForFunction(() => !window.__casawalk.xr.ui.photoFx, null, { timeout: 10000 }).catch(() => {});
 await frames(3);
 const pfx = await page.evaluate(() => { const x = window.__casawalk.xr; return { flash: x.veil.amount('flash') > 0, note: x.ui.photoNote.mesh.visible, fx: x.ui.photoFx }; });
-check('Photo: no menu, laser, controller, orb, arc, marker, welcome card, flash or note in it; all back after',
-	ph.during?.length === 0 && ph.before.join() === 'menu,welcome,markers,orbs,hands' && ph.after.join() === 'menu,welcome,markers,orbs,hands', JSON.stringify(ph));
+check('Photo: no menu, laser, controller, orb, arc, marker, flash or note in it; all back after',
+	ph.during?.length === 0 && ph.before.join() === 'menu,markers,orbs,hands' && ph.after.join() === 'menu,markers,orbs,hands', JSON.stringify(ph));
 await click('right', 'b-button');
 check('Photo: the flash and the note go again', !pfx.flash && !pfx.note && pfx.fx === null, JSON.stringify(pfx));
-await page.evaluate(() => window.__casawalk.xr.ui.setWelcome(false)); await restLeft();
+await restLeft();
 
 // Walking: lasers, the inside board, B, trigger ownership, snap, two-hand pull, fade.
 await lookDown(); await pressWrist('right');

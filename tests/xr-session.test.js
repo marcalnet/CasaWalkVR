@@ -14,7 +14,6 @@ import { prepareObjText } from '../js/formats.js';
 import { optimiseModel, unmergedModel } from '../js/optimise.js';
 import { readoutText } from '../js/hand-readout.js';
 import { devFlags } from '../js/dev.js';
-import { FIRST_TIME_CARDS } from '../js/lessons.js';
 import { XRExperience } from '../js/xr.js';
 import { HOLD } from '../js/xr-tools.js';
 
@@ -174,13 +173,13 @@ test('the first time inside: a looping hand with its arc and ring, no card; the 
 		[[0, 0, false], [0.2, 0, false], [1, 0.8, false], [1, 1, true], [0.3, 0.3, false], [0, 0, false]], 'one loop: pinch, arc grows, ring blue, hand opens');
 	const { x, go, frame } = await setup();
 	const demo = x.pinchDemo;
-	for (const k of ['lessonWalkControllers', 'lessonWalkHands']) writeSetting(k, false);
+	for (const k of ['pinchSeenControllers', 'pinchSeenHands']) writeSetting(k, false);
 	// One teacher at a time (harmony, conflict 12): it waits for the room's name to fade.
 	const arrive = () => { for (let i = 0; i < 200 && !demo.playing; i++) frame(); };
 	go('in');
 	assert.ok(!demo.playing && x.arrival.mesh.visible, 'the room\'s name first');
 	arrive();
-	assert.ok(demo.playing && demo.group.visible && !x.lessons.group.visible && !x.arrival.mesh.visible, 'then the loop plays; no lesson card');
+	assert.ok(demo.playing && demo.group.visible && !x.arrival.mesh.visible, 'then the loop plays');
 	assert.ok(demo.ring.position.distanceTo(x.headWorld()) > 1.4, 'its ring is on the floor ahead');
 	const spot = demo.spot.clone(), head = x.headWorld();
 	assert.ok(Math.abs(spot.y - head.y + 0.42) < 0.02 && spot.distanceTo(head) < 1.05 && spot.distanceTo(head) > 0.95, 'about 1 m ahead, 25° below the eyes');
@@ -189,16 +188,16 @@ test('the first time inside: a looping hand with its arc and ring, no card; the 
 	assert.ok(Math.abs(az + 15) < 1, `15° to the main hand's side (right), taken from the view as it appears: ${az.toFixed(1)}°`);
 	demo.update(0.5); demo.update(0.5);
 	assert.ok(demo.state.fade === 1, 'faded in');
-	x.lessons.note('teleport');
+	x.modes.walk.go(x.headWorld());
 	for (let i = 0; i < 40; i++) demo.update(1 / 72);
 	assert.ok(!demo.playing && !demo.group.visible, 'gone after the first teleport');
 	const { readSetting } = await import('../js/settings.js');
-	assert.equal(readSetting('lessonWalkControllers') || readSetting('lessonWalkHands'), true, 'remembered');
+	assert.equal(readSetting('pinchSeenControllers') || readSetting('pinchSeenHands'), true, 'remembered');
 	// Another visit: not shown again.
 	go('back'); go('in'); arrive();
 	assert.ok(!demo.playing, 'not again');
 	// Not remembered after only a timeout: 15 s, then it goes; 40 s stuck, once more.
-	for (const k of ['lessonWalkControllers', 'lessonWalkHands']) writeSetting(k, false);
+	for (const k of ['pinchSeenControllers', 'pinchSeenHands']) writeSetting(k, false);
 	go('back'); go('in'); arrive();
 	assert.ok(demo.playing);
 	for (let t = 0; t < 15.6; t += 0.1) demo.update(0.1);
@@ -303,7 +302,7 @@ test('settings keep the board open; the doors move one layer at a time', async (
 test('the interface is never in a photo; what the tools make is', async () => {
 	const { x } = await setup();
 	const hidden = x.photoHidden;
-	for (const o of [...Object.values(x.menus).map((p) => p.mesh), x.ui.wrist.cross, x.veil.mesh, x.arrival.mesh, x.ui.welcome.mesh, x.ui.photoNote.mesh, x.modes.walk.arc.dots, x.modes.walk.arc.ring,
+	for (const o of [...Object.values(x.menus).map((p) => p.mesh), x.ui.wrist.cross, x.veil.mesh, x.arrival.mesh, x.ui.photoNote.mesh, x.modes.walk.arc.dots, x.modes.walk.arc.ring,
 		...x.modes.dollhouse.markers, ...x.input.controllers.flatMap((c) => [c.ray, c.grip])]) assert.ok(hidden.has(o), o.name || o.type);
 	assert.ok(!hidden.has(x.tools.annotations) && x.tools.annotations.parent === x.centerer, 'measurements and drawings live in model space and show in photos');
 });
@@ -336,7 +335,6 @@ test('leaving VR in the middle of a walk leaves nothing behind', async () => {
 	const { x, ended, go, frame } = await setup();
 	go('in');
 	x.ui.openMenu();
-	x.ui.setWelcome(true);
 	const c = x.input.controllers[0];
 	frame();
 	assert.ok(x.ui.wrist.orb.holder, 'the orb is on a wrist');
@@ -348,8 +346,8 @@ test('leaving VR in the middle of a walk leaves nothing behind', async () => {
 	x.photoPending = true;
 	x.tools.annotations.add(new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshBasicMaterial()));
 	x.end();
-	assert.deepEqual([x.mode, x.menu, walk.tele, walk.fade, x.ui.drag, x.modes.dollhouse.grab, x.ui.welcomeOn, x.pendingRecentre, x.photoPending], [null, null, null, null, null, null, false, false, false]);
-	const shown = [walk.arc.dots, walk.arc.ring, x.veil.mesh, x.ui.photoNote.mesh, x.walkSky, x.showroom, x.stage, x.ui.welcome.mesh, ...x.modes.dollhouse.markers, ...Object.values(x.menus).map((p) => p.mesh)].filter((o) => o.visible);
+	assert.deepEqual([x.mode, x.menu, walk.tele, walk.fade, x.ui.drag, x.modes.dollhouse.grab, x.pendingRecentre, x.photoPending], [null, null, null, null, null, null, false, false]);
+	const shown = [walk.arc.dots, walk.arc.ring, x.veil.mesh, x.ui.photoNote.mesh, x.walkSky, x.showroom, x.stage, ...x.modes.dollhouse.markers, ...Object.values(x.menus).map((p) => p.mesh)].filter((o) => o.visible);
 	assert.deepEqual(shown.map((o) => o.name || o.type), []);
 	assert.ok(!x.ui.wrist.orb.group.parent && !x.ui.wrist.orb.holder && !x.ui.wrist.open);
 	assert.equal(x.rig.position.length() + x.anchor.position.length() + x.lift, 0);
@@ -773,46 +771,6 @@ test('Walk in on the plinth: the laser presses it on letting go over it', async 
 	assert.equal(x.mode, 'walk', 'on letting go over it');
 });
 
-test('the first-time cards are off for now: no lesson card, no welcome card, at the scale model or inside', async () => {
-	const { x, go } = await setup();
-	assert.equal(FIRST_TIME_CARDS.on, false);
-	x.setMode('dollhouse');
-	x.ui.setWelcome(true);
-	assert.ok(x.lessons.place === null && !x.lessons.group.visible && !x.ui.welcome.mesh.visible, 'scale model: nothing');
-	go('in');
-	assert.ok(x.lessons.place === null && !x.lessons.group.visible, 'inside: nothing');
-});
-
-test('the first-time lessons (switched off for now; kept working): steps tick off in order; stepping inside starts the next; controllers skip the hand-only step', async (t) => {
-	FIRST_TIME_CARDS.on = true;
-	t.after(() => { FIRST_TIME_CARDS.on = false; });
-	const { x, go } = await setup();
-	const L = x.lessons;
-	assert.equal(L.place, 'scale', 'shown at the scale model on entry');
-	assert.equal(L.kind, 'controllers');
-	assert.deepEqual(L.steps().map((s) => s.id), ['start', 'menu', 'tools', 'hold', 'inside'], 'the ready pose is for bare hands only');
-	assert.ok(L.words(L.steps()[2]).includes('left controller'), 'the sides filled in: the fan on the left');
-	assert.ok(!x.ui.welcome.mesh.visible, 'it replaces the welcome card');
-	assert.equal(L.current().id, 'start');
-	L.note('held'); // done early: counts, but Start is still the step to do
-	assert.equal(L.current().id, 'start');
-	assert.ok(!L.canClose(), 'Got it waits for the steps that must not be missed');
-	L.note('start'); L.note('wrist');
-	assert.ok(!L.canClose(), 'the tools step must be done too');
-	L.note('fan');
-	assert.ok(L.canClose());
-	assert.equal(L.current().id, 'inside');
-	go('in');
-	assert.equal(L.place, 'walk', 'inside: the next lesson');
-	assert.equal(L.current().id, 'arc');
-	L.note('arc'); L.note('teleport'); L.note('turn');
-	assert.equal(L.place, 'walk', 'the last step has no gesture: it waits for Got it');
-	assert.ok(L.keys.keys.get('close'), 'the card has its own Close key');
-	assert.ok(L.canClose());
-	L.finish();
-	assert.equal(L.place, null);
-});
-
 test('the fan shows the camera from the front, the meter and the marker from the side, each with a name tag', async () => {
 	const { x } = await setup();
 	const by = Object.fromEntries(x.fan.slots.map((s) => [s.name, s]));
@@ -826,7 +784,6 @@ test('the fan shows the camera from the front, the meter and the marker from the
 test('the tool fan: opens over the raised left hand in view; the right tip touches a tool, the grip takes it, swaps, puts back', async () => {
 	const { x, press, frame, hands } = await setup();
 	const fan = x.fan;
-	x.lessons.stop();
 	// The left controller held up in front of you, the right one down at your side.
 	hands.left.grip.visible = hands.right.grip.visible = true; // (tracked)
 	hands.left.grip.position.set(-0.1, 1.3, -0.45);
@@ -1145,7 +1102,6 @@ test('bare hands teleport with one hand: the main hand while it is empty, the ot
 test('the fan: a controller raised in view opens it, a key near closes it; the fan slides outward as a group from the orb (25 cm kept); the orb yields to its own hand', async () => {
 	const { x, frame, hands } = await setup();
 	const fan = x.fan;
-	x.lessons.stop();
 	hands.left.grip.visible = hands.right.grip.visible = true;
 	hands.left.grip.position.set(-0.1, 1.3, -0.45);
 	hands.right.grip.position.set(0.3, 0.8, 0);
@@ -1244,7 +1200,6 @@ test('going home turns the model square to the plinth (unless you turned it with
 
 test('a laser on a wing hovers its cell', async () => {
 	const { x, frame, hands } = await setup();
-	x.lessons.stop();
 	hands.right.grip.visible = true;
 	frame();
 	x.ui.openMenu();

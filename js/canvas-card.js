@@ -1,5 +1,5 @@
 // The one base for everything drawn on a canvas in the headset (code audit,
-// A5): the boards, cards, labels, keys, the guide, the lessons' card, the
+// A5): the boards, cards, labels, keys, the guide, the
 // meter's labels and screen, the camera's hint and lens label. Each keeps its
 // own drawing; this makes the canvas and its texture the same way for all of
 // them. In Node (the tests), where there is no canvas, both are null and the

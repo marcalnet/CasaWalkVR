@@ -270,7 +270,6 @@ export class Dollhouse {
 		xr.applyView();
 		xr.applyStoreys();
 		this.apply();
-		xr.ui.setWelcome(xr.ui.welcomeOn);
 	}
 
 	// -----------------------------------------------------------------------
@@ -302,7 +301,6 @@ export class Dollhouse {
 		}
 		const plate = xr.plate?.mesh;
 		if (plate) plate.position.y = h + (plate.userData.tiltHalf ?? 0.03);
-		if (xr.model) xr.ui.placeWelcome(); // (the welcome card floats above the model: it rides along)
 		if (resting) { this.doll.pos.y = h + 0.004; this.apply(); }
 		else if (this.grab) this.keepAbove(); // (a model in the hand is never left inside the rising plinth)
 	}
@@ -501,7 +499,6 @@ export class Dollhouse {
 	update(dt) {
 		const xr = this.xr, ui = xr.ui, input = xr.input;
 		this.fadeDoors(dt);
-		ui.faceWelcome();
 		if (ui.buttons()) return;
 		const point = ui.point();
 		// The doors (not while a menu is open in front of them). They sit where hands and
@@ -643,7 +640,6 @@ export class Dollhouse {
 			pos: this.doll.pos.clone(), yaw: this.doll.yaw };
 		xr.sound.play('grab');
 		if (!c.isHand) xr.haptics.play(c, 'click');
-		xr.lessons?.note('held');
 	}
 
 	/**

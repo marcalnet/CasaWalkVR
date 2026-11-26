@@ -1,6 +1,6 @@
 // The first time inside: a looping 3D hand shows the move, no card (the UX
 // design of 25 Nov 2026, approved by the user; SPEC.md, "The first-time
-// demonstration"). It replaces the inside lesson card.
+// demonstration").
 //
 // One loop of 3 s: the hand rests sideways in front of you; it pinches (the
 // finger tips brighten); a demonstration arc grows from the pinch to an orange
@@ -29,7 +29,6 @@ import { HAND_POSES, pinchJoints } from './hand-poses.js';
 import { Label } from './panel.js';
 import { COLOURS } from './theme.js';
 import { readSetting, writeSetting } from './settings.js';
-import { lessonSetting } from './lessons.js';
 
 export const DEMO = {
 	AHEAD: 1.0, BELOW: 25, RIGHT: 15, // metres ahead; degrees below the eyes and to the side
@@ -37,6 +36,9 @@ export const DEMO = {
 	SHOW: 15, FADE: 0.4, STUCK: 40, // seconds on screen, fade, and the wait before the one replay
 	LABEL: 'Pinch · aim · let go', LABEL_CONTROLLERS: 'Trigger · aim · let go',
 };
+
+/** The setting that remembers it was seen, per input kind ('hands' | 'controllers'). */
+const seenSetting = (kind) => (kind === 'hands' ? 'pinchSeenHands' : 'pinchSeenControllers');
 
 /** The loop's moments (s): the hand pinches, the arc grows, the ring is steady, the hand opens. */
 export const LOOP = { pinchFrom: 0.5, pinchTo: 0.9, arcTo: 1.7, openFrom: 2.2, openTo: 2.5 };
@@ -92,7 +94,7 @@ export class PinchDemo {
 	/** True while it shows. */
 	get playing() { return !!this.state; }
 
-	/** The input kind now (as the lessons read it): controllers if any is held, else bare hands. */
+	/** The input kind now: controllers if any is held, else bare hands. */
 	inputKind() { return this.xr.input.active().length ? 'controllers' : 'hands'; }
 
 	/**
@@ -106,7 +108,7 @@ export class PinchDemo {
 	/** Starts the demonstration the first time for this input kind. */
 	start() {
 		const kind = this.inputKind();
-		if (!this.xr.session || readSetting(lessonSetting('walk', kind))) { this.stop(); return false; }
+		if (!this.xr.session || readSetting(seenSetting(kind))) { this.stop(); return false; }
 		this.visit = { t: 0, teleported: false, replayed: false };
 		this.play(kind);
 		return true;
@@ -125,7 +127,7 @@ export class PinchDemo {
 	note(event) {
 		if (event !== 'teleport' || !this.visit || this.visit.teleported) return;
 		this.visit.teleported = true;
-		writeSetting(lessonSetting('walk', this.kind), true);
+		writeSetting(seenSetting(this.kind), true);
 		if (this.state && this.xr.soundLevel !== 'off') this.xr.sound.play('press');
 		if (this.state) this.state.out = true;
 	}

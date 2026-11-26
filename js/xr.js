@@ -5,7 +5,7 @@
 //              over passthrough (AR view): js/xr-dollhouse.js
 //   walk       the home at 1:1: js/xr-walk.js
 //   menus      what they say and do: js/xr-menus.js; the wrist menu:
-//              js/wrist-menu.js; the board, help, welcome card and notes:
+//              js/wrist-menu.js; the board, help and notes:
 //              js/xr-ui.js
 //   layers     page → scale model → inside, one step at a time: goLayer()
 //              (dive and surface transitions, the arrival title)
@@ -41,7 +41,6 @@
 import * as THREE from 'three';
 import { XRInput } from './xr-input.js';
 import { HandView } from './hands.js';
-import { Lessons } from './lessons.js';
 import { SafetyNet } from './safety.js';
 import { Veil } from './veil.js';
 import { HandReadout } from './hand-readout.js';
@@ -164,7 +163,6 @@ export class XRExperience {
 		this.hideFromPhotos(this.veil.mesh, this.arrival.mesh);
 		this.modes = { dollhouse: new Dollhouse(this), walk: new Walk(this) };
 		this.ui = new XRUI(this);
-		this.lessons = new Lessons(this); // the first-time lessons (C0.5)
 		this.toolsIntro = new ToolsIntro(this); // the tools' first-time introduction (C3)
 		this.pinchDemo = new PinchDemo(this); // the looping hand the first time inside (js/pinch-demo.js)
 		this.tools = new ToolSystem(this);
@@ -222,7 +220,6 @@ export class XRExperience {
 		const size = model.bounds.getSize(new THREE.Vector3());
 		this.baseScale = 1 / roundScaleUp(Math.max(size.x, size.z, 0.01) / DOLLHOUSE_SIZE); // a round scale (1:25, not 1:23) that still fits the plinth
 		this.setPlinth(size.x * this.baseScale, size.z * this.baseScale);
-		this.ui.placeWelcome();
 		// Everything casts and receives shadows (used only when shadows are on),
 		// except the ground (nothing below it) and glass, so sun comes in
 		// through the windows.
@@ -305,8 +302,7 @@ export class XRExperience {
 		this.modes.dollhouse.begin();
 		this.setMode('dollhouse', { measure: false }); // no head pose yet: measured below, with the first one
 		this.fan.camera.warm(); // the camera's drawing programs, before anyone takes it (behind the start)
-		this.introPending = true; // the tools' introduction, the first time, once the head is known (then the lesson)
-		this.ui.setWelcome(true); // until the menu is first opened
+		this.introPending = true; // the tools' introduction, the first time, once the head is known
 		// The floor origin is not necessarily where you stand (it can be
 		// anywhere in your play area), so place the plinth in front of the
 		// head as soon as the first head pose arrives.
@@ -356,8 +352,7 @@ export class XRExperience {
 		this.applySeeThrough(); // the 2D page shows the model as modelled
 		this.mode = null;
 		this.pendingRecentre = false;
-		this.ui.reset(); // menus, welcome card, notes, the wrist menu
-		this.lessons.stop();
+		this.ui.reset(); // menus, notes, the wrist menu
 		this.pinchDemo.stop();
 		this.toolsIntro.stop();
 		this.layerFx = null;
@@ -394,18 +389,12 @@ export class XRExperience {
 	 * point and heading).
 	 */
 	setMode(name, ...args) {
-		const was = this.mode;
 		if (this.mode && this.mode !== name) this.modes[this.mode].exit();
 		this.mode = name; // (set first: applyStoreys() and applyView() read it)
 		this.ui.closeAll();
 		this.modes[name].enter(...args);
-		// The first-time lessons: stepping inside ends the scale model's; each place starts its own (until done).
-		if (was === 'dollhouse' && name === 'walk') this.lessons.note('inside');
-		this.lessons.stop();
-		if (this.session && !(name === 'dollhouse' && this.toolsIntro?.playing)) this.lessons.start(name === 'walk' ? 'walk' : 'scale'); // (the tools' introduction first)
 		if (name !== 'dollhouse') this.toolsIntro?.stop();
 		if (name === 'walk' && this.session) this.pinchDemo.arm(); else this.pinchDemo.stop(); // (it starts once the room's name has faded)
-		this.ui.setWelcome(this.ui.welcomeOn);
 	}
 
 	// -----------------------------------------------------------------------
@@ -516,7 +505,6 @@ export class XRExperience {
 		const head = this.viewerMatrix() ?? this.camera.matrix.clone();
 		this.rig.updateMatrixWorld(true); // (the rig was just reset by the mode's enter(): the head's world place is fresh again)
 		this.modes.dollhouse.recentre(head.premultiply(this.rig.matrix));
-		if (this.lessons.place === 'scale') this.lessons.place3d(); // (a lesson card in front of you too)
 	}
 
 	/**
@@ -663,7 +651,7 @@ export class XRExperience {
 
 	/**
 	 * True if world point p is within `margin` of any key you could press (the
-	 * orb, the plinth doors and levels, the wrist keys, a lesson's keys, an
+	 * orb, the plinth doors and levels, the wrist keys, an
 	 * open wing): the fan stays closed over a hand reaching for one.
 	 */
 	nearKey(p, margin, { orb: withOrb = true, wristKeys = true } = {}) {
@@ -671,7 +659,6 @@ export class XRExperience {
 		if (withOrb && orb?.visible && orb.getWorldPosition(this._nk ??= new THREE.Vector3()).distanceTo(p) < margin) return true;
 		if (this.mode === 'dollhouse' && this.modes.dollhouse.doorsLive && this.modes.dollhouse.doors.near(p, margin)) return true; // (only live keys: faded doors guard nothing)
 		if (wristKeys && wrist.open && wrist.pad.near(p, margin)) return true;
-		if (this.lessons?.keys?.near(p, margin)) return true;
 		const q = this._nk2 ??= new THREE.Vector3();
 		for (const panel of this.ui.openPanels()) {
 			panel.mesh.updateMatrixWorld(true);
@@ -799,13 +786,10 @@ export class XRExperience {
 				this.pendingRecentre = false;
 				this.modes.dollhouse.measureLift(head); // the tall view, from where the head really is
 				this.modes.dollhouse.recentre(head.clone().premultiply(this.rig.matrix));
-				if (this.introPending) { this.introPending = false; if (this.toolsIntro.start()) this.lessons.stop(); }
-				if (this.lessons.place) this.lessons.place3d(); // (in front of you, now that the head is known)
+				if (this.introPending) { this.introPending = false; this.toolsIntro.start(); }
 			}
 		}
-		if (!this.layerFx) this.lessons.update(dt); // (its keys before the mode's lasers)
 		this.toolsIntro.update(dt, () => {
-			if (this.mode === 'dollhouse') this.lessons.start('scale', { again: !!this.introAgain });
 			if (!this.introAgain) this.ui.wrist.attractOrb(2); // (the next teacher: once the fan has closed, the orb calls for 30 s)
 			this.introAgain = false;
 		});
