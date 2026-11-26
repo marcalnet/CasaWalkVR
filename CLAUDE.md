@@ -21,7 +21,8 @@ WebXR viewer for Meta Quest (Quest 3, 3S, 2 and Pro; Quest 3/3S first; Quest 1 n
 ```
 index.html        2D UI and import map
 config.js         Google API key, defaults
-js/main.js        2D page: renderer and view, loading, and the order the page's parts start in
+js/main.js        2D page: renderer and view, showing the model opened, and the order the page's parts start in
+js/model-service.js one service for models: files or a link in, a finished model out (reading, merging, superseding, freeing, downloading); no page code (Node-testable)
 js/page/files-card.js  the files card: Open file, the sample homes, the link box, Recent, the photos taken in VR
 js/page/send.js   Send to my Quest (computers) and Receive (headset)
 js/page/enter-vr.js the Enter VR button (Send to my Quest beside it on computers)

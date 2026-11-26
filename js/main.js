@@ -7,8 +7,9 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { CONFIG } from '../config.js';
-import { openFiles, UserError, checkDecoders } from './formats.js';
-import { optimiseModel, unmergedModel, modelStats } from './optimise.js';
+import { UserError, checkDecoders } from './formats.js';
+import { modelStats } from './optimise.js';
+import { ModelService } from './model-service.js';
 import { DEV } from './dev.js';
 import { DEVICE } from './device.js';
 import { SIMPLIFY } from './simplify.js';
@@ -16,7 +17,7 @@ import { workerObjParser } from './obj-worker-client.js';
 import { XRExperience } from './xr.js';
 import { Lighting } from './lighting.js';
 import { DepthShading } from './depth.js';
-import { checkLink, fileNameOf, resolveOneDrive, resolveGoogleDrive, looksLikeWebPage, LinkError } from './links.js';
+import { checkLink } from './links.js';
 import { readSetting, writeSetting } from './settings.js';
 import { getRecent, addRecent, setLastLink, addPhoto } from './storage.js';
 import { sampleById } from './samples.js';
@@ -38,8 +39,8 @@ const page = {
 	load: (...a) => load(...a),
 	loadUrl: (...a) => loadUrl(...a),
 	sendable: () => sendable(),
-	get current() { return current; },
-	get loading() { return loading; },
+	get current() { return models.current; },
+	get loading() { return models.loading; },
 	get xr() { return xr; },
 	get renderer() { return renderer; },
 	get controls() { return controls; },
@@ -96,7 +97,8 @@ centerer.name = 'centerer';
 anchor.add(centerer);
 scene.add(anchor);
 
-let current = null; // result of openFiles(), with root replaced by the merged model
+// The model service (js/model-service.js, stage B1): reads, merges, supersedes and frees models; it holds the one shown (models.current).
+const models = new ModelService({ config: CONFIG, onStatus: (text, isError) => setStatus(text, isError), onFree: () => centerer.clear() });
 
 // Depth shading (corner gradients) for the headset; prepared in the background.
 const depth = new DepthShading();
@@ -222,22 +224,22 @@ function setStatus(text, isError = false) {
 }
 
 function showStats() {
-	if (!current) { $('stats').textContent = ''; return; }
-	const { triangles, drawCalls } = modelStats(current.root);
-	const s = current.stats;
+	if (!models.current) { $('stats').textContent = ''; return; }
+	const { triangles, drawCalls } = modelStats(models.current.root);
+	const s = models.current.stats;
 	const fmt = (n) => n.toLocaleString('en-GB');
-	const lines = [`${fmt(triangles)} triangles · ${fmt(drawCalls)} draw calls${current.merged ? ` (merged from ${fmt(current.merged.sourceMeshes)} meshes)` : ''}`];
-	if (current.kind === 'sh3d') {
+	const lines = [`${fmt(triangles)} triangles · ${fmt(drawCalls)} draw calls${models.current.merged ? ` (merged from ${fmt(models.current.merged.sourceMeshes)} meshes)` : ''}`];
+	if (models.current.kind === 'sh3d') {
 		lines.push(`${s.walls} walls · ${s.rooms} rooms · ${s.pieces} pieces · ${s.openings} openings${s.levels > 1 ? ` · ${s.levels} levels` : ''}`);
 		if (s.missingModels) lines.push(`${s.missingModels} model(s) could not be read (shown as boxes)`);
-	} else if (current.unit) {
-		lines.push(`Units: ${current.unit}`);
+	} else if (models.current.unit) {
+		lines.push(`Units: ${models.current.unit}`);
 	}
 	// Built as text nodes, never as HTML: file names come from outside.
 	const row = (text, cls) => { const d = document.createElement('div'); if (cls) d.className = cls; d.textContent = text; return d; };
-	const rows = [row(current.label || '', 'name'), ...lines.map((l) => row(l))];
+	const rows = [row(models.current.label || '', 'name'), ...lines.map((l) => row(l))];
 	// Said, never hidden: the page says when a home was simplified, and by how much.
-	if (current.simplified) rows.push(row(`Simplified for the Quest: ${fmt(Math.round(current.simplified.before))} → about ${fmt(Math.round(current.simplified.after))} triangles (${current.simplified.models} heavy model${current.simplified.models === 1 ? '' : 's'}; sizes kept exact). A computer shows the original.`, 'warn'));
+	if (models.current.simplified) rows.push(row(`Simplified for the Quest: ${fmt(Math.round(models.current.simplified.before))} → about ${fmt(Math.round(models.current.simplified.after))} triangles (${models.current.simplified.models} heavy model${models.current.simplified.models === 1 ? '' : 's'}; sizes kept exact). A computer shows the original.`, 'warn'));
 	if (triangles > CONFIG.triangleWarning) rows.push(row(`Heavy model: over ${fmt(CONFIG.triangleWarning)} triangles may run slowly on Quest 2.`, 'warn'));
 	$('stats').replaceChildren(...rows);
 	return { triangles, drawCalls };
@@ -247,53 +249,39 @@ function showStats() {
 // Loading
 // ---------------------------------------------------------------------------
 
-function disposeCurrent() {
-	if (!current) return;
-	current.root.traverse((o) => {
-		if (o.geometry) o.geometry.dispose();
-		const mats = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : [];
-		for (const m of mats) { m.map?.dispose(); m.dispose(); }
-	});
-	current.store?.dispose();
-	centerer.clear();
-	current = null;
-}
-
 /**
- * Loads [{ name, bytes }] and shows it.
+ * Loads [{ name, bytes }] and shows it: the model service (js/model-service.js,
+ * stage B1) reads, merges and frees; this shows the result.
  * source: { type: 'link', url } | { type: 'file' } | { type: 'recent', url?, id } (not re-saved; url = the link it first came from; id = its entry under Recent)
  */
 async function load(files, label, source = { type: 'file' }) {
-	// If another model is opened before this one finishes, this one is dropped.
-	const seq = ++loadSeq;
-	const superseded = (result) => { if (seq === loadSeq) return false; result.store?.dispose(); return true; };
-	setStatus(`Opening ${label}…`);
-	loading++;
-	updateXRButtons(); // no Enter VR while a model is being swapped in
+	// If another model is opened before this one finishes, this one is dropped (the service answers null).
+	let seq = 0;
 	// In the headset, the old home goes first (heavy homes, step 4): the memory's peak is then the
 	// new home alone, not both. Not inside VR, where it is on view; not on a computer, where a
 	// failed open should leave the home you had.
+	const freeFirst = DEVICE.headset && !xr.session;
 	let previous = null; // the home freed to make room: offered back if this open fails
-	if (current && DEVICE.headset && !xr.session) {
-		previous = { label: current.label, recentId: current.recentId ?? (current.source?.type === 'recent' ? current.source.id : null) };
-		disposeCurrent(); setFiles(null); showStats(); invalidate();
-	}
 	try {
-		const result = await openFiles(files, { units: $('units').value, triangleLimit: DEVICE.headset ? CONFIG.triangleLimit : Infinity, simplifyAbove: DEVICE.headset ? SIMPLIFY.above : Infinity, objParser: DEV.worker ? workerObjParser() : null, onProgress: (t) => { if (seq === loadSeq) setStatus(t); } });
-		if (superseded(result)) return;
-		setStatus('Optimising for Quest…');
-		await new Promise((r) => setTimeout(r, 0)); // let the status paint
-		if (superseded(result)) return;
-		// ?nomerge (debugging only): show the scene exactly as loaded.
-		const merged = DEV.nomerge ? unmergedModel(result.root) : optimiseModel(result.root, { fold: !DEV.nofold });
-		disposeCurrent();
-		current = { ...result, label, source, root: merged.group, layers: merged.layers, merged: merged.stats };
+		const model = await models.open(files, label, source, {
+			read: { units: $('units').value, triangleLimit: DEVICE.headset ? CONFIG.triangleLimit : Infinity, simplifyAbove: DEVICE.headset ? SIMPLIFY.above : Infinity, objParser: DEV.worker ? workerObjParser() : null },
+			nomerge: DEV.nomerge, fold: !DEV.nofold, freeFirst,
+			onStart: () => {
+				seq = models.seq;
+				updateXRButtons(); // no Enter VR while a model is being swapped in
+				const c = models.current;
+				if (c && freeFirst) previous = { label: c.label, recentId: c.recentId ?? (c.source?.type === 'recent' ? c.source.id : null) };
+			},
+			onFreed: () => { setFiles(null); showStats(); invalidate(); },
+		});
+		if (!model) return; // (superseded)
+		const result = model, merged = { stats: model.merged };
 		// On a computer, keep the opened files: Send to my Quest can pass them on.
 		setFiles(ON_HEADSET ? null : files);
 		passOn(files, label); // linked to the headset: it gets this one too
-		centerer.add(current.root);
+		centerer.add(model.root);
 		// Bottom-centre of the model (without the ground) at the origin.
-		const b = current.bounds;
+		const b = model.bounds;
 		centerer.position.set(-(b.min.x + b.max.x) / 2, -b.min.y, -(b.min.z + b.max.z) / 2);
 		anchor.updateMatrixWorld(true);
 		// More than one level (distinct elevations): walk mode lets you stand on
@@ -301,28 +289,28 @@ async function load(files, label, source = { type: 'file' }) {
 		const elevations = new Set([...(result.home?.levels.values() ?? [])].filter((l) => l.viewable).map((l) => l.elevation));
 		// Bulbs of the home's lamps: they glow at sunset and at night.
 		const lamps = merged.stats ? lighting.setLamps(result.lamps) : lighting.setLamps(null);
-		if (lamps) current.root.add(lamps);
-		if (merged.stats) lighting.liftCeilings(current.layers.ceilings); // (ceilings read muddy at eye level: a small lift of their own)
-		xr.setModel({ group: current.root, layers: current.layers, lamps, storeys: result.storeys ?? 1, storeyNames: result.storeyNames ?? [], bounds: current.bounds, observer: current.observer, skyColor: result.home?.skyColor, multiLevel: elevations.size > 1, plan: result.plan ?? null });
-		depth.setModel(merged.stats ? current.layers : null); // (not in the ?nomerge debug view)
-		prepareTextures(current.root);
+		if (lamps) model.root.add(lamps);
+		if (merged.stats) lighting.liftCeilings(model.layers.ceilings); // (ceilings read muddy at eye level: a small lift of their own)
+		xr.setModel({ group: model.root, layers: model.layers, lamps, storeys: result.storeys ?? 1, storeyNames: result.storeyNames ?? [], bounds: model.bounds, observer: model.observer, skyColor: result.home?.skyColor, multiLevel: elevations.size > 1, plan: result.plan ?? null });
+		depth.setModel(merged.stats ? model.layers : null); // (not in the ?nomerge debug view)
+		prepareTextures(model.root);
 		lighting.setHome({ compass: result.home?.compass, skyColor: result.home?.skyColor });
-		lighting.setSubject(centerer, current.bounds);
+		lighting.setSubject(centerer, model.bounds);
 		frame('iso');
 		invalidate();
 		// Links to other websites written inside a model are never followed.
-		const blocked = current.store?.blockedLinks() ?? 0;
-		const notes = current.store?.allNotes() ?? [];
+		const blocked = model.store?.blockedLinks() ?? 0;
+		const notes = model.store?.allNotes() ?? [];
 		// Small windows: get the files card out of the way of the model.
 		if (window.matchMedia('(max-width: 720px), (max-height: 520px)').matches) setCollapsed(true);
 		setStatus(`Loaded ${label}.${blocked ? ` ${blocked} link${blocked > 1 ? 's' : ''} to other websites inside the file ${blocked > 1 ? 'were' : 'was'} ignored.` : ''}${notes.map((n) => ` ${n}`).join('')}`);
 		showStats();
 		// Once the textures have arrived: shrink any oversized ones and free
 		// the unpacked files, which the scene no longer needs.
-		const store = current.store;
+		const store = model.store;
 		store?.whenIdle().then(() => {
-			if (current?.store !== store) return;
-			prepareTextures(current.root);
+			if (models.current?.store !== store) return;
+			prepareTextures(model.root);
 			store.dispose();
 			invalidate();
 		});
@@ -330,18 +318,17 @@ async function load(files, label, source = { type: 'file' }) {
 		// Remember it for one-tap reopening (only once it opened successfully).
 		if (source.type !== 'recent') addRecent({ name: label, files, source }).then((id) => {
 			renderRecents();
-			if (id === 'too large' && current?.label === label) setStatus(`${$('status').textContent} It is too large to keep under Recent.`);
-			else if (id && current?.label === label) current.recentId = id; // (offered back if the next open fails)
+			if (id === 'too large' && models.current?.label === label) setStatus(`${$('status').textContent} It is too large to keep under Recent.`);
+			else if (id && models.current?.label === label) models.current.recentId = id; // (offered back if the next open fails)
 		});
 	} catch (e) {
 		console.error(e);
-		if (seq === loadSeq) {
+		if (models.isLatest(seq)) {
 			setStatus(e instanceof UserError ? e.message : `Could not open ${label}: ${e.message}`, true);
-			if (previous && !current) offerPrevious(previous);
+			if (previous && !models.current) offerPrevious(previous);
 		}
 		throw e;
 	} finally {
-		loading--;
 		updateXRButtons();
 	}
 }
@@ -373,8 +360,6 @@ function offerPrevious(previous) {
 	status.append(line);
 }
 
-let loadSeq = 0; // the newest load() call
-let loading = 0; // loads in progress
 
 /**
  * Textures: sharper filtering at grazing angles (floors) without any
@@ -414,12 +399,12 @@ function prepareTextures(root) {
 
 /** Fits the camera to the model. view: 'iso' | 'ne' | 'nw' | 'se' | 'sw' | 'top'. */
 function frame(view = 'iso') {
-	if (!current) return;
+	if (!models.current) return;
 	// After an XR session the camera carries the headset's projection: reset it.
 	camera.fov = 50;
 	camera.aspect = window.innerWidth / window.innerHeight;
 	camera.quaternion.identity();
-	const box = (current.bounds && !current.bounds.isEmpty() ? current.bounds.clone() : new THREE.Box3().setFromObject(current.root)).translate(centerer.position);
+	const box = (models.current.bounds && !models.current.bounds.isEmpty() ? models.current.bounds.clone() : new THREE.Box3().setFromObject(models.current.root)).translate(centerer.position);
 	const center = box.getCenter(new THREE.Vector3());
 	const size = box.getSize(new THREE.Vector3());
 	const radius = Math.max(size.x, size.z, size.y) * 0.5 + 0.5;
@@ -436,89 +421,15 @@ function frame(view = 'iso') {
 	controls.update();
 }
 
-/**
- * Downloads a URL into bytes, showing progress in the status line.
- * no-store: after editing the home on the Mac, always get the new version.
- */
-async function download(url, name, expectedSize = 0, init = {}) {
-	// A size limit, so a wrong or hostile link cannot fill the memory.
-	const max = CONFIG.maxDownloadMB * 1048576;
-	const tooBig = () => new UserError(`That file is larger than ${CONFIG.maxDownloadMB} MB, which is too large to open here.`);
-	if (expectedSize > max) throw tooBig();
-	// No cookies and no "where from" header go to the other site (Google Drive
-	// is the exception: its key is checked against this site's origin).
-	const res = await fetch(url, { cache: 'no-store', referrerPolicy: 'no-referrer', ...init, credentials: 'omit' });
-	if (!res.ok) throw new Error(`HTTP ${res.status}`);
-	const total = expectedSize || Number(res.headers.get('Content-Length')) || 0;
-	if (total > max) { res.body?.cancel().catch(() => {}); throw tooBig(); }
-	if (!res.body) {
-		const all = new Uint8Array(await res.arrayBuffer());
-		if (all.length > max) throw tooBig();
-		return all;
-	}
-	const reader = res.body.getReader();
-	const chunks = [];
-	let got = 0;
-	for (;;) {
-		const { done, value } = await reader.read();
-		if (done) break;
-		chunks.push(value);
-		got += value.length;
-		if (got > max) { reader.cancel().catch(() => {}); throw tooBig(); }
-		const mb = (n) => (n / 1048576).toFixed(1);
-		setStatus(total ? `Downloading ${name}… ${Math.min(100, Math.round((got / total) * 100))}% of ${mb(total)} MB` : `Downloading ${name}… ${mb(got)} MB`);
-	}
-	const bytes = new Uint8Array(got);
-	let off = 0;
-	for (const c of chunks) { bytes.set(c, off); off += c.length; }
-	return bytes;
-}
-
 /** What to do when a link cannot be downloaded from here (said on the device in hand). */
 const linkWayRound = () => (ON_HEADSET
 	? 'Instead: open the link in a browser tab here, download the file, then press Open file and pick it from Downloads.'
 	: 'Instead: download the file, open it here, then use Send to my Quest.');
 
+/** Opens a link's model: the model service checks and downloads it (saying what is wrong), then load() shows it. */
 async function loadUrl(url, { remember = true } = {}) {
+	const { name, bytes } = await models.fetchLink(url, { base: location.href, wayRound: linkWayRound });
 	url = url.trim();
-	const link = checkLink(url, location.href);
-	if (!link.ok) { setStatus(link.error, true); throw new UserError(link.error); }
-	if (link.problem) {
-		const text = link.blocked ? `${link.problem} ${linkWayRound()}` : link.problem;
-		setStatus(text, true);
-		throw new UserError(text);
-	}
-	const service = link.service;
-	if (link.googleDrive && !CONFIG.googleApiKey) {
-		const text = `This copy of the viewer is not set up for Google Drive links (config.js has no Google API key). ${linkWayRound()}`;
-		setStatus(text, true);
-		throw new UserError(text);
-	}
-	let name = fileNameOf(link.url);
-	setStatus(`Downloading ${link.googleDrive || link.oneDrive ? `from ${service}` : name}…`);
-	let bytes;
-	try {
-		let from = link.url;
-		let size = 0;
-		let init = {};
-		if (link.googleDrive) ({ url: from, name, size, init } = await resolveGoogleDrive(link.googleDrive, CONFIG.googleApiKey));
-		if (link.oneDrive) ({ url: from, name, size } = await resolveOneDrive(link.oneDrive));
-		bytes = await download(from, name, size, init);
-		// A private link usually answers with a sign-in page instead of the file.
-		if (looksLikeWebPage(bytes)) {
-			throw new UserError(service
-				? `${service} sent a web page instead of the file: the link is probably not public. Share it with “Anyone with the link” and copy the link again.`
-				: 'That link opens a web page, not a model file. Use a link that downloads the file itself.');
-		}
-	} catch (e) {
-		let text;
-		if (e instanceof UserError || e instanceof LinkError) text = e.message;
-		else if (/^HTTP (401|403|404)/.test(e.message)) text = `${service || 'That site'} would not give the file (${e.message}). Check the link is shared with “Anyone with the link”.`;
-		else if (e instanceof TypeError) text = `${service || 'That site'} does not let other websites download this file. ${linkWayRound()}`;
-		else text = `Could not download that link (${e.message}).`;
-		setStatus(text, true);
-		throw e instanceof UserError ? e : new UserError(text);
-	}
 	if (remember) { setLastLink(url); $('link-input').value = url; }
 	return load([{ name, bytes }], name, { type: 'link', url });
 }
@@ -585,11 +496,11 @@ if (DEV.test) window.__casawalk = {
 	invalidate,
 	frame: (view) => { frame(view); controls.update(); renderer.render(scene, camera); },
 	look: (pos, target) => { camera.position.set(...pos); controls.target.set(...target); controls.update(); renderer.render(scene, camera); },
-	stats: () => ({ ...(current?.stats || {}), ...modelStats(current?.root || new THREE.Group()), merged: current?.merged }),
+	stats: () => ({ ...(models.current?.stats || {}), ...modelStats(models.current?.root || new THREE.Group()), merged: models.current?.merged }),
 	decoders: checkDecoders,
 	scene,
 	xr,
 	renderer,
-	get current() { return current; },
+	get current() { return models.current; },
 };
 
