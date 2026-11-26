@@ -53,7 +53,7 @@ test('the sample list: unique ids, each with its file and picture in examples/',
 	assert.equal(sampleById(null), null);
 });
 
-test('Pond House: 2 levels, 30 rooms (15 named; the pond is water, not a room; the deck is pieces that never overlap), a round wall, a sloping wall, unnamed helper rooms, nothing missing', async () => {
+test('Pond House: 2 levels, 32 rooms (18 named; the pond is water, not a room; the deck is pieces that never overlap), a round wall, a sloping wall, unnamed helper rooms, nothing missing', async () => {
 	const entries = unzipSync(new Uint8Array(fs.readFileSync(path.join(ROOT, 'examples/pond-house.sh3d'))));
 	const xml = new TextDecoder().decode(entries['Home.xml']);
 	assert.match(xml, /<home [^>]*selectedLevel=/, 'Sweet Home 3D opens it with its level tabs');
@@ -63,8 +63,8 @@ test('Pond House: 2 levels, 30 rooms (15 named; the pond is water, not a room; t
 	assert.ok(home.walls.some((w) => Math.abs(w.arcExtent) > 0.1), 'the round pond wall (arcExtent)');
 	assert.ok(home.walls.some((w) => w.heightAtEnd !== null && Math.abs(w.heightAtEnd - w.height) > 1), 'the sloping wall along the drive (heightAtEnd)');
 	const named = built.plan.rooms.filter((r) => r.name), unnamed = built.plan.rooms.filter((r) => !r.name);
-	assert.equal(built.plan.rooms.length, 30);
-	assert.equal(named.length, 15, `named rooms: ${named.map((r) => r.name).join(', ')}`);
+	assert.equal(built.plan.rooms.length, 32);
+	assert.equal(named.length, 18, `named rooms: ${named.map((r) => r.name).join(', ')}`);
 	assert.ok(unnamed.length > 0, 'pieces that only carry a floor or ceiling stay unnamed (one label per space)');
 	assert.equal(new Set(named.map((r) => r.name)).size, named.length, 'every named room a name of its own (Bedroom 2, Bedroom 3)');
 	assert.ok(built.lamps.length >= 4); // (hall, pendant, two bedside lamps)
