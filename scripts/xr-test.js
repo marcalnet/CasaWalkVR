@@ -269,7 +269,7 @@ const leftovers = () => page.evaluate(() => {
 	want('session', x.session === null && x.mode === null);
 	want('grab/tele/fade/drag', !x.modes.dollhouse.grab && !x.modes.walk.tele && !x.modes.walk.fade && !x.pendingRecentre);
 	want('menu', x.menu === null && Object.values(x.menus).every((p) => !p.mesh.visible && !p.open) && !x.ui.wrist.open && !x.ui.wrist.cross.visible);
-	want('layers', !x.layerFx && !(x.veil.amount('layer') > 0) && !x.arrival.mesh.visible);
+	want('layers', !x.layerFx && !(x.veil.amount('layer') > 0) && !x.pause.arrival.mesh.visible);
 	want('hands note', !x.ui.handsNote.mesh.visible);
 	want('photo', !x.photoPending && !x.ui.photoFx && !x.veil.mesh.visible && !x.ui.photoNote.mesh.visible);
 	want('arc', !x.modes.walk.arc.dots.visible && !x.modes.walk.arc.ring.visible);
@@ -480,7 +480,7 @@ const crossSeen = () => page.evaluate(() => {
 		const angle = Math.atan2(fwd.clone().cross(to.clone().normalize()).y, fwd.dot(to.clone().normalize())) * 180 / Math.PI; // + = left
 		return { angle: +angle.toFixed(1), distance: +to.length().toFixed(2), below: +(head.y - menu.y).toFixed(2), wrist: x.ui.wrist.open, title: x.menu.title };
 	});
-	check('Settings opens the right wing beside the model: about 45° to the right (out of the model\'s way), 0.55 m from the eyes (up to 0.9 when a large model fills the view), below eye level (15°, less when a large model lifts it: its leaned corners count, harmony conflict 13); the wrist menu closes', s.menu === 'dollhouse' && m.angle < -34 && m.angle > -56 && m.distance > 0.45 && m.distance < 0.91 && m.below > 0.03 && m.below < 0.3 && !m.wrist && /Scale model/.test(m.title), JSON.stringify(m));
+	check('Settings opens the right wing beside the model: about 45° to the right (out of the model\'s way), 0.55 m from the eyes (up to 0.9 when a large model fills the view), below eye level (15°, less when a large model lifts it: its leaned corners count, harmony conflict 13); the wrist menu closes', s.menu === 'dollhouse' && m.angle < -34 && m.angle > -56 && m.distance > 0.45 && m.distance < 0.91 && m.below > 0.03 && m.below < 0.3 && !m.wrist && m.title === 'Settings', JSON.stringify(m));
 	// Nothing covers the model: no open wing overlaps the model's outline seen from the eyes, with the 5° margin.
 	const cover = await page.evaluate(async () => {
 		const THREE = await import('three'), W = await import('/js/wings.js');
@@ -549,7 +549,8 @@ await button('left', 'squeeze', 1); await frames(4);
 await aim('left', [-0.2, 0.3, -0.4], [-0.2, 0.1, -1.4]); await frames(8);
 s = await state();
 await button('left', 'squeeze', 0); await frames(4);
-check('model stays on top of the plinth, a few millimetres clear of it', s.pos[1] > 0.6 + 0.003 && s.pos[1] < 0.6 + 0.006, `y ${s.pos[1].toFixed(4)}`);
+{ const top = await page.evaluate(() => window.__casawalk.xr.plinthH); // (one plinth, 1.24 m, since step 1.2)
+check('model stays on top of the plinth, a few millimetres clear of it', s.pos[1] > top + 0.003 && s.pos[1] < top + 0.006, `y ${s.pos[1].toFixed(4)}, top ${top}`); }
 // (Recentre left the menu: the headset's own recentre, the Meta button, moves the plinth. Put the model back for what follows.)
 await page.evaluate(() => { const d = window.__casawalk.xr.modes.dollhouse; d.doll.pos.set(0, d.doll.pos.y, 0); d.doll.yaw = 0; d.doll.zoom = 1; });
 await page.evaluate(() => window.__casawalk.xr.modes.dollhouse.recentre());
@@ -882,7 +883,7 @@ check('B closes the board', (await state()).menu === null);
 	await page.waitForFunction(() => { const w = window.__casawalk.xr.modes.walk; return !w.fade && !w.tele; }, null, { timeout: 8000, polling: 'raf' }).catch(() => {}); // (the fade does the move: a slow emulator needs time)
 	const after = await page.evaluate(() => ({ head: window.__casawalk.xr.headWorld().toArray(), tele: !!window.__casawalk.xr.modes.walk.tele }));
 	const jumped = Math.hypot(after.head[0] - head0[0], after.head[2] - head0[2]);
-	check('bare hands walking: opening the pinch on blue teleports', !after.tele && jumped > 0.5, JSON.stringify({ jumped: +jumped.toFixed(2) }));
+	check('bare hands walking: opening the pinch on blue teleports', !after.tele && jumped > 0.25 /* a teleport, not a drift: the landing may snap to a hotspot near you (step 2b's snaps) */, JSON.stringify({ jumped: +jumped.toFixed(2) }));
 	// Turning: a wrist flick while aiming turns 30°; the arc stays. Letting go before blue: nothing.
 	await gesture('right', { type: 'pinch' }); await frames(3);
 	const yaw0 = await page.evaluate(() => window.__casawalk.xr.rig.rotation.y);
@@ -1012,17 +1013,17 @@ const mark = await page.evaluate(() => { const x = window.__casawalk.xr, m = x.m
 // (The tunnel zoom, build 120's M2: watched every frame while it runs.)
 await page.evaluate(() => {
 	const x = window.__casawalk.xr, w = window.__tunnelSeen = { scale: 1, dim: 0, shown: false, black: null };
-	const run = x.runTunnel.bind(x);
-	x.runTunnel = (f, cover) => { run(f, cover); const m = x.veil.tunnel; w.scale = Math.max(w.scale, x.stage.scale.x); if (m?.visible) { w.shown = true; w.dim = Math.max(w.dim, m.material.opacity); } if (w.black === null && x.veil.amount('layer') > 0) w.black = +f.t.toFixed(2); };
+	const run = x.pause.runTunnel.bind(x.pause); // (the tunnel moved into js/pause.js, step 2a)
+	x.pause.runTunnel = (f, cover) => { run(f, cover); const m = x.veil.tunnel; w.scale = Math.max(w.scale, x.stage.scale.x); if (m?.visible) { w.shown = true; w.dim = Math.max(w.dim, m.material.opacity); } if (w.black === null && x.veil.amount('layer') > 0) w.black = +f.t.toFixed(2); };
 });
 await click('right', 'trigger');
 await settled();
 s = await state();
 check('trigger on model enters 1:1 (through the dive)', s.mode === 'walk' && s.anchorScale === 1, JSON.stringify(s.rig.map((v) => +v.toFixed(2))));
-const tunnel = await page.evaluate(() => { const x = window.__casawalk.xr; delete x.runTunnel; return window.__tunnelSeen; });
+const tunnel = await page.evaluate(() => { const x = window.__casawalk.xr; delete x.pause.runTunnel; return window.__tunnelSeen; });
 check('walking in: the tunnel zoom, subtle (x1.4, dimmed to half at most, black from 1.25 s; build 120, M2)', tunnel.shown && Math.abs(tunnel.scale - 1.4) < 0.01 && tunnel.dim > 0.45 && tunnel.dim <= 0.5 && tunnel.black >= 1.24 && tunnel.black <= 1.36, JSON.stringify(tunnel)); // (seen on the first frame past 1.25 s: headless frames can be 0.1 s apart)
 {
-	const arr = await page.evaluate(() => { const x = window.__casawalk.xr; return { shown: x.arrival.mesh.visible, text: x.arrival.text, curtain: x.veil.amount('layer') > 0 }; });
+	const arr = await page.evaluate(() => { const x = window.__casawalk.xr; return { shown: x.pause.arrival.mesh.visible, text: x.pause.arrival.text, curtain: x.veil.amount('layer') > 0 }; });
 	check('arriving inside: the room\'s name floats in front of you, the view uncovered', arr.shown && arr.text.length > 0 && !arr.curtain, JSON.stringify(arr));
 }
 {
@@ -1323,7 +1324,7 @@ const walkUntil = async (pred, arg, timeout = 15000) => {
 			}
 			return at;
 		};
-		const portal = () => page.evaluate(() => { const p = window.__casawalk.xr.portals; const u = p.uniforms.cwPortalHand.value; return { r: +u.w.toFixed(3), at: [u.x, u.y, u.z].map((v) => +v.toFixed(2)), touching: p.touching.size, hidden: p.hidden, meshes: p.meshes.length, mode: window.__casawalk.xr.mode }; });
+		const portal = () => page.evaluate(() => { const p = window.__casawalk.xr.portals; const u0 = p.uniforms.cwPortalHand.value, u2 = p.uniforms.cwPortalHand2.value, u = u2.w > u0.w ? u2 : u0; /* each hand its own portal since build 111: whichever slot this one took */ return { r: +u.w.toFixed(3), at: [u.x, u.y, u.z].map((v) => +v.toFixed(2)), touching: p.touching.size, hidden: p.hidden, meshes: p.meshes.length, mode: window.__casawalk.xr.mode, hand2: +p.uniforms.cwPortalHand2.value.w.toFixed(3), who: [...p.touching.keys()].map((c) => c.handedness), block: (() => { const x = window.__casawalk.xr, c = x.input.controllers.find((k) => k.isController && k.handedness === 'right'); return c?.touch.tracked ? x.aimBlock(c, c.touch.tip) : 'untracked'; })() }; });
 		await touchWall(0.3); await frames(5); // (the resting controller reaches into the wall this close: away first)
 		const touched = await touchWall(0.02); await frames(30);
 		let pt = await portal();
@@ -1463,14 +1464,14 @@ check('back from walking: eyes at 1.89 m again, gallery shown, lasers on', Math.
 
 // The pause (js/pause.js), tips on: Walk in with controllers: the dark, the floor ring, the room's name, the teleport tip; a pull after 0.8 s skips it.
 {
-	await page.evaluate(() => { window.__casawalk.xr.pause.tipsOn = true; window.__casawalk.xr.menuAction('in'); });
+	await page.evaluate(() => { const x = window.__casawalk.xr; x.store.tips = { seen: new Set(), learnt: new Set() }; x.pause.tipsOn = true; x.menuAction('in'); }); // (this run has teleported already: the tips start over, as with New visitor)
 	await page.waitForFunction(() => !!window.__casawalk.xr.pause.fx?.pause, null, { timeout: 10000, polling: 'raf' }).catch(() => {});
 	await page.waitForFunction(() => (window.__casawalk.xr.pause.fx?.pause?.t ?? 0) > 1, null, { timeout: 10000, polling: 'raf' }).catch(() => {});
 	const pz = await page.evaluate(() => { const P = window.__casawalk.xr.pause, p = P.fx?.pause; return { tip: p?.tip?.id ?? null, words: P.tipLabel.text, name: P.nameLabel.mesh.visible ? P.nameLabel.text : null, ring: P.floor.visible, dark: window.__casawalk.xr.veil.amount('layer'), demo: P.demo.playing, mode: window.__casawalk.xr.mode }; });
 	check('the pause on the first Walk in: the dark, the floor ring and the teleport tip, inside already', pz.tip === 'teleport' && pz.words === 'Hold the trigger, aim, let go.' && pz.ring && pz.dark === 1 && pz.demo && pz.mode === 'walk', JSON.stringify(pz));
 	await shot('pause-walk-in');
 	await click('right', 'trigger'); await settled(); await frames(4);
-	const after = await page.evaluate(() => { const x = window.__casawalk.xr; return { fx: !!x.layerFx, dark: x.veil.amount('layer'), learnt: x.pause.record.learnt.has('teleport:controllers'), seen: x.pause.record.seen.has('teleport:controllers'), target: x.pause.target.visible }; });
+	const after = await page.evaluate(() => { const x = window.__casawalk.xr; return { fx: !!x.layerFx, dark: x.veil.amount('layer'), learnt: x.pause.record.tips.learnt.has('teleport:controllers'), seen: x.pause.record.tips.seen.has('teleport:controllers'), target: x.pause.target.visible }; });
 	check('a pull skips it (seen, not learnt); the room fades in, the first-target ring ahead', !after.fx && after.dark === 0 && !after.learnt && after.seen && after.target, JSON.stringify(after));
 	await page.evaluate(() => { const x = window.__casawalk.xr; x.pause.tipsOn = false; x.menuAction('back'); }); await settled(); await frames(6);
 	await restRight(); await restLeft(); await lookDown(); await frames(4);
@@ -1782,7 +1783,7 @@ check('Photo: the flash and the note go again', !pfx.flash && !pfx.note && pfx.f
 await restLeft();
 
 // Walking: lasers, the inside board, B, trigger ownership, snap, two-hand pull, fade.
-await lookDown(); await pressWrist('right');
+await page.evaluate(() => window.__casawalk.xr.menuAction('in')); await settled(); await frames(4); // (Walk in → left the wrist: it is the plinth's door now)
 await lookAhead(); await restRight(); await restLeft(); await frames(5);
 const l0 = await lasers(); await click('right', 'a-button'); await frames(3); const l1 = await lasers();
 check('walking: lasers hidden, shown while the wrist menu is open', l0 === 'left:off right:off' && l1 === 'left:on right:on', `${l0} / ${l1}`);
