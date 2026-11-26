@@ -11,7 +11,7 @@ test('the storage keys never change', () => {
 	assert.deepEqual(keys, {
 		light: 'casawalk.light', shadows: 'casawalk.shadows', depth: 'casawalk.depth', view: 'casawalk.view',
 		height: 'casawalk.height', seeThrough: 'casawalk.seeThrough', mainHand: 'casawalk.mainHand', sound: 'casawalk.sound', cameraLens: 'casawalk.cameraLens',
-		pinchSeenHands: 'casawalk.welcome.walk.hands', pinchSeenControllers: 'casawalk.welcome.walk.controllers', toolsIntro: 'casawalk.toolsIntro',
+		pinchSeenHands: 'casawalk.welcome.walk.hands', pinchSeenControllers: 'casawalk.welcome.walk.controllers',
 	});
 });
 

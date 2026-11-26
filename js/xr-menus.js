@@ -52,8 +52,6 @@ const CELLS = {
 	lens: { type: 'choice', id: 'lens', label: 'Camera lens', options: [24, 28, 35, 50].map((mm) => ({ value: mm, label: `${mm} mm` })), value: 28 },
 	sound: { type: 'choice', id: 'sound', label: 'Sound', options: [{ value: 'off', label: 'Off' }, { value: 'effects', label: 'Effects' }], value: 'effects' },
 	guide: GUIDE_CELL,
-	replayTools: { type: 'button', id: 'replayTools', label: 'Tools show' }, // the left wing's two replay keys
-	replayPinch: { type: 'button', id: 'replayPinch', label: 'Pinch hand' },
 	height: { type: 'choice', id: 'height', label: 'Height', options: HEIGHTS.map((h) => ({ value: h, label: h ? `${h.toFixed(1)} m` : 'Yours' })), value: 0 },
 };
 
@@ -119,7 +117,7 @@ export function buildMenus(rig) {
 		rig.add(p.mesh);
 		menus[mode] = p;
 		// The left wing: How to move (moving pictures for the input in hand), the two replay keys, the Meta button's line.
-		const g = new Panel({ tabs: [{ id: 'guide', label: '', rows: cells([['guide'], ['replayTools', 'replayPinch']]) }] }, {
+		const g = new Panel({ tabs: [{ id: 'guide', label: '', rows: cells([['guide']]) }] }, {
 			title: 'How to move', width: WING_SIZE.guide, pxPerM: BOARD_PX_PER_M, hint: CLOSE_HINT.controllers, background: paper,
 		});
 		g.mesh.visible = false;
@@ -154,8 +152,6 @@ export function updateLabels(xr) {
 		p.set('lens', { value: xr.cameraLens });
 	}
 	// The left wing's replay keys: the tools' show is at the scale model, the pinch hand inside.
-	xr.guides.dollhouse.set('replayPinch', { disabled: true, note: 'Inside' });
-	xr.guides.walk.set('replayTools', { disabled: true, note: 'At the scale model' });
 	const walk = xr.menus.walk, doll = xr.menus.dollhouse;
 	walk.set('height', { value: xr.personHeight });
 	// (Levels are not here: a stack of keys beside the doors at the scale model, js/xr-dollhouse.js.)
@@ -182,14 +178,6 @@ export function menuAction(xr, target) {
 			break;
 		case 'settings': ui.toggleBoard(); break;
 		case 'guideKey': ui.toggleHelp(); break; // (How to move: the left wing)
-		case 'replayTools':
-			ui.closeAll(); // (it must play where it can be seen)
-			if (xr.mode === 'dollhouse' && xr.toolsIntro?.start({ again: true })) xr.introAgain = true;
-			break;
-		case 'replayPinch':
-			ui.closeAll();
-			if (xr.mode === 'walk') xr.pinchDemo.play(xr.pinchDemo.inputKind());
-			break;
 		case 'mainHand': {
 			const main = SETTINGS.mainHand.options.includes(value) ? value : xr.mainHand === 'left' ? 'right' : 'left';
 			xr.toolFan = main === 'left' ? 'right' : 'left';

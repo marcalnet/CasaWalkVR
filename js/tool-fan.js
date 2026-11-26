@@ -34,7 +34,7 @@ const SPACING = 0.115; // between tools in the arc (the marker and the meter lie
 // How each tool shows in the fan (the user's note, 24 Nov): the camera from the front, its lens towards you; the meter and
 // the marker from the side, their length across the fan like tools on a pegboard, nib to the left as you see it.
 const VIEW = { camera: Math.PI, meter: Math.PI / 2, marker: Math.PI / 2 };
-const TAG = { height: 0.03, below: -0.05 }; // each tool's name tag (like the tools' first-time show: js/tools-intro.js)
+const TAG = { height: 0.03, below: -0.05 }; // each tool's name tag
 const NAMES = { camera: 'Camera', meter: 'Meter', marker: 'Marker' };
 const REACH = 0.05; // a controller's tip this close to a tool touches it
 const REACH_HAND = 0.07; // a bare fingertip: tracking is looser, and the tools are small (the marker is 9 cm)
@@ -60,7 +60,6 @@ export class ToolFan {
 		this.target = null; // the slot a closing bare hand would take: the touched one, one touched a moment ago, or the one at the palm
 		this.mem = null; // { slot, t }: the last slot a bare fingertip touched
 		this._outward = new THREE.Vector3(); // across the view, away from the middle, on the fan hand's side
-		this.force = 0; // seconds the fan stays open by itself (the tools' show: js/tools-intro.js)
 		const make = (name, object, live, tool = null) => {
 			const slot = { name, object, live, home: new THREE.Group(), pose: new THREE.Group(), wobble: 0, tagGrow: 0, held: false };
 			slot.pose.rotation.y = VIEW[name] ?? 0; // (the pose is the group's, so the tool's own rotation stays free for the wobble)
@@ -132,7 +131,6 @@ export class ToolFan {
 			anchor.y += ABOVE;
 			open = !xr.teaching; // (one teacher at a time: closed while one plays; that rule goes with the teachers, step 2)
 		}
-		if (this.force > 0) { this.force -= dt; open = true; } // (the tools' show: opens it as they land)
 		this.alpha = THREE.MathUtils.clamp(this.alpha + (open ? dt : -dt) / FADE, 0, 1);
 		this.group.visible = this.alpha > 0;
 		if (this.group.visible) this.place(anchor, head);

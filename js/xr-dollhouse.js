@@ -440,7 +440,7 @@ export class Dollhouse {
 		const spots = [];
 		for (const c of input.active()) {
 			input.setLaser(c, c.claim.trigger !== 'tool'); // (a hand holding a tool has no laser)
-			if (c.claim.trigger === null && !xr.toolsIntro?.showing) { // (while the tools' show plays, the aims wait)
+			if (c.claim.trigger === null) {
 				input.setRaycaster(c, xr.raycaster);
 				const modelHit = xr.raycaster.intersectObjects(pointable, false)[0];
 				if (modelHit) {
@@ -504,7 +504,7 @@ export class Dollhouse {
 
 	/**
 	 * The house's box in the world, as placed now (houseBounds): what the
-	 * wings, the open fan, the tools' show and the arrival title keep clear of
+	 * wings keep clear of
 	 * (the interaction harmony's conflict 13: the home, not its lawn).
 	 */
 	houseBox(out = new THREE.Box3()) {
@@ -786,7 +786,7 @@ export class Dollhouse {
 	handMoves(dt, spots) {
 		const xr = this.xr, ui = xr.ui, input = xr.input;
 		const box = this.modelBox(this._box2 ??= new THREE.Box3()), p = this._p2 ??= new THREE.Vector3();
-		const busy = xr.boardOpen || ui.wrist.open || !!xr.toolsIntro?.showing; // (while the tools' show plays, the aims wait: the harmony's conflict 7)
+		const busy = xr.boardOpen || ui.wrist.open;
 		let jump = null;
 		for (const c of input.gestureHands()) {
 			const palm = this.holdPoint(c, p);

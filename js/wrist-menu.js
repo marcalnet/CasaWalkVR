@@ -37,7 +37,6 @@ const ORB_SCALE = 1; // the orb at full size (about 5 cm): easy to notice (the u
 const ORB_TIP_TOUCH = 0.035, ORB_TIP_RELEASE = 0.08; // a fingertip or controller tip touching the orb
 const ORB_GRIP_TOUCH = 0.08, ORB_GRIP_RELEASE = 0.14; // or a whole controller reaching into it
 const TOWARDS_EYES = 0.07; // the cross floats this far from the wrist towards the eyes: the hand is always behind it, never over the keys
-const ATTRACT = 30; // seconds the orb breathes deeper after the tools' show (attractOrb)
 const IDLE = 12, IDLE_NEAR = 0.15; // seconds with no finger within this of the nearest key (m), and no laser on a key, before it closes: a menu you forgot doesn't hang there
 const OUT_OF_VIEW = 0.4; // seconds with the wrist out of view before it closes
 const VIEW_ANGLE = THREE.MathUtils.degToRad(50); // "in view": within this of where the head looks
@@ -75,7 +74,6 @@ export class WristMenu {
 		this.keysHot = false; this.laserNear = false; // a fingertip is over a key: the orb ignores touches (it sits between the keys)
 		this.fanYield = false; // the orb's own hand reaching into the fan (js/tool-fan.js sets it)
 		this.keyYield = false; // a fingertip near a live key (the doors, the levels, a wing): the orb makes room and ignores touches
-		this.attract = null; // { wait, left } (s): the orb breathes deeper, a teacher's turn after the tools' show (attractOrb)
 		xr.scene.add(this.cross);
 		xr.hideFromPhotos(this.cross);
 		this._p = new THREE.Vector3(); this._q = new THREE.Vector3(); this._m = new THREE.Matrix4(); this._quat = new THREE.Quaternion();
@@ -89,12 +87,6 @@ export class WristMenu {
 		this.close();
 	}
 
-	/**
-	 * The third teacher at the scale model (the interaction harmony's conflict
-	 * 12): once the fan has closed after the tools' show (`wait` s), the orb
-	 * breathes deeper for ATTRACT seconds, or until the wrist menu opens.
-	 */
-	attractOrb(wait = 2) { this.attract = { wait, left: ATTRACT }; }
 
 	/** The orb makes room (half size, 30%): for the hand reaching into the fan, or a fingertip at a live key. */
 	get orbYield() { return this.fanYield || this.keyYield; }
@@ -164,7 +156,6 @@ export class WristMenu {
 		const p = o.group.getWorldPosition(this._p);
 		let hot = false, toggle = false, byController = false;
 		this.keyYield = this.keyYieldNow();
-		if (this.attract) { if (this.open) this.attract = null; else if ((this.attract.wait -= dt) <= 0 && (this.attract.left -= dt) <= 0) this.attract = null; }
 
 		// Touch the orb: another fingertip or controller tip (or a whole controller)
 		// reaching into it; not while a fingertip is over a key.
@@ -204,7 +195,7 @@ export class WristMenu {
 		this.laserNear = padNear; // (a laser on a key counts as near, however far the hand)
 		// The orb's own hand reaching into the fan, or a fingertip at a live key: it shrinks and fades, out of the way.
 		o.yieldK += ((this.orbYield ? 1 : 0) - o.yieldK) * (1 - Math.exp(-dt / 0.15 * 1));
-		animateOrb(o, performance.now() / 1000, hot || this.open, !!this.attract && this.attract.wait <= 0);
+		animateOrb(o, performance.now() / 1000, hot || this.open);
 
 		if (action) this.close(); // after any key (Help opens the board, like Settings)
 		else if (toggle && !action) {
@@ -312,12 +303,11 @@ export function makeOrb() {
 const ORB_AMBER = new THREE.Color(0xe99a45), ORB_BLUE = new THREE.Color(0x4d8dff);
 const ORB_EMBER = new THREE.Color(0x8a3f0c), ORB_EMBER_BLUE = new THREE.Color(0x173f8a);
 
-export function animateOrb(o, time, hot, attract = false) {
+export function animateOrb(o, time, hot) {
 	const t = time + o.phase;
 	o.glow += ((hot ? 1 : 0) - o.glow) * 0.2;
-	o.attractK = (o.attractK ?? 0) + ((attract ? 1 : 0) - (o.attractK ?? 0)) * 0.05;
-	// Breathing: two slow waves, so it never looks mechanical (deeper and slower while it calls you: attractOrb).
-	const breathe = 1 + (0.1 + 0.25 * o.attractK) * Math.sin(t * (2.1 - 0.8 * o.attractK)) + 0.04 * Math.sin(t * 5.3);
+	// Breathing: two slow waves, so it never looks mechanical. (Its deeper "call" after the tools' show went on 26 Nov 2026.)
+	const breathe = 1 + 0.1 * Math.sin(t * 2.1) + 0.04 * Math.sin(t * 5.3);
 	const y = o.yieldK ?? 0; // (0..1) the orb makes room for a hand reaching into the fan: half size, 30% strength
 	o.body.scale.setScalar(breathe * (1 + 0.4 * o.glow) * (1 - 0.5 * y));
 	o.shell.rotation.set(t * 0.5, t * 0.8, 0);

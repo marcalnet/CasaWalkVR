@@ -396,7 +396,7 @@ check('one Enter VR button', await enterVR.count() === 1 && await page.locator('
 // Head 1.6 m up, looking slightly down at the plinth.
 // The first-time teachers (the tools' show, the pinch hand inside) are marked seen for the whole run
 // (they would stand in front of the other checks); their own checks clear them below.
-const SEEN_KEYS = ['casawalk.welcome.walk.hands', 'casawalk.welcome.walk.controllers', 'casawalk.toolsIntro'];
+const SEEN_KEYS = ['casawalk.welcome.walk.hands', 'casawalk.welcome.walk.controllers'];
 await page.evaluate((keys) => { for (const k of keys) localStorage.setItem(k, '1'); }, SEEN_KEYS);
 await page.evaluate(() => window.__device.position.set(0, 1.6, 0));
 await lookDown();
@@ -1021,7 +1021,7 @@ await click('left', 'y-button');
 await settled();
 s = await state();
 check('Y: ← Back to the scale model (one layer up)', s.mode === 'dollhouse');
-check('arriving back: "Scale model 1:…" floats in front of you', await page.evaluate(() => { const x = window.__casawalk.xr; return x.arrival.mesh.visible && /^Scale model 1:\d+$/.test(x.arrival.text); }));
+check('arriving back: no title at the scale model (it said only "Scale model")', await page.evaluate(() => !window.__casawalk.xr.arrival.mesh.visible));
 await click('right', 'b-button');
 check('at the scale model, B never leaves VR', (await state()).presenting && (await state()).mode === 'dollhouse');
 
@@ -1443,25 +1443,6 @@ check('back from walking: eyes at 1.89 m again, gallery shown, lasers on', Math.
 	check('the tools stay over the lowered hand', await page.evaluate(() => window.__casawalk.xr.fan.group.visible && window.__casawalk.xr.fan.alpha === 1));
 }
 
-// The tools' first-time show (C3; placed above the model 25 Nov): once you look towards the model they hang above it, then fly to the fan's wrist, and the fan opens for 2 s.
-{
-	await page.evaluate(() => { localStorage.removeItem('casawalk.toolsIntro'); const x = window.__casawalk.xr; x.ui.closeAll(); x.toolsIntro.start(); }); // (it never plays behind an open wing or the wrist menu)
-	await page.waitForFunction(() => !window.__casawalk.xr.toolsIntro.state?.waiting, null, { timeout: 15000, polling: 'raf' }).catch(() => {});
-	await frames(10);
-	const i0 = await page.evaluate(async () => { const x = window.__casawalk.xr, t = x.toolsIntro, V = x.rig.position.constructor, h = x.headWorld(), p = t.group.getWorldPosition(new V()), d = p.distanceTo(h);
-		const W = await import('/js/wings.js'), top = Math.max(...W.zoneHull(W.zoneOf(x.modes.dollhouse.houseBox(), h, x.viewYaw())).map((a) => a.el)) * 180 / Math.PI;
-		const below = Math.asin((h.y - p.y) / d) * 180 / Math.PI, lower = -below - Math.atan(0.345 / d) * 180 / Math.PI;
-		return { playing: t.playing, shown: t.group.visible, away: +d.toFixed(2), below: +below.toFixed(1), lowerEdge: +lower.toFixed(1), modelTop: +top.toFixed(1), names: t.items.map((i) => i.name) }; });
-	check('the tools\' show: the three tools 1.3 m away (1.6 if they must), 5-15° below your eyes and clear of the model\'s top as seen (harmony, conflict 3), named, once you look at the model', i0.playing && i0.shown && (Math.abs(i0.away - 1.3) < 0.1 || Math.abs(i0.away - 1.6) < 0.1) && i0.below >= 4.9 && i0.below <= 15.1 && (i0.lowerEdge >= i0.modelTop + 2.9 || i0.below <= 5.1) && i0.names.join() === 'Street camera,Meter,Marker', JSON.stringify(i0));
-	await shot('tools-intro');
-	const fanOpened = await page.waitForFunction(() => { const f = window.__casawalk.xr.fan; return f.force > 0 && f.alpha > 0.5 && f.group.visible; }, null, { timeout: 30000, polling: 'raf' }).then(() => true).catch(() => false);
-	check('as the tools fly, the fan opens by itself', fanOpened);
-	if (fanOpened) await shot('tools-fan-opens');
-	await page.waitForFunction(() => !window.__casawalk.xr.toolsIntro.playing, null, { timeout: 30000, polling: 'raf' }).catch(() => {});
-	const i1 = await page.evaluate(() => ({ playing: window.__casawalk.xr.toolsIntro.playing, remembered: localStorage.getItem('casawalk.toolsIntro') }));
-	check('after a few seconds they fly to the wrist and it is remembered', !i1.playing && i1.remembered === '1', JSON.stringify(i1));
-}
-
 // The pinch hand the first time inside, with controllers: the arc and the ring alone; the first teleport ends it (remembered).
 {
 	await page.evaluate(() => localStorage.removeItem('casawalk.welcome.walk.controllers'));
@@ -1754,7 +1735,6 @@ await page.evaluate(() => window.__casawalk.xr.menuAction('guideKey')); // (Help
 // Photo: nothing of the interface in the picture, all of it back afterwards.
 await openBoard();
 await aimW('left', L, await modelTop()); await frames(6); // a marker under the left laser
-await page.evaluate(() => window.__casawalk.xr.toolsIntro.stop());
 const seen = page.evaluate(() => new Promise((done) => {
 	const S = window.__casawalk, x = S.xr, r = S.renderer, render = r.render;
 	const ui = { menu: Object.values(x.menus).map((p) => p.mesh), feedback: [x.veil.mesh, x.ui.photoNote.mesh], arc: [x.modes.walk.arc.dots, x.modes.walk.arc.ring],

@@ -35,7 +35,7 @@ export const SETTINGS = {
 	// first-time lessons inside, which it replaced; the lessons' 'casawalk.welcome.scale.*' went in Nov 2026.)
 	pinchSeenHands: { key: 'casawalk.welcome.walk.hands', flag: true, fallback: false },
 	pinchSeenControllers: { key: 'casawalk.welcome.walk.controllers', flag: true, fallback: false },
-	toolsIntro: { key: 'casawalk.toolsIntro', flag: true, fallback: false }, // the tools' first-time introduction was shown (milestone C3)
+	// (The tools' first-time show and its 'casawalk.toolsIntro' went on 26 Nov 2026: the tools always float over the left hand.)
 };
 
 /** The value a stored string stands for (null or undefined: nothing stored). */

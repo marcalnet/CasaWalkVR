@@ -46,8 +46,6 @@ import { Veil } from './veil.js';
 import { HandReadout } from './hand-readout.js';
 import { FrameStats } from './frame-stats.js';
 import { DEV } from './dev.js';
-import { ToolsIntro } from './tools-intro.js';
-import { zoneOf, zoneHull } from './wings.js';
 import { attachTransientPointer } from './transient-pointer.js';
 import { SeeThrough, SEE_THROUGH_MAX } from './walls.js';
 import { Portals } from './portal.js';
@@ -60,7 +58,7 @@ import { roomAt } from './rooms.js';
 import { targetSets, findFloor, CLAIM } from './xr-targets.js';
 import { buildMenus, updateLabels, menuAction, SEE_THROUGH_ON } from './xr-menus.js';
 import { XRUI } from './xr-ui.js';
-import { Dollhouse, roundScale, roundScaleUp } from './xr-dollhouse.js';
+import { Dollhouse, roundScaleUp } from './xr-dollhouse.js';
 import { Walk } from './xr-walk.js';
 import { ToolSystem } from './xr-tools.js';
 import { ToolFan } from './tool-fan.js';
@@ -162,7 +160,6 @@ export class XRExperience {
 		this.hideFromPhotos(this.veil.mesh, this.arrival.mesh);
 		this.modes = { dollhouse: new Dollhouse(this), walk: new Walk(this) };
 		this.ui = new XRUI(this);
-		this.toolsIntro = new ToolsIntro(this); // the tools' first-time introduction (C3)
 		this.pinchDemo = new PinchDemo(this); // the looping hand the first time inside (js/pinch-demo.js)
 		this.tools = new ToolSystem(this);
 		this.fan = new ToolFan(this); // the tool fan over the left hand (milestone C)
@@ -177,8 +174,8 @@ export class XRExperience {
 	/** True while either wing (Settings, How to move) is open: nothing else claims the hands then. */
 	get boardOpen() { return !!(this.ui.menu || this.ui.guide); }
 
-	/** A first-time teacher plays (the tools' show in view, or the pinch demonstration): the fan stays closed (the interaction harmony's conflict 12). */
-	get teaching() { return !!(this.toolsIntro?.showing || this.pinchDemo?.state); }
+	/** The pinch demonstration plays (the one first-time teacher left until the pause): the fan stays closed (the interaction harmony's conflict 12). */
+	get teaching() { return !!this.pinchDemo?.state; }
 
 	/** Objects never drawn in a photo (the interface); hiding one hides what it carries. */
 	/**
@@ -300,7 +297,6 @@ export class XRExperience {
 		this.modes.dollhouse.begin();
 		this.setMode('dollhouse', { measure: false }); // no head pose yet: measured below, with the first one
 		this.fan.camera.warm(); // the camera's drawing programs, before anyone takes it (behind the start)
-		this.introPending = true; // the tools' introduction, the first time, once the head is known
 		// The floor origin is not necessarily where you stand (it can be
 		// anywhere in your play area), so place the plinth in front of the
 		// head as soon as the first head pose arrives.
@@ -352,7 +348,6 @@ export class XRExperience {
 		this.pendingRecentre = false;
 		this.ui.reset(); // menus, notes, the wrist menu
 		this.pinchDemo.stop();
-		this.toolsIntro.stop();
 		this.layerFx = null;
 		this.veil.clear();
 		this.arrival.mesh.visible = false;
@@ -391,7 +386,6 @@ export class XRExperience {
 		this.mode = name; // (set first: applyStoreys() and applyView() read it)
 		this.ui.closeAll();
 		this.modes[name].enter(...args);
-		if (name !== 'dollhouse') this.toolsIntro?.stop();
 		if (name === 'walk' && this.session) this.pinchDemo.arm(); else this.pinchDemo.stop(); // (it starts once the room's name has faded)
 	}
 
@@ -486,8 +480,7 @@ export class XRExperience {
 				f.go();
 				// Every arrival at the scale model puts the plinth in front of you, the model
 				// level on it, here behind the fade (you may have turned and walked inside).
-				if (this.mode === 'dollhouse') this.recentreHere();
-				this.showArrival(`Scale model 1:${roundScale(1 / this.baseScale)}`);
+				if (this.mode === 'dollhouse') this.recentreHere(); // (no title here since 26 Nov 2026: it said only "Scale model")
 			}
 		} else {
 			cover(Math.max(0, 1 - f.t / IN));
@@ -505,20 +498,16 @@ export class XRExperience {
 	}
 
 	/**
-	 * The arrival title: the layer's name, 1.5 m in front of you for 1.5 s,
-	 * then it fades. Just above eye level, and at the scale model above the
-	 * model's silhouette as seen plus 5° (the interaction harmony's conflict 12).
+	 * The arrival title inside: the room's name, 1.5 m in front of you for
+	 * 1.5 s, just above eye level, then it fades. (The scale model's went on
+	 * 26 Nov 2026.)
 	 */
 	showArrival(text) {
 		const head = this.camera.matrix;
 		const yaw = yawOfMatrix(head);
 		const p = new THREE.Vector3().setFromMatrixPosition(head);
 		this.arrival.set(text);
-		let up = 0.05;
-		if (this.mode === 'dollhouse' && this.model) {
-			const hull = zoneHull(zoneOf(this.modes.dollhouse.houseBox(), this.headWorld(), this.viewYaw()) ?? []);
-			if (hull.length) up = Math.max(up, 1.5 * Math.tan(Math.max(...hull.map((a) => a.el)) + THREE.MathUtils.degToRad(5) + Math.atan(0.06 / 1.5)));
-		}
+		const up = 0.05;
 		this.arrival.mesh.position.set(p.x - Math.sin(yaw) * 1.5, p.y + up, p.z - Math.cos(yaw) * 1.5);
 		this.arrival.mesh.rotation.set(0, yaw, 0);
 		this.arrival.mesh.visible = true;
@@ -780,13 +769,8 @@ export class XRExperience {
 				this.pendingRecentre = false;
 				this.modes.dollhouse.measureLift(head); // the tall view, from where the head really is
 				this.modes.dollhouse.recentre(head.clone().premultiply(this.rig.matrix));
-				if (this.introPending) { this.introPending = false; this.toolsIntro.start(); }
 			}
 		}
-		this.toolsIntro.update(dt, () => {
-			if (!this.introAgain) this.ui.wrist.attractOrb(2); // (the next teacher: once the fan has closed, the orb calls for 30 s)
-			this.introAgain = false;
-		});
 		if (this.layerFx) this.runLayerFx(dt); // moving between layers: the modes wait
 		else this.modes[this.mode]?.update(dt);
 		this.runArrival(dt);

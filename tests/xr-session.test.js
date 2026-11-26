@@ -211,34 +211,6 @@ test('the first time inside: a looping hand with its arc and ring, no card; the 
 	assert.equal(DEMO.SHOW, 15);
 });
 
-test('the tools show waits for you to look at the model, plays above it (5-15° below the eyes, clear of its top: harmony, conflict 3), and opens the fan for 2 s as they land', async () => {
-	const { x, frame } = await setup();
-	const intro = x.toolsIntro;
-	assert.ok(intro.start({ again: true }) && intro.state.waiting, 'waiting for a look');
-	x.camera.rotation.x = 0.5; x.camera.updateMatrixWorld(true);
-	assert.ok(!intro.lookingAtModel(), 'looking up, well above the model: not yet');
-	intro.update(0.1, () => {});
-	assert.ok(intro.state.waiting && !intro.group.visible, 'it waits');
-	x.camera.rotation.x = -0.6; x.camera.updateMatrixWorld(true); // (looking down at the model)
-	assert.ok(intro.lookingAtModel(), 'the head looks towards the model');
-	intro.update(0.1, () => {});
-	assert.ok(!intro.state.waiting && intro.group.visible, 'begins once looked at');
-	const head = x.headWorld(), p = intro.group.getWorldPosition(new THREE.Vector3());
-	// Above the model as seen (harmony, conflict 3), on the one plinth: its middle 5-15° below eye level, its lower edge 3° over the model's top.
-	const W = await import('../js/wings.js'), { PLINTH_HEIGHT } = await import('../js/xr-scene.js'), deg = THREE.MathUtils.radToDeg;
-	for (const h of [PLINTH_HEIGHT]) {
-		x.scene.updateMatrixWorld(true);
-		intro.begin();
-		const q = intro.group.getWorldPosition(new THREE.Vector3()), d = q.distanceTo(head), el = Math.asin((q.y - head.y) / d);
-		const top = Math.max(...W.zoneHull(W.zoneOf(x.modes.dollhouse.houseBox(), head, x.viewYaw())).map((a) => a.el));
-		assert.ok(deg(el) >= -15.01 && deg(el) <= -4.99, `plinth ${h}: its middle 5-15° below eye level (${deg(el).toFixed(1)}°)`);
-		assert.ok(deg(el - Math.atan(0.345 / d)) >= deg(top) + 3 - 0.01 || deg(el) > -5.01, `plinth ${h}: its lower edge ${deg(el - Math.atan(0.345 / d)).toFixed(1)}° vs the model's top ${deg(top).toFixed(1)}°`);
-	}
-	for (let t = 0; t < 5.2; t += 1 / 72) intro.update(1 / 72, () => {});
-	assert.ok(x.fan.force > 0, 'the fan is told to open as they fly');
-	intro.stop();
-});
-
 test('the tab you left a board on is the one the other board opens on', async () => {
 	const { x, go } = await setup();
 	x.ui.openMenu();
@@ -1139,22 +1111,6 @@ test('the fan: over the left controller however it is turned; the orb\'s own han
 	assert.ok(x.ui.wrist.orb.body.scale.x < 0.7 && x.ui.wrist.orb.shellMat.opacity < 0.3, 'half size, a third of the strength');
 });
 
-test('the tools show also starts on a wider look after 4 s, and by itself after 10 s, never behind an open board', async () => {
-	const { x } = await setup();
-	const intro = x.toolsIntro;
-	x.camera.rotation.x = 1.2; x.camera.updateMatrixWorld(true); // (looking up, far from the model)
-	intro.start();
-	for (let t = 0; t < 9.5; t += 1 / 72) intro.update(1 / 72, () => {});
-	assert.ok(intro.state.waiting && !intro.lookingAtModel(Math.PI / 3), 'not before 10 s when looking far away');
-	x.ui.openMenu();
-	for (let t = 0; t < 2; t += 1 / 72) intro.update(1 / 72, () => {});
-	assert.ok(intro.state.waiting, 'the board is open: it waits');
-	x.ui.closeAll();
-	intro.update(1 / 72, () => {});
-	assert.ok(!intro.state.waiting && intro.group.visible, 'timed: it begins');
-	intro.stop();
-});
-
 test('the plinth: one height, 1.24 m, for controllers and bare hands, 30 cm of table each side; it never moves by itself', async () => {
 	const { x, frame } = await setup();
 	const { PLINTH_HEIGHT: H, PLINTH_MARGIN } = await import('../js/xr-scene.js');
@@ -1260,45 +1216,14 @@ test('harmony, live keys only (rule 4; conflicts 2 and 11): the wrist arc fades 
 });
 
 
-test('harmony, conflicts 7, 8 and 12: the two Walk-in keys are one key; the show waits for the arrival title, the aims wait while it plays and a trigger at the tools starts their flight; then the orb calls for 30 s', async () => {
-	const { x, frame, press, hands } = await setup();
+test('harmony, conflict 8: the two Walk-in keys are one key (the waist door and the wrist key look, read and do the same)', async () => {
+	const { x, frame } = await setup();
 	frame();
-	// Conflict 8: the waist door and the wrist key look, read and do the same.
 	const door = x.modes.dollhouse.doors.keys.get('in').spec, wrist = x.ui.wrist;
 	wrist.redraw();
 	const key = wrist.pad.keys.get('right').spec;
 	for (const k of ['id', 'look', 'icon', 'label', 'caption']) assert.equal(key[k], door[k], `the same ${k}`);
-	// Conflict 12: the show waits while the arrival title shows.
-	const intro = x.toolsIntro;
-	x.showArrival('Scale model 1:10');
-	intro.start({ again: true });
-	x.camera.rotation.x = -0.6; x.camera.updateMatrixWorld(true); // (looking at the model)
-	for (let i = 0; i < 30; i++) frame();
-	assert.ok(intro.state.waiting && x.arrival.mesh.visible, 'the title first');
-	for (let i = 0; i < 300 && intro.state?.waiting; i++) frame();
-	assert.ok(intro.showing && x.teaching, 'then the show (a teacher: the fan stays closed)');
-	// Conflict 7: while it shows, a pull at the model steps nowhere; a pull at the tools starts their flight.
-	const c = hands.right, orig = x.input.setRaycaster.bind(x.input), head = x.headWorld().clone();
-	// (At the model's front foot, well below the tools that hang above it: the plinth is 1.24 m high since 26 Nov 2026.)
-	const mb = x.modes.dollhouse.modelBox();
-	let aim = new THREE.Vector3((mb.min.x + mb.max.x) / 2, mb.min.y, mb.max.z);
-	x.input.setRaycaster = (cc, rc) => { if (cc === c) { rc.set(head, aim.clone().sub(head).normalize()); rc.far = 5; } else orig(cc, rc); };
-	press('right', 'trigger'); frame(); press('right', 'trigger', false); frame();
-	assert.ok(x.mode === 'dollhouse' && !x.layerFx && intro.state.flying === null, 'at the model: nothing (the aims wait)');
-	aim = intro.items[1].holder.getWorldPosition(new THREE.Vector3());
-	press('right', 'trigger'); frame(); press('right', 'trigger', false); frame();
-	assert.ok(intro.state?.flying !== null && x.mode === 'dollhouse' && !x.layerFx, 'at the tools: they fly, and nobody steps inside');
-	x.input.setRaycaster = orig;
-	for (let i = 0; i < 300 && intro.playing; i++) frame();
-	assert.ok(!intro.playing, 'landed');
-	// (Help's replay never calls the orb; the first time does.)
-	x.introAgain = false; intro.start({ again: true }); intro.stop(); wrist.attractOrb(2);
-	assert.ok(wrist.attract && wrist.attract.left === 30, 'the orb calls for 30 s after the fan has closed (2 s)');
-	wrist.show({ pinned: true });
-	frame();
-	assert.equal(wrist.attract, null, 'found: it stops');
 });
-
 test('harmony, conflict 5: at the scale model a bare hand steps inside on letting go once the ray has shown 0.3 s, at the landing from 0.1 s before; a quicker pinch-and-open moves nothing', async () => {
 	const { x } = await setup();
 	const d = x.modes.dollhouse, spot = { model: new THREE.Vector3(1, 0, 1) }, other = { model: new THREE.Vector3(5, 0, 5) };
