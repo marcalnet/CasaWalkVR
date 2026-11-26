@@ -12,6 +12,7 @@
 
 import * as THREE from 'three';
 import { unzipSync } from 'fflate';
+import { modelTriangles, homeTriangles, tooHeavyMessage } from './triangles.js';
 import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
 import { defaultMtlFor, usedMaterialNames, definedMaterialNames, isWindowPaneName, WINDOW_PANE_OPACITY } from './obj-defaults.js';
@@ -570,6 +571,7 @@ export const UNIT_SCALE = { cm: 0.01, m: 1, mm: 0.001, in: 0.0254 };
  * Opens one or more files.
  * @param files  [{ name, bytes: Uint8Array }]
  * @param opts   { units: 'auto'|'cm'|'m'|'mm'|'in', onProgress(text),
+ *                 triangleLimit (refuse, before building, a home counted above it; default none),
  *                 makeTexture(ref) (a Sweet Home 3D texture image; default: decoded
  *                 by the browser. Node, which decodes no images, passes a stand-in) }
  * @returns { kind: 'sh3d'|'model', root, bounds, observer, stats, store }
@@ -577,6 +579,7 @@ export const UNIT_SCALE = { cm: 0.01, m: 1, mm: 0.001, in: 0.0254 };
 export async function openFiles(files, opts = {}) {
 	if (!files.length) throw new UserError('No file selected.');
 	const progress = opts.onProgress || (() => {});
+	const limit = opts.triangleLimit ?? Infinity; // (counted from the bytes before building: js/triangles.js)
 
 	let store;
 	try {
@@ -584,7 +587,7 @@ export async function openFiles(files, opts = {}) {
 		if (files.length === 1 && sniff(files[0].bytes) === 'zip') {
 			progress('Unzipping…');
 			store = EntryStore.fromZip(files[0].bytes);
-			if (store.entries.has('Home.xml')) return await openSh3d(store, progress, opts.makeTexture);
+			if (store.entries.has('Home.xml')) return await openSh3d(store, progress, opts.makeTexture, limit);
 			if (store.entries.has('Home')) throw new UserError('Re-save this file in Sweet Home 3D 5.3 or later.');
 			mainPath = findMainModel([...store.entries.keys()], store);
 			if (!mainPath) throw new UserError('No 3D model (.sh3d, .obj, .glb, .dae, .3ds) found inside this ZIP.');
@@ -596,8 +599,10 @@ export async function openFiles(files, opts = {}) {
 			mainPath = names.find((n) => MODEL_EXTS.includes(extOf(n))) || names.find((n) => ['glb', 'dae', '3ds'].includes(sniff(store.entries.get(n)))) || names[0];
 		}
 
-		progress('Loading model…');
 		const fmt = sniff(store.get(mainPath));
+		const estimate = modelTriangles(store.get(mainPath), fmt);
+		if (estimate > limit) throw new UserError(tooHeavyMessage(estimate, limit));
+		progress('Loading model…');
 		const object = await loadModelEntry(store, mainPath);
 		const isMetric = fmt === 'glb' || fmt === 'gltf' || fmt === 'dae'; // glTF is metres; COLLADA declares its own unit
 		return placeModel(object, store, { units: isMetric ? 'm' : opts.units || 'auto', name: baseName(mainPath) });
@@ -616,9 +621,12 @@ async function breathe() {
 	lastPause = Date.now();
 }
 
-async function openSh3d(store, progress, makeTexture = null) {
+async function openSh3d(store, progress, makeTexture = null, limit = Infinity) {
 	progress('Reading Home.xml…');
 	const home = parseHome(new TextDecoder().decode(store.entries.get('Home.xml')));
+	// Too heavy to open here: said before anything is built (the furniture counted from its bytes).
+	const { triangles } = homeTriangles(home.pieces, (ref) => { const b = store.get(ref); return b ? modelTriangles(b, sniff(b)) : null; });
+	if (triangles > limit) throw new UserError(tooHeavyMessage(triangles, limit));
 	const texLoader = new THREE.TextureLoader(store.manager);
 	makeTexture ??= (ref) => texLoader.load(`mem:${ref}`);
 	const built = await buildHome(home, {

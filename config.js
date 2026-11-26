@@ -12,6 +12,12 @@ export const CONFIG = {
 	// Warn (but still load) above this many triangles; Quest 2 is a phone GPU.
 	triangleWarning: 1_500_000,
 
+	// Refuse, before building, a home counted above this many triangles, in the
+	// headset's browser only (a computer opens it): over it a Quest 2's tab runs
+	// out of memory (measured: 2-3 million already strain it). To
+	// tune on the Quest.
+	triangleLimit: 6_000_000,
+
 	// What a model may cost to draw on a Quest 2 (code audit, A3; checked by
 	// tests/budget.test.js on the sample, example and heavy homes). Draw calls
 	// for the model alone: the gallery, the interface and the hands take about

@@ -246,7 +246,7 @@ async function load(files, label, source = { type: 'file' }) {
 	loading++;
 	updateXRButtons(); // no Enter VR while a model is being swapped in
 	try {
-		const result = await openFiles(files, { units: $('units').value, onProgress: (t) => { if (seq === loadSeq) setStatus(t); } });
+		const result = await openFiles(files, { units: $('units').value, triangleLimit: DEVICE.headset ? CONFIG.triangleLimit : Infinity, onProgress: (t) => { if (seq === loadSeq) setStatus(t); } });
 		if (superseded(result)) return;
 		setStatus('Optimising for Quest…');
 		await new Promise((r) => setTimeout(r, 0)); // let the status paint
