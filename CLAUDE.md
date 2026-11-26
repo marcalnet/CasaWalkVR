@@ -28,24 +28,26 @@ js/page/send.js   Send to my Quest (computers) and Receive (headset)
 js/page/enter-vr.js the Enter VR button (Send to my Quest beside it on computers)
 js/page/welcome.js the welcome notes over the empty view, the files card folding away, dropping files on the page
 js/page/updates.js which build is running (Reload when the site has a newer one), offline use (sw.js)
-js/xr.js          XR session: the parts below, the frame order, setMode, layers (goLayer: dive, surface), photo capture, shared state
+js/xr.js          XR session: the parts below, the frame order, setMode, the live keys, photo capture, shared state (moves between places: js/pause.js)
 js/safety.js      the safety net in the headset: errors show a calm card, repeated errors end the session (pure, Node-testable)
-js/xr-dollhouse.js  scale model mode ("dollhouse" in code): plinth, rotate/zoom/grab, scale plate and zoom settling, the doors on the plinth, where stepping inside lands
-js/xr-walk.js     walk mode: locomotion, teleport and fade, snap turn, grip pull, floor following, solid walls
-js/xr-ui.js       the two wings (Settings right, How to move left: opening, closing, touch and lasers, trigger claims), welcome card, notes
-js/wings.js       where the wings go: 0.55 m, 40° to the side, never over the scale model (pure, Node-testable)
-js/wrist-menu.js  the wrist menu: orb on one wrist, three keys on an arc laid out as seen (← Back, Settings and help, Walk in →)
-js/keys.js        keys pressed by touch or laser (wrist menu, the doors on the plinth)
-js/xr-menus.js    the boards as data (cells by id; tabs as rows of ids), help cards, labels, what a key or cell does
+js/xr-dollhouse.js  scale model mode ("dollhouse" in code): one plinth (1.24 m), turn and hold, one round scale per visit and its plate, the doors and levels on the plinth, where walking in lands
+js/xr-walk.js     walk mode: teleport and fade, snap turn, the stick walk (it stops at walls), floor following
+js/xr-ui.js       the one Settings wing (opening on the tab per place, closing, touch and lasers, trigger claims), B / Y held, notes
+js/wings.js       where the wing goes: 0.55 m, 40-50° to the main hand's side, never over the scale model (pure, Node-testable)
+js/wrist-menu.js  the wrist menu: orb on one wrist (it makes room for live keys), two keys on an arc: the round held ← Back, and Settings
+js/keys.js        keys pressed by touch or laser (wrist menu, the doors and levels on the plinth, the tool dial), held keys and their ring
+js/xr-menus.js    the wing as data (cells by id; tabs as rows of ids), How to move's words, the pause's tips, what a key or cell does
 js/xr-scene.js    scenery builders: gallery room, plinth, skies, markers
 js/xr-targets.js  what lasers, the teleport arc and the feet may hit (pure, Node-testable)
 js/xr-tools.js    hand-held tool system: claims, routing, annotations in model space (tools from milestone C)
-js/tool-fan.js    the tool fan over the left hand: open on a look, touch and grip (or a closed hand) to take, swap, put back; the inactive camera
+js/tool-fan.js    the tools over the left hand, or waiting at the edge of the centre: touch and grip (or a closed hand) to take, swap, put back; the reach
+js/tool-dial.js   each tool's one option (lens, colour, units) on one round dial at its control part, and the quiet ring there
 js/tool-models.js the three tools' models (camera, meter, marker), plain theme colours
 js/laser-meter.js the laser meter tool: beam and dot, live reading, measured lines with labels in model space
 js/marker-tool.js the marker tool: strokes as growing tubes (one draw call each), colours, undo
 js/measure.js     the meter's measuring: snapping, labels, undo (pure, Node-testable)
 js/street-camera.js the street camera tool: shutter (photo from the lens, 3:2), viewfinder render target, lens setting, the print
+js/framing-guide.js the camera's red frame: where the photo's edges fall, at the depth it is aimed at (never in photos)
 js/settings.js    every remembered setting: key, default, meaning (page and headset)
 js/rooms.js       where stepping inside lands: a room's clear middle and long direction (pure, Node-testable)
 js/theme.js       fonts, colours, corner radii of everything drawn in the headset (restyle here)
@@ -61,25 +63,29 @@ js/obj-worker.js  the OBJ worker, and js/obj-worker-client.js its page side (onl
 js/obj-defaults.js Sweet Home 3D's built-in OBJ materials and see-through window panes (pure, Node-testable)
 js/optimise.js    merge-by-material (plain colours folded into vertex colours) and BVH
 js/xr-input.js    controllers, rays, thumbsticks, teleport arc, per-frame button claims; bare hands told apart (a pinch never clicks); touch state for hands and controllers (poke point, pinch); controller tip nub
+js/controller-model.js the real controllers (vendor/controllers/), one draw call each, their buttons moving; faded while holding a tool; the touch point at the nose
 js/touch.js       touch keys: hover, contact, click, release, front-only (pure, Node-testable)
 js/hands.js       bare hands drawn from the WebXR joints (translucent capsules, orange fingertip)
-js/gestures.js    bare-hand gestures from the joints: the pinch-and-hold teleport and wrist flick, the quick pinch (closes the wings), the closed hand, the aim ray (pure, Node-testable)
+js/gestures.js    bare-hand gestures from the joints: the pinch-and-hold teleport and wrist flick, the quick pinch (closes the wing), the closed hand, the aim ray (pure, Node-testable)
+js/hand-owner.js  who owns a hand this frame: the ladder (a held tool, a dial, the wing, the wrist menu, a key, the tools, the model) (pure, Node-testable)
+js/zones.js       the areas (left, centre, right), where the tools wait, the orb's line of sight (pure, Node-testable)
 js/dev.js         the development switches in the page address (?test, ?hands, ?stats, ?nomerge, ?nofold, ?sw, ?worker), read in one place
 js/device.js      which device: the headset's own browser, a Quest 2 (the one place that reads the browser's name)
 js/hand-readout.js the bare-hand tuning readout over each wrist, only with ?hands on the page URL (development)
 js/frame-stats.js the headset's fps and draw-call counter, only with ?stats on the page URL (measuring)
 js/hotspots.js    teleport hotspots: room middles and doorways, and snapping to them (pure, Node-testable)
-js/guide.js       How to move, the board's first tab: pictures and lines for hands or controllers, the build at its foot
-js/tools-intro.js the tools' first-time show above the scale model, then flying to the wrist (the fan opens 2 s)
-js/pinch-demo.js  the looping pinch hand shown the first time inside (arc, ring, three words), no card
+js/landing.js     where the teleport lands beside what you can't stand on: a wall's foot, clear floor round furniture (pure, Node-testable)
+js/guide.js       How to move, the wing's first tab: pictures and lines for hands or controllers, the build at its foot
+js/pause.js       every move between places (Enter VR, Walk in, ← Back, leaving), held until the place is ready, and the tips on the way
+js/tip-demo.js    the pause's looping hand, showing the tip's move
+js/session-store.js what belongs to this VR session only (the tips, the first tabs): cleared at Enter VR and by New visitor
 js/transient-pointer.js Apple Vision Pro's look-and-pinch: one pinch acts along its ray (isolated)
-js/lessons.js     the first-time lessons: a card of steps that tick off, the looping 3D hand, the first target
 js/hand-model.js  the hand model: the generic hand (vendor/generic-hand/) dressed in the hand look, posed from joints or presets
-js/hand-poses.js  preset hand poses (from IWER, MIT) for the lessons' demonstration hand
-js/panel.js       canvas-texture board (switches, options, stepper, Close key), controls and welcome cards, labels
+js/hand-poses.js  preset hand poses (from IWER, MIT) for the pause's demonstration hand
+js/panel.js       canvas-texture wing (switches, options, buttons, tabs), note cards, labels
 js/canvas-card.js the one way every drawn card, key and label makes its canvas and texture
 js/veil.js        the one sphere round the eyes: teleport fade, layer change, photo flash
-js/walls.js       solid walls while walking and see-through walls and furniture (headset only)
+js/walls.js       the walls the stick walk stops at, and see-through walls and furniture (headset only)
 js/portal.js      the wall portal: a circle fades open where a fingertip touches a wall or door, or the eyes come within 30 cm (headset only)
 js/photo.js       photos: renders the view without the interface (its own layer, INTERFACE_LAYER) and saves a JPEG
 js/lighting.js    time of day (sun from the compass) and on-demand shadows
@@ -94,7 +100,7 @@ js/build-label.js how the build reads ("Build 213 · 23 Nov 2026 14:05"), and th
 assets/ui/        replaceable interface artwork (drafts by scripts/make-ui-assets.js; listed in its README)
 examples/         sample homes (pond-house, apartment: .sh3d + card picture, listed in js/samples.js; colours from scripts/sample-palette.js) example-home.sh3d (the tests' small fixture) and heavy-home.sh3d (the budget test's heavy home, not offered on the page), each made by its generator in scripts/ (original content; commit the output)
 js/samples.js     the sample homes the page offers, as data (one entry per home)
-vendor/           vendored dependencies + licences; vendor/worker/: addons with 'three' imported by relative path, for module workers (written by scripts/vendor.js, checked by a test)
+vendor/           vendored dependencies + licences (vendor/controllers/: the Quest controller models); vendor/worker/: addons with 'three' imported by relative path, for module workers (written by scripts/vendor.js, checked by a test)
 tests/            Node tests (node:test)
 scripts/          vendoring, fixtures, example home, UI artwork, local server, screenshots, emulated XR test, screenshot compare
 tests/fixtures/   sample .sh3d files (not committed; see README)
