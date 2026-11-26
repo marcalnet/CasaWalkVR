@@ -582,8 +582,10 @@ check('Time of day: one click picks an option', t1 === pick && (await cell('doll
 await shot('dollhouse-menu-sunset');
 await clickMenu('light', t0);
 await clickMenu('shadows');
+const busyLabel = (await cell('dollhouse', 'shadows')).label;
+await page.waitForFunction(() => !window.__casawalk.xr.shadowsBusy, null, { timeout: 10000, polling: 'raf' }).catch(() => {}); // (it says "Shadows …" while the materials recompile)
 s = await page.evaluate(() => ({ on: window.__casawalk.lighting.shadows, map: window.__casawalk.renderer.shadowMap.enabled, time: window.__casawalk.lighting.time }));
-check('Shadows switch turns them on', s.on && s.map && s.time === t0 && (await cell('dollhouse', 'shadows')).value === true, JSON.stringify(s));
+check('Shadows switch turns them on (it says "Shadows …" while the materials recompile: checked in Node)', s.on && s.map && s.time === t0 && (await cell('dollhouse', 'shadows')).value === true, JSON.stringify({ ...s, busyLabel }));
 
 // See-through: one switch, 75%; walls and furniture fade, floors don't.
 /** Switches See-through on or off (a switch: clicked only when it must change). */

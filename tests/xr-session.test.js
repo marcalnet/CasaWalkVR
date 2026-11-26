@@ -267,6 +267,20 @@ test('the pause: practising the teleport (hold the trigger, an arc onto the floo
 	for (let i = 0; i < 200 && P.fx; i++) frame();
 	assert.ok(!P.fx && x.veil.amount('layer') === 0, 'the room fades in');
 });
+test('Shadows switched on says it works ("Shadows …") before the pause, then settles; off at once', async () => {
+	const { x, frame } = await setup();
+	x.lighting = { shadows: false, time: 'morning', setShadows(v) { this.shadows = v; }, fit() {}, refresh() {} };
+	frame();
+	x.menuAction('shadows');
+	const cell = () => x.menus.dollhouse.get('shadows');
+	assert.ok(x.shadowsBusy && cell().label === 'Shadows \u2026' && !x.lighting.shadows, 'first the busy label, shadows not yet on');
+	for (let i = 0; i < 20; i++) frame();
+	assert.ok(!x.shadowsBusy && x.lighting.shadows && cell().label === 'Shadows' && cell().value === true, 'then on, the label settled');
+	x.menuAction('shadows');
+	assert.ok(!x.lighting.shadows && cell().value === false, 'off: at once');
+	x.lighting = null;
+});
+
 test('shared headsets: Height is per session (never stored, "Yours" at every Enter VR); New visitor starts the session over (tips, first tab, height, the target ring), what you see stays', async () => {
 	const { x, frame } = await setup();
 	const { readSetting, writeSetting, SETTINGS } = await import('../js/settings.js');

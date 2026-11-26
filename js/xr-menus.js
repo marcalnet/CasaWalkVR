@@ -158,7 +158,7 @@ export function updateLabels(xr) {
 		p.set('mainHand', { value: xr.mainHand });
 		if (xr.lighting) {
 			p.set('light', { value: xr.lighting.time });
-			p.set('shadows', { value: xr.lighting.shadows });
+			p.set('shadows', { value: xr.lighting.shadows || !!xr.shadowsBusy, label: xr.shadowsBusy ? 'Shadows \u2026' : 'Shadows' }); // (switching on: a visible pause on a heavy home, said while it works)
 		}
 		if (xr.depth) {
 			const preparing = xr.depth.enabled && xr.depth.state === 'baking';
@@ -235,7 +235,18 @@ export function menuAction(xr, target) {
 			else xr.lighting?.nextTime();
 			updateLabels(xr);
 			break;
-		case 'shadows': xr.lighting?.setShadows(!xr.lighting.shadows); updateLabels(xr); break;
+		case 'shadows':
+			if (!xr.lighting || xr.shadowsBusy) break;
+			if (xr.lighting.shadows) { xr.lighting.setShadows(false); updateLabels(xr); break; }
+			// Switching on recompiles every material (a pause of a second or more on a heavy home): the
+			// switch says so first ("Shadows …", drawn before the pause), then shadows go on, then it settles.
+			xr.shadowsBusy = true;
+			updateLabels(xr);
+			xr.tweens.start({ duration: 0.05, step: () => {}, done: () => {
+				xr.lighting.setShadows(true);
+				xr.tweens.start({ duration: 0.1, step: () => {}, done: () => { xr.shadowsBusy = false; updateLabels(xr); } });
+			} });
+			break;
 		case 'lens':
 			xr.cameraLens = SETTINGS.cameraLens.options.includes(value) ? value : 28;
 			writeSetting('cameraLens', xr.cameraLens);
