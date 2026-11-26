@@ -93,7 +93,7 @@ export const GUIDES = {
 		frames: ['Close your hand on it: hold', 'Let go: it floats, then goes home', 'Pinch and hold, point at a room', 'Let go when it holds still: step inside'],
 		lines: ['Lift it and turn it: it stays level', 'Palm towards you: cancel', 'Pinch outside the panels: close them', 'The Meta button leaves VR at any moment'] },
 	'dollhouse-controllers': { title: 'The scale model', row: 3,
-		frames: ['Grip: hold it', 'Sticks: turn and zoom', 'Point at a room', 'Pull the trigger: step inside'],
+		frames: ['Grip: hold it', 'Stick: turn', 'Point at a room', 'Pull the trigger: step inside'],
 		lines: ['Lift it and turn it: it stays level', 'Let go in the air: it goes home by itself', 'Trigger outside the panels: close them', 'The Meta button leaves VR at any moment'] },
 };
 

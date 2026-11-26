@@ -1,6 +1,7 @@
 // Dollhouse mode (SPEC.md, "XR dollhouse mode"): the home on a plinth in a
 // gallery room (VR view) or floating over passthrough (AR view), about
-// 1.2 m across. Thumbstick left/right rotates it, up/down zooms; a grip held
+// 1.4 m across at most, at one round scale per visit (no zoom since 26 Nov
+// 2026). Thumbstick left/right rotates it; a grip held
 // while moving the controller moves it (upright, never into the plinth); the
 // laser shows a person-height marker where you will land, and the trigger
 // steps inside, at 1:1, there: pointing at a room, the marker hops to the
@@ -41,13 +42,11 @@ import { HAND } from './theme.js';
 const DOLLHOUSE_PERSON = 2.0; // metres
 const DOLLHOUSE_LIFT_START = 0.25; // used for the first frames, before the head height is known
 const DOLLHOUSE_LIFT_MAX = 1.4; // (lying on the floor is not a case to support)
-const ZOOM_MIN = 0.5, ZOOM_MAX = 4;
 const ABOVE_REAL_FLOOR = 0.05; // passthrough: the model never sinks below the real floor
 // Round scales only (build 111's test: 1:23 and 1:8 showed). The scale model
-// rests, and the plate reads, only on these (1:5, 1:10, 1:15, 1:20, ...); while
-// you zoom the plate shows the nearest one and on letting go the model glides
-// onto it. The fit scale at entry rounds up to one too (js/xr.js setModel), so
-// the model still fits the plinth.
+// rests, and the plate reads, only on these (1:5, 1:10, 1:15, 1:20, ...): the
+// fit scale at entry rounds up to one (js/xr.js setModel), so the model still
+// fits the plinth, and keeps it for the visit.
 export const ROUND_SCALES = [5, 10, 15, 20, 25, 30, 40, 50, 75, 100, 150, 200, 300, 500, 1000];
 
 /** A yaw (radians) turned to the nearest quarter turn: square to the plinth (0°, 90°, 180°, 270°). */
@@ -82,7 +81,6 @@ const MAX_FRAME_TURN = THREE.MathUtils.degToRad(20); // a held model turns at mo
 const SHOWN_FOR = 0.3, LOOK_BACK = 0.1;
 const HOVER = { frames: 2, linger: 0.2, away: CLAIM.near, faint: 0.36, solid: 0.9 }; // the hover ray before a pinch: shown after 2 frames in the zone, gone 0.2 s after; not within 15 cm of the model; its opacity, and the aim's
 const WAIST = 0.8; // a pinching hand this far below the eyes is at your side: it never aims, and an aim cancels (m)
-const ZOOM_SPEED = 1.2; // e-folds/s at full stick
 // The doors at the scale model, metres (the user's Quest 2 tests): Walk in →
 // is the big one, ← Back about a third as long, the same height, on its left.
 // They float at waist height in front of you (on the plinth's edge you had to
@@ -125,7 +123,7 @@ export class Dollhouse {
 	constructor(xr) {
 		this.xr = xr;
 		this.name = 'dollhouse';
-		// The model on the plinth, in stage space: position, turn and zoom.
+		// The model on the plinth, in stage space: position, turn, and a growth factor (zoom: 1, except while a move between layers grows the model).
 		// (Always level: only a turn about the vertical. The full free tilt of C0.4 went on 24 Nov 2026.)
 		this.doll = { pos: new THREE.Vector3(0, xr.plinthH + 0.004, -xr.plinthDistance), yaw: 0, zoom: 1 };
 		this.floating = null; // let go in the air: { wait (s with nothing near), going (the glide home) }
@@ -413,14 +411,14 @@ export class Dollhouse {
 		xr.anchor.quaternion.setFromAxisAngle(UP, xr.stage.rotation.y + this.doll.yaw);
 		xr.anchor.scale.setScalar(xr.baseScale * this.doll.zoom);
 		xr.anchor.updateMatrixWorld(true);
-		xr.plate.set(roundScale(1 / (xr.baseScale * this.doll.zoom))); // e.g. 1:40 on the plinth: round scales only
+		xr.plate.set(roundScale(1 / xr.baseScale)); // e.g. 1:40 on the plinth: the visit's one round scale
 		xr.lighting?.fit(); // the sun follows the model; shadows re-render
 	}
 
 	/**
 	 * Moves the room, plinth and doors in front of where the user now stands
-	 * and looks, the model on the plinth, level. It keeps the model's zoom
-	 * and its turn on the plinth, so you find the home as you left it. Every
+	 * and looks, the model on the plinth, level. It keeps the model's turn
+	 * on the plinth, so you find the home as you left it. Every
 	 * arrival at the scale model does this, behind the fade (the first entry,
 	 * Back from inside, the Meta button's re-centre).
 	 */
@@ -431,11 +429,10 @@ export class Dollhouse {
 		xr.stage.position.set(head.x, 0, head.z);
 		xr.stage.rotation.set(0, yaw, 0);
 		xr.stage.updateMatrixWorld(true);
-		const { yaw: turn, zoom } = this.doll;
+		const turn = this.doll.yaw;
 		this.grab = null;
 		this.reset();
 		this.doll.yaw = turn;
-		this.doll.zoom = zoom;
 		this.apply();
 	}
 
@@ -570,19 +567,10 @@ export class Dollhouse {
 		this.updateFloating(dt);
 		this.updatePlinth(dt);
 
-		// Thumbsticks: left/right rotates, up/down zooms (either controller).
-		// Letting go of a zoom near a standard scale settles on it.
-		let sx = 0, sy = 0, zoomHand = null;
-		for (const c of input.active()) { sx += c.state.stick.x; sy += c.state.stick.y; if (c.state.stick.y) zoomHand = c; }
+		// Thumbsticks: left/right turns the model (either controller); up and down do nothing.
+		let sx = 0;
+		for (const c of input.active()) sx += c.state.stick.x;
 		if (sx) { this.doll.yaw -= sx * ROTATE_SPEED * dt; if (this.floating) this.stickTurned = true; } // (a turn you made with the stick is kept when it goes home)
-		if (sy) {
-			if (this.settling) { xr.tweens.stop(this.settling); this.settling = null; }
-			this.doll.zoom = THREE.MathUtils.clamp(this.doll.zoom * Math.exp(-sy * ZOOM_SPEED * dt), ZOOM_MIN, ZOOM_MAX);
-			this.zoomHand = zoomHand;
-		} else if (this.zoomHand) {
-			this.settleZoom(this.zoomHand);
-			this.zoomHand = null;
-		}
 		this.apply();
 	}
 
@@ -926,25 +914,6 @@ export class Dollhouse {
 		let best = null;
 		for (const e of a.past) if (e.age <= want + 1e-6) best = e;
 		return (best ?? a.past[0])?.spot ?? a.spot;
-	}
-
-	/**
-	 * After zooming: the model glides onto the nearest round scale (1:50, ...
-	 * one the zoom range allows), with a light tick in the hand that zoomed.
-	 */
-	settleZoom(c) {
-		const xr = this.xr;
-		const ratio = 1 / (xr.baseScale * this.doll.zoom);
-		const allowed = ROUND_SCALES.filter((n) => { const z = 1 / (xr.baseScale * n); return z >= ZOOM_MIN - 1e-9 && z <= ZOOM_MAX + 1e-9; });
-		if (!allowed.length) return;
-		const target = allowed.reduce((a, b) => (Math.abs(Math.log(b / ratio)) < Math.abs(Math.log(a / ratio)) ? b : a));
-		const from = this.doll.zoom, to = 1 / (xr.baseScale * target);
-		if (Math.abs(to - from) < 1e-6) return;
-		this.settling = xr.tweens.start({
-			duration: 0.25, ease: ease.out,
-			step: (k) => { this.doll.zoom = from + (to - from) * k; this.apply(); },
-			done: () => { this.settling = null; xr.haptics.play(c, 'tick'); xr.sound.play('tick'); },
-		});
 	}
 }
 

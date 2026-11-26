@@ -401,10 +401,10 @@ test('the plinth faces where you look, even looking straight down or up', async 
 	}
 });
 
-test('back from inside: the plinth in front of where you now stand and look, the model level on it, its zoom and turn kept', async () => {
+test('back from inside: the plinth in front of where you now stand and look, the model level on it, its turn kept', async () => {
 	const { x, frame, go } = await setup();
 	const d = x.modes.dollhouse;
-	d.doll.zoom = 1.5; d.doll.yaw = 0.7; d.apply();
+	d.doll.yaw = 0.7; d.apply();
 	go('in');
 	// Inside, you walked 1 m to the side and turned round to face behind you.
 	x.camera.position.set(1, 1.6, 0.5);
@@ -417,7 +417,7 @@ test('back from inside: the plinth in front of where you now stand and look, the
 	assert.ok(Math.abs(st.position.x - 1) < 1e-6 && Math.abs(st.position.z - 0.5) < 1e-6, 'the room stands where you stand');
 	assert.ok(Math.abs(st.rotation.y - Math.PI * 0.9) < 1e-6, 'and faces where you look');
 	assert.ok(d.level() && Math.abs(d.doll.pos.z + x.plinthDistance) < 1e-6 && Math.abs(d.doll.pos.x) < 1e-6, 'the model level, on the plinth');
-	assert.ok(Math.abs(d.doll.zoom - 1.5) < 1e-6 && Math.abs(d.doll.yaw - 0.7) < 1e-6, 'its zoom and turn kept');
+	assert.ok(d.doll.zoom === 1 && Math.abs(d.doll.yaw - 0.7) < 1e-6, 'its turn kept, its scale the visit\'s one');
 	x.camera.position.set(0, 0, 0); x.camera.rotation.set(0, 0, 0); x.camera.updateMatrix();
 });
 
@@ -1067,7 +1067,7 @@ test('20 measurements and 20 strokes cost a handful of draw calls', async () => 
 	assert.ok(meshes <= 6, `all of it in ${meshes} meshes (lines, labels, one per ink)`);
 });
 
-test('round scales only: the plate and the model rest on 1:5, 1:10, 1:15 ... never 1:23 or 1:8', async () => {
+test('round scales only, one per visit: the plate and the model rest on 1:5, 1:10, 1:15 ... never 1:23 or 1:8; the stick turns, never zooms', async () => {
 	const { roundScale, roundScaleUp, ROUND_SCALES } = await import('../js/xr-dollhouse.js');
 	assert.equal(roundScale(23), 25); assert.equal(roundScale(8), 10); assert.equal(roundScale(12), 10); assert.equal(roundScale(13), 15);
 	assert.equal(roundScaleUp(23.4), 25, 'the fit scale rounds up, so the model still fits'); assert.equal(roundScaleUp(25), 25);
@@ -1076,13 +1076,16 @@ test('round scales only: the plate and the model rest on 1:5, 1:10, 1:15 ... nev
 	const d = x.modes.dollhouse, ratio = () => 1 / (x.baseScale * d.doll.zoom);
 	assert.ok(ROUND_SCALES.includes(Math.round(ratio())) && Math.abs(ratio() - Math.round(ratio())) < 1e-6, `on entry: 1:${ratio()}`);
 	assert.equal(x.plate.text, `1:${Math.round(ratio())}`);
-	// Zooming between two round scales: the plate shows the nearest; letting go glides onto it.
-	d.doll.zoom *= 1.19; d.apply();
-	assert.ok(ROUND_SCALES.includes(Number(x.plate.text.slice(2))), `while zooming: ${x.plate.text}`);
-	d.zoomHand = x.input.controllers[1];
-	d.settleZoom(d.zoomHand);
+	// The stick up and down does nothing (zoom went on 26 Nov 2026); left and right turn the model.
+	const pad = x.input.controllers[1].source.gamepad, before = ratio(), plate = x.plate.text, yaw = d.doll.yaw;
+	pad.axes[3] = -1;
 	for (let i = 0; i < 40; i++) frame();
-	assert.ok(ROUND_SCALES.some((s) => Math.abs(s - ratio()) < 1e-6), `settled on 1:${ratio()}`);
+	pad.axes[3] = 0;
+	assert.ok(Math.abs(ratio() - before) < 1e-9 && x.plate.text === plate && d.doll.yaw === yaw, 'stick up: nothing');
+	pad.axes[2] = 1;
+	for (let i = 0; i < 10; i++) frame();
+	pad.axes[2] = 0;
+	assert.ok(d.doll.yaw !== yaw && Math.abs(ratio() - before) < 1e-9, 'stick right: it turns, at the same scale');
 });
 
 test('bare hands teleport with one hand: the main hand while it is empty, the other while it holds a tool; Main hand flips them', async () => {

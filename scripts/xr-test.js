@@ -1,5 +1,5 @@
 // Scripted VR session in headless Chromium using Meta's WebXR emulator (IWER):
-// enter VR, point at the model, rotate/zoom, grab, orbs (point and touch) and
+// enter VR, point at the model, rotate, grab, orbs (point and touch) and
 // menu, VR/passthrough switch, jump in at 1:1, walk, snap turn, teleport,
 // pull with the trigger, turn and height options, solid walls, see-through,
 // exit, and re-enter from another spot. Screenshots go to test-output/xr-*.png.
@@ -14,7 +14,7 @@
 //   XR_STEADY=1 XR_OUT=test-output/after XR_BASELINE=test-output/before/xr-fingerprint-metaQuest2.json npm run xr-test -- examples/example-home.sh3d
 //   node scripts/xr-compare.js test-output/before test-output/after
 // XR_STEADY hides the breathing orbs in screenshots and fixes the model's
-// turn and zoom after the stick steps, so two runs give the same pictures.
+// turn after the stick steps, so two runs give the same pictures.
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -501,19 +501,20 @@ s = await state();
 check('marker shows when pointing at the model', s.marker);
 await shot('pointing');
 
-// Thumbstick right rotates, forward zooms in.
+// Thumbstick right rotates; forward does nothing (no zoom since 26 Nov 2026).
 const yaw0 = s.yaw;
 await stick('right', 1, 0); await frames(25); await stick('right', 0, 0); await frames(3);
 s = await state();
 check('thumbstick rotates', Math.abs(s.yaw - yaw0) > 0.2, `yaw ${yaw0.toFixed(2)} -> ${s.yaw.toFixed(2)}`);
 if (STEADY) await page.evaluate(() => { window.__casawalk.xr.modes.dollhouse.doll.yaw = -0.8; }); // (the stick's timing varies a little from run to run)
-await stick('right', 0, -1); await frames(25); await stick('right', 0, 0); await frames(3);
-s = await state();
-check('thumbstick zooms', s.zoom > 1.2 && s.zoom <= 4, `zoom ${s.zoom.toFixed(2)}`);
-if (STEADY) await page.evaluate(() => { window.__casawalk.xr.modes.dollhouse.doll.zoom = 1.8; });
-await shot('rotated-zoomed');
-await stick('right', 0, 1); await frames(25); await stick('right', 0, 0); await frames(3);
-if (STEADY) await page.evaluate(() => { window.__casawalk.xr.modes.dollhouse.doll.zoom = 1; });
+{
+	const plate0 = await page.evaluate(() => window.__casawalk.xr.plate.text);
+	await stick('right', 0, -1); await frames(25); await stick('right', 0, 0); await frames(3);
+	s = await state();
+	const plate1 = await page.evaluate(() => window.__casawalk.xr.plate.text);
+	check('thumbstick forward: no zoom, the same scale', s.zoom === 1 && plate1 === plate0, JSON.stringify({ zoom: s.zoom, plate0, plate1 }));
+}
+await shot('rotated');
 
 // Grip and move the controller: the model follows.
 const pos0 = (await state()).pos;
@@ -1602,15 +1603,9 @@ check('example home: two storeys, all shown', lv.count === 2 && lv.multi && lv.h
 	await lookAhead(); await restRight(); await frames(5);
 	await shot('example-landed');
 	await lookDown(); await click('right', 'b-button'); await settled(); await frames(5);
-	// Zooming near a standard scale (1:N) settles exactly on it.
-	const target = await page.evaluate(() => { const x = window.__casawalk.xr, base = x.baseScale;
-		const S = [10, 20, 25, 50].find((n) => { const z = 1 / (base * n); return z > 0.6 && z < 3.5; });
-		x.modes.dollhouse.doll.zoom = 1 / (base * S * 1.04); return S; });
-	await stick('right', 0, -0.3); await frames(3); await stick('right', 0, 0);
-	await page.waitForFunction(() => !window.__casawalk.xr.modes.dollhouse.settling && !window.__casawalk.xr.modes.dollhouse.zoomHand, null, { timeout: 5000 }).catch(() => {});
-	await frames(3);
+	// Back at the scale model: the visit's one round scale, on the plate too.
 	const zs = await page.evaluate(() => { const x = window.__casawalk.xr; return { ratio: 1 / (x.baseScale * x.modes.dollhouse.doll.zoom), plate: x.plate.text }; });
-	check(`zoom settles on a standard scale (1:${target})`, Math.abs(zs.ratio - target) < 1e-6 && zs.plate === `1:${target}`, JSON.stringify(zs));
+	check('back at the scale model: the same round scale, on the plate too', Number.isInteger(Math.round(zs.ratio)) && Math.abs(zs.ratio - Math.round(zs.ratio)) < 1e-6 && zs.plate === `1:${Math.round(zs.ratio)}`, JSON.stringify(zs));
 	await shot('example-scale-plate');
 	await page.evaluate(() => window.__casawalk.xr.modes.dollhouse.recentre()); await frames(5);
 }

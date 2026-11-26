@@ -95,7 +95,7 @@ While aiming a teleport (hands or controllers), faint rings on the floor mark th
 **Scale model**
 - The home stands on a low museum plinth in a gallery room, 60 cm in front of you. You look down at it as a 2 m tall person would, whether you sit or stand, so it's easy to look into the rooms. If you change position, the Quest's own recentre (hold the Meta button) brings the plinth in front of you and measures your height again. **Passthrough** (View tab) swaps the gallery for your own room; the model stays exactly where it is.
 - **Walk in →** (big) and **← Back** (leave VR, small, on its left) also float in front of you at waist height, under the model. Push them with a fingertip or a controller's tip, from the front (resting a hand on them does nothing), or point a controller at them and pull and let go of the trigger. Hold ← Back for a moment (a ring fills) to leave VR.
-- **Thumbstick** left/right turns it; up/down zooms it (½× to 4×). A brass plate on the plinth shows its true scale (e.g. 1:42); let go of a zoom near a standard scale (1:10, 1:20, 1:25, 1:50, 1:100…) and it settles on it with a light tick.
+- **Thumbstick** left/right turns it. The model opens at one standard scale that fits the plinth (1:10, 1:25, 1:50…) and keeps it for the visit; a brass plate on the plinth shows it.
 - Point the **laser** at a room: an orange marker hops to the room's clear middle, with the room's name above it and a small arrow for the way you'll face. **Trigger** takes you there at real size. (Pointing at the garden, you land where you point, clear of the walls, facing the house. OBJ and GLB files have no rooms: you land where you point.)
 - **Grip** and move your hand to lift it or move it; it never sinks into the plinth.
 - **Walk in →** on the wrist menu puts you inside at Sweet Home 3D's virtual visitor position; **← Back** leaves VR. View tab: **Time of day** (morning, noon, sunset, night), **Shadows**, **Depth shading**, **Ceilings**, **Passthrough**, **Transparent walls**, **Levels** (in a home with several storeys: all of them, or up to a level, by its Sweet Home 3D name, with the ceilings off the top one shown).
@@ -111,7 +111,7 @@ While aiming a teleport (hands or controllers), faint rings on the floor mark th
 
 **Photo:** not in the menu for now. The street camera (a later update) brings photos back. Photos you took earlier stay on the page, under the model: **Save all to Downloads** (or one by one) puts them in the Quest's **Files** app, in **Downloads**. (Nothing is ever downloaded during VR: the Quest Browser asks for permission at the first download, and its question would end the VR session.)
 
-**Sound** (General tab): Off or Effects (a light tick when the zoom settles on a scale; the hand-held tools will add more).
+**Sound** (General tab): Off or Effects.
 
 **Transparent walls** (headset only, View tab): a switch that turns walls and furniture into glass (about a third of them left), so you can see into every room at once; the wall in front of you fades evenly. Floors and ceilings stay as they are. Faded walls and furniture cast no shadows, like glass. The 2D page always shows the home as modelled.
 
@@ -206,7 +206,7 @@ index.html        2D UI and import map
 config.js         Google API key, defaults
 js/main.js        2D page, renderer, loading, UI
 js/xr.js          VR/AR session: the frame order and the parts below
-js/xr-dollhouse.js  the scale model on its plinth: turn, zoom, move, scale plate, where stepping inside lands
+js/xr-dollhouse.js  the scale model on its plinth: turn, move, scale plate, where stepping inside lands
 js/xr-walk.js     walking at 1:1: stick, teleport, snap turn, grip pull, floors and solid walls
 js/xr-ui.js       the settings board, help and notes; touch and lasers on the board
 js/wrist-menu.js  the wrist menu: the orb and four keys (Settings, Help, ← Back, Walk in →)

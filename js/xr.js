@@ -412,8 +412,7 @@ export class XRExperience {
 		if (this.layerFx || !this.session) return;
 		this.ui.closeAll();
 		if (dir !== 'out' && this.soundLevel !== 'off') this.sound.play(dir === 'in' ? 'dive' : 'surface');
-		const doll = this.modes.dollhouse.doll;
-		this.layerFx = { dir, go, t: 0, done: false, zoom: doll.zoom };
+		this.layerFx = { dir, go, t: 0, done: false };
 		if (dir === 'in' && WALK_IN_ZOOM && spot && this.mode === 'dollhouse') {
 			// (Where the zoom centres: the landing spot in the world, and what it scales from.)
 			this.layerFx.tunnel = { at: this.centerer.localToWorld(spot.clone()), stage: this.stage.position.clone(), anchor: this.anchor.position.clone(), scale: this.anchor.scale.x };
@@ -465,13 +464,13 @@ export class XRExperience {
 			if (!f.done) {
 				// Only the model grows (the gallery stays still, a fixed frame), eased in and out, with a soft vignette; then the fade.
 				const g = Math.min(1, f.t / GROW);
-				if (this.mode === 'dollhouse') { doll.doll.zoom = f.zoom * (1 + 0.6 * ease.inOut(g)); doll.apply(); }
+				if (this.mode === 'dollhouse') { doll.doll.zoom = 1 + 0.6 * ease.inOut(g); doll.apply(); }
 				this.veil.setVignette(Math.min(1, f.t / 0.3) * (WALK_IN_GROW > 0.5 ? 1 : 0));
 				cover(THREE.MathUtils.clamp((f.t - GROW) / OUT, 0, 1));
 				if (f.t >= GROW + OUT) {
 					f.done = true; f.t = 0;
 					this.veil.setVignette(0);
-					doll.doll.zoom = f.zoom; // (the scale model is as you left it when you come back)
+					doll.doll.zoom = 1; // (the scale model is as you left it when you come back)
 					f.go();
 					this.showArrival(this.roomHere() || 'Inside');
 				}
@@ -490,13 +489,13 @@ export class XRExperience {
 				// Every arrival at the scale model puts the plinth in front of you, the model
 				// level on it, here behind the fade (you may have turned and walked inside).
 				if (this.mode === 'dollhouse') this.recentreHere();
-				this.showArrival(`Scale model 1:${roundScale(1 / (this.baseScale * doll.doll.zoom))}`);
+				this.showArrival(`Scale model 1:${roundScale(1 / this.baseScale)}`);
 			}
 		} else {
 			cover(Math.max(0, 1 - f.t / IN));
 			const g = Math.min(1, f.t / GROW);
-			if (this.mode === 'dollhouse') { doll.doll.zoom = f.zoom * (1 + 0.6 * (1 - ease.out(g))); doll.apply(); }
-			if (f.t >= GROW) { doll.doll.zoom = f.zoom; if (this.mode === 'dollhouse') doll.apply(); cover(0); this.layerFx = null; }
+			if (this.mode === 'dollhouse') { doll.doll.zoom = 1 + 0.6 * (1 - ease.out(g)); doll.apply(); }
+			if (f.t >= GROW) { doll.doll.zoom = 1; if (this.mode === 'dollhouse') doll.apply(); cover(0); this.layerFx = null; }
 		}
 	}
 
