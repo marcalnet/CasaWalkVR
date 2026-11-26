@@ -23,7 +23,7 @@
 // 'ui'), so the mode leaves those alone.
 
 import * as THREE from 'three';
-import { NoteCard } from './panel.js';
+import { NoteCard, Label } from './panel.js';
 import { BUILD } from './version.js';
 import { buildLabel } from './build-label.js';
 import { headHeading } from './xr-dollhouse.js';
@@ -56,6 +56,8 @@ const ERROR_TEXT = {
 	line: '\u2190 Back returns to the page. The Meta button always leaves VR.',
 	ending: 'Returning to the page\u2026',
 };
+
+const DONE_FOR = 1.5; // seconds: a done line in the wing's place (New visitor)
 
 export class XRUI {
 	/** xr: the XRExperience (rig, camera, input, menus, mode, model, stage, ...). */
@@ -302,6 +304,30 @@ export class XRUI {
 	/** True while the wing or the wrist menu is open. */
 	get anyOpen() { return !!this.menu || this.wrist.open; }
 
+	/**
+	 * A short line in the wing's place for 1.5 s (New visitor: "Ready for the
+	 * next visitor", the UX review's C4), at the wing's last place, facing you.
+	 */
+	showDone(text, wing) {
+		const xr = this.xr;
+		if (!this.doneLabel) {
+			this.doneLabel = new Label({ height: 0.06 });
+			xr.rig.add(this.doneLabel.mesh);
+			xr.hideFromPhotos(this.doneLabel.mesh);
+		}
+		const m = this.doneLabel.mesh;
+		if (wing) { m.position.copy(wing.position); m.quaternion.copy(wing.quaternion); }
+		this.doneLabel.set(text);
+		this.doneT = DONE_FOR;
+	}
+
+	/** Once a frame: the done line's time. */
+	runDone(dt) {
+		if (!(this.doneT > 0)) return;
+		this.doneT -= dt;
+		if (this.doneT <= 0) this.doneLabel.set('');
+	}
+
 	/** Settings on the wrist: opens the wing, or closes it. */
 	toggleBoard() { if (this.menu) this.closeMenu(); else this.openMenu(); }
 
@@ -484,6 +510,7 @@ export class XRUI {
 		this.handsNote.mesh.visible = false;
 		this.errorNote.mesh.visible = false;
 		this.wrist.reset();
+		if (this.doneLabel) { this.doneLabel.set(''); this.doneT = 0; }
 		this.opened = false;
 		this.teleports = 0;
 		for (const row of this.touches) for (const st of row?.values() ?? []) { resetTouch(st.s); st.ring.visible = false; }

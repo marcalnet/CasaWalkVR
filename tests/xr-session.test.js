@@ -537,6 +537,10 @@ test('shared headsets: Height is per session (never stored, "Yours" at every Ent
 	x.menuAction('newVisitor');
 	assert.ok(x.personHeight === 0 && x.store.tips.seen.size === 0 && !x.store.target && Object.keys(x.store.tabs).length === 0 && !x.menu, 'the next person: height "Yours", every tip, the first tabs, the target ring; the wing closes');
 	assert.equal(x.lighting?.time ?? 'sunset', 'sunset', 'what you see stays');
+	const done = x.ui.doneLabel;
+	assert.ok(done?.mesh.visible && done.text === 'Ready for the next visitor', 'a done line in the wing\'s place (the UX review\'s C4)');
+	for (let i = 0; i < 115; i++) frame();
+	assert.ok(!done.mesh.visible, 'gone after 1.5 s');
 	x.ui.openMenu();
 	assert.equal(x.menu.tab, 'move', 'the next opening: How to move');
 	assert.ok(x.menus.walk.get('newVisitor') && x.menus.dollhouse.get('newVisitor') && x.menus.dollhouse.tabOf('newVisitor') === 'general', 'New visitor: General\'s last row');

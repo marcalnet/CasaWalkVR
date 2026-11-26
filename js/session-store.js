@@ -1,7 +1,7 @@
 // What belongs to this VR session only (the shared-headset principle, SPEC.md
 // "Design principles"; the next-build asks, section 4): several people use one
 // headset, and the app can't tell them apart, so teaching and who you are
-// start fresh with every Enter VR, and with "New visitor" in How to move.
+// start fresh with every Enter VR, and with "New visitor" (General's last row).
 // Nothing here is stored. (What you see, the home's light and view, is
 // remembered: js/settings.js, scope 'remembered'.)
 //

@@ -412,13 +412,16 @@ export class XRExperience {
 	}
 
 	/**
-	 * New visitor (How to move's foot; the shared-headset principle): the
+	 * New visitor (General's last row; the shared-headset principle): the
 	 * session starts over for the next person while the headset stays on: the
-	 * tips, the tab each board opens on, Height back to "Yours", the
-	 * first-target ring. What you see stays (it is remembered).
+	 * tips, the tab the wing opens on, Height back to "Yours", the
+	 * first-target ring; "Ready for the next visitor" shows 1.5 s where the
+	 * wing was. What you see stays (it is remembered), marks and measurements too.
 	 */
 	newVisitor() {
+		const wing = this.ui.menu?.mesh;
 		this.ui.closeAll(); // (first: closing keeps the tab shown, and the next person starts on How to move)
+		this.ui.showDone('Ready for the next visitor', wing); // (1.5 s in the wing's place: what you see, marks and measurements stay)
 		this.store.start();
 		this.personHeight = readSetting('height');
 		if (this.mode === 'walk') this.setLift(this.modes.walk.personLift());
@@ -762,6 +765,7 @@ export class XRExperience {
 		this.sound.update(dt);
 		if (this.photoPending) this.capturePhoto();
 		this.ui.runPhotoFx(dt);
+		this.ui.runDone(dt);
 	}
 }
 
