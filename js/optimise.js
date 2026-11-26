@@ -95,6 +95,37 @@ export function isGlass(obj) {
 	return false;
 }
 
+/**
+ * What you may stand on among the furniture (the next-build asks, "Free
+ * teleport"): stairs (a staircase cut-out, or named for one) and structural
+ * platforms (named, or catalogued, for a deck, a step, a platform, a terrace or
+ * a podium), whole words, in a few languages. Never by size: a sofa seat, a bed
+ * or a table is never a platform. Merged meshes carry them as userData.stair
+ * and userData.platform.
+ */
+export const STAIR_NAME = /\b(stairs?|staircase|stairway|escalera|escalier|treppe|scala|escala|escales)\b/i;
+export const PLATFORM_NAME = /\b(decks?|decking|steps?|platforms?|terraces?|terrassa|terraza|terrasse|podium|plataforma|plateforme|plattform|pedana|tarima)\b/i;
+
+/** True for a stair piece. */
+export function isStair(obj) {
+	for (let o = obj; o; o = o.parent) {
+		if (o.userData?.stair) return true;
+		const p = o.userData?.piece;
+		if (p) return !!p.staircase || STAIR_NAME.test(p.name ?? '');
+	}
+	return false;
+}
+
+/** True for a structural platform piece (a deck, a step, a terrace, a podium: by name or catalogue id). */
+export function isPlatform(obj) {
+	for (let o = obj; o; o = o.parent) {
+		if (o.userData?.platform) return true;
+		const p = o.userData?.piece;
+		if (p) return PLATFORM_NAME.test(p.name ?? '') || PLATFORM_NAME.test((p.catalogId ?? '').replace(/[#_-]/g, ' '));
+	}
+	return false;
+}
+
 /** Which layer an object of the loaded scene belongs to, from its top-level group name. */
 function layerOf(obj, root) {
 	let o = obj;
@@ -219,6 +250,7 @@ export function optimiseModel(root, { fold = true } = {}) {
 		const opening = layer === 'main' && isOpening(o); // doors and windows merge on their own
 		const water = layer === 'main' && !opening && isWater(o); // and so does water
 		const glassPiece = layer === 'main' && !opening && !water && isGlass(o); // and glass (also by material, below)
+		const stand = layer === 'main' && !opening && !water && !glassPiece ? (isStair(o) ? 'stair' : isPlatform(o) ? 'platform' : '') : ''; // and what you may stand on
 		const m = o.matrixWorld;
 		const mirrored = m.determinant() < 0;
 		const g0 = o.geometry;
@@ -237,9 +269,9 @@ export function optimiseModel(root, { fold = true } = {}) {
 			const g = extract(base, part.start, part.count, !!part.material.vertexColors, plain ? part.material.color : null);
 			g.applyMatrix4(m);
 			if (mirrored) flipWinding(g);
-			const key = `${layer}#${storey}#${opening ? 'opening' : water ? 'water' : glass ? 'glass' : ''}#${plain ? `plain#${part.material.side}` : materialKey(part.material)}`;
+			const key = `${layer}#${storey}#${opening ? 'opening' : water ? 'water' : glass ? 'glass' : stand}#${plain ? `plain#${part.material.side}` : materialKey(part.material)}`;
 			let b = buckets.get(key);
-			if (!b) { b = { layer, storey, opening, water, glass, material: plain ? foldedMaterial(part.material.side, folded) : part.material, geoms: [] }; buckets.set(key, b); }
+			if (!b) { b = { layer, storey, opening, water, glass, stand: glass ? '' : stand, material: plain ? foldedMaterial(part.material.side, folded) : part.material, geoms: [] }; buckets.set(key, b); }
 			b.geoms.push(g);
 		}
 	});
@@ -266,6 +298,7 @@ export function optimiseModel(root, { fold = true } = {}) {
 		if (b.opening) mesh.userData.opening = true;
 		if (b.water) mesh.userData.water = true;
 		if (b.glass) mesh.userData.glass = true;
+		if (b.stand) mesh.userData[b.stand] = true; // ('stair' | 'platform': you may stand on it)
 		layers[b.layer].add(mesh);
 		triangles += merged.index.count / 3;
 		drawCalls++;

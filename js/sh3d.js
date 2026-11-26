@@ -154,6 +154,7 @@ export function parseHome(xmlText) {
 		return {
 			kind: n.name === 'doorOrWindow' ? 'door' : n.name === 'light' ? 'light' : 'piece',
 			id: a.id || '', name: a.name || '', model: a.model || null, levelId,
+			staircase: !!a.staircaseCutOutShape, catalogId: a.catalogId || '', // (a stair, and the catalogue it came from: what you may stand on, js/optimise.js)
 			x: num(a, 'x'), y: num(a, 'y'), elevation: num(a, 'elevation'), angle: num(a, 'angle'),
 			width: num(a, 'width', 1), depth: num(a, 'depth', 1), height: num(a, 'height', 1),
 			pitch: num(a, 'pitch'), roll: num(a, 'roll'),
@@ -554,7 +555,7 @@ async function buildPiece(piece, ctx) {
 	wrapper.matrixAutoUpdate = false;
 	wrapper.matrix.copy(matrix);
 	wrapper.add(normalized);
-	wrapper.userData.piece = { name: piece.name, kind: piece.kind };
+	wrapper.userData.piece = { name: piece.name, kind: piece.kind, staircase: !!piece.staircase, catalogId: piece.catalogId ?? '' };
 
 	applyPieceMaterials(model, piece, ctx.getTexture, !!raw);
 	return { object: wrapper, effHeight };

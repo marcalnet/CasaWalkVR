@@ -377,6 +377,8 @@ const ARC_STEPS = 60; // up to 1.8 s of flight
 const DOTS = 40;
 const OK_COLOR = new THREE.Color(0x3d8bfd), BAD_COLOR = new THREE.Color(0xe5484d), PENDING_COLOR = new THREE.Color(0xffffff);
 
+const UP_Y = new THREE.Vector3(0, 1, 0);
+
 export class TeleportArc {
 	constructor(scene) {
 		this.dots = new THREE.InstancedMesh(new THREE.SphereGeometry(0.012, 8, 6), new THREE.MeshBasicMaterial({ color: 0xffffff }), DOTS);
@@ -438,7 +440,8 @@ export class TeleportArc {
 		this.points = pts;
 		const valid = !!hit && (hit.valid ?? hit.normal.y > 0.7);
 		const color = valid ? (pending ? PENDING_COLOR : OK_COLOR) : BAD_COLOR;
-		const snapped = valid && snap ? snap(hit.point) : null; // (the ring moves to a hotspot; the arc stays where you point)
+		const landing = hit?.land ?? hit?.point; // (where you will land: beside what you can't stand on, js/landing.js; the arc ends at the hit)
+		const snapped = valid && snap ? snap(landing) : null; // (the ring moves to a hotspot; the arc stays where you point)
 
 		// Dots evenly spaced along the polyline.
 		const lengths = [0];
@@ -458,13 +461,14 @@ export class TeleportArc {
 
 		this.ring.visible = !!hit;
 		if (hit) {
-			this.ring.position.copy(snapped ?? hit.point).addScaledVector(hit.normal, 0.01);
-			this.ring.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), snapped ? new THREE.Vector3(0, 1, 0) : hit.normal);
+			const flat = snapped || hit.land;
+			this.ring.position.copy(snapped ?? landing).addScaledVector(flat ? UP_Y : hit.normal, 0.01);
+			this.ring.quaternion.setFromUnitVectors(UP_Y, flat ? UP_Y : hit.normal);
 			this.ring.material.color.copy(color);
 			this.ring.children[0].material.color.copy(color);
 			this.cross.visible = !valid;
 		}
-		return { valid, point: hit ? (snapped ?? hit.point).clone() : null, snapped: !!snapped };
+		return { valid, point: hit ? (snapped ?? landing).clone() : null, snapped: !!snapped };
 	}
 
 	hide() {

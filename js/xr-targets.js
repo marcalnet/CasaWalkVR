@@ -2,23 +2,21 @@
 // (SPEC.md, "Experience and controls", walk mode). Pure functions of the
 // model's layers, so the rules can be tested in Node.
 //
-//   One level: you stand on room floors and the ground only, and the arc
-//   flies through furniture to the floor.
-//   More than one level (or no rooms, as in OBJ and GLB files): you can stand
-//   on anything but walls, doors and windows, so stairs work and the arc still
-//   passes through doorways.
-//   Walls always stop the arc.
-//   Water (pieces named water, pond, pool...: optimise.js WATER_NAME) is never
-//   a landing or a floor: the arc meets it as a red landing, a laser pointing
-//   at it finds no floor, and the feet never stand on it. It blocks no
-//   movement.
-//   Glass (pieces named glass..., or a transparent material: optimise.js
-//   GLASS_NAME, isGlassMaterial) is never a landing or a floor either. It is
-//   still furniture: met by the arc (as a red landing) only where furniture
-//   is met, in a home with several levels; flown through in a one-level one.
+//   Free teleport (the next-build asks, "Free teleport"; one rule for every
+//   Sweet Home 3D home, however many levels): a landing is valid wherever a
+//   person could stand. You stand on room floors, the ground, water (on its
+//   surface), stairs and structural platforms (decks, steps, terraces: by
+//   name or catalogue, js/optimise.js; never by size). Other furniture, walls
+//   and glass stop the arc, and the landing snaps to the clear floor beside
+//   them, on your side (js/landing.js). Doors and windows let the arc through
+//   (doorways). Walls always stop the arc; portals let it through.
+//   No rooms (OBJ and GLB): anything but doors and windows may be stood on,
+//   but an upward surface with space 0.3-1.6 m beneath it is an object (a
+//   table, a bed) and snaps beside, like furniture.
 
 import * as THREE from 'three';
-import { isOpening, isWater, isGlass } from './optimise.js';
+import { isOpening, isWater, isGlass, isStair, isPlatform } from './optimise.js';
+import { landFor, spaceBeneath, headroom } from './landing.js';
 
 /**
  * Every "this hand belongs to that" decision in the headset (the interaction
@@ -43,19 +41,31 @@ export function targetSets(model) {
 	const shown = (name) => (model.layers[name]?.children ?? []).filter((m) => m.visible);
 	const L = { main: shown('main'), walls: shown('walls'), floors: shown('floors'), ground: shown('ground') };
 	const walls = L.walls;
-	const anywhere = model.multiLevel || L.floors.length === 0;
+	const objModel = L.floors.length === 0; // (no rooms: OBJ and GLB, the safe rule)
 	const water = L.main.filter((m) => isWater(m));
-	const furniture = L.main.filter((m) => !isOpening(m) && !water.includes(m));
-	const glass = furniture.filter((m) => isGlass(m));
-	const walkable = [...L.floors, ...L.ground, ...(anywhere ? furniture.filter((m) => !glass.includes(m)) : [])];
+	const pieces = L.main.filter((m) => !isOpening(m) && !water.includes(m));
+	const glass = pieces.filter((m) => isGlass(m));
+	const stand = pieces.filter((m) => !glass.includes(m) && (objModel || isStair(m) || isPlatform(m)));
+	const furniture = pieces.filter((m) => !glass.includes(m) && !stand.includes(m));
+	const walkable = [...L.floors, ...L.ground, ...water, ...stand];
 	return {
 		pointable: [...L.main, ...walls, ...L.floors],
-		floors: [...L.floors, ...L.ground, ...water], // (water is met first, and gives no floor: findFloor)
-		solid: [...walls, ...walkable, ...water, ...(anywhere ? glass : [])], // (met, never valid: not walkable)
+		floors: walkable, // (where the feet and a pointed laser find floor: water too, on its surface)
+		solid: [...walls, ...walkable, ...glass, ...furniture], // (the arc meets all of these; only walkable tops are landings)
 		walkable: new Set(walkable),
 		walkableList: walkable,
+		wallLike: new Set([...walls, ...glass]), // (met: step back to your side, then the floor below)
+		objModel,
 		obstacles: [...L.main, ...walls],
+		bounds: siteBounds(model), // (outside the site: no landing)
 	};
+}
+
+/** The site: the box of every layer, grown by 1 m (beyond it no landing). */
+function siteBounds(model) {
+	const box = new THREE.Box3();
+	for (const name of ['main', 'walls', 'floors', 'ground']) for (const m of model.layers[name]?.children ?? []) if (m.visible) box.expandByObject(m);
+	return box.isEmpty() ? null : box.expandByScalar(1);
 }
 
 /** A ray hit's face normal in world space. */
@@ -75,7 +85,7 @@ export function findFloor(raycaster, floors, worldPoint, lift) {
 	raycaster.far = Infinity;
 	const hits = raycaster.intersectObjects(floors, false);
 	const h = hits.find((x) => !x.face || worldNormal(x).y > 0.7);
-	return h && !isWater(h.object) ? h.point : null; // (water over the ground: no floor there)
+	return h ? h.point : null; // (water too: you stand on its surface)
 }
 
 // Stairs: the arc meeting a step's steep front (the riser) lands on its top
@@ -100,8 +110,19 @@ export function hitSegment(raycaster, a, b, t) {
 	if (!h) return null;
 	const normal = worldNormal(h);
 	if (normal.dot(dir) > 0) normal.negate(); // the side the arc came from
-	if (normal.y > 0.7 || !t.walkable.has(h.object) || normal.y < -0.3) return { point: h.point, normal, valid: normal.y > 0.7 && t.walkable.has(h.object) };
-	return treadAbove(raycaster, h.point, normal, t) ?? { point: h.point, normal, valid: false };
+	const point = h.point, walk = t.walkable.has(h.object);
+	if (t.bounds && !t.bounds.containsPoint(point)) return { point, normal, valid: false }; // (outside the site)
+	if (normal.y < -0.3) return { point, normal, valid: false }; // (a ceiling or an underside)
+	if (walk && normal.y > 0.7) {
+		// A floor, water, a stair's tread, a platform: here, unless it is an object (OBJ, GLB) or the headroom is low (under a table).
+		if (!(t.objModel && spaceBeneath(raycaster, point, t)) && headroom(raycaster, point, t)) return { point, normal, valid: true };
+	} else if (walk) {
+		const tread = treadAbove(raycaster, point, normal, t); // (a stair's riser: the tread above it)
+		if (tread) return tread;
+	}
+	// Something you can't stand on: the floor beside it, on your side (js/landing.js); the arc still ends here.
+	const l = landFor(raycaster, { object: h.object, point, normal }, a, t);
+	return { point, normal, valid: !!l, land: l?.land ?? null };
 }
 
 /**

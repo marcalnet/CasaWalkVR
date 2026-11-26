@@ -233,6 +233,7 @@ js/hand-model.js  the hand model (the WebXR generic hand, restyled)
 js/hand-poses.js  preset hand poses for the pause's looping hand
 js/settings.js    every setting, its key, meaning and scope (remembered, or this session only)
 js/hand-owner.js  who owns a hand: the ladder (a held tool, a wing, the wrist menu, a key, the tools, the model), on one snapshot a frame
+js/landing.js     where the teleport lands when you aim at something you can't stand on (beside it, on your side)
 js/zones.js       the areas round you (left: the tools; centre: the model; right: the orb and Settings) and where each hand is
 js/session-store.js what belongs to this VR session only (the tips, the first tabs): cleared at Enter VR and by New visitor
 js/tween.js, js/haptics.js, js/sound.js   feedback: motion, vibration, synthesised sounds

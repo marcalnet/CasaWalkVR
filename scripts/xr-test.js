@@ -1143,13 +1143,13 @@ s = await page.evaluate(async () => {
 		if (ray.intersectObjects(x.model.layers.walls.children, false).length) continue;
 		const seg = x.modes.walk.hitSegment(h.point.clone().setY(h.point.y + 0.5), h.point.clone().setY(-0.05), t); // from above the top down past the floor
 		const under = new THREE.Raycaster(h.point.clone().setY(h.point.y + 0.1), new THREE.Vector3(0, -1, 0)).intersectObjects([...t.walkable], false)[0];
-		return restore({ top: +h.point.y.toFixed(2), topPoint: h.point.toArray(), arcLands: seg ? +seg.point.y.toFixed(2) : null, arcValid: seg?.valid, floorBelow: under ? +under.point.y.toFixed(2) : null });
+		return restore({ top: +h.point.y.toFixed(2), topPoint: h.point.toArray(), arcEnds: seg ? +seg.point.y.toFixed(2) : null, land: seg?.land ? seg.land.toArray().map((v) => +v.toFixed(2)) : null, arcValid: seg?.valid, floorBelow: under ? +under.point.y.toFixed(2) : null });
 	}
 	return restore(null);
 });
-check('one level: arc goes through furniture to the floor', s && s.arcValid === true && s.floorBelow !== null && s.floorBelow < s.top - 0.25 && Math.abs(s.arcLands - s.floorBelow) < 0.01, JSON.stringify(s));
+check('free teleport: the arc ends on a piece of furniture, the ring on the clear floor beside it (never on top)', s && s.arcValid === true && Math.abs(s.arcEnds - s.top) < 0.01 && s.land && s.land[1] < s.top - 0.25, JSON.stringify(s));
 
-// More than one level: furniture (and so stairs) can be stood on.
+// More than one level: the same rule (furniture is never a landing; stairs and platforms are, in every home).
 s = await page.evaluate(async (top) => {
 	const THREE = await import('three');
 	const x = window.__casawalk.xr;
@@ -1160,9 +1160,9 @@ s = await page.evaluate(async (top) => {
 	const seg = x.modes.walk.hitSegment(p.clone().setY(p.y + 0.5), p.clone().setY(-0.05), t);
 	x.model.multiLevel = was;
 	x._targets = null;
-	return { arcLands: seg ? +seg.point.y.toFixed(2) : null, arcValid: seg?.valid };
+	return { land: seg?.land ? +seg.land.y.toFixed(2) : null, arcValid: seg?.valid };
 }, s.topPoint);
-check('several levels: you can stand on furniture', s.arcValid === true && s.arcLands > 0.25, JSON.stringify(s));
+check('several levels: the same rule, the ring beside the furniture', s.arcValid === true && s.land !== null && s.land < 0.25, JSON.stringify(s));
 
 // Left stick forward: walk at about 0.75 m/s where the head looks.
 h0 = (await state()).head;
@@ -1647,7 +1647,7 @@ await fingerprint('example-walk');
 		const openings = main.filter((m) => m.userData.opening);
 		return { openings: openings.length, inSolid: openings.filter((m) => t.solid.includes(m)).length, furnitureSolid: t.solid.some((m) => main.includes(m) && !m.userData.opening) };
 	});
-	check('several levels: the arc passes doors and windows, not other furniture', o.openings > 0 && o.inSolid === 0 && o.furnitureSolid, JSON.stringify(o));
+	check('the arc passes doors and windows, not other furniture', o.openings > 0 && o.inSolid === 0 && o.furnitureSolid, JSON.stringify(o));
 	// Stairs: an arc meeting a step's front (the riser) lands on its top (the tread), not red.
 	const st = await page.evaluate(() => {
 		const x = window.__casawalk.xr, t = x.targets(), V = x.rig.position.constructor;

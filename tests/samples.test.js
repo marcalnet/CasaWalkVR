@@ -68,11 +68,14 @@ test('Pond House: 2 levels, 32 rooms (18 named; the pond is water, not a room; t
 	assert.ok(unnamed.length > 0, 'pieces that only carry a floor or ceiling stay unnamed (one label per space)');
 	assert.equal(new Set(named.map((r) => r.name)).size, named.length, 'every named room a name of its own (Bedroom 2, Bedroom 3)');
 	assert.ok(built.lamps.length >= 4); // (hall, pendant, two bedside lamps)
-	// The pond is water: merged on its own, never stood on (furniture can be: several levels).
+	// The pond is water: merged on its own, and stood on (free teleport); the stair is a stair, a landing too.
 	const { layers } = optimiseModel(built.root);
 	const t = targetSets({ layers, multiLevel: true });
 	const water = layers.main.children.filter((m) => m.userData.water);
-	assert.ok(water.length > 0 && water.every((m) => !t.walkable.has(m)) && t.walkableList.some((m) => layers.main.children.includes(m)));
+	assert.ok(water.length > 0 && water.every((m) => t.walkable.has(m)), 'you stand on the water');
+	const stair = layers.main.children.filter((m) => m.userData.stair);
+	assert.ok(stair.length > 0 && stair.every((m) => t.walkable.has(m)), 'the floating stair: a landing');
+	assert.ok(layers.main.children.some((m) => !m.userData.stair && !m.userData.platform && !m.userData.water && !m.userData.glass && !m.userData.opening && !t.walkable.has(m)), 'other furniture: never');
 	// Glass (the shower's screens; the stair has an oak rod rail now) is never stood on either.
 	const glass = layers.main.children.filter((m) => m.userData.glass);
 	assert.ok(glass.every((m) => !t.walkable.has(m)), 'glass is never a landing');
