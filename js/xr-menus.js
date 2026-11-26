@@ -93,6 +93,21 @@ export const GUIDES = {
 		lines: ['Lift it and turn it: it stays level', 'Let go in the air: it goes home by itself', 'Trigger outside the panels: close them', 'The Meta button leaves VR at any moment'] },
 };
 
+/**
+ * The pause's tips (js/pause.js; the next-build asks, "Tip screens"): one line
+ * each, eight words or fewer, for bare hands and for controllers. Shown in
+ * this order, per transition, each at most once a session.
+ */
+export const TIPS = {
+	enter: [{ id: 'walkin', hands: 'Pinch a room, then Walk in.', controllers: 'Point at a room, then Walk in.', demo: 'door' }],
+	in: [
+		{ id: 'teleport', hands: 'Pinch, aim, let go to jump.', controllers: 'Hold the trigger, aim, let go.', demo: 'pinch', practise: true },
+		{ id: 'turn', hands: 'Flick your wrist while pinching to turn.', controllers: 'Flick the right stick to turn.' },
+		{ id: 'portal', hands: 'Touch a wall to see through it.', controllers: 'Touch a wall to see through it.' },
+	],
+	back: [{ id: 'grab', hands: 'Close your hand on the model to turn it.', controllers: 'Hold grip on the model to turn it.' }],
+};
+
 // The line at each wing's foot, saying how to close it (there is no Close key: build 120, M1; js/xr-ui.js sets it on opening).
 export const CLOSE_HINT = { controllers: 'Pull the trigger outside to close', hands: 'Pinch outside to close' };
 

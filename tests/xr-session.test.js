@@ -38,6 +38,7 @@ async function setup({ nomerge = false, file = FILE } = {}) {
 	// A pretend session with two controllers (buttons as in the xr-standard mapping).
 	x.session = { end: () => x.handleEnd() };
 	x.sessionMode = 'ar';
+	x.pause.tipsOn = false; // (no tips but in the pause's own tests: they would hold every move)
 	const pads = {};
 	for (const [i, hand] of [[0, 'left'], [1, 'right']]) {
 		const c = x.input.controllers[i];
@@ -164,53 +165,90 @@ test('the levels stack beside the doors: one key per level, ground at the bottom
 	assert.ok(d.levelCount === 0 && !key(0).group.visible && !d.levelTitle.mesh.visible);
 });
 
-test('the first time inside: a looping hand with its arc and ring, no card; the first teleport ends it and is remembered; 15 s ends it unremembered; 40 s stuck: once more', async (t) => {
-	const { loopAt, DEMO } = await import('../js/pinch-demo.js');
-	const { writeSetting } = await import('../js/settings.js');
-	const store = new Map(); // (Node has no localStorage: a small one for this test)
-	globalThis.localStorage = { getItem: (k) => store.get(k) ?? null, setItem: (k, v) => store.set(k, String(v)), removeItem: (k) => store.delete(k) };
-	t.after(() => { delete globalThis.localStorage; });
+test('the pause, pure: which tip (in order, once a session, per input kind), ready, the practice arc', async () => {
+	const { nextTip, newRecord, tipKey, isReady, practiceArc, PAUSE } = await import('../js/pause.js');
+	const { loopAt } = await import('../js/tip-demo.js');
 	assert.deepEqual([0, 0.6, 1.5, 2.0, 2.4, 2.9].map((t) => { const m = loopAt(t); return [+m.pinch.toFixed(1), +m.arc.toFixed(1), m.blue]; }),
-		[[0, 0, false], [0.2, 0, false], [1, 0.8, false], [1, 1, true], [0.3, 0.3, false], [0, 0, false]], 'one loop: pinch, arc grows, ring blue, hand opens');
-	const { x, go, frame } = await setup();
-	const demo = x.pinchDemo;
-	for (const k of ['pinchSeenControllers', 'pinchSeenHands']) writeSetting(k, false);
-	// One teacher at a time (harmony, conflict 12): it waits for the room's name to fade.
-	const arrive = () => { for (let i = 0; i < 200 && !demo.playing; i++) frame(); };
-	go('in');
-	assert.ok(!demo.playing && x.arrival.mesh.visible, 'the room\'s name first');
-	arrive();
-	assert.ok(demo.playing && demo.group.visible && !x.arrival.mesh.visible, 'then the loop plays');
-	assert.ok(demo.ring.position.distanceTo(x.headWorld()) > 1.4, 'its ring is on the floor ahead');
-	const spot = demo.spot.clone(), head = x.headWorld();
-	assert.ok(Math.abs(spot.y - head.y + 0.42) < 0.02 && spot.distanceTo(head) < 1.05 && spot.distanceTo(head) > 0.95, 'about 1 m ahead, 25° below the eyes');
-	const { angleOf } = await import('../js/wings.js');
-	const az = THREE.MathUtils.radToDeg(angleOf(spot, head, x.viewYaw()).az);
-	assert.ok(Math.abs(az + 15) < 1, `15° to the main hand's side (right), taken from the view as it appears: ${az.toFixed(1)}°`);
-	demo.update(0.5); demo.update(0.5);
-	assert.ok(demo.state.fade === 1, 'faded in');
-	x.modes.walk.go(x.headWorld());
-	for (let i = 0; i < 40; i++) demo.update(1 / 72);
-	assert.ok(!demo.playing && !demo.group.visible, 'gone after the first teleport');
-	const { readSetting } = await import('../js/settings.js');
-	assert.equal(readSetting('pinchSeenControllers') || readSetting('pinchSeenHands'), true, 'remembered');
-	// Another visit: not shown again.
-	go('back'); go('in'); arrive();
-	assert.ok(!demo.playing, 'not again');
-	// Not remembered after only a timeout: 15 s, then it goes; 40 s stuck, once more.
-	for (const k of ['pinchSeenControllers', 'pinchSeenHands']) writeSetting(k, false);
-	go('back'); go('in'); arrive();
-	assert.ok(demo.playing);
-	for (let t = 0; t < 15.6; t += 0.1) demo.update(0.1);
-	assert.ok(!demo.playing, '15 s: faded away');
-	for (let t = 15.6; t < 40.2; t += 0.1) demo.update(0.1);
-	assert.ok(demo.playing, '40 s inside with no teleport: once more');
-	for (let t = 0; t < 16; t += 0.1) demo.update(0.1);
-	for (let t = 0; t < 60; t += 0.1) demo.update(0.1);
-	assert.ok(!demo.playing, 'then never again that visit');
-	assert.equal(DEMO.SHOW, 15);
+		[[0, 0, false], [0.2, 0, false], [1, 0.8, false], [1, 1, true], [0.3, 0.3, false], [0, 0, false]], 'the demonstration\'s loop: pinch, arc grows, ring blue, hand opens');
+	const r = newRecord();
+	assert.equal(nextTip('in', r, 'hands').id, 'teleport', 'Walk in: the teleport first');
+	r.seen.add(tipKey('teleport', 'hands'));
+	assert.equal(nextTip('in', r, 'hands').id, 'turn', 'each tip at most once a session: then the turn');
+	r.learnt.add(tipKey('turn', 'hands'));
+	assert.equal(nextTip('in', r, 'hands').id, 'portal', 'a learnt tip is never shown');
+	r.seen.add(tipKey('portal', 'hands'));
+	assert.equal(nextTip('in', r, 'hands'), null, 'none left: a plain fade');
+	assert.equal(nextTip('in', r, 'controllers').id, 'teleport', 'learnt with hands: still shown once for controllers');
+	assert.equal(nextTip('enter', newRecord(), 'hands').id, 'walkin');
+	assert.equal(nextTip('back', newRecord(), 'controllers').id, 'grab');
+	assert.equal(nextTip('out', newRecord(), 'hands'), null, 'leaving VR: never a tip');
+	const all = newRecord(), ids = Array.from({ length: 6 }, () => nextTip('in', all, 'hands', { all: true }).id);
+	assert.deepEqual(ids, ['walkin', 'teleport', 'turn', 'portal', 'grab', 'walkin'], '?tips: every tip in turn, never retired');
+	assert.ok(!isReady([0.01, 0.01]) && isReady(Array(10).fill(1 / 72)) && !isReady([...Array(9).fill(1 / 72), 0.03]), 'ready: 10 smooth frames (under 1.5x the budget)');
+	assert.equal(PAUSE.READY_LIMIT, 10, 'never stuck: 10 s at most');
+	const { land } = practiceArc(new THREE.Vector3(0, 1.4, 0), new THREE.Vector3(0, -0.3, -1), 0);
+	assert.ok(land && Math.abs(land.y) < 1e-9 && land.z < -1, `the practice arc lands ahead on the floor (${land?.z.toFixed(2)} m)`);
 });
 
+test('the pause: Walk in with a tip (the dark, the floor ring, the room\'s name, the tip, the hand); 3.5 s shown; ← Back: the grab tip; none left: a plain fade', async () => {
+	const { x, frame } = await setup();
+	const P = x.pause, { PAUSE } = await import('../js/pause.js');
+	P.tipsOn = true;
+	frame();
+	x.menuAction('in');
+	let n = 0;
+	for (; n < 400 && !P.fx?.pause; n++) frame();
+	const p = P.fx?.pause;
+	assert.ok(p && x.mode === 'walk', 'after the tunnel: inside, in the pause');
+	assert.equal(p.tip.id, 'teleport');
+	assert.ok(P.group.visible && P.floor.visible && x.veil.amount('layer') === 1, 'the dark, the tip and the floor ring');
+	assert.ok(P.demo.playing || !P.demo.hands, 'the looping demonstration');
+	const t0 = n;
+	for (; n < 1400 && P.fx?.pause && !P.fx.pause.ending; n++) frame();
+	const shown = (n - t0) / 72;
+	assert.ok(shown >= PAUSE.TIP_IN + PAUSE.SHOWN - 0.05 && shown < PAUSE.TIP_IN + PAUSE.SHOWN + 0.2, `shown ${shown.toFixed(2)} s (fade in, then 3.5 s)`);
+	for (let i = 0; i < 200 && P.fx; i++) frame();
+	assert.ok(!P.fx && x.veil.amount('layer') === 0 && !P.group.visible && !P.floor.visible, 'then the room fades in');
+	assert.ok(P.target.visible, 'the first time inside: the first-target ring ahead');
+	x.menuAction('back');
+	for (let i = 0; i < 100 && !P.fx?.pause; i++) frame();
+	assert.equal(P.fx?.pause?.tip.id, 'grab', '← Back: the grab tip (unseen, unlearnt)');
+	for (let i = 0; i < 600 && P.fx; i++) frame();
+	assert.ok(!P.target.visible && x.mode === 'dollhouse', 'at the scale model: no target ring');
+	x.menuAction('in');
+	for (let i = 0; i < 400 && !P.fx?.pause; i++) frame();
+	assert.equal(P.fx?.pause?.tip.id, 'turn', 'the next Walk in: the next tip');
+});
+
+test('the pause: practising the teleport (hold the trigger, an arc onto the floor ring, let go) ends it at once and learns it; a quick pull after 0.8 s only skips', async () => {
+	const { x, frame, press } = await setup();
+	const P = x.pause;
+	P.tipsOn = true;
+	frame();
+	x.menuAction('in');
+	for (let n = 0; n < 400 && !P.fx?.pause; n++) frame();
+	for (let i = 0; i < 72; i++) frame(); // (1 s in)
+	const hands = x.input.hands;
+	hands.right.ray.position.set(0.2, 1.3, -0.2);
+	hands.right.ray.quaternion.setFromAxisAngle(new THREE.Vector3(1, 0, 0), -0.4); // (pointing down ahead)
+	hands.right.ray.updateMatrixWorld(true);
+	press('right', 'trigger'); for (let i = 0; i < 36; i++) frame(); // 0.5 s
+	assert.ok(P.arc.visible, 'the practice arc onto the floor');
+	press('right', 'trigger', false); frame();
+	assert.ok(P.fx?.pause?.ending?.learnt, 'let go: the tip ends at once, learnt');
+	assert.ok(P.record.learnt.has('teleport:controllers'));
+	for (let i = 0; i < 200 && P.fx; i++) frame();
+	// Enter VR: the dark from the first frame, the walk-in tip; a quick pull before 0.8 s does nothing, after it skips.
+	P.enter();
+	assert.ok(P.fx.pause?.tip.id === 'walkin' && x.veil.amount('layer') === 1, 'Enter VR: the pause from the first frame');
+	press('right', 'trigger'); frame(); press('right', 'trigger', false); frame();
+	assert.ok(!P.fx.pause.ending, 'too soon to skip');
+	for (let i = 0; i < 72; i++) frame();
+	press('right', 'trigger'); frame(); press('right', 'trigger', false); frame();
+	assert.ok(P.fx.pause.ending && !P.fx.pause.ending.learnt, 'after 0.8 s: skipped, seen, not learnt');
+	for (let i = 0; i < 200 && P.fx; i++) frame();
+	assert.ok(!P.fx && x.veil.amount('layer') === 0, 'the room fades in');
+});
 test('the tab you left a board on is the one the other board opens on', async () => {
 	const { x, go } = await setup();
 	x.ui.openMenu();
@@ -571,7 +609,7 @@ test('bare hands: an empty hand between the eyes and the model shows a faint aim
 });
 
 test('the tunnel zoom (on, subtle: build 120, M2): the room and the model scale x1.4 about the spot with a soft start and stop, the view goes black from 1.25 s, then inside; the scale model as it was', async () => {
-	const { WALK_IN_ZOOM } = await import('../js/xr.js');
+	const { WALK_IN_ZOOM } = await import('../js/pause.js');
 	assert.equal(WALK_IN_ZOOM, true, 'on since the user\'s word (26 Nov 2026)');
 	const { x, frame } = await setup();
 	frame();
@@ -579,16 +617,20 @@ test('the tunnel zoom (on, subtle: build 120, M2): the room and the model scale 
 	const stage0 = x.stage.position.clone(), scale0 = x.anchor.scale.x;
 	let went = 0, maxScale = 0, blackAt = null;
 	const scales = [];
-	x.layerFx = { dir: 'in', t: 0, done: false, zoom: 1, go: () => { went++; }, tunnel: { at: spot, stage: stage0.clone(), anchor: x.anchor.position.clone(), scale: scale0 } };
-	const cover = (v) => { if (v > 0 && blackAt === null) blackAt = x.layerFx.t; };
-	for (let i = 0; i < 72 * 1.8 && x.layerFx?.tunnel; i++) { x.layerFx.t += 1 / 72; x.runTunnel(x.layerFx, cover); maxScale = Math.max(maxScale, x.stage.scale.x); scales.push(x.stage.scale.x); }
+	const P = x.pause;
+	P.fx = { dir: 'in', t: 0, done: false, go: () => { went++; }, tunnel: { at: spot, stage: stage0.clone(), anchor: x.anchor.position.clone(), scale: scale0 } };
+	for (let i = 0; i < 72 * 1.8 && P.fx?.tunnel; i++) {
+		P.fx.t += 1 / 72; P.runTunnel(P.fx);
+		if (x.veil.amount('layer') > 0 && blackAt === null) blackAt = P.fx.t;
+		maxScale = Math.max(maxScale, x.stage.scale.x); scales.push(x.stage.scale.x);
+	}
 	assert.ok(Math.abs(maxScale - 1.4) < 0.005 && went === 1, `scaled to x${maxScale.toFixed(3)}, then inside`);
 	assert.ok(blackAt > 1.24 && blackAt < 1.28, `the fade to black from ${blackAt?.toFixed(2)} s`);
 	// Smootherstep: the first and last steps of the zoom are tiny (no jolt at either end).
 	const steps = scales.slice(1).map((v, i) => v - scales[i]).filter((d) => d > 0);
 	assert.ok(steps[0] < 1e-4 && steps.at(-1) < 1e-4 && Math.max(...steps) > 0.005, `steps ${steps[0].toExponential(1)} … ${steps.at(-1).toExponential(1)}`);
 	assert.ok(x.stage.scale.x === 1 && x.stage.position.distanceTo(stage0) < 1e-9, 'the room back as it was');
-	x.layerFx = null;
+	P.fx = null; x.veil.clear();
 });
 
 test('the wrist key opens both wings and closes both; the How to move key closes and reopens How to move alone; the tab you left is kept', async () => {

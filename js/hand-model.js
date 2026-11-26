@@ -9,7 +9,7 @@
 // theme.HAND.model ('generic' | 'capsules'), and while the files load.
 //
 // Also poses a hand from the preset poses of js/hand-poses.js: the looping
-// pinch hand shown the first time inside (js/pinch-demo.js).
+// demonstration hand of the pause's tips (js/tip-demo.js).
 
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';

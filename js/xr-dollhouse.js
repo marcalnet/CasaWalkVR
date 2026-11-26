@@ -543,6 +543,7 @@ export class Dollhouse {
 	startGrab(c) {
 		const xr = this.xr, p = this.holdPoint(c), q = this.holdTurn(c);
 		if (!p || !q) return;
+		xr.pause?.note('grab'); // (the grab tip is learnt: js/pause.js)
 		if (this.settling) { xr.tweens.stop(this.settling); this.settling = null; }
 		this.stopFloating();
 		this.cancelHandAim();

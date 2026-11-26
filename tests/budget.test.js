@@ -96,9 +96,10 @@ test('the ?stats counter: only with ?stats; fps, draw calls and triangles in one
 test('one place for the development switches and the device (code audit, A4)', async () => {
 	const { devFlags } = await import('../js/dev.js');
 	const { isHeadsetBrowser, isQuest2 } = await import('../js/device.js');
-	assert.deepEqual(devFlags('?test&model=examples/heavy-home.sh3d&stats'), { test: true, hands: false, stats: true, nomerge: false, nofold: false, sw: false, worker: false });
+	assert.deepEqual(devFlags('?test&model=examples/heavy-home.sh3d&stats'), { test: true, hands: false, stats: true, nomerge: false, nofold: false, sw: false, worker: false, tips: false });
+	assert.equal(devFlags('?tips').tips, true, '?tips: a pause on every move, every tip');
 	assert.equal(devFlags('?worker').worker, true, '?worker: OBJ models read in a worker');
-	assert.deepEqual(devFlags(''), { test: false, hands: false, stats: false, nomerge: false, nofold: false, sw: false, worker: false });
+	assert.deepEqual(devFlags(''), { test: false, hands: false, stats: false, nomerge: false, nofold: false, sw: false, worker: false, tips: false });
 	const q2 = 'Mozilla/5.0 (X11; Linux x86_64; Quest 2) AppleWebKit/537.36 (KHTML, like Gecko) OculusBrowser/38.0 Chrome/132 VR Safari/537.36';
 	const q3 = 'Mozilla/5.0 (X11; Linux x86_64; Quest 3) AppleWebKit/537.36 (KHTML, like Gecko) OculusBrowser/38.0 Chrome/132 VR Safari/537.36';
 	const mac = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132 Safari/537.36';
@@ -109,7 +110,7 @@ test('one place for the development switches and the device (code audit, A4)', a
 	assert.ok(js.some((f) => f.startsWith('page')), 'the page\'s parts are read too');
 	for (const f of js) {
 		const src = fs.readFileSync(path.join(ROOT, 'js', f), 'utf8');
-		assert.ok(!/\.has\('(test|hands|stats|nomerge|sw)'\)/.test(src), `${f} reads a development switch itself`);
+		assert.ok(!/\.has\('(test|hands|stats|nomerge|sw|tips)'\)/.test(src), `${f} reads a development switch itself`);
 		assert.ok(!/userAgent/.test(src), `${f} reads the browser's name itself`);
 	}
 });

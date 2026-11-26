@@ -31,10 +31,8 @@ export const SETTINGS = {
 	sound: { key: 'casawalk.sound', options: ['off', 'effects', 'all'], fallback: 'all' }, // all: effects and the ambience (milestone H)
 	// (The guide's 'casawalk.walkGuide' setting went in Nov 2026: nothing read it. A stored value is simply never read.)
 	cameraLens: { key: 'casawalk.cameraLens', options: [24, 28, 35, 50], fallback: 28 }, // the street camera's lens, mm (milestone D)
-	// The pinch hand was seen, per input kind (js/pinch-demo.js). (The keys are those of the
-	// first-time lessons inside, which it replaced; the lessons' 'casawalk.welcome.scale.*' went in Nov 2026.)
-	pinchSeenHands: { key: 'casawalk.welcome.walk.hands', flag: true, fallback: false },
-	pinchSeenControllers: { key: 'casawalk.welcome.walk.controllers', flag: true, fallback: false },
+	// (The first-time lessons' and the pinch hand's 'casawalk.welcome.*' keys went on 26 Nov 2026: tips are per VR
+	// session and nothing about them is stored, js/pause.js. A stored value is simply never read.)
 	// (The tools' first-time show and its 'casawalk.toolsIntro' went on 26 Nov 2026: the tools always float over the left hand.)
 };
 

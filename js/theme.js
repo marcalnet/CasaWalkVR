@@ -23,6 +23,9 @@ export const BADGE = {
 	orb: { fill: '#d9822b', text: '#fff' },
 };
 
+/** The pause between places (js/pause.js; the next-build asks, "Tip screens"): its dark (black now; grey under a future light theme) and its floor ring's line. */
+export const VOID = { color: 0x000000, line: 0xffffff };
+
 /** Corner radii, in canvas pixels. */
 export const RADIUS = { panel: 36, cell: 20, card: 48, badge: 14 };
 

@@ -256,7 +256,7 @@ const modelTop = () => page.evaluate(async () => {
 	}
 	return p.toArray();
 });
-const waitXR = () => page.waitForFunction(() => { const x = window.__casawalk.xr; return x.mode && !x.pendingRecentre && x.ui.wrist.orb.holder; }, null, { timeout: 8000 }).catch(() => {});
+const waitXR = () => page.waitForFunction(() => { const x = window.__casawalk.xr; return x.mode && !x.pendingRecentre && x.ui.wrist.orb.holder && !x.layerFx; }, null, { timeout: 15000 }).catch(() => {}); // (Enter VR holds the dark until the room draws smoothly: js/pause.js)
 /** What a session leaves on the 2D page: should be nothing. Returns the names of what was left. */
 const leftovers = () => page.evaluate(() => {
 	const S = window.__casawalk, x = S.xr, bad = [], want = (n, ok) => ok || bad.push(n);
@@ -394,10 +394,8 @@ check('one Enter VR button', await enterVR.count() === 1 && await page.locator('
 }
 
 // Head 1.6 m up, looking slightly down at the plinth.
-// The first-time teachers (the tools' show, the pinch hand inside) are marked seen for the whole run
-// (they would stand in front of the other checks); their own checks clear them below.
-const SEEN_KEYS = ['casawalk.welcome.walk.hands', 'casawalk.welcome.walk.controllers'];
-await page.evaluate((keys) => { for (const k of keys) localStorage.setItem(k, '1'); }, SEEN_KEYS);
+// The pause's tips are off for the whole run (they would hold every move); their own check switches them on below.
+await page.evaluate(() => { window.__casawalk.xr.pause.tipsOn = false; });
 await page.evaluate(() => window.__device.position.set(0, 1.6, 0));
 await lookDown();
 await restRight();
@@ -927,18 +925,18 @@ check('B closes the board', (await state()).menu === null);
 		return { floating: !!d.floating, wait: d.floating?.wait, going: !!d.floating?.going, grab: !!d.grab, level: d.level(), y: +d.doll.pos.y.toFixed(3),
 			near: x.input.controllers.map((c) => { const p = d.holdPoint(c, new V()); return [c.handedness, c.isHand, c.isController, c.touch.tracked, p ? +b.distanceToPoint(p).toFixed(2) : null]; }) }; });
 	check('with hands away, the floating model goes home by itself and settles, level', !homeAgain.floating && homeAgain.level && Math.abs(homeAgain.y - (await page.evaluate(() => window.__casawalk.xr.plinthH)) - 0.004) < 0.002, JSON.stringify(homeAgain));
-	// The looping hand shown inside the first time (js/pinch-demo.js), frozen here at its steady-blue moment to look at it.
+	// The pause's looping hand (js/tip-demo.js), frozen here at its steady-blue moment to look at it.
 	const pd = await page.evaluate(async () => {
-		const x = window.__casawalk.xr, d = x.pinchDemo;
+		const x = window.__casawalk.xr, d = x.pause.demo, V = x.rig.position.constructor, h = x.headWorld(), f = new V(0, 0, -1).transformDirection(x.camera.matrixWorld).setY(0).normalize();
 		await d.loaded;
 		d.update = () => {};
-		d.play('hands'); d.state.t = 2.0; d.state.fade = 1; d.draw(d.state);
-		return { hand: Object.values(d.hands ?? {}).some((h) => h.visible), label: d.label.text, arc: d.arcGeometry.drawRange.count, away: +d.spot.distanceTo(x.headWorld()).toFixed(2) };
+		d.play('hands', h.clone().addScaledVector(f, 2).setY(h.y - 1.6)); d.state.t = 2.0; d.state.fade = 1; d.draw(d.state);
+		return { hand: Object.values(d.hands ?? {}).some((q) => q.visible), arc: d.arcGeometry.drawRange.count, away: +d.spot.distanceTo(h).toFixed(2) };
 	});
 	await frames(3);
-	check('the looping pinch hand: the hand model, its arc to the ring, the three words, about 1 m away', pd.hand && pd.label === 'Pinch · aim · let go' && pd.arc > 10 && Math.abs(pd.away - 1) < 0.05, JSON.stringify(pd));
-	await shot('pinch-demo-hand');
-	await page.evaluate(() => { const d = window.__casawalk.xr.pinchDemo; d.stop(); delete d.update; });
+	check('the pause\'s looping hand: the hand model and its arc to the ring, 0.6 m away', pd.hand && pd.arc > 10 && Math.abs(pd.away - 0.6) < 0.05, JSON.stringify(pd));
+	await shot('tip-demo-hand');
+	await page.evaluate(() => { const d = window.__casawalk.xr.pause.demo; d.stop(); delete d.update; });
 	// The safety net (A1): an error shows the calm card in front of you; the app goes on.
 	const safe = await page.evaluate(() => {
 		const x = window.__casawalk.xr;
@@ -1443,18 +1441,18 @@ check('back from walking: eyes at 1.89 m again, gallery shown, lasers on', Math.
 	check('the tools stay over the lowered hand', await page.evaluate(() => window.__casawalk.xr.fan.group.visible && window.__casawalk.xr.fan.alpha === 1));
 }
 
-// The pinch hand the first time inside, with controllers: the arc and the ring alone; the first teleport ends it (remembered).
+// The pause (js/pause.js), tips on: Walk in with controllers: the dark, the floor ring, the room's name, the teleport tip; a pull after 0.8 s skips it.
 {
-	await page.evaluate(() => localStorage.removeItem('casawalk.welcome.walk.controllers'));
-	await page.evaluate(() => { window.__casawalk.xr.menuAction('in'); }); await settled(); await frames(6);
-	await page.waitForFunction(() => window.__casawalk.xr.pinchDemo.playing, null, { timeout: 5000, polling: 'raf' }).catch(() => {}); await frames(3); // (it starts once the room's name has faded: one teacher at a time)
-	const pc = await page.evaluate(() => { const d = window.__casawalk.xr.pinchDemo; return { playing: d.playing, kind: d.kind, label: d.label.text, ring: d.ring.visible && d.group.visible }; });
-	check('the first time inside, with controllers: the loop plays (arc and ring, "Trigger · aim · let go")', pc.playing && pc.kind === 'controllers' && pc.label === 'Trigger · aim · let go' && pc.ring, JSON.stringify(pc));
-	await shot('pinch-demo');
-	await page.evaluate(() => { const x = window.__casawalk.xr; x.modes.walk.go(x.headWorld()); });
-	await page.waitForFunction(() => !window.__casawalk.xr.pinchDemo.playing, null, { timeout: 5000, polling: 'raf' }).catch(() => {});
-	check('the first teleport puts it away for good', await page.evaluate(() => !window.__casawalk.xr.pinchDemo.playing && localStorage.getItem('casawalk.welcome.walk.controllers') === '1'));
-	await page.evaluate(() => window.__casawalk.xr.menuAction('back')); await settled(); await frames(6);
+	await page.evaluate(() => { window.__casawalk.xr.pause.tipsOn = true; window.__casawalk.xr.menuAction('in'); });
+	await page.waitForFunction(() => !!window.__casawalk.xr.pause.fx?.pause, null, { timeout: 10000, polling: 'raf' }).catch(() => {});
+	await page.waitForFunction(() => (window.__casawalk.xr.pause.fx?.pause?.t ?? 0) > 1, null, { timeout: 10000, polling: 'raf' }).catch(() => {});
+	const pz = await page.evaluate(() => { const P = window.__casawalk.xr.pause, p = P.fx?.pause; return { tip: p?.tip?.id ?? null, words: P.tipLabel.text, name: P.nameLabel.mesh.visible ? P.nameLabel.text : null, ring: P.floor.visible, dark: window.__casawalk.xr.veil.amount('layer'), demo: P.demo.playing, mode: window.__casawalk.xr.mode }; });
+	check('the pause on the first Walk in: the dark, the floor ring and the teleport tip, inside already', pz.tip === 'teleport' && pz.words === 'Hold the trigger, aim, let go.' && pz.ring && pz.dark === 1 && pz.demo && pz.mode === 'walk', JSON.stringify(pz));
+	await shot('pause-walk-in');
+	await click('right', 'trigger'); await settled(); await frames(4);
+	const after = await page.evaluate(() => { const x = window.__casawalk.xr; return { fx: !!x.layerFx, dark: x.veil.amount('layer'), learnt: x.pause.record.learnt.has('teleport:controllers'), seen: x.pause.record.seen.has('teleport:controllers'), target: x.pause.target.visible }; });
+	check('a pull skips it (seen, not learnt); the room fades in, the first-target ring ahead', !after.fx && after.dark === 0 && !after.learnt && after.seen && after.target, JSON.stringify(after));
+	await page.evaluate(() => { const x = window.__casawalk.xr; x.pause.tipsOn = false; x.menuAction('back'); }); await settled(); await frames(6);
 	await restRight(); await restLeft(); await lookDown(); await frames(4);
 }
 
@@ -1479,7 +1477,7 @@ await page.evaluate(() => {
 	d.quaternion.set(...q);
 });
 await enterVR.click();
-await frames(30);
+await waitXR(); await frames(10);
 s = await state();
 check('re-entering puts the plinth in front of you', Math.abs(s.stage[0] - 1.2) < 0.02 && Math.abs(s.stage[2] - 0.8) < 0.02 && Math.abs(s.stage[3] - 0.9) < 0.02,
 	`stage ${s.stage.map((v) => v.toFixed(2))}`);

@@ -325,6 +325,7 @@ export class Portals {
 			h.target.copy(target);
 			h.c = first.c; h.open = true; h.from = h.radius; h.t = 0;
 			xr.sound?.play('portal');
+			xr.pause?.note('portal'); // (the portal tip is learnt: js/pause.js)
 		}
 		hs.forEach((h, i) => {
 			h.t += dt;

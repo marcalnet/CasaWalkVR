@@ -209,7 +209,7 @@ export class Walk {
 	/** Teleports to a world floor point, with the short fade (and the step sound). */
 	go(target) {
 		this.xr.sound.play('step');
-		this.xr.pinchDemo?.note('teleport'); // (the looping pinch hand goes after the first teleport)
+		this.xr.pause?.note('teleport'); // (the teleport tip is learnt; the first-target ring goes: js/pause.js)
 		this.fade = { t: 0, action: () => this.placeUser(target, null) };
 	}
 

@@ -129,7 +129,7 @@ export class ToolFan {
 			outward.copy(xr.viewAxes().right).multiplyScalar(xr.toolFan === 'right' ? 1 : -1);
 			anchor.copy(wrist).addScaledVector(outward, OUT);
 			anchor.y += ABOVE;
-			open = !xr.teaching; // (one teacher at a time: closed while one plays; that rule goes with the teachers, step 2)
+			open = true; // (the pause's dark covers it between places: js/pause.js)
 		}
 		this.alpha = THREE.MathUtils.clamp(this.alpha + (open ? dt : -dt) / FADE, 0, 1);
 		this.group.visible = this.alpha > 0;
