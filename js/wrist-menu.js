@@ -77,7 +77,6 @@ export class WristMenu {
 		this.keys = {};
 		for (const slot of ORDER) { this.keys[slot] = this.pad.add(slot, slot === 'right' ? WRIST.settingsW : WRIST.key, WRIST.key, { round: slot === 'left' }); this.cross.add(this.keys[slot].group); }
 		this.keysHot = false; this.laserNear = false; // a fingertip is over a key: the orb ignores touches (it sits between the keys)
-		this.fanYield = false; // the orb's own hand reaching into the fan (js/tool-fan.js sets it)
 		this.keyYield = false; // a fingertip near a live key (the doors, the levels, a wing): the orb makes room and ignores touches
 		this.sightYield = false; // the orb between the eyes and a live key: it makes room (only its look: touches still count)
 		this.sightClear = 0; // seconds clear of every live key (it grows back after SIGHT.CLEAR_FOR)
@@ -99,6 +98,9 @@ export class WristMenu {
 
 	/** The orb makes room (half size, 30%): for the hand reaching into the fan, a fingertip at a live key, or a live key behind it. */
 	get orbYield() { return this.fanYield || this.keyYield || this.sightYield; }
+
+	/** The orb's own hand within reach of the tools (the fan's fanBusy: CLAIM.near, let go at CLAIM.clear): it makes room. */
+	get fanYield() { return !!this.xr.fan?.fanBusy; }
 
 	/**
 	 * The orb between the eyes and a live key (the next-build asks 5.8): it

@@ -23,7 +23,7 @@
 // the tag swings forward and grows for 2 s.
 //
 // Keeping the two wrists apart: while the taking hand is within reach of the
-// fan, the orb ignores touches (fanBusy, fanYield).
+// fan (fanBusy), the orb ignores touches and makes room (WristMenu reads it).
 
 import * as THREE from 'three';
 import { MarkerTool } from './marker-tool.js';
@@ -47,7 +47,6 @@ const PALM_REACH = 0.09; // a closing bare hand: its palm this close to a tool s
 const MEMORY = 0.6; // seconds a touched tool stays the one a closing hand takes
 const BUSY = CLAIM.near, BUSY_CLEAR = CLAIM.clear; // the taking hand this close to the open fan: the orb ignores touches, until it is BUSY_CLEAR away
 const OUT = 0.08; // the open fan sits this far to the fan hand's outer side, beside its ABOVE
-const YIELD_NEAR = CLAIM.near, YIELD_CLEAR = CLAIM.clear; // the taking hand's fingertip this close to the open fan: its orb shrinks and fades, until YIELD_CLEAR away
 const RETURN = 0.08; // a bare hand bringing its tool this close to its place puts it back
 const FADE = 0.2; // seconds: the fan appears and goes (tracking found or lost)
 
@@ -160,7 +159,6 @@ export class ToolFan {
 		}
 		const takeD = this.alpha > 0.5 && take?.touch.tracked ? take.touch.tip.distanceTo(this.pos ?? anchor) : Infinity; // (where the tools are: home or waiting)
 		this.fanBusy = takeD < (this.fanBusy ? BUSY_CLEAR : BUSY);
-		xr.ui.wrist.fanYield = takeD < (xr.ui.wrist.fanYield ? YIELD_CLEAR : YIELD_NEAR); // (the orb on that wrist makes room)
 		// A closing bare hand takes the tool it touched (a moment ago: the fingers curl away as the hand closes) or holds in its palm.
 		this.target = this.hot;
 		if (take?.isHand && this.alpha > 0.5 && take.touch.tracked) {
