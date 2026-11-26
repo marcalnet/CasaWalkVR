@@ -1122,21 +1122,28 @@ test('bare hands teleport with one hand: the main hand while it is empty, the ot
 	x.menuAction({ id: 'mainHand', value: 'right' });
 });
 
-test('the fan: opens only on the "look at your watch" pose; the fan slides outward as a group from the orb (25 cm kept); the orb yields to its own hand', async () => {
+test('the fan: a controller raised in view opens it, a key near closes it; the fan slides outward as a group from the orb (25 cm kept); the orb yields to its own hand', async () => {
 	const { x, frame, hands } = await setup();
 	const fan = x.fan;
 	x.lessons.stop();
 	hands.left.grip.visible = hands.right.grip.visible = true;
 	hands.left.grip.position.set(-0.1, 1.3, -0.45);
 	hands.right.grip.position.set(0.3, 0.8, 0);
-	// The left controller's face turned sideways, away from your eyes: the fan stays closed.
+	// A controller raised and in view opens it, however it is turned (its face axis is not measured yet: the Lead's decision).
 	hands.left.grip.rotation.set(0, 0, Math.PI / 2);
 	for (let i = 0; i < 20; i++) frame();
-	assert.ok(!fan.group.visible, 'a hand held face down: no fan');
-	hands.left.grip.rotation.set(0, 0, 0.0);
-	hands.left.grip.rotation.x = 0.6; // tilted so the face looks at the eyes
+	assert.ok(fan.group.visible && fan.alpha === 1, 'a controller raised in view: the fan opens');
+	// A key always wins: the fan hand's tip within 15 cm of the orb closes it.
+	const tip = fan.hands().fan.touch.tip, orbAt = x.ui.wrist.orb.group.getWorldPosition(new THREE.Vector3());
+	const right0 = hands.right.grip.position.clone();
+	hands.right.grip.position.add(x.rig.worldToLocal(tip.clone()).sub(x.rig.worldToLocal(orbAt.clone())).multiplyScalar(0.9));
 	for (let i = 0; i < 20; i++) frame();
-	assert.ok(fan.group.visible && fan.alpha === 1, 'the face towards the eyes: the fan opens');
+	assert.ok(fan.alpha < 1 || fan.keyShut, 'the orb at the fan hand\'s tip: it closes');
+	hands.right.grip.position.copy(right0);
+	frame(); x.ui.wrist.close(); // (the touch opened the wrist menu, whose keys are keys too)
+	hands.left.grip.rotation.set(0.6, 0, 0);
+	for (let i = 0; i < 40; i++) frame();
+	assert.ok(fan.group.visible && fan.alpha === 1, `the orb away again: it opens (${JSON.stringify({ a: fan.alpha, shut: fan.keyShut, near: x.nearKey(fan.hands().fan.touch.tip, 0.25), wrist: x.ui.wrist.open })})`);
 	// The orb (on the right wrist) brought near the open fan: the whole fan slides outward, its nearest tool 25 cm from the orb.
 	const orb = x.ui.wrist.orb.group, o = new THREE.Vector3(), p = new THREE.Vector3();
 	const meter = fan.slots.find((s) => s.name === 'meter');

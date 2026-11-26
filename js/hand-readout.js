@@ -4,7 +4,9 @@
 // js/gestures.js can be tuned on the headset in one session:
 //   the palm's angle from straight down ("palm 12°"), the pinch distance (thumb to index),
 //   and "ready", "aiming" or "blocked: key / fan / model / tool / board /
-//   wrist menu" (XRExperience.aimBlock), or what is not ready yet.
+//   wrist menu" (XRExperience.aimBlock), or what is not ready yet. Above a
+//   controller: how much each candidate face axis of its grip turns to the eyes
+//   (which one is the buttons' face: the tool fan's watch pose, build 120).
 // Never shown to users: nothing in the menus or settings turns it on.
 
 import * as THREE from 'three';
@@ -38,6 +40,19 @@ export function readoutText(xr, c) {
 	return `${c.handedness === 'left' ? 'L' : 'R'} · palm ${palm}° to eyes · pinch ${pinch} cm · ${state}`;
 }
 
+/**
+ * What the readout says for controller c: how much each candidate "face" axis
+ * of its grip turns to the eyes (1: straight at them), to settle on the headset
+ * which one is the buttons' face (the fan's watch pose, js/tool-fan.js).
+ */
+export function controllerReadoutText(xr, c) {
+	c.grip.updateMatrixWorld(true);
+	const at = new THREE.Vector3().setFromMatrixPosition(c.grip.matrixWorld);
+	const to = xr.headWorld().sub(at).normalize();
+	const axis = (x, y, z) => new THREE.Vector3(x, y, z).normalize().transformDirection(c.grip.matrixWorld).dot(to).toFixed(2);
+	return `${c.handedness === 'left' ? 'L' : 'R'} grip to eyes · +Y ${axis(0, 1, 0)} · -Z ${axis(0, 0, -1)} · (+Y-Z) ${axis(0, 1, -1)} (the face that reads near 1 in a watch pose)`;
+}
+
 export class HandReadout {
 	/** xr: the XRExperience. */
 	constructor(xr) {
@@ -56,8 +71,8 @@ export class HandReadout {
 		const xr = this.xr, head = xr.headWorld();
 		xr.input.controllers.forEach((c, i) => {
 			const label = this.labels[i];
-			const wrist = c.isHand && c.touch.tracked ? xr.input.joint(c, 'wrist') : null;
-			label.set(wrist ? readoutText(xr, c) : '');
+			const wrist = c.isHand && c.touch.tracked ? xr.input.joint(c, 'wrist') : c.isController && c.touch.tracked ? c.grip.getWorldPosition(new THREE.Vector3()) : null;
+			label.set(!wrist ? '' : c.isHand ? readoutText(xr, c) : controllerReadoutText(xr, c));
 			if (!wrist) return;
 			label.mesh.position.copy(wrist).y += ABOVE;
 			label.mesh.lookAt(head);

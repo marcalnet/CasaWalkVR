@@ -266,8 +266,12 @@ export class Walk {
 		tele.age += dt;
 		tele.result = r;
 		// The last moments' landings (the release uses the one LOOK_BACK ago).
-		tele.past.push({ age: tele.age, valid: r.valid, point: r.point?.clone() ?? null });
-		while (tele.past.length > 2 && tele.age - tele.past[1].age > LOOK_BACK) tele.past.shift();
+		// (Entries reused from those dropped: nothing allocated per frame on the Quest 2.)
+		const e = this.spare?.pop() ?? { age: 0, valid: false, point: new THREE.Vector3(), has: false };
+		e.age = tele.age; e.valid = r.valid; e.has = !!r.point;
+		if (r.point) e.point.copy(r.point);
+		tele.past.push(e);
+		while (tele.past.length > 2 && tele.age - tele.past[1].age > LOOK_BACK) (this.spare ??= []).push(tele.past.shift());
 	}
 
 	/** The landing a hand's aim showed `back` seconds ago (or its oldest kept), else now's. */
@@ -275,7 +279,9 @@ export class Walk {
 		const want = tele.age - back;
 		let best = null;
 		for (const e of tele.past) if (e.age <= want + 1e-6) best = e;
-		return best ?? tele.past[0] ?? tele.result ?? null;
+		best ??= tele.past[0];
+		if (!best) return tele.result ?? null;
+		return { valid: best.valid, point: best.has === false ? null : best.point };
 	}
 
 	/** Lift that puts the eyes at the chosen person height (0 = your own). */

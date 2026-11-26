@@ -47,7 +47,7 @@ const KEY_CLEAR = 0.25; // the fan hand's tip this close to any key (the orb, th
 const KEY_CLOSE = 0.15; // open, the tip this close to a key: it fades out (KEY_FADE) and stays closed until KEY_CLEAR away
 const KEY_FADE = 0.15; // seconds
 const HIGH = 0.5; // the fan hand's wrist no lower than this below the eyes (the doors and the level keys are 0.65 m below)
-const WATCH = 0.5; // the palm (a controller's face, its buttons' side) within 60 degrees of the direction to your eyes: "look at your watch"
+const WATCH = 0.5; // the palm (bare hands; controllers need only be raised and in view) within 60 degrees of the direction to your eyes: "look at your watch"
 const OUT = 0.08; // the open fan sits this far to the fan hand's outer side, beside its ABOVE
 // The orb's field (build 120's design, item 2): the whole fan slides outward across the view as a group,
 // held there while the orb stays near, and glides back once it has gone.
@@ -165,7 +165,9 @@ export class ToolFan {
 			if (!nearClear) this.keyShut = false;
 			keyNear = nearClear;
 			// The "look at your watch" pose: a palm (or a controller's face) turned to your eyes. A hand reaching to press a key has its palm down or forward.
-			const watching = this.palmToEyes(fan, head) > WATCH;
+			// (Controllers: raised and in view is enough, as in build 120, until the buttons' face axis is measured
+			// on a Quest: the Lead's decision. The key rules below apply to both.)
+			const watching = !fan.isHand || this.palmToEyes(fan, head) > WATCH;
 			// (Closed over a bare hand that is aiming: it would sit in the arc's way; the tester's finding. Not
 			// merely in the ready pose: a curled hand raised to look at the fan reads as ready.)
 			const aiming = xr.modes.walk?.tele?.c === fan || xr.modes.dollhouse?.handAim?.c === fan;
@@ -241,7 +243,7 @@ export class ToolFan {
 		this.animate(dt);
 	}
 
-	/** How much the fan hand's palm (a controller's face) turns to the eyes: 1 straight at them, -1 away. */
+	/** How much the fan hand's palm turns to the eyes: 1 straight at them, -1 away (a controller: always 1). */
 	palmToEyes(c, head) {
 		const n = this._n ??= new THREE.Vector3(), d = this._d ??= new THREE.Vector3();
 		if (c.isHand) {
@@ -250,11 +252,7 @@ export class ToolFan {
 			n.copy(s.normal); d.subVectors(head, s.pinchAt).normalize();
 			return n.dot(d);
 		}
-		c.grip.updateMatrixWorld(true);
-		n.set(0, 1, 0).transformDirection(c.grip.matrixWorld);
-		d.subVectors(head, this.xr.input.wristOf(c).getWorldPosition(this._d2 ??= new THREE.Vector3())).normalize();
-		// Only the face, the buttons' side (build 120's design, item 1: "either face" let a controller held flat to press a key open it).
-		return n.dot(d);
+		return 1; // (a controller: no watch pose until its face axis is measured; the ?hands readout shows the candidates)
 	}
 
 	/**
