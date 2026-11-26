@@ -500,9 +500,9 @@ const crossSeen = () => page.evaluate(() => {
 		const g = (p) => p.mesh.geometry.parameters;
 		return { doll: kinds(x.menus.dollhouse), walk: kinds(x.menus.walk), heights: Object.values(x.menus).map((p) => +g(p).height.toFixed(3)), width: g(x.menus.walk).width };
 	});
-	const want = { shadows: 'switch', depth: 'switch', light: 'choice', view: 'switch', seethrough: 'switch', mainHand: 'choice', sound: 'choice', height: 'choice' };
-	const ok = Object.entries(want).every(([id, t]) => kinds.doll[id] === t && kinds.walk[id] === t) && !Object.values(kinds.doll).includes('button');
-	check('the settings wing: switches and options, 40 cm wide', ok && Math.abs(kinds.width - 0.4) < 1e-6 && Math.max(...kinds.heights) < 0.5, JSON.stringify({ heights: kinds.heights, width: kinds.width }));
+	const want = { guide: 'drawn', shadows: 'switch', depth: 'switch', light: 'choice', view: 'switch', seethrough: 'switch', mainHand: 'choice', sound: 'switch', height: 'choice', newVisitor: 'button' };
+	const ok = Object.entries(want).every(([id, t]) => kinds.doll[id] === t && kinds.walk[id] === t) && Object.entries(kinds.doll).filter(([, t]) => t === 'button').map(([id]) => id).join() === 'newVisitor';
+	check('the settings wing: switches and options (New visitor the one button), 40 cm wide, 34 cm tall at most', ok && Math.abs(kinds.width - 0.4) < 1e-6 && Math.max(...kinds.heights) <= 0.34 + 1e-3, JSON.stringify({ heights: kinds.heights, width: kinds.width, doll: kinds.doll }));
 }
 await shot('dollhouse-board');
 await click('right', 'b-button');
@@ -808,7 +808,8 @@ check('B closes the board', (await state()).menu === null);
 	// A quick pinch (tap) at empty space closes the wings; at the model, nothing (build 120, M1).
 	{
 		const roomMid = await page.evaluate(() => window.__casawalk.xr.modes.dollhouse.modelBox().getCenter(new (window.__casawalk.xr.rig.position.constructor)()).toArray());
-		const away = await page.evaluate(() => { const h = window.__casawalk.xr.headWorld(), a = window.__casawalk.xr.viewAxes(); return h.clone().addScaledVector(a.right, 2).addScaledVector(a.forward, 3).setY(h.y + 1.2).toArray(); });
+		// (Up and to the left: the one wing is on the right, the main hand's side, and a hand within 15 cm of it never closes it.)
+		const away = await page.evaluate(() => { const h = window.__casawalk.xr.headWorld(), a = window.__casawalk.xr.viewAxes(); return h.clone().addScaledVector(a.right, -2).addScaledVector(a.forward, 3).setY(h.y + 1.2).toArray(); });
 		const leftWas = await page.evaluate(() => { const p = window.__device.hands.left.position, was = [p.x, p.y, p.z]; p.set(-0.25, 0.7, 0.1); return was; }); await frames(40); // (the left hand at your side: an open fan over it never lets a press close)
 		await page.evaluate(() => window.__casawalk.xr.ui.openMenu()); await frames(3);
 		await handAimAt(roomMid); await frames(4); await handAimAt(roomMid); await frames(4);
@@ -865,7 +866,9 @@ check('B closes the board', (await state()).menu === null);
 	let floorAhead = targets[0];
 	for (const t of targets) {
 		await handAimAt(t); await frames(3); await handAimAt(t); await frames(3);
-		if (await page.evaluate(() => !!window.__casawalk.xr.modes.walk.tele?.result?.valid)) { floorAhead = t; break; }
+		// (A target the ring really reaches: since step 2b a wall in the way is a valid landing too, 0.3 m back on your side, so a
+		// hotspot in the next room gives a blue ring at your feet. The first try did exactly that, a 0.42 m "jump".)
+		if (await page.evaluate((t) => { const r = window.__casawalk.xr.modes.walk.tele?.result; return !!r?.valid && !!r.point && Math.hypot(r.point.x - t[0], r.point.z - t[2]) < 0.6; }, t)) { floorAhead = t; break; }
 	}
 	await handAimAt(floorAhead); await frames(2);
 	const settling = await page.evaluate(() => { const x = window.__casawalk.xr, w = x.modes.walk, c = x.input.controllers.find((c) => c.handedness === 'right');
@@ -877,11 +880,15 @@ check('B closes the board', (await state()).menu === null);
 	check('bare hands walking: a pinch held shows the arc from the hand, blue at once on a floor (no white "not yet")', settling.via === 'hand' && settling.dots && settling.colour === '3d8bfd' && steady.valid && steady.colour === '3d8bfd', JSON.stringify({ settling, steady, targets: targets.length }));
 	await shot('hands-teleport-aim');
 	const head0 = await page.evaluate(() => window.__casawalk.xr.headWorld().toArray());
+	const ring = await page.evaluate(() => window.__casawalk.xr.modes.walk.tele?.result?.point?.toArray() ?? null); // (where the ring shows as the pinch opens)
 	await gesture('right', { type: 'pinchEnd' }); await frames(4);
 	await page.waitForFunction(() => { const w = window.__casawalk.xr.modes.walk; return !w.fade && !w.tele; }, null, { timeout: 8000, polling: 'raf' }).catch(() => {}); // (the fade does the move: a slow emulator needs time)
 	const after = await page.evaluate(() => ({ head: window.__casawalk.xr.headWorld().toArray(), tele: !!window.__casawalk.xr.modes.walk.tele }));
 	const jumped = Math.hypot(after.head[0] - head0[0], after.head[2] - head0[2]);
-	check('bare hands walking: opening the pinch on blue teleports', !after.tele && jumped > 0.25 /* a teleport, not a drift: the landing may snap to a hotspot near you (step 2b's snaps) */, JSON.stringify({ jumped: +jumped.toFixed(2) }));
+	// You land where you aimed: the aimed hotspot (1.2-3.5 m away), the ring snapping at most 0.5 m (HOTSPOT.SNAP). Logged: the aim, the ring, the landing.
+	const flat = (a, b) => a && b ? +Math.hypot(a[0] - b[0], a[2] - b[2]).toFixed(2) : null;
+	const landed = { jumped: +jumped.toFixed(2), aimedAt: flat(floorAhead, head0), ringFromAim: flat(ring, floorAhead), endFromAim: flat(after.head, floorAhead), endFromRing: flat(after.head, ring) };
+	check('bare hands walking: opening the pinch on blue teleports, to where it aimed', !after.tele && jumped > 0.5 && landed.endFromAim !== null && landed.endFromAim < 0.6, JSON.stringify(landed));
 	// Turning: a wrist flick while aiming turns 30°; the arc stays. Letting go before blue: nothing.
 	await gesture('right', { type: 'pinch' }); await frames(3);
 	const yaw0 = await page.evaluate(() => window.__casawalk.xr.rig.rotation.y);
