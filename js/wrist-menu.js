@@ -27,7 +27,7 @@
 
 import * as THREE from 'three';
 import { WRIST_ORB } from './xr-input.js';
-import { WRIST } from './theme.js';
+import { WRIST, COLOURS } from './theme.js';
 import { ease } from './tween.js';
 import { KeyPad, HoldRing } from './keys.js';
 import { CLAIM } from './xr-targets.js';
@@ -80,7 +80,7 @@ export class WristMenu {
 		this.keyYield = false; // a fingertip near a live key (the doors, the levels, a wing): the orb makes room and ignores touches
 		this.sightYield = false; // the orb between the eyes and a live key: it makes room (only its look: touches still count)
 		this.sightClear = 0; // seconds clear of every live key (it grows back after SIGHT.CLEAR_FOR)
-		this.backRing = new HoldRing(SIGHT.ORB_R + 0.003); // B or Y held: the ring fills round the orb (js/xr-ui.js buttons())
+		this.backRing = new HoldRing(SIGHT.ORB_R + 0.003, COLOURS.onDark); // B or Y held: the ring fills round the orb (js/xr-ui.js buttons()); light, as it is seen over the room (the UX review's C3)
 		this.orb.group.add(this.backRing.group);
 		xr.scene.add(this.cross);
 		xr.hideFromPhotos(this.cross);

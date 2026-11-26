@@ -10,7 +10,7 @@ export const FONT = '-apple-system, "Segoe UI", Roboto, sans-serif';
 /** Menu (settings list) colours. */
 export const COLOURS = {
 	panel: 'rgba(233,237,241,0.96)',
-	cell: '#ffffff', edge: '#d3d9df', text: '#1d2329', soft: '#5d6873',
+	cell: '#ffffff', edge: '#d3d9df', text: '#1d2329', soft: '#5d6873', onDark: '#ffffff', // (onDark: text and lines over the room or the dark, e.g. the ring round the orb)
 	hover: '#e3edfb', hoverEdge: '#3d6fd8', accent: '#3d6fd8', accentText: '#ffffff',
 	segment: '#eef1f4', track: '#c4ccd4',
 	primary: '#e07a1f',

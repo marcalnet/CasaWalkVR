@@ -203,6 +203,7 @@ test('B / Y with nothing open: a light tick on the press; held 0.6 s it is ← B
 	assert.ok(x.mode === 'walk' && !x.layerFx, 'a short press: nothing');
 	press('right', 'b'); for (let i = 0; i < 25; i++) frame();
 	assert.ok(x.ui.wrist.backRing.group.visible && x.ui.wrist.backRing.shown > 0.4, 'the ring fills round the orb');
+	assert.equal('#' + x.ui.wrist.backRing.fill.material.color.getHexString(), '#ffffff', 'in the light colour, over the room (the UX review\'s C3)');
 	press('right', 'b', false); frame();
 	for (let i = 0; i < 20; i++) frame();
 	assert.ok(x.mode === 'walk' && x.ui.wrist.backRing.shown === 0, 'let go early: it drains back, nothing happens');

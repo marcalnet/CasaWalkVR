@@ -252,9 +252,9 @@ function sharedAtlas() {
  * full. The same ring circles the orb while B or Y is held (js/wrist-menu.js).
  */
 export class HoldRing {
-	/** r: the inner radius (m), just outside what it circles. */
-	constructor(r) {
-		const mat = (opacity) => new THREE.MeshBasicMaterial({ color: COLOURS.text, transparent: true, opacity, depthTest: false, depthWrite: false });
+	/** r: the inner radius (m), just outside what it circles; colour: its track and fill (graphite round a key, COLOURS.onDark round the orb). */
+	constructor(r, colour = COLOURS.text) {
+		const mat = (opacity) => new THREE.MeshBasicMaterial({ color: colour, transparent: true, opacity, depthTest: false, depthWrite: false });
 		this.group = new THREE.Group();
 		this.group.name = 'hold-ring';
 		this.track = new THREE.Mesh(new THREE.RingGeometry(r, r + 0.004, 64), mat(0.25));
