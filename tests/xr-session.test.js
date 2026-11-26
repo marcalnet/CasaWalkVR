@@ -76,7 +76,7 @@ test('the settings boards: the same tabs at both layers, no Close key (the foot 
 	for (const p of Object.values(x.menus)) {
 		assert.deepEqual(p.tabs.map((t) => t.label), ['View', 'Walk', 'Tools', 'General']);
 		assert.equal(p.lead.label, '? How to move', 'the How to move key at the tabs\' left end');
-		assert.deepEqual(shape(p.tabs[0].rows), ['light:choice:Time of day:Morning:Noon:Sunset:Night', 'shadows:switch:Shadows | ceilings:switch:Ceilings',
+		assert.deepEqual(shape(p.tabs[0].rows), ['light:choice:Time of day:Morning:Noon:Sunset:Night', 'shadows:switch:Shadows',
 			'depth:switch:Depth shading', 'view:switch:Passthrough', 'seethrough:switch:Transparent walls']);
 		assert.deepEqual(shape(p.tabs[1].rows), ['height:choice:Height:Yours:1.4 m:1.7 m:2.0 m']);
 		assert.deepEqual(shape(p.tabs[2].rows), ['lens:choice:Camera lens:24 mm:28 mm:35 mm:50 mm']);
@@ -274,7 +274,7 @@ test('Sound: off and on, remembered', async () => {
 test('settings keep the board open; the doors move one layer at a time', async () => {
 	const { x, ended, go } = await setup();
 	const stays = (id, value) => { x.ui.openMenu(); x.menuAction(value === undefined ? id : { id, value }); return x.menu !== null; };
-	for (const [id, v] of [['light', 'noon'], ['shadows'], ['depth'], ['ceilings'], ['ceilings'], ['seethrough'], ['seethrough'], ['levels', 0], ['levels', 1], ['view', 'ar'], ['sound', 'effects']]) {
+	for (const [id, v] of [['light', 'noon'], ['shadows'], ['depth'], ['seethrough'], ['seethrough'], ['levels', 0], ['levels', 1], ['view', 'ar'], ['sound', 'effects']]) {
 		assert.equal(stays(id, v), true, id);
 	}
 	assert.equal(x.seeThroughAmount, 0);
@@ -1220,7 +1220,7 @@ test('a laser on a wing hovers its cell', async () => {
 	frame();
 	x.ui.openMenu();
 	frame();
-	const p = x.menu, r = p.rects().find((t) => t.id === 'ceilings');
+	const p = x.menu, r = p.rects().find((t) => t.id === 'seethrough');
 	const g = p.mesh.geometry.parameters;
 	p.mesh.updateMatrixWorld(true);
 	const at = p.mesh.localToWorld(new THREE.Vector3((((r.x + r.w / 2) / p.size.w) - 0.5) * g.width, (0.5 - (r.y + r.h / 2) / p.size.h) * g.height, 0));
@@ -1231,7 +1231,7 @@ test('a laser on a wing hovers its cell', async () => {
 	x.input.setRaycaster = (c, rc) => { if (c === x.input.controllers[1]) rc.set(from, dir); else orig(c, rc); };
 	for (let i = 0; i < 5; i++) frame();
 	const c = x.input.controllers[1]; x.input.setRaycaster(c, x.raycaster); const hit = x.raycaster.intersectObject(p.mesh, false)[0];
-	assert.ok(x.menu.hover?.startsWith('ceilings|'), `hover=${x.menu.hover} hit=${hit?.distance} claim=${c.claim.trigger} active=${x.input.active().length} panels=${x.ui.openPanels().length} vis=${p.mesh.visible}`);
+	assert.ok(x.menu.hover?.startsWith('seethrough|'), `hover=${x.menu.hover} hit=${hit?.distance} claim=${c.claim.trigger} active=${x.input.active().length} panels=${x.ui.openPanels().length} vis=${p.mesh.visible}`);
 });
 
 test('a press at empty space closes the wings (build 120, M1): a pull at the sky closes both and stays used up until let go; at the model, or with a tool in hand, nothing closes; a quick pinch the same', async () => {

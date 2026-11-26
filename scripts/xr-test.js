@@ -485,7 +485,7 @@ const crossSeen = () => page.evaluate(() => {
 		const g = (p) => p.mesh.geometry.parameters;
 		return { doll: kinds(x.menus.dollhouse), walk: kinds(x.menus.walk), heights: Object.values(x.menus).map((p) => +g(p).height.toFixed(3)), width: g(x.menus.walk).width };
 	});
-	const want = { shadows: 'switch', depth: 'switch', ceilings: 'switch', light: 'choice', view: 'switch', seethrough: 'switch', mainHand: 'choice', sound: 'choice', height: 'choice' };
+	const want = { shadows: 'switch', depth: 'switch', light: 'choice', view: 'switch', seethrough: 'switch', mainHand: 'choice', sound: 'choice', height: 'choice' };
 	const ok = Object.entries(want).every(([id, t]) => kinds.doll[id] === t && kinds.walk[id] === t) && !Object.values(kinds.doll).includes('button');
 	check('the settings wing: switches and options, 40 cm wide', ok && Math.abs(kinds.width - 0.4) < 1e-6 && Math.max(...kinds.heights) < 0.5, JSON.stringify({ heights: kinds.heights, width: kinds.width }));
 }
@@ -558,16 +558,16 @@ s = await state();
 check('Settings by laser opens the board', s.menu === 'dollhouse' && !s.wrist);
 await restRight(); await frames(3);
 await fingerprint('doll-menu');
-const c0 = (await state()).ceilings;
-await aimAtMenu('right', await menuPoint('ceilings')); await frames(5);
+const c0 = (await cell('dollhouse', 'seethrough')).value; // (a switch to press: Ceilings, the old one, went on 26 Nov 2026)
+await aimAtMenu('right', await menuPoint('seethrough')); await frames(5);
 s = await state();
 const dbg = await page.evaluate(async () => { const x = window.__casawalk.xr, V = x.rig.position.constructor, c = x.input.controllers.find((k) => k.handedness === 'right'); x.input.setRaycaster(c, x.raycaster);
 	return { panels: x.ui.openPanels().map((p) => [p.title, p.mesh.visible, x.raycaster.intersectObject(p.mesh, false)[0]?.distance ?? null, p.mesh.position.toArray().map((v) => +v.toFixed(2))]), claim: c.claim.trigger, ray: [x.raycaster.ray.origin.toArray().map((v) => +v.toFixed(2)), x.raycaster.ray.direction.toArray().map((v) => +v.toFixed(2))], head: x.camera.position.toArray().map((v) => +v.toFixed(2)) }; });
-check('laser hovers the board', s.hover?.startsWith('ceilings|'), `hover=${s.hover} ${JSON.stringify(dbg)}`);
-await clickMenu('ceilings');
+check('laser hovers the board', s.hover?.startsWith('seethrough|'), `hover=${s.hover} ${JSON.stringify(dbg)}`);
+await clickMenu('seethrough');
 s = await state();
-check('Ceilings toggles and the board stays open', s.ceilings === !c0 && s.menu === 'dollhouse' && (await cell('dollhouse', 'ceilings')).value === !c0);
-await clickMenu('ceilings'); // back on
+check('a switch (Transparent walls) toggles and the board stays open', s.menu === 'dollhouse' && (await cell('dollhouse', 'seethrough')).value === !c0);
+await clickMenu('seethrough'); // back off
 
 // Light: pick an option; shadows: a switch.
 const t0 = await page.evaluate(() => window.__casawalk.lighting.time);
@@ -731,26 +731,26 @@ check('B closes the board', (await state()).menu === null);
 		return { open: x.menu === x.menus.dollhouse, ahead: +Math.hypot(at.x - head.x, at.z - head.z).toFixed(3), below: +(head.y - at.y).toFixed(3), wrist: x.ui.wrist.open };
 	});
 	check('Settings pressed with a fingertip opens the wing within reach (0.55 m from the eyes, 15° below)', nm.open && nm.ahead > 0.45 && nm.ahead < 0.95 && nm.below > -0.05 && nm.below < 0.3 && !nm.wrist, JSON.stringify(nm));
-	const ceilings = () => page.evaluate(() => window.__casawalk.xr.menus.dollhouse.get('ceilings').value);
-	const c0v = await ceilings();
-	await pressKey('hand', 'right', 'dollhouse', 'ceilings', { hold: true });
+	const key = () => page.evaluate(() => window.__casawalk.xr.menus.dollhouse.get('seethrough').value);
+	const c0v = await key();
+	await pressKey('hand', 'right', 'dollhouse', 'seethrough', { hold: true });
 	await shot('hands-press');
-	await pressKey('hand', 'right', 'dollhouse', 'ceilings', { backOnly: true });
-	const c1v = await ceilings();
-	await pressKey('hand', 'right', 'dollhouse', 'ceilings');
-	const c2v = await ceilings();
+	await pressKey('hand', 'right', 'dollhouse', 'seethrough', { backOnly: true });
+	const c1v = await key();
+	await pressKey('hand', 'right', 'dollhouse', 'seethrough');
+	const c2v = await key();
 	check('a fingertip from the front presses a key once, and again after letting go', c1v === !c0v && c2v === c0v, JSON.stringify({ c0v, c1v, c2v }));
 	// From behind (the tip appears inside the key) and pinches over a key: nothing.
-	await pressKey('hand', 'right', 'dollhouse', 'ceilings', { from: -0.004, to: -0.012 });
-	await pressKey('hand', 'right', 'dollhouse', 'ceilings', { from: -0.004, to: 0.08 });
-	const c3v = await ceilings();
-	await pressKey('hand', 'right', 'dollhouse', 'ceilings', { from: 0.06, to: 0.025, hold: true });
+	await pressKey('hand', 'right', 'dollhouse', 'seethrough', { from: -0.004, to: -0.012 });
+	await pressKey('hand', 'right', 'dollhouse', 'seethrough', { from: -0.004, to: 0.08 });
+	const c3v = await key();
+	await pressKey('hand', 'right', 'dollhouse', 'seethrough', { from: 0.06, to: 0.025, hold: true });
 	for (let i = 0; i < 2; i++) {
 		await page.evaluate(() => window.__device.hands.right.updatePinchValue(1)); await frames(5);
 		await page.evaluate(() => window.__device.hands.right.updatePinchValue(0)); await frames(5);
 	}
-	await pressKey('hand', 'right', 'dollhouse', 'ceilings', { backOnly: true });
-	const c4v = await ceilings(), still = await state();
+	await pressKey('hand', 'right', 'dollhouse', 'seethrough', { backOnly: true });
+	const c4v = await key(), still = await state();
 	check('a fingertip from behind, and pinches over a key, click nothing', c3v === c0v && c4v === c0v && still.menu === 'dollhouse' && still.mode === 'dollhouse', JSON.stringify({ c3v, c4v, menu: still.menu }));
 	const wingsNow = () => page.evaluate(() => { const ui = window.__casawalk.xr.ui; return { settings: !!ui.menu, guide: !!ui.guide, lead: !!ui.menu?.lead.on, closeKey: !!ui.menu?.rects().some((r) => /close/i.test(r.id)), foot: ui.menu?.hint ?? ui.guide?.hint ?? null }; });
 	const w0 = await wingsNow();
@@ -976,12 +976,12 @@ check('B closes the board', (await state()).menu === null);
 		check('touch: controllers have a poke point in front, and the trigger selects', c0.every((t) => t.kind === 'controller' && t.tracked) && near && c1.held && c1.value === 1, JSON.stringify({ kinds: c0.map((t) => t.kind), near, held: c1.held }));
 		// The controller's tip nub presses keys by touch too.
 		await openBoard();
-		const v0 = await page.evaluate(() => window.__casawalk.xr.menus.dollhouse.get('ceilings').value);
-		await pressKey('controller', 'right', 'dollhouse', 'ceilings');
-		const v1 = await page.evaluate(() => window.__casawalk.xr.menus.dollhouse.get('ceilings').value);
+		const v0 = await page.evaluate(() => window.__casawalk.xr.menus.dollhouse.get('seethrough').value);
+		await pressKey('controller', 'right', 'dollhouse', 'seethrough');
+		const v1 = await page.evaluate(() => window.__casawalk.xr.menus.dollhouse.get('seethrough').value);
 		const nub = await page.evaluate(() => window.__casawalk.xr.input.active().every((c) => c.body.children.length === 2 && c.body.visible));
 		check('a controller\'s tip nub presses a key by touch', v1 === !v0 && nub, JSON.stringify({ v0, v1, nub }));
-		await pressKey('controller', 'right', 'dollhouse', 'ceilings');
+		await pressKey('controller', 'right', 'dollhouse', 'seethrough');
 		await click('right', 'b-button');
 	}
 	const back = await page.evaluate(() => { const x = window.__casawalk.xr; return { note: x.ui.handsNote.mesh.visible, active: x.input.active().length, lasers: x.input.active().every((c) => c.line.visible && c.body.visible) }; });
@@ -1800,10 +1800,10 @@ const wm = await page.evaluate(() => { const x = window.__casawalk.xr, V = x.rig
 check('the inside wing: 0.55 m from the eyes (0.53 m across), 15° below, facing you', Math.abs(wm.dist - 0.53) < 0.02 && Math.abs(wm.drop - 0.142) < 0.02 && wm.facing < 1, JSON.stringify(wm));
 {
 	const stays = [];
-	for (const [id, v] of [['height', 1.7], ['height', 0], ['ceilings']]) { await clickMenu(id, v); if ((await state()).menu !== 'walk') stays.push(id); }
+	for (const [id, v] of [['height', 1.7], ['height', 0], ['seethrough']]) { await clickMenu(id, v); if ((await state()).menu !== 'walk') stays.push(id); }
 	const agree = await page.evaluate(() => { const { dollhouse: d, walk: k } = window.__casawalk.xr.menus;
-		return ['light', 'shadows', 'depth', 'ceilings', 'seethrough', 'view'].filter((id) => d.get(id).value !== k.get(id).value || !!d.get(id).disabled !== !!k.get(id).disabled); });
-	await clickMenu('ceilings');
+		return ['light', 'shadows', 'depth', 'seethrough', 'view'].filter((id) => d.get(id).value !== k.get(id).value || !!d.get(id).disabled !== !!k.get(id).disabled); });
+	await clickMenu('seethrough');
 	check('the inside board stays open for switches and options; both boards agree', !stays.length && !agree.length, `closed on ${stays}; differ ${agree}`);
 }
 if ((await state()).session === 'ar') {

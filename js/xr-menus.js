@@ -46,7 +46,6 @@ const CELLS = {
 	light: { type: 'choice', id: 'light', label: 'Time of day', options: TIMES.map((t) => ({ value: t, label: TIME_LABELS[t] ?? t })), value: 'morning' },
 	shadows: sw('shadows', 'Shadows'),
 	depth: sw('depth', 'Depth shading'),
-	ceilings: sw('ceilings', 'Ceilings'),
 	seethrough: sw('seethrough', 'Transparent walls'),
 	view: sw('view', 'Passthrough'), // on: the room around you; off: the VR world
 	mainHand: { type: 'choice', id: 'mainHand', label: 'Main hand', options: [{ value: 'right', label: 'Right' }, { value: 'left', label: 'Left' }], value: 'right' }, // flips the wrist menu and the tool fan together
@@ -61,7 +60,7 @@ const CELLS = {
 
 /** The board's tabs (the same at both layers), each with rows of cell ids. Camera lens joins General in milestone D. */
 export const TABS = [
-	{ id: 'view', label: 'View', rows: [['light'], ['shadows', 'ceilings'], ['depth'], ['view'], ['seethrough']] }, // (the long words on full rows: half a row clipped "Depth shading" and "Passthrough", build 120)
+	{ id: 'view', label: 'View', rows: [['light'], ['shadows'], ['depth'], ['view'], ['seethrough']] }, // (the long words on full rows: half a row clipped "Depth shading" and "Passthrough", build 120)
 	{ id: 'walk', label: 'Walk', rows: [['height']] }, // (Solid walls left it on 26 Nov 2026; Turn left the board: 30° stays, the user's call)
 	{ id: 'tools', label: 'Tools', rows: [['lens']] }, // (the street camera's lens: wide for interiors; to get closer, walk closer)
 	{ id: 'general', label: 'General', rows: [['mainHand'], ['sound']] },
@@ -138,10 +137,8 @@ export function buildMenus(rig) {
 
 /** Shows the current settings in both menus (switch positions, chosen options, levels). */
 export function updateLabels(xr) {
-	const ceilings = xr.model?.layers.ceilings.visible ?? true;
 	const view = xr.sessionMode === 'vr' ? { disabled: true, note: 'Not available', value: false } : { disabled: false, value: xr.view === 'ar' };
 	for (const p of Object.values(xr.menus)) {
-		p.set('ceilings', { value: ceilings });
 		p.set('view', view);
 		p.set('seethrough', { value: xr.seeThroughAmount > 0 });
 		p.set('mainHand', { value: xr.mainHand });
@@ -198,12 +195,6 @@ export function menuAction(xr, target) {
 			xr.toolFan = main === 'left' ? 'right' : 'left';
 			writeSetting('mainHand', main);
 			ui.wrist.setSide();
-			updateLabels(xr);
-			break;
-		}
-		case 'ceilings': {
-			const c = xr.model.layers.ceilings;
-			c.visible = !c.visible;
 			updateLabels(xr);
 			break;
 		}
