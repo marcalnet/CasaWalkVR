@@ -16,9 +16,11 @@ export const WING = {
 	drop: D(15), // centre below eye level
 	tilt: D(20), // leaned back
 	margin: D(5), // keep-clear margin round the model
+	minMargin: D(2), // ... which gives way last, only when every other limit is spent, never below this (the house itself is never covered)
 	maxSide: D(50), // (the Quest's view reaches about 50° to a side: further out a wing is mostly out of sight; build 120's design)
 	minSide: D(30), // never nearer straight ahead than this, whatever happens (build 120's design, B8)
-	maxDist: 0.9, // the last resort: further away a wing covers less of the view (lasers reach it; touch does not)
+	maxDist: 0.62, // the last resort: further away a wing covers less of the view, never past a fingertip's reach (the harmony's conflict 13)
+	ceiling: D(10), // no corner of a wing above this (the handbook's ceiling: keys up there cost the neck and the arm)
 	maxUp: D(-5), // the centre never higher than this
 };
 
@@ -124,18 +126,28 @@ export function overlaps(r, zone, margin = 0) {
 /**
  * Where a wing goes: side +1 (left) or -1 (right); w, h its size (m); zone
  * the model's points in view (zoneOf; or null: nothing in the way, as inside the home).
- * Returns { az, el, dist, clear } of its centre, relative to where the head
- * looks: outward first, then up, then further from the eyes (a last resort:
- * a far wing covers less of the view). clear is false when even that cannot
+ * Returns { az, el, dist, margin, clear } of its centre, relative to where
+ * the head looks: outward first (to maxSide), then up (while its top stays
+ * within the ceiling), then further from the eyes (within reach), and only
+ * then the margin shrinks from WING.margin towards WING.minMargin (the
+ * interaction harmony's conflict 13). clear is false when even that cannot
  * keep the model uncovered (a model zoomed up to fill the view).
  */
 export function placeWing(side, w, h, zone) {
-	let az = side * WING.side, el = -WING.drop, dist = WING.dist;
-	if (!zone) return { az, el, dist, clear: true };
-	const hits = () => overlaps(wingRect(az, el, w, h, dist), zone, WING.margin);
+	let az = side * WING.side, el = -WING.drop, dist = WING.dist, margin = WING.margin;
+	if (!zone) return { az, el, dist, margin, clear: true };
+	const hull = zoneHull(zone), a = { az: 0, el: 0 };
+	const hits = () => {
+		const r = wingRect(az, el, w, h, dist);
+		if (overlaps(r, zone, margin)) return true;
+		for (const [x, y] of [[r.az0, r.el0], [r.az1, r.el0], [r.az1, r.el1], [r.az0, r.el1]]) { a.az = x; a.el = y; if (inZone(a, hull, margin)) return true; } // (a corner of it on the outline)
+		return false;
+	};
 	while (hits() && Math.abs(az) < WING.maxSide) az += side * D(1); // outward first
-	while (hits() && el < WING.maxUp) el += D(1); // then up
-	while (hits() && dist < WING.maxDist) dist += 0.05; // then back
+	const under = (e) => wingRect(az, e, w, h, dist).el1 <= WING.ceiling + 1e-9; // (its top corners within the ceiling)
+	while (hits() && el + D(1) <= WING.maxUp && under(el + D(1))) el += D(1); // then up, never past the ceiling
+	while (hits() && dist + 0.01 <= WING.maxDist + 1e-9) dist += 0.01; // then back, within reach
+	while (hits() && margin - D(0.5) >= WING.minMargin - 1e-9) margin -= D(0.5); // the margin gives way last
 	if (Math.abs(az) < WING.minSide) az = side * WING.minSide; // (never inwards: only a guard)
-	return { az, el, dist, clear: !hits() };
+	return { az, el, dist, margin, clear: !hits() };
 }

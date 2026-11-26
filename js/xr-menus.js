@@ -16,7 +16,7 @@
 // cell. Opening, closing and pointing are js/xr-ui.js.
 
 import * as THREE from 'three';
-import { Panel } from './panel.js';
+import { Panel, COMPACT } from './panel.js';
 import { TIMES } from './lighting.js';
 import { SETTINGS, writeSetting } from './settings.js';
 import { BOARD } from './theme.js';
@@ -133,7 +133,7 @@ export function buildMenus(rig) {
 	for (const [mode, { title }] of Object.entries(MENUS)) {
 		// The right wing: Settings (the tabs), with the How to move key at the tabs' left end.
 		const p = new Panel({ tabs: TABS.map((t) => ({ ...t, rows: cells(t.rows) })), actions: [] }, {
-			title, width: WING_SIZE.settings, pxPerM: BOARD_PX_PER_M, hint: CLOSE_HINT.controllers, background: paper, // (no Close key: build 120, M1)
+			title, width: WING_SIZE.settings, pxPerM: BOARD_PX_PER_M, hint: CLOSE_HINT.controllers, background: paper, layout: COMPACT, // (no Close key: build 120, M1; 34 cm tall at most: the harmony's conflict 13)
 			lead: { id: 'guideKey', label: '? How to move', w: 150 },
 		});
 		p.mesh.visible = false;
@@ -143,7 +143,7 @@ export function buildMenus(rig) {
 		menus[mode] = p;
 		// The left wing: How to move (moving pictures for the input in hand), the two replay keys, the Meta button's line.
 		const g = new Panel({ tabs: [{ id: 'guide', label: '', rows: cells([['guide'], ['replayTools', 'replayPinch']]) }], actions: [] }, {
-			title: 'How to move', width: WING_SIZE.guide, pxPerM: BOARD_PX_PER_M, hint: CLOSE_HINT.controllers, background: paper,
+			title: 'How to move', width: WING_SIZE.guide, pxPerM: BOARD_PX_PER_M, hint: CLOSE_HINT.controllers, background: paper, layout: COMPACT,
 		});
 		g.mesh.visible = false;
 		g.mesh.name = 'guide-wing';

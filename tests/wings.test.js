@@ -35,7 +35,7 @@ test('a zoomed-up model pushes the wings outward, then up, and never under it', 
 });
 
 test('no model in view (inside the home): the wings sit at 45 degrees, 15 below', () => {
-	assert.deepEqual(placeWing(1, 0.34, 0.3, null), { az: WING.side, el: -WING.drop, dist: WING.dist, clear: true });
+	assert.deepEqual(placeWing(1, 0.34, 0.3, null), { az: WING.side, el: -WING.drop, dist: WING.dist, margin: WING.margin, clear: true });
 });
 
 test('a wing leaned back 20°: its lower edge comes towards you and spans more below than a flat one (harmony, conflict 13)', () => {

@@ -28,6 +28,11 @@ const PX_PER_M = 1024; // canvas pixels per metre of panel
 const PAD = 28, GAP = 14, ROW_H = 80, TITLE_H = 72, HINT_H = 52;
 const PRIMARY_H = 108, PRIMARY_GAP = 26; // the primary button: taller, set apart
 const TAB_H = 66, TAB_GAP = 18; // the row of tabs, and the space under it
+// The spacing a board is laid out with (canvas px). A wing passes `layout: COMPACT` (the interaction harmony's
+// conflict 13: a Settings wing no taller than 34 cm, its top within 10° of eye level): the title and the close line
+// share one header row, rows of 66 px (4.5 cm with their gap), option segments exactly 4 cm tall (inset 4 px).
+const LAYOUT = { PAD, GAP, ROW_H, TITLE_H, HINT_H, TAB_H, TAB_GAP, INSET: 10, hintInTitle: false, titleFont: 40 };
+export const COMPACT = { PAD: 16, GAP: 6, ROW_H: 66, TITLE_H: 38, TAB_H: 60, TAB_GAP: 8, INSET: 4, hintInTitle: true, titleFont: 28 };
 const TAB = '#tab'; // a click target's id for a tab (its value is the tab's id)
 const CHOICE_MAX = 6; // more options than this: a stepper
 const SWITCH_W = 96, SWITCH_H = 52;
@@ -50,7 +55,8 @@ export class Panel {
 	 *              actions never move. Clicking a tab is handled here (like a dropdown).
 	 * @param opts  { title, hint (small text at the bottom), width (m), pxPerM (canvas pixels per metre) }
 	 */
-	constructor(rows, { title = '', hint = '', width = 0.62, pxPerM = PX_PER_M, background = null, lead = null } = {}) {
+	constructor(rows, { title = '', hint = '', width = 0.62, pxPerM = PX_PER_M, background = null, lead = null, layout = null } = {}) {
+		this.L = { ...LAYOUT, ...layout };
 		const spec = Array.isArray(rows) ? { tabs: [{ id: '', label: '', rows }], actions: [] } : rows;
 		const cellsOf = (rs) => rs.map((r) => r.map((c) => ({ type: 'button', ...c })));
 		this.tabs = spec.tabs.map((t) => ({ id: t.id, label: t.label, rows: cellsOf(t.rows) }));
@@ -94,13 +100,13 @@ export class Panel {
 
 	/** Lays rows out from height y: boxes, and the height they end at. */
 	place(rows, y, boxes) {
-		const full = this.size.w - 2 * PAD;
+		const full = this.size.w - 2 * this.L.PAD;
 		rows.forEach((row, i) => {
 			const primary = row.some((c) => c.primary);
-			if (i > 0) y += primary ? PRIMARY_GAP : GAP;
-			const h = Math.max(primary ? PRIMARY_H : ROW_H, ...row.map((c) => c.h ?? 0));
-			const w = (full - (row.length - 1) * GAP) / row.length;
-			row.forEach((cell, k) => boxes.push({ cell, x: PAD + k * (w + GAP), y, w, h, primary: !!cell.primary }));
+			if (i > 0) y += primary ? PRIMARY_GAP : this.L.GAP;
+			const h = Math.max(primary ? PRIMARY_H : this.L.ROW_H, ...row.map((c) => c.h ?? 0));
+			const w = (full - (row.length - 1) * this.L.GAP) / row.length;
+			row.forEach((cell, k) => boxes.push({ cell, x: this.L.PAD + k * (w + this.L.GAP), y, w, h, primary: !!cell.primary }));
 			y += h;
 		});
 		return y;
@@ -108,14 +114,14 @@ export class Panel {
 
 	/** Cell rectangles in canvas pixels (and the panel height). */
 	layout() {
-		let y = PAD + (this.title ? TITLE_H : 0);
+		let y = this.L.PAD + (this.title ? this.L.TITLE_H : 0);
 		const boxes = [];
 		if (this.tabs.length > 1) {
 			const lead = this.lead ? this.lead.w + 8 : 0;
-			const full = this.size.w - 2 * PAD - lead, w = (full - (this.tabs.length - 1) * 8) / this.tabs.length;
-			this.leadBox = this.lead ? { ...this.lead, x: PAD, y: y - 3, w: this.lead.w, h: TAB_H + 6 } : null;
-			this.tabBoxes = this.tabs.map((t, i) => ({ id: t.id, label: t.label, x: PAD + lead + i * (w + 8), y, w, h: TAB_H }));
-			y += TAB_H + TAB_GAP;
+			const full = this.size.w - 2 * this.L.PAD - lead, w = (full - (this.tabs.length - 1) * 8) / this.tabs.length;
+			this.leadBox = this.lead ? { ...this.lead, x: this.L.PAD, y: y - 3, w: this.lead.w, h: this.L.TAB_H + 6 } : null;
+			this.tabBoxes = this.tabs.map((t, i) => ({ id: t.id, label: t.label, x: this.L.PAD + lead + i * (w + 8), y, w, h: this.L.TAB_H }));
+			y += this.L.TAB_H + this.L.TAB_GAP;
 		} else {
 			this.tabBoxes = [];
 			this.leadBox = null;
@@ -125,8 +131,8 @@ export class Panel {
 		const tallest = Math.max(...this.tabs.map((t) => this.place(t.rows, top, [])));
 		this.place(this.tabs.find((t) => t.id === this.tab).rows, top, boxes);
 		y = tallest;
-		if (this.actions.length) y = this.place(this.actions, y + (this.actions[0].some((c) => c.primary) ? PRIMARY_GAP : GAP + 14), boxes);
-		this.size.h = Math.round(y + (this.hint ? HINT_H : 0) + PAD);
+		if (this.actions.length) y = this.place(this.actions, y + (this.actions[0].some((c) => c.primary) ? PRIMARY_GAP : this.L.GAP + 14), boxes);
+		this.size.h = Math.round(y + (this.hint && !this.L.hintInTitle ? this.L.HINT_H : 0) + this.L.PAD);
 		return boxes;
 	}
 
@@ -138,7 +144,7 @@ export class Panel {
 	/** The control's area in a cell (choices, sliders). */
 	controlArea(b) {
 		const x = b.x + this.labelWidth(b);
-		return { x, y: b.y + 10, w: b.x + b.w - 12 - x, h: b.h - 20 };
+		return { x, y: b.y + this.L.INSET, w: b.x + b.w - 12 - x, h: b.h - 2 * this.L.INSET };
 	}
 
 	/**
@@ -201,11 +207,11 @@ export class Panel {
 		const b = this.boxes.find((x) => x.cell.id === this.open);
 		if (!b) return null;
 		const opts = b.cell.options ?? [];
-		const room = this.size.h - 2 * PAD - 16;
+		const room = this.size.h - 2 * this.L.PAD - 16;
 		const rowH = Math.max(OPTION_MIN_H, Math.min(OPTION_H, Math.floor(room / Math.max(1, opts.length))));
 		const h = opts.length * rowH + 16;
 		const a = this.controlArea(b);
-		const y = THREE.MathUtils.clamp(b.y + b.h - h, PAD, Math.max(PAD, this.size.h - PAD - h)); // its bottom at the cell's bottom
+		const y = THREE.MathUtils.clamp(b.y + b.h - h, this.L.PAD, Math.max(this.L.PAD, this.size.h - this.L.PAD - h)); // its bottom at the cell's bottom
 		return {
 			x: a.x - 8, y, w: a.w + 16, h,
 			options: opts.map((o, i) => ({ ...o, x: a.x, y: y + 8 + i * rowH, w: a.w, h: rowH - 4, selected: o.value === b.cell.value })),
@@ -230,18 +236,28 @@ export class Panel {
 			ctx.fill();
 		}
 		ctx.textBaseline = 'middle';
+		const mid = this.L.PAD + this.L.TITLE_H / 2 - (this.L.hintInTitle ? 0 : 4);
+		let titleW = 0;
 		if (this.title) {
 			ctx.fillStyle = COLOURS.text;
-			ctx.font = `600 40px ${FONT}`;
-			ctx.fillText(this.title, PAD + 8, PAD + TITLE_H / 2 - 4);
+			ctx.font = `600 ${this.L.titleFont}px ${FONT}`;
+			ctx.fillText(this.title, this.L.PAD + 8, mid);
+			titleW = ctx.measureText(this.title).width;
 		}
 		this.drawTabs(ctx);
 		for (const b of this.boxes) this.drawCell(ctx, b);
-		if (this.hint) {
+		if (this.hint && this.L.hintInTitle) {
+			// (Compact: the close line in caption size at the header's free end, in the secondary colour.)
+			ctx.fillStyle = COLOURS.soft;
+			ctx.textAlign = 'right';
+			fitFont(ctx, this.hint, w - 2 * this.L.PAD - titleW - 32, 22, 14, 400);
+			ctx.fillText(this.hint, w - this.L.PAD - 8, mid + 1);
+			ctx.textAlign = 'left';
+		} else if (this.hint) {
 			ctx.fillStyle = COLOURS.soft;
 			ctx.textAlign = 'center';
-			fitFont(ctx, this.hint, w - 2 * PAD, 28, 16, 400);
-			ctx.fillText(this.hint, w / 2, h - PAD - HINT_H / 2 + 8);
+			fitFont(ctx, this.hint, w - 2 * this.L.PAD, 28, 16, 400);
+			ctx.fillText(this.hint, w / 2, h - this.L.PAD - this.L.HINT_H / 2 + 8);
 			ctx.textAlign = 'left';
 		}
 		if (this.open) this.drawList(ctx);

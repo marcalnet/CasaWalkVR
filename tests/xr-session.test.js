@@ -1382,7 +1382,7 @@ test('harmony, conflict 5: at the scale model a bare hand steps inside on lettin
 	assert.equal(d.spotBefore(a, 0.1), spot, 'the landing from 0.1 s before the release (not the flick at the end)');
 });
 
-test('harmony, conflict 13: no wing corner within 5° of the house as seen (its covered rooms and what stands on them, not the lawn), for Pond House and the Apartment, on both plinths, with either main hand', async () => {
+test('harmony, conflict 13: no wing corner within 5° of the house as seen (its covered rooms and what stands on them, not the lawn; 2° at the very least, once every other limit is spent) nor above +10°, every wing within 0.62 m, for Pond House and the Apartment, on both plinths, with either main hand', async () => {
 	const W = await import('../js/wings.js');
 	const { PLINTH_HEIGHT, PLINTH_HEIGHT_HANDS } = await import('../js/xr-scene.js');
 	for (const name of ['pond-house', 'apartment']) {
@@ -1399,10 +1399,15 @@ test('harmony, conflict 13: no wing corner within 5° of the house as seen (its 
 				const head = x.headWorld(), yaw = x.ui.wingYaw, hull = W.zoneHull(W.zoneOf(x.modes.dollhouse.houseBox(), head, yaw));
 				for (const panel of x.ui.openPanels()) {
 					const g = panel.mesh.geometry.parameters;
+					assert.ok(panel.mesh.position.distanceTo(x.rig.worldToLocal(head.clone())) <= 0.62 + 1e-6, `${name}, plinth ${h} m, ${panel.title}: within a fingertip's reach (${JSON.stringify(panel.placed)})`);
 					for (const [sx, sy] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
 						const p = panel.mesh.localToWorld(new THREE.Vector3(sx * g.width / 2, sy * g.height / 2, 0));
 						const a = W.angleOf(p, head, yaw);
-						assert.ok(!W.inZone(a, hull, W.WING.margin), `${name}, plinth ${h} m, ${main} hand, ${panel.title}: a corner at az ${(a.az * 180 / Math.PI).toFixed(1)}°, el ${(a.el * 180 / Math.PI).toFixed(1)}°; placed ${JSON.stringify(panel.placed)}`);
+						// (5° wherever the other limits suffice; the margin gives way last, never below 2°.)
+						const spent = Math.abs(Math.abs(panel.placed.az) - W.WING.maxSide) < 1e-6 && panel.placed.dist >= W.WING.maxDist - 1e-6;
+						assert.ok(panel.placed.margin >= W.WING.minMargin - 1e-9 && (panel.placed.margin >= W.WING.margin - 1e-9 || spent), `${name}, plinth ${h} m, ${panel.title}: the margin ${(panel.placed.margin * 180 / Math.PI).toFixed(1)}° only once every other limit is spent`);
+						assert.ok(!W.inZone(a, hull, panel.placed.margin), `${name}, plinth ${h} m, ${main} hand, ${panel.title}: a corner at az ${(a.az * 180 / Math.PI).toFixed(1)}°, el ${(a.el * 180 / Math.PI).toFixed(1)}°; placed ${JSON.stringify(panel.placed)}`);
+						assert.ok(a.el <= W.WING.ceiling + 1e-6, `${name}, plinth ${h} m, ${main} hand, ${panel.title}: a corner ${(a.el * 180 / Math.PI).toFixed(1)}° above the eyes (ceiling +10°)`);
 					}
 				}
 			}
