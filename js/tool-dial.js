@@ -99,6 +99,19 @@ export class ToolDial {
 		this.pad.reset();
 	}
 
+	/**
+	 * Each frame, before the places (with the tools' and the fan's claims):
+	 * while the dial is open, the other controllers' triggers are its own: a
+	 * stop chosen by laser, or a press outside that closes it, is never also a
+	 * teleport or a walk-in (the next-build asks 3.4; the code audit's S1).
+	 * Bare hands: the hand arbiter's 'dial' rung (js/hand-owner.js).
+	 */
+	claim() {
+		if (!this.open) return;
+		const held = this.xr.tools?.held;
+		for (const c of this.xr.input.active()) if (c !== held?.c && c.claim.trigger === null) c.claim.trigger = 'dial';
+	}
+
 	/** The stick press of the holding controller: the next stop, the dial shown 1.5 s with it lit. */
 	step(tool) {
 		const v = nextStop(tool.option.stops, tool.option.get());
@@ -136,7 +149,7 @@ export class ToolDial {
 		const other = xr.input.controllers.find((c) => c !== held.c && c.touch?.tracked);
 		if (!o && other && other.touch.tip.distanceTo(this.partAt(held.tool)) < DIAL.ZONE) this.show(held.tool);
 		if (!this.open) return;
-		const { action, hot } = this.pad.update(dt, { active: true, exclude: held.c });
+		const { action, hot } = this.pad.update(dt, { active: true, exclude: held.c, own: 'dial' }); // (the triggers claim() took for it)
 		this.open.t = hot.size ? 0 : this.open.t + dt;
 		if (action?.id?.startsWith('stop:')) {
 			const s = this.open.tool.option.stops[Number(action.id.slice(5))];

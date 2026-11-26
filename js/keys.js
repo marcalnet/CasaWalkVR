@@ -100,7 +100,7 @@ export class KeyPad {
 	 * over the same key). A key with spec.hold is pressed only once held that
 	 * long, by touch or laser (a ring fills; letting go early does nothing).
 	 */
-	update(dt, { active = true, exclude = null, tips = 'all', blockers = null, laserOnRelease = false, rules = TOUCH } = {}) {
+	update(dt, { active = true, exclude = null, tips = 'all', blockers = null, laserOnRelease = false, rules = TOUCH, own = null } = {}) {
 		const xr = this.xr, input = xr.input, now = performance.now() / 1000;
 		let action = null, laserHot = null;
 		const keys = this.list;
@@ -111,7 +111,7 @@ export class KeyPad {
 			faces.length = 0;
 			for (const k of keys) if (k.out && k.group.visible) faces.push(k.face);
 			for (const c of input.active()) {
-				if (c === exclude || c.claim.trigger || !faces.length) { this.armed[c.index] = null; continue; }
+				if (c === exclude || (c.claim.trigger && c.claim.trigger !== own) || !faces.length) { this.armed[c.index] = null; continue; } // (own: a claim this pad's owner made for it, earlier in the frame)
 				input.setRaycaster(c, xr.raycaster);
 				const hits = this._hits;
 				hits.length = 0;

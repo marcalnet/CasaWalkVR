@@ -356,6 +356,14 @@ test('one option per tool, on one dial: the stick steps it (the dial shows 1.5 s
 	frame(); frame();
 	assert.ok(dial.open && !dial.open.stepped, 'touched: the dial opens');
 	assert.equal(x.aimBlock(hands.left, lensAt), 'dial', 'while open it owns the other hand');
+	// A controller's trigger too (the audit's S1): claimed before the place reads it, so a pull is never also a walk-in.
+	const left = x.input.controllers[0];
+	hands.left.ray.position.set(0, 1.3, 0); hands.left.ray.lookAt(new THREE.Vector3(0, 0.9, -x.plinthDistance)); hands.left.ray.updateMatrixWorld(true); // (its laser across the model)
+	press('left', 'trigger'); frame();
+	assert.ok(left.claim.trigger !== null && x.mode === 'dollhouse' && !x.layerFx, `the open dial owns the other trigger (the press outside closes it): no walk-in (claim ${left.claim.trigger})`);
+	press('left', 'trigger', false); frame();
+	assert.ok(!x.layerFx && x.mode === 'dollhouse', 'nor on release');
+	dial.show(cam);
 	const stop = dial.pad.keys.get('stop0');
 	dial.choose(cam, cam.option.stops[0].value); dial.close();
 	assert.equal(x.cameraLens, 24, 'a stop chosen: 24 mm');

@@ -717,6 +717,7 @@ export class XRExperience {
 		this.ui.showHandsNote(); // bare hands: "Pick up your controllers" (their pinches are never read)
 		this.tools.claim(); // a held tool's buttons are its own, before the menu and the mode
 		this.fan.claim(); // (a squeeze on a tool in the fan takes it: never the model)
+		this.dial.claim(); // (an open dial owns the other controllers' triggers: never also a teleport or a walk-in)
 		if (this.pendingRecentre && this.mode === 'dollhouse') {
 			const head = this.viewerMatrix();
 			if (head) {
