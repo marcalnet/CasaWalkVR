@@ -144,3 +144,29 @@ export function dampTowards(pos, vel, target, dt, time = TOOLS.SPRING) {
 	pos.set(target.x + (cx + tx) * k, target.y + (cy + ty) * k, target.z + (cz + tz) * k);
 	return pos;
 }
+
+/**
+ * The orb never hides a live key (the next-build asks 5.8, the Lead's
+ * decision): from the eyes, the orb covers a key when it is nearer than the
+ * key and the angle between their centres is under the orb's angular radius +
+ * the key's angular half-diagonal + IN; clear again only beyond the same sum +
+ * OUT (2° of hysteresis). Both at full size, so the orb shrinking never makes
+ * it "clear". Looking at the orb on purpose wins: within OWN of the eyes, or
+ * within LOOK of the head's forward direction, it never yields to sight.
+ */
+export const SIGHT = { IN: THREE.MathUtils.degToRad(1), OUT: THREE.MathUtils.degToRad(3), OWN: 0.4, LOOK: THREE.MathUtils.degToRad(12), CLEAR_FOR: 0.4, ORB_R: 0.037 };
+
+const _o = new THREE.Vector3(), _k = new THREE.Vector3();
+/** True if the orb (centre orb, radius orbR) covers a key (centre key, half-diagonal keyR) seen from eye; was: it covered last frame. */
+export function orbCovers(eye, orb, orbR, key, keyR, was = false) {
+	const dO = _o.subVectors(orb, eye).length(), dK = _k.subVectors(key, eye).length();
+	if (dO >= dK || dO < 1e-6) return false;
+	const sum = Math.asin(Math.min(1, orbR / dO)) + Math.asin(Math.min(1, keyR / dK)) + (was ? SIGHT.OUT : SIGHT.IN);
+	return _o.angleTo(_k) < sum;
+}
+
+/** True when you look at the orb on purpose: within SIGHT.OWN of the eyes, or within SIGHT.LOOK of the head's forward direction. */
+export function lookingAt(eye, forward, orb) {
+	_o.subVectors(orb, eye);
+	return _o.length() < SIGHT.OWN || _o.angleTo(forward) < SIGHT.LOOK;
+}

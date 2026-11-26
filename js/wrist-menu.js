@@ -31,6 +31,7 @@ import { WRIST } from './theme.js';
 import { ease } from './tween.js';
 import { KeyPad } from './keys.js';
 import { CLAIM } from './xr-targets.js';
+import { SIGHT, orbCovers, lookingAt } from './zones.js';
 
 export const ORB_ON_GRIP = new THREE.Vector3(0, 0.035, 0.115); // the orb on a controller, in its grip space
 const ORB_SCALE = 1; // the orb at full size (about 5 cm): easy to notice (the user's Quest 2 test)
@@ -74,6 +75,8 @@ export class WristMenu {
 		this.keysHot = false; this.laserNear = false; // a fingertip is over a key: the orb ignores touches (it sits between the keys)
 		this.fanYield = false; // the orb's own hand reaching into the fan (js/tool-fan.js sets it)
 		this.keyYield = false; // a fingertip near a live key (the doors, the levels, a wing): the orb makes room and ignores touches
+		this.sightYield = false; // the orb between the eyes and a live key: it makes room (only its look: touches still count)
+		this.sightClear = 0; // seconds clear of every live key (it grows back after SIGHT.CLEAR_FOR)
 		xr.scene.add(this.cross);
 		xr.hideFromPhotos(this.cross);
 		this._p = new THREE.Vector3(); this._q = new THREE.Vector3(); this._m = new THREE.Matrix4(); this._quat = new THREE.Quaternion();
@@ -88,8 +91,23 @@ export class WristMenu {
 	}
 
 
-	/** The orb makes room (half size, 30%): for the hand reaching into the fan, or a fingertip at a live key. */
-	get orbYield() { return this.fanYield || this.keyYield; }
+	/** The orb makes room (half size, 30%): for the hand reaching into the fan, a fingertip at a live key, or a live key behind it. */
+	get orbYield() { return this.fanYield || this.keyYield || this.sightYield; }
+
+	/**
+	 * The orb between the eyes and a live key (the next-build asks 5.8): it
+	 * goes small and faint at once, and grows back once clear for
+	 * SIGHT.CLEAR_FOR. Not while you look at it on purpose (js/zones.js).
+	 */
+	sightYieldNow(p, dt) {
+		const xr = this.xr, eye = xr.headWorld(), fwd = xr.viewAxes().forward;
+		const keys = xr.liveKeys?.() ?? [];
+		const covering = !lookingAt(eye, fwd, p) && keys.some((k) => orbCovers(eye, p, SIGHT.ORB_R, k.p, k.r, this.sightYield));
+		if (covering) { this.sightClear = 0; return true; }
+		if (!this.sightYield) return false;
+		this.sightClear += dt;
+		return this.sightClear < SIGHT.CLEAR_FOR; // (out only after 0.4 s clear: a swaying wrist never pulses)
+	}
 
 	/**
 	 * Either hand's tip near a live key (the doors and levels while they take
@@ -156,6 +174,7 @@ export class WristMenu {
 		const p = o.group.getWorldPosition(this._p);
 		let hot = false, toggle = false, byController = false;
 		this.keyYield = this.keyYieldNow();
+		this.sightYield = this.sightYieldNow(p, dt);
 
 		// Touch the orb: another fingertip or controller tip (or a whole controller)
 		// reaching into it; not while a fingertip is over a key.
@@ -195,6 +214,10 @@ export class WristMenu {
 		this.laserNear = padNear; // (a laser on a key counts as near, however far the hand)
 		// The orb's own hand reaching into the fan, or a fingertip at a live key: it shrinks and fades, out of the way.
 		o.yieldK += ((this.orbYield ? 1 : 0) - o.yieldK) * (1 - Math.exp(-dt / 0.15 * 1));
+		// Yielded: it stops writing depth (the key draws whole behind it) and its laser target shrinks to its body.
+		const yielded = o.yieldK > 0.5;
+		if (o.ringMat.depthWrite === yielded) { o.ringMat.depthWrite = o.core.material.depthWrite = !yielded; }
+		o.target.scale.setScalar(yielded ? 0.4 : 1);
 		animateOrb(o, performance.now() / 1000, hot || this.open);
 
 		if (action) this.close(); // after any key (Help opens the board, like Settings)

@@ -1188,6 +1188,31 @@ test('the areas: the tools home over the left hand in the left area; the hand ov
 	assert.ok(!fan.reach && fan.mode === 'home' && fan.group.position.distanceTo(fan._anchor) < 0.02, 'the hand gone: home again');
 });
 
+test('the orb never hides a live key: resting over the Walk in door it goes small and faint (touch unchanged); clear again it grows back after 0.4 s; looked at on purpose it stays full size', async () => {
+	const { x, frame, hands } = await setup();
+	const w = x.ui.wrist;
+	hands.left.grip.visible = hands.right.grip.visible = true;
+	hands.left.grip.position.set(-0.6, 0.8, 0.2); // (out of the way, far from the level keys)
+	frame();
+	const door = x.modes.dollhouse.doors.keys.get('in').face.getWorldPosition(new THREE.Vector3()), eye = x.headWorld();
+	// The right wrist resting so its orb sits on the line from the eyes to the door.
+	const want = eye.clone().lerp(door, 0.6); // (0.43 m from the eyes: resting, not raised to look; its tip well clear of the door)
+	for (let i = 0; i < 3; i++) { const o = w.orb.group.getWorldPosition(new THREE.Vector3()); hands.right.grip.position.add(x.rig.worldToLocal(want.clone()).sub(x.rig.worldToLocal(o))); frame(); }
+	for (let i = 0; i < 30; i++) frame();
+	assert.ok(w.sightYield && w.orb.yieldK > 0.9 && !w.keyYield, `over the door: it yields (by sight, not by touch) ${JSON.stringify({ sight: w.sightYield, key: w.keyYield, k: w.orb.yieldK })}`);
+	assert.ok(!w.orb.ringMat.depthWrite && w.orb.target.scale.x < 1, 'no depth while yielded; its laser target shrinks to its body');
+	// Away: it grows back only after 0.4 s clear.
+	hands.right.grip.position.set(0.5, 1.0, 0.1);
+	for (let i = 0; i < 14; i++) frame(); // (0.19 s)
+	assert.ok(w.sightYield, 'not at once');
+	for (let i = 0; i < 30; i++) frame();
+	assert.ok(!w.sightYield, 'after 0.4 s clear');
+	// Raised to the eyes to look at it: never yields to sight.
+	hands.right.grip.position.copy(x.rig.worldToLocal(eye.clone().lerp(door, 0.25)));
+	for (let i = 0; i < 20; i++) frame();
+	assert.ok(!w.sightYield, 'looked at on purpose (within 0.40 m): full size');
+});
+
 test('the fan: over the left controller however it is turned; the orb\'s own hand reaching into the fan: the orb yields', async () => {
 	const { x, frame, hands } = await setup();
 	const fan = x.fan;

@@ -547,6 +547,28 @@ export class XRExperience {
 	}
 
 	/**
+	 * The live keys the orb must never hide (the next-build asks 5.8): the
+	 * doors and level keys while they take presses, and each open wing (as one
+	 * key: its cells, tabs and close line). Not the wrist's own keys. Each
+	 * { p (world centre), r (half-diagonal, m) }.
+	 */
+	liveKeys() {
+		const out = [];
+		if (this.mode === 'dollhouse' && this.modes.dollhouse.doorsLive) {
+			for (const k of this.modes.dollhouse.doors.list) {
+				let o = k.group, shown = true;
+				while (o) { if (!o.visible) { shown = false; break; } o = o.parent; }
+				if (shown) out.push({ p: k.face.getWorldPosition(new THREE.Vector3()), r: Math.hypot(k.w, k.h) / 2 });
+			}
+		}
+		for (const panel of this.ui.openPanels()) {
+			const g = panel.mesh.geometry.parameters;
+			out.push({ p: panel.mesh.getWorldPosition(new THREE.Vector3()), r: Math.hypot(g.width, g.height) / 2 });
+		}
+		return out;
+	}
+
+	/**
 	 * True if world point p is within `margin` of any key you could press (the
 	 * orb, the plinth doors and levels, the wrist keys, an
 	 * open wing): the fan stays closed over a hand reaching for one.
