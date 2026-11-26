@@ -1208,7 +1208,7 @@ await pressWrist('right');
 s = await state();
 check('Settings opens the inside board', s.menu === 'walk' && await page.evaluate(() => /Inside/.test(window.__casawalk.xr.menu.title)));
 await shot('walk-menu');
-check('the Walk tab: Height and Solid walls (Turn left the board: 30° turns)', s.snap === 30 && await page.evaluate(() => { const p = window.__casawalk.xr.menus.walk; return !p.get('turn') && p.tabs.find((t) => t.id === 'walk').rows.flat().map((c) => c.id).join() === 'height,solid'; }));
+check('the Walk tab: Height (Turn and Solid walls left the board: 30° turns; the stick always stops at walls)', s.snap === 30 && await page.evaluate(() => { const p = window.__casawalk.xr.menus.walk; return !p.get('turn') && !p.get('solid') && p.tabs.find((t) => t.id === 'walk').rows.flat().map((c) => c.id).join() === 'height'; }));
 const feet = (await state()).rig[1] - (await state()).lift;
 await clickMenu('height', 1.4);
 s = await state();
@@ -1217,6 +1217,7 @@ await shot('height-1.4');
 await clickMenu('height', 0);
 s = await state();
 check('Height back to your own', s.height === 0 && Math.abs(s.head[1] - feet - 1.6) < 0.01);
+if ((await state()).menu) { await click('right', 'b-button'); await frames(3); } // (the board closed: an open wing owns the hands, and the wall checks below need a free one)
 
 /**
  * Holds the left stick forward until pred(head) is true for the app (checked on
