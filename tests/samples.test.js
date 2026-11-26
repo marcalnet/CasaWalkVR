@@ -53,7 +53,7 @@ test('the sample list: unique ids, each with its file and picture in examples/',
 	assert.equal(sampleById(null), null);
 });
 
-test('Pond House: 2 levels, 31 rooms (15 named; the pond is water, not a room; the deck is pieces that never overlap), a round wall, a sloping wall, unnamed helper rooms, nothing missing', async () => {
+test('Pond House: 2 levels, 30 rooms (15 named; the pond is water, not a room; the deck is pieces that never overlap), a round wall, a sloping wall, unnamed helper rooms, nothing missing', async () => {
 	const entries = unzipSync(new Uint8Array(fs.readFileSync(path.join(ROOT, 'examples/pond-house.sh3d'))));
 	const xml = new TextDecoder().decode(entries['Home.xml']);
 	assert.match(xml, /<home [^>]*selectedLevel=/, 'Sweet Home 3D opens it with its level tabs');
@@ -61,9 +61,9 @@ test('Pond House: 2 levels, 31 rooms (15 named; the pond is water, not a room; t
 	assert.equal(built.storeys, 2);
 	assert.equal(built.stats.missingModels, 0);
 	assert.ok(home.walls.some((w) => Math.abs(w.arcExtent) > 0.1), 'the round pond wall (arcExtent)');
-	assert.ok(home.walls.some((w) => w.heightAtEnd !== null && Math.abs(w.heightAtEnd - w.height) > 1), 'the sloping path wall (heightAtEnd)');
+	assert.ok(home.walls.some((w) => w.heightAtEnd !== null && Math.abs(w.heightAtEnd - w.height) > 1), 'the sloping wall along the drive (heightAtEnd)');
 	const named = built.plan.rooms.filter((r) => r.name), unnamed = built.plan.rooms.filter((r) => !r.name);
-	assert.equal(built.plan.rooms.length, 31);
+	assert.equal(built.plan.rooms.length, 30);
 	assert.equal(named.length, 15, `named rooms: ${named.map((r) => r.name).join(', ')}`);
 	assert.ok(unnamed.length > 0, 'pieces that only carry a floor or ceiling stay unnamed (one label per space)');
 	assert.ok(built.lamps.length >= 4); // (hall, pendant, two bedside lamps)
@@ -84,7 +84,7 @@ test('Pond House: the water is sunk in a stone basin, the stepping stones stand 
 	const by = (name) => pieces.filter((p) => p.name === name);
 	const top = (p) => Number(p.elevation ?? 0) + Number(p.height);
 	const water = by('Pond'), coping = by('Stone coping'), stones = by('Stepping stones'), lilies = by('Lily pads');
-	assert.ok(water.length === 2 && coping.length === 1 && stones.length === 1 && lilies.length === 3);
+	assert.ok(water.length === 1 && coping.length === 1 && stones.length === 1 && lilies.length === 3, 'one wide pond (v7)');
 	const level = Math.min(...water.map(top));
 	assert.ok(coping.every((p) => top(p) - level >= 10 && top(p) - level <= 15), `the water sits 10-15 cm below the coping (${top(coping[0])} vs ${level} cm)`);
 	assert.ok(stones.every((p) => Math.abs(top(p) - level - 5) < 0.01), 'the stepping stones: tops 5 cm above the water');
