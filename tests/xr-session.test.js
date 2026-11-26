@@ -74,8 +74,11 @@ test('?nomerge (the model as loaded, for debugging): the headset takes it, shado
 });
 
 test('the pause with no tip left (§1, revised): a steady place is the plain fade\'s short dark; an unsteady one shows the void, the rings and the place\'s name past 0.3 s, and fades in at 3 s', async () => {
-	const { x, frame } = await setup();
+	const { x, frame: step } = await setup();
 	const { PAUSE } = await import('../js/pause.js');
+	let clock = 0; // (the cap counts real seconds: here they pass with the frames)
+	x.pause.clock = () => clock;
+	const frame = (dt = 1 / 72) => { clock += dt; step(dt); };
 	frame();
 	// Steady: Walk in, then ten even frames after the move and it lifts; nothing shows.
 	x.menuAction('in');
@@ -98,6 +101,19 @@ test('the pause with no tip left (§1, revised): a steady place is the plain fad
 	assert.ok(at && at.t > PAUSE.GAP && at.t < PAUSE.GAP + 0.05 && at.floor, `past the 0.3 s gap: the void and the rings (${JSON.stringify(at)})`);
 	assert.ok(Math.abs(t - PAUSE.READY_LIMIT) < 0.05, `the cap: in at 3 s (${t.toFixed(2)} s)`);
 	assert.equal(x.pause.last.capped, true);
+	while (x.layerFx) frame();
+	// The cap is real seconds (the audit's S7): a stall of 1.4 s (one frame, its dt capped at 0.1 s) counts as 1.4 s.
+	x.menuAction('in');
+	n = 0;
+	while (x.layerFx && !x.pause.fx.pause && n++ < 400) frame();
+	frame(1 / 72); frame(1 / 36);
+	clock += 1.4; step(0.1); // (the stall)
+	t = 0;
+	while (x.pause.fx?.pause && t < 3) { const dt = (n++ % 2) ? 1 / 36 : 1 / 72; frame(dt); t += dt; }
+	assert.ok(t < 3 - 1.4 + 0.1, `in by 3 s of real time, the stall counted in full (${(t + 1.4 + 0.1).toFixed(2)} s)`);
+	while (x.layerFx) frame();
+	x.menuAction('back');
+	while (x.layerFx) frame();
 	while (x.layerFx) frame();
 	assert.equal(x.mode, 'dollhouse');
 	// Inside, the name is the room's.

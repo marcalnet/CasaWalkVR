@@ -262,7 +262,7 @@ const modelTop = () => page.evaluate(async () => {
 	}
 	return p.toArray();
 });
-const waitXR = () => page.waitForFunction(() => { const x = window.__casawalk.xr; return x.mode && !x.pendingRecentre && x.ui.wrist.orb.holder && !x.layerFx; }, null, { timeout: 45000 }).catch(() => {}); // (Enter VR holds the dark until the room draws smoothly, at most 10 s of frame time (each capped at 0.1 s): js/pause.js. Under load that is well over 15 s of real time.)
+const waitXR = () => page.waitForFunction(() => { const x = window.__casawalk.xr; return x.mode && !x.pendingRecentre && x.ui.wrist.orb.holder && !x.layerFx; }, null, { timeout: 45000 }).catch(() => {}); // (Enter VR holds the dark until the head has a pose and the room is ready, at most 3 s of real time: js/pause.js. The emulator's slow start comes first.)
 /** The Enter VR tip, once chosen: its words' kind, and where it stands from the head (the audit's B1). */
 const enterTip = async () => {
 	await page.waitForFunction(() => { const p = window.__casawalk.xr.pause.fx?.pause; return !p || (!p.choosing && p.tip); }, null, { timeout: 15000, polling: 'raf' }).catch(() => {});
@@ -426,10 +426,10 @@ await waitXR();
 	// ready (its frames steady); the pause's own cap (READY_LIMIT, 3 s of frame time) ending it means they never were.
 	const last = await page.evaluate(() => window.__casawalk.xr.pause.last ?? null);
 	const wall = (Date.now() - enteredAt) / 1000;
-	console.log(`Enter VR: the dark lasted ${last ? last.t.toFixed(2) : '?'} s of frame time over ${last?.frames ?? '?'} frames (${wall.toFixed(1)} s wall time)${last?.capped ? ', ended by the 3 s cap' : ''}`);
+	console.log(`Enter VR: the dark lasted ${last ? last.waited.toFixed(2) : '?'} s from the first draw over ${last?.frames ?? '?'} frames (${wall.toFixed(1)} s from the click)${last?.capped ? ', ended by the 3 s cap' : ''}`);
 	// (Here every frame is software-rendered, slow and uneven, so the cap often ends it: the log line says so. What can fail
-	// here is the dark outlasting its cap. The real time needs a headset.)
-	check('Enter VR: the dark never outlasts the pause\'s 3 s cap (frame time)', !!last && last.transition === 'enter' && last.t <= 3 + 0.1 + 1e-6, JSON.stringify({ ...last, wall }));
+	// here is the dark outlasting its cap: 3 s of real time, plus the one slow frame that crosses it. The real time needs a headset.)
+	check('Enter VR: the dark never outlasts the pause\'s 3 s cap (real seconds)', !!last && last.transition === 'enter' && last.waited <= 3 + 1, JSON.stringify({ ...last, wall }));
 }
 await frames(10);
 let s = await state();

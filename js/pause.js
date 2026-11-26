@@ -168,6 +168,9 @@ export class Pause {
 		this._v = new THREE.Vector3(); this._w = new THREE.Vector3();
 	}
 
+	/** The clock the 3 s cap is counted on: real seconds (the tests drive it). */
+	clock() { return performance.now() / 1000; }
+
 	/** This session's record (js/session-store.js): cleared at Enter VR and by New visitor. */
 	get record() { return this.xr.store; }
 
@@ -324,7 +327,7 @@ export class Pause {
 	 */
 	startPause(transition) {
 		const f = this.fx;
-		f.pause = { transition, tip: null, kind: this.kind(), t: 0, count: 0, shown: 0, tips: 0, frames: [], waited: 0, ending: null, aim: null, away: 0, follow: null, waiting: false };
+		f.pause = { transition, tip: null, kind: this.kind(), t: 0, since: null, count: 0, shown: 0, tips: 0, frames: [], waited: 0, ending: null, aim: null, away: 0, follow: null, waiting: false };
 		this.cover(1);
 		this.floor.visible = false;
 		// Enter VR: nothing to place yet. The 2D page's camera is still the camera, and no controller has
@@ -406,8 +409,10 @@ export class Pause {
 		p.count++;
 		p.frames.push(dt);
 		if (p.frames.length > PAUSE.READY_FRAMES) p.frames.shift();
+		p.since ??= this.clock(); // (the place's first draw)
+		p.waited = this.clock() - p.since; // (real seconds: a frame's dt is capped at 0.1 s, so a long stall would count for little: the audit's S7)
 		if (p.choosing && this.choose(p, dt)) return; // (Enter VR: the dark until the head has a pose)
-		const ready = isReady(p.frames) || p.t >= PAUSE.READY_LIMIT;
+		const ready = isReady(p.frames) || p.waited >= PAUSE.READY_LIMIT;
 		this.demo.update(dt);
 		if (!p.tip) { // (no tip: the dark until the place is ready)
 			if (ready) { this.reveal(); return; }
@@ -462,8 +467,8 @@ export class Pause {
 	/** The pause is over: the place fades in. */
 	reveal() {
 		const f = this.fx, p = f.pause;
-		// How long the dark lasted (frame time, frames) and whether the room was ready or the cap ended it: read by the emulator test.
-		this.last = { transition: p.transition, t: p.t, frames: p.count, capped: !isReady(p.frames) && p.t >= PAUSE.READY_LIMIT };
+		// How long the dark lasted (real seconds since the first draw, frames) and whether the room was ready or the cap ended it: read by the emulator test.
+		this.last = { transition: p.transition, waited: p.waited, frames: p.count, capped: !isReady(p.frames) && p.waited >= PAUSE.READY_LIMIT };
 		f.pause = null;
 		f.t = 0;
 		this.group.visible = this.floor.visible = this.arc.visible = false;
