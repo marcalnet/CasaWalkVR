@@ -176,12 +176,17 @@ export class ToolDial {
 			if (!tool.option) continue;
 			let cue = this.cues.get(tool);
 			if (!cue) {
-				const part = tool.object.getObjectByName(tool.option.part) ?? tool.object;
-				cue = { mesh: new THREE.Mesh(new THREE.RingGeometry(DIAL.ZONE / 2, DIAL.ZONE / 2 + CONTROL_CUE.width, 32),
-					new THREE.MeshBasicMaterial({ color: CONTROL_CUE.color, transparent: true, opacity: CONTROL_CUE.opacity, depthWrite: false, side: THREE.DoubleSide })), pulse: 0 };
+				// Where the model says it is seen in the hand (userData.cue: a band round the camera's lens barrel, a ring on
+				// the marker's cap end), else a ring round the control part, facing you (the meter's blade). Depth-tested.
+				const spec = tool.object.userData.cue, w = CONTROL_CUE.width;
+				const geo = spec?.shape === 'band' ? new THREE.CylinderGeometry(spec.radius, spec.radius, w, 32, 1, true).rotateX(Math.PI / 2)
+					: spec?.shape === 'ring' ? new THREE.RingGeometry(spec.radius - w, spec.radius, 32)
+						: new THREE.RingGeometry(DIAL.ZONE / 2, DIAL.ZONE / 2 + w, 32);
+				cue = { mesh: new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: CONTROL_CUE.color, transparent: true, opacity: CONTROL_CUE.opacity, depthWrite: false, side: THREE.DoubleSide })), pulse: 0, faces: !spec };
 				cue.mesh.name = 'control-cue';
 				cue.mesh.raycast = () => {};
-				part.add(cue.mesh);
+				if (spec) { tool.object.add(cue.mesh); cue.mesh.position.fromArray(spec.at); }
+				else (tool.object.getObjectByName(tool.option.part) ?? tool.object).add(cue.mesh);
 				this.xr.hideFromPhotos(cue.mesh);
 				this.cues.set(tool, cue);
 			}
@@ -193,7 +198,7 @@ export class ToolDial {
 			cue.pulse = Math.max(0, cue.pulse - dt);
 			const k = cue.pulse > 0 ? Math.sin((1 - cue.pulse / DIAL.PULSE) * Math.PI) : 0;
 			cue.mesh.material.opacity = CONTROL_CUE.opacity + (1 - CONTROL_CUE.opacity) * k;
-			cue.mesh.lookAt(this.xr.headWorld());
+			if (cue.faces) cue.mesh.lookAt(this.xr.headWorld());
 		}
 	}
 }

@@ -415,6 +415,15 @@ test('one option per tool, on one dial: the stick steps it (the dial shows 1.5 s
 	frame();
 	const cue = dial.cues.get(cam);
 	assert.ok(cue && cue.pulse > 0, 'the lens carries its quiet ring, pulsing on the first take');
+	// Where each is seen in the hand (the UX review's S5): 2.5 mm, depth-tested; the camera's a band round the lens barrel's back edge,
+	// the marker's a ring on its cap's end facing along the axis, the meter's a ring at its blade facing you.
+	for (let i = 0; i < 3; i++) frame();
+	const { CONTROL_CUE } = await import('../js/theme.js');
+	const cues = Object.fromEntries([...dial.cues].map(([t, c]) => [t.name, c]));
+	assert.ok(CONTROL_CUE.width === 0.0025 && Object.values(cues).every((c) => c.mesh.material.depthTest), '2.5 mm, depth-tested');
+	assert.ok(cues.camera.mesh.geometry.type === 'CylinderGeometry' && cues.camera.mesh.parent === cam.object && !cues.camera.faces, 'the camera: a band on its body, round the lens barrel');
+	assert.ok(cues.marker.mesh.geometry.type === 'RingGeometry' && cues.marker.mesh.parent === x.fan.marker.object && cues.marker.mesh.position.z > 0.082 && !cues.marker.faces, 'the marker: a ring on the cap\'s end, along the axis');
+	assert.ok(cues.meter.faces, 'the meter: a ring at its blade, facing you');
 	const lens0 = x.cameraLens;
 	press('right', 'stick'); frame(); press('right', 'stick', false); frame();
 	assert.ok(x.cameraLens !== lens0 && dial.open?.stepped && dial.label.mesh.visible && dial.label.text === `${x.cameraLens} mm`, 'the stick: the next lens, the dial and its label');

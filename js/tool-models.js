@@ -221,6 +221,9 @@ export function buildCamera({ inactive = false } = {}) {
 
 	point(g, 'grip', 0.044, -0.008, 0);
 	point(g, 'lens', lx, ly, zFront - 0.035, [0, 0, -1]);
+	// The quiet ring on the control part (js/tool-dial.js): a band round the lens barrel's side at its back edge, just in
+	// front of the mount, where it is seen from behind in the hold (the UX review's S5).
+	g.userData.cue = { shape: 'band', at: [lx, ly, zFront - 0.0055 - 0.00125], radius: 0.0212 + 0.0005 };
 	point(g, 'viewfinder', -0.040, ySplit + topH / 2, d / 2 + 0.003, [0, 0, 1]);
 	point(g, 'shutter', 0.043, yTop + 0.005, 0);
 	point(g, 'screen', -0.012, -0.008, d / 2 + 0.001, [0, 0, 1]);
@@ -316,6 +319,8 @@ export function buildMarker({ ink = 'blue' } = {}) {
 	point(g, 'grip', 0, 0, -0.018);
 	point(g, 'tip', 0, 0, -0.0695, [0, 0, -1]);
 	point(g, 'cap', 0, 0, 0.067); // (the posted cap's middle: the marker's control part, its colour dial)
+	// Its quiet ring: round the cap's domed end, facing along the axis, 0.5 mm proud of the surface (the UX review's S5).
+	g.userData.cue = { shape: 'ring', at: [0, 0, 0.0823 + 0.0005], radius: 0.0085 };
 	g.userData.fanScale = MARKER_FAN_SCALE;
 	g.userData.setInk = (c) => M.ink.color.set(MARKER_INKS[c] || c);
 	return g;
