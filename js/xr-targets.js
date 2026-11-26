@@ -122,7 +122,7 @@ export function hitSegment(raycaster, a, b, t) {
 	}
 	// Something you can't stand on: the floor beside it, on your side (js/landing.js); the arc still ends here.
 	const l = landFor(raycaster, { object: h.object, point, normal }, a, t);
-	return { point, normal, valid: !!l, land: l?.land ?? null };
+	return { point, normal, valid: !!l, land: l?.land ?? null, wall: t.wallLike.has(h.object) };
 }
 
 /**

@@ -1690,6 +1690,31 @@ test('the waiting tools never park on the levels stack (the UX review\'s S1): Po
 	assert.ok(toolsAt > keysLeft + THREE.MathUtils.degToRad(1), `the tools ${THREE.MathUtils.radToDeg(toolsAt).toFixed(1)}° left, the levels' edge ${THREE.MathUtils.radToDeg(keysLeft).toFixed(1)}°`);
 });
 
+test('a wall the arc meets under 0.6 m from you: red, nothing happens; further, the floor at its foot (the UX review\'s S3)', async () => {
+	const { x, go } = await setup();
+	go('in');
+	const w = x.modes.walk, t = x.targets(), head = x.headWorld().clone();
+	// The nearest wall round you, at chest height.
+	let best = null;
+	for (let k = 0; k < 16; k++) {
+		const a = (k / 16) * Math.PI * 2, dir = new THREE.Vector3(Math.sin(a), 0, -Math.cos(a));
+		x.raycaster.set(head.clone().setY(head.y - 0.4), dir); x.raycaster.far = 6;
+		const h = x.raycaster.intersectObjects(x.model.layers.walls.children, false)[0];
+		if (h && (!best || h.distance < best.d)) best = { d: h.distance, dir };
+	}
+	assert.ok(best, 'a wall near you');
+	const at = (gap) => { // (stand `gap` from that wall, and throw a short arc segment into it from the hand)
+		x.rig.position.addScaledVector(best.dir, (best.d - gap)); x.rig.updateMatrixWorld(true);
+		const h0 = x.headWorld(), from = h0.clone().setY(h0.y - 0.4).addScaledVector(best.dir, 0.1);
+		const r = w.hitSegment(from, from.clone().addScaledVector(best.dir, gap + 0.2), t);
+		x.rig.position.addScaledVector(best.dir, -(best.d - gap)); x.rig.updateMatrixWorld(true);
+		return r;
+	};
+	const near = at(0.4), far = at(1.0);
+	assert.ok(near?.wall && !near.valid && !near.land, `0.4 m from the wall: red (${JSON.stringify({ wall: near?.wall, valid: near?.valid })})`);
+	assert.ok(far?.wall && far.valid && far.land, '1.0 m from it: the floor at its foot');
+});
+
 test('ladder rule 5: the tools guard the empty-space close only within 15 cm of a tool (they always show); the house box leaves the lawn out', async () => {
 	const { x, frame } = await setup();
 	frame();

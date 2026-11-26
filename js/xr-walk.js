@@ -29,6 +29,7 @@ import { hotspots, snapTo, HOTSPOT } from './hotspots.js';
 import { Label } from './panel.js';
 
 const WALK_SPEED = 0.75; // m/s at full stick
+const WALL_TOO_NEAR = 0.6; // a wall the arc meets this close to you (m, horizontally): red, nothing happens
 const STEP = 0.6; // floor following: look this far above and below the feet
 const FADE_OUT = 0.1, FADE_IN = 0.15; // teleport fade, seconds
 // Highest the teleport arc may rise above your feet: under a door frame
@@ -326,7 +327,19 @@ export class Walk {
 	}
 
 	/** First solid hit between two world points (`t`: XRExperience.targets()); valid only on walkable floors. */
-	hitSegment(a, b, t) { return hitSegment(this.xr.raycaster, a, b, t); }
+	/**
+	 * The arc meeting something (js/xr-targets.js). A wall, door, window or
+	 * glass closer than WALL_TOO_NEAR to you (horizontally): nothing happens,
+	 * red, rather than a landing a step back at your feet (the UX review's S3).
+	 */
+	hitSegment(a, b, t) {
+		const h = hitSegment(this.xr.raycaster, a, b, t);
+		if (h?.wall && h.valid) {
+			const head = this.xr.headWorld();
+			if (Math.hypot(h.point.x - head.x, h.point.z - head.z) < WALL_TOO_NEAR) { h.valid = false; h.land = null; }
+		}
+		return h;
+	}
 
 	/**
 	 * Floor following: cast down from STEP above the feet; adopt a walkable
