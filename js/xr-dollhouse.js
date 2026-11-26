@@ -520,6 +520,20 @@ export class Dollhouse {
 		return out.copy(xr.model.bounds).applyMatrix4(xr.centerer.matrixWorld);
 	}
 
+	/**
+	 * The points the centre area keeps clear, as seen (js/zones.js): the
+	 * model's box corners, the plinth's top corners, and the doors and level
+	 * keys. World space.
+	 */
+	clearPoints() {
+		const xr = this.xr, pts = [], b = this.modelBox(this._cb ??= new THREE.Box3());
+		for (const x of [b.min.x, b.max.x]) for (const y of [b.min.y, b.max.y]) for (const z of [b.min.z, b.max.z]) pts.push(new THREE.Vector3(x, y, z));
+		const { W, D } = xr.plinthSize ?? { W: 0, D: 0 };
+		for (const sx of [-1, 1]) for (const sz of [-1, 1]) pts.push(xr.stage.localToWorld(new THREE.Vector3(sx * W / 2, xr.plinthH, -xr.plinthDistance + sz * D / 2)));
+		for (const k of this.doors.list) if (k.group.visible) pts.push(k.group.getWorldPosition(new THREE.Vector3()));
+		return pts;
+	}
+
 	/** Where a hand holds (world): a bare hand's palm centre (between the wrist and the middle knuckle), a controller's grip. Null when not tracked. */
 	holdPoint(c, out = new THREE.Vector3()) {
 		if (c.isHand) {

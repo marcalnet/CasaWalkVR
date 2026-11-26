@@ -1,9 +1,13 @@
 // The tool fan (SPEC.md phase 17, milestone C2): the three tools, small,
 // float in an arc about 15 cm above the fan hand (the left by default; Main
 // hand: Left swaps both wrists), gently bobbing, full size, whenever that hand
-// or controller is tracked (the next build's step 1: no watch pose, no
-// docked row, no slide, no fades near keys, the model or the eyes; step 3
-// gives the tools their areas: next-build asks, section 5).
+// or controller is tracked: no watch pose, no fades (the next-build asks,
+// section 5). While the fan hand is in its own area (the left: js/zones.js)
+// they are home over it; out of it they wait, grouped, at the edge of the
+// centre (never over the model, the keys or the orb), and glide between on a
+// 0.25 s spring. While the other hand is within reach of them (0.25 m, until
+// 0.35), nothing but the fan hand moves them: a tool never slides away from
+// the hand reaching for it. Tracking lost: they stay 1 s, then fade.
 //
 // Taking a tool: reach over with the other hand. The tool you touch (the
 // fingertip or the controller's tip within 5 cm) lifts a little (sound and
@@ -28,6 +32,7 @@ import { StreetCamera } from './street-camera.js';
 import { ease } from './tween.js';
 import { Label } from './panel.js';
 import { CLAIM } from './xr-targets.js';
+import { TOOLS, edgeSpot, keepFromEyes, dampTowards } from './zones.js';
 
 const ABOVE = 0.15; // the fan's middle, above the fan hand (metres)
 const SPACING = 0.115; // between tools in the arc (the marker and the meter lie across it, 9 and 11 cm long)
@@ -120,20 +125,22 @@ export class ToolFan {
 		const held = xr.tools.held;
 		// Where the fan floats: above the fan hand, facing you. (Reused vectors: nothing allocated per frame.)
 		const head = xr.headWorld();
-		let open = false;
 		const anchor = this._anchor ??= new THREE.Vector3(), at = this._at ??= new THREE.Vector3(), wrist = this._wr ??= new THREE.Vector3();
 		if (fan && xr.session) {
+			this.lost = 0;
 			input.wristOf(fan).getWorldPosition(wrist);
-			// The fan's place: above the fan hand and to its outer side (across the view).
+			// Home: above the fan hand and to its outer side (across the view).
 			const outward = this._outward;
 			outward.copy(xr.viewAxes().right).multiplyScalar(xr.toolFan === 'right' ? 1 : -1);
 			anchor.copy(wrist).addScaledVector(outward, OUT);
 			anchor.y += ABOVE;
-			open = true; // (the pause's dark covers it between places: js/pause.js)
-		}
-		this.alpha = THREE.MathUtils.clamp(this.alpha + (open ? dt : -dt) / FADE, 0, 1);
+			this.aim(fan, take, anchor, wrist, head, dt);
+		} else this.lost = (this.lost ?? 0) + dt;
+		// (The pause's dark covers it between places: js/pause.js. Tracking lost: it stays LOST_HOLD, then fades.)
+		const open = !!xr.session && this.lost < TOOLS.LOST_HOLD;
+		this.alpha = THREE.MathUtils.clamp(this.alpha + (open ? dt : -dt) / (open ? FADE : TOOLS.LOST_FADE), 0, 1);
 		this.group.visible = this.alpha > 0;
-		if (this.group.visible) this.place(anchor, head);
+		if (this.group.visible) this.place(head);
 		// Touching a tool with the taking hand's tip.
 		let hot = null;
 		if (this.alpha > 0.5 && take?.touch.tracked) {
@@ -149,7 +156,7 @@ export class ToolFan {
 			if (hot && !hot.live) this.refuse(hot, take);
 			this.hot = hot;
 		}
-		const takeD = this.alpha > 0.5 && take?.touch.tracked ? take.touch.tip.distanceTo(anchor) : Infinity;
+		const takeD = this.alpha > 0.5 && take?.touch.tracked ? take.touch.tip.distanceTo(this.pos ?? anchor) : Infinity; // (where the tools are: home or waiting)
 		this.fanBusy = takeD < (this.fanBusy ? BUSY_CLEAR : BUSY);
 		xr.ui.wrist.fanYield = takeD < (xr.ui.wrist.fanYield ? YIELD_CLEAR : YIELD_NEAR); // (the orb on that wrist makes room)
 		// A closing bare hand takes the tool it touched (a moment ago: the fingers curl away as the hand closes) or holds in its palm.
@@ -190,9 +197,40 @@ export class ToolFan {
 		this.animate(dt);
 	}
 
-	/** The fan above the fan hand, turned to face you; tools bob gently (not the inactive camera). */
-	place(anchor, head) {
-		this.group.position.copy(anchor);
+	/**
+	 * Where the tools go this frame (js/zones.js): home over the fan hand while
+	 * it is in its own area, else waiting at the edge of the centre; the glide
+	 * between on the critically damped spring; within reach of the other hand,
+	 * only the fan hand moves them (no glide starts, waiting they stay put).
+	 */
+	aim(fan, take, anchor, wrist, head, dt) {
+		const xr = this.xr, areas = xr.areas, side = xr.toolFan === 'right' ? -1 : 1; // (+1: the fan's area is the left)
+		const area = areas?.hands[xr.input.controllers.indexOf(fan)] ?? null;
+		const own = side > 0 ? 'left' : 'right';
+		// Within reach: the other hand's tip near the nearest tool (hysteresis).
+		let near = Infinity;
+		if (take?.touch.tracked) for (const s of this.slots) if (!s.held) near = Math.min(near, s.home.getWorldPosition(this._rp ??= new THREE.Vector3()).distanceTo(take.touch.tip));
+		this.reach = near < (this.reach ? TOOLS.REACH_CLEAR : TOOLS.REACH);
+		const home = !areas?.centre || area === null || area === own;
+		if (!this.reach) this.mode = home ? 'home' : 'edge';
+		this.mode ??= 'home';
+		this.pos ??= anchor.clone(); this.vel ??= new THREE.Vector3();
+		const target = this._tt ??= new THREE.Vector3();
+		if (this.mode === 'home') target.copy(anchor);
+		else if (this.reach) target.copy(this.pos); // (waiting, with a hand reaching for them: they stay put)
+		else edgeSpot(head, areas.centre, side, wrist, target);
+		keepFromEyes(target, head); // (never at the face: pushed out, never hidden)
+		if (this.mode !== this.was) this.gliding = true;
+		this.was = this.mode;
+		if (this.gliding || this.mode === 'edge') {
+			dampTowards(this.pos, this.vel, target, dt);
+			if (this.mode === 'home' && this.pos.distanceTo(target) < 0.01) this.gliding = false;
+		} else { this.pos.copy(target); this.vel.set(0, 0, 0); }
+	}
+
+	/** The fan where aim() put it, turned to face you; tools bob gently (not the inactive camera). */
+	place(head) {
+		this.group.position.copy(this.pos ?? this._anchor);
 		this.group.lookAt(head);
 		const shown = this.alpha > 0.05;
 		this.slots.forEach((s, i) => {
@@ -273,5 +311,6 @@ export class ToolFan {
 		this.hot = null;
 		this.target = this.mem = null;
 		this.fanBusy = false;
+		this.pos = this.vel = null; this.mode = this.was = null; this.gliding = false; this.reach = false; this.lost = 0;
 	}
 }

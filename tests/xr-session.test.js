@@ -1154,6 +1154,40 @@ test('bare hands teleport with either empty hand; while one aims, the other\'s p
 	x.input._gh = null;
 });
 
+test('the areas: the tools home over the left hand in the left area; the hand over the model: they wait at the left edge; within reach of the other hand, they never slide away', async () => {
+	const { x, frame, hands } = await setup();
+	const fan = x.fan, deg = THREE.MathUtils.radToDeg;
+	const { yawTo, angleDiff } = await import('../js/zones.js');
+	hands.left.grip.visible = hands.right.grip.visible = true;
+	hands.right.grip.position.set(0.4, 0.8, 0.1); // (the right hand at your side)
+	hands.left.grip.position.set(-0.45, 1.2, -0.3); // (out to the left)
+	for (let i = 0; i < 30; i++) frame();
+	const L = x.input.controllers.indexOf(hands.left);
+	assert.equal(x.areas.hands[L], 'left', 'the left hand in the left area');
+	assert.equal(fan.mode, 'home');
+	const home = fan.group.position.clone(), wrist = x.input.wristOf(hands.left).getWorldPosition(new THREE.Vector3());
+	assert.ok(home.y > wrist.y + 0.1, 'home: above the hand');
+	// The left hand over the model: they glide to the left edge and wait there, outside the centre.
+	hands.left.grip.position.set(0, 1.2, -0.6);
+	for (let i = 0; i < 72; i++) frame();
+	assert.equal(x.areas.hands[L], 'centre');
+	assert.equal(fan.mode, 'edge');
+	const head = x.headWorld(), c = x.areas.centre, at = deg(angleDiff(c.left, yawTo(head, fan.group.position)));
+	assert.ok(at > 2 && at < 4, `at the edge, 3° inside the left area (${at.toFixed(1)}°)`);
+	const d = fan.group.position.distanceTo(head);
+	assert.ok(d >= 0.4 - 1e-3 && d <= 0.6 + 1e-3, `0.40-0.60 m away (${d.toFixed(2)})`);
+	// The right hand reaches for them: the left hand goes back home meanwhile, but they stay put.
+	const waiting = fan.group.position.clone();
+	hands.right.grip.position.copy(x.rig.worldToLocal(waiting.clone().add(new THREE.Vector3(0.05, 0, 0.12))));
+	frame();
+	hands.left.grip.position.set(-0.45, 1.2, -0.3);
+	for (let i = 0; i < 30; i++) frame();
+	assert.ok(fan.reach && fan.group.position.distanceTo(waiting) < 0.01, 'within reach: they stay where the hand reaches');
+	hands.right.grip.position.set(0.4, 0.8, 0.1);
+	for (let i = 0; i < 72; i++) frame();
+	assert.ok(!fan.reach && fan.mode === 'home' && fan.group.position.distanceTo(fan._anchor) < 0.02, 'the hand gone: home again');
+});
+
 test('the fan: over the left controller however it is turned; the orb\'s own hand reaching into the fan: the orb yields', async () => {
 	const { x, frame, hands } = await setup();
 	const fan = x.fan;

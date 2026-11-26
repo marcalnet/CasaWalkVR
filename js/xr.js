@@ -51,6 +51,7 @@ import { SeeThrough, SEE_THROUGH_MAX } from './walls.js';
 import { Portals } from './portal.js';
 import { Pause } from './pause.js';
 import { SessionStore } from './session-store.js';
+import { scaleCentre, walkCentre, followBody, areaOf, yawTo } from './zones.js';
 import { takePhoto, photoName, saveFile, INTERFACE_LAYER } from './photo.js';
 import { readSetting } from './settings.js';
 import { buildShowroom, buildStage, fitPlinth, placePlate, buildWalkSky, recolourSphere, PLINTH_HEIGHT } from './xr-scene.js';
@@ -101,6 +102,8 @@ export class XRExperience {
 		this.toolFan = readSetting('mainHand') === 'left' ? 'right' : 'left'; // the hand the tool fan floats over: the one that is not the main hand (the main hand wears the wrist menu and takes tools)
 		this.cameraLens = readSetting('cameraLens'); // the street camera's lens, mm (milestone D)
 		this.frameDt = 1 / 72;
+		this.body = null; // inside: the body's direction ({ yaw, following }), following the head slowly (js/zones.js)
+		this.areas = null; // { centre, hands }: updateAreas()
 		this.maxStorey = null; // dollhouse: highest storey shown (null = all)
 		this.pendingRecentre = false;
 		this.photoPending = false;
@@ -335,6 +338,7 @@ export class XRExperience {
 		this.ui.reset(); // menus, notes, the wrist menu
 		this.pause.stop();
 		this.veil.clear();
+		this.body = null; this.areas = null;
 		for (const v of this.handViews) v.hide();
 		this.readout?.hide();
 		this.frameStats?.reset();
@@ -375,6 +379,31 @@ export class XRExperience {
 	// -----------------------------------------------------------------------
 	// Layers: page → scale model → inside (SPEC.md C0, "Layers")
 	// -----------------------------------------------------------------------
+
+	/**
+	 * The areas (js/zones.js), once a frame: the centre (at the scale model the
+	 * model, the plinth and its keys as seen; inside, ±20° about the body's
+	 * direction, which follows the head slowly) and which area each hand is in,
+	 * by its wrist (or grip) seen from the eyes. this.areas = { centre, hands:
+	 * [area per input entry] }.
+	 */
+	updateAreas(dt) {
+		const head = this.headWorld(), prev = this.areas?.hands ?? [];
+		let centre = null;
+		if (this.mode === 'dollhouse' && this.model) {
+			const plinth = this.stage.localToWorld((this._pc ??= new THREE.Vector3()).set(0, this.plinthH, -this.plinthDistance));
+			centre = scaleCentre(head, plinth, this.modes.dollhouse.clearPoints());
+		} else if (this.mode === 'walk') {
+			this.body = followBody(this.body, this.viewYaw(), dt);
+			centre = walkCentre(this.body.yaw);
+		}
+		const w = this._aw ??= new THREE.Vector3();
+		const hands = this.input.controllers.map((c, i) => {
+			if (!centre || !(c.isHand ? c.touch.tracked : c.isController && !c.resting)) return null;
+			return areaOf(yawTo(head, this.input.wristOf(c).getWorldPosition(w)), centre, prev[i]);
+		});
+		this.areas = { centre, hands };
+	}
 
 	/**
 	 * New visitor (How to move's foot; the shared-headset principle): the
@@ -589,6 +618,7 @@ export class XRExperience {
 	/** Turns the user by `angle` (radians, + = left) about their head. */
 	turn(angle) {
 		this.pause?.note('turn'); // (the turn tip is learnt: js/pause.js)
+		if (this.body) this.body.yaw += angle; // (a snap turn turns the body at once: js/zones.js)
 		const before = this.headWorld();
 		this.rig.rotation.y += angle;
 		const after = this.headWorld();
@@ -661,7 +691,8 @@ export class XRExperience {
 		for (const v of this.handViews) v.update(dt, { passthrough: !this.vrView });
 		this.readout?.update();
 		this.frameStats?.update(dt);
-		this.fan.update(dt); // the tool fan: open, touch, take, swap, put back (milestone C)
+		this.updateAreas(dt); // left, centre, right: where each hand is (js/zones.js)
+		this.fan.update(dt); // the tool fan: home or waiting at the edge, touch, take, swap, put back (milestone C)
 		this.tools.update(dt);
 		this.tweens.update(dt);
 		this.haptics.update(dt);

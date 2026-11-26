@@ -291,6 +291,7 @@ export class Walk {
 	 */
 	placeUser(target, yaw) {
 		const xr = this.xr, rig = xr.rig;
+		xr.body = null; // (a teleport turns the body at once: js/zones.js)
 		const headLocal = new THREE.Vector3().setFromMatrixPosition(xr.camera.matrix);
 		const headYawLocal = yawOf(xr.camera.matrix);
 		const heading = yaw ?? (rig.rotation.y + headYawLocal);
