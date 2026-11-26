@@ -101,9 +101,9 @@ export class StreetCamera {
 		this.flash = 0.12;
 		this.guide.shutter(); // (hidden while the shutter fires and the print pops)
 		this.object.updateMatrixWorld(true);
-		const eye = this.lensPoint.matrixWorld.clone();
-		// The lens empty's +Z looks out of the lens; a photo camera looks along -Z: turn it round.
-		eye.multiply(new THREE.Matrix4().makeRotationY(Math.PI));
+		// From the same smoothed pose the red frame is drawn from, so the photo matches it (the UX review's C5);
+		// before the frame's first pose, the lens (its empty's +Z looks out: turned round, as a photo camera looks along -Z).
+		const eye = this.guide.poseMatrix() ?? this.lensPoint.matrixWorld.clone().multiply(new THREE.Matrix4().makeRotationY(Math.PI));
 		xr.capturePhoto({ eye, width: PHOTO[0], height: PHOTO[1], fov: lensFov(this.mm), level: LEVEL, onBlob: (blob) => this.print(blob) });
 	}
 

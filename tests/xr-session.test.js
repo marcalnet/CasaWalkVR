@@ -497,8 +497,11 @@ test('the framing guide: while the camera is held, a red frame where the photo\'
 	const { hw, hh } = frameAt(g.dist, lensFov(cam.mm));
 	assert.ok(Math.abs(Math.max(...xs) - hw) < 1e-6 && Math.abs(Math.max(...ys) - hh) < 1e-6 && Math.abs(hw / hh - 1.5) < 1e-9, 'the photo\'s 3:2 frame at that depth');
 	assert.ok(x.photoHidden.has(g.group), 'never in a photo');
-	x.capturePhoto = () => {};
+	assert.ok(GUIDE.WIDTH === 0.003 && g.group.children.length === 1 && !g.lines, 'the outline alone, 3 mm at 1 m: no lines from the lens (the UX review\'s C5)');
+	let shotFrom = null;
+	x.capturePhoto = ({ eye }) => { shotFrom = eye; };
 	cam.shoot();
+	assert.ok(shotFrom && shotFrom.equals(g.poseMatrix()), 'the photo is shot from the frame\'s own smoothed pose');
 	for (let i = 0; i < 20; i++) frame();
 	assert.ok(g.alpha === 0, 'hidden while the shutter fires and the print pops');
 	for (let i = 0; i < 40; i++) frame();
