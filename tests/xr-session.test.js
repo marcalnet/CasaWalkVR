@@ -212,6 +212,30 @@ test('B / Y with nothing open: a light tick on the press; held 0.6 s it is ← B
 	assert.equal(ended(), 1, 'at the scale model, held: it leaves VR (one key, one behaviour)');
 });
 
+test('the held ← Back key fills from the first contact (the asks 3.2; the UX review\'s C2): a tip resting on its face, never pushed in, presses it at 0.6 s', async () => {
+	const { x, frame, hands, ended } = await setup();
+	const { TOUCH } = await import('../js/touch.js');
+	hands.left.grip.visible = hands.right.grip.visible = true;
+	frame();
+	x.ui.wrist.show({ pinned: true });
+	for (let i = 0; i < 30; i++) frame(); // (the keys spring out)
+	const k = x.ui.wrist.keys.left;
+	const put = (depth) => { // (the left controller's tip `depth` in front of the key's face: negative is pushed in)
+		k.group.updateMatrixWorld(true);
+		const at = k.group.localToWorld(new THREE.Vector3(0, 0, 0.006 + TOUCH.RADIUS + depth));
+		const c = hands.left;
+		c.grip.updateMatrixWorld(true);
+		const tip = c.touch.tip.clone();
+		c.grip.position.add(x.rig.worldToLocal(at.clone()).sub(x.rig.worldToLocal(tip)));
+	};
+	put(0.03); frame(); put(0.03); frame();
+	for (let d = 0.03; d > 0.002; d -= 0.004) { put(d); frame(); } // (coming in from the front)
+	let n = 0;
+	for (; n < 72 && !x.layerFx && !ended(); n++) { put(-0.002); frame(); } // (resting on it: in contact, never past the 8 mm click)
+	assert.ok(x.layerFx || ended(), `pressed after ${(n / 72).toFixed(2)} s in contact`);
+	assert.ok(n / 72 >= 0.55 && n / 72 <= 0.7, `about 0.6 s (${(n / 72).toFixed(2)} s)`);
+});
+
 test('the wrist menu: an arc over the upper outer side of the orb, frozen once open, closed after 12 s with no finger or laser near a key', async () => {
 	const { WRIST } = await import('../js/theme.js');
 	const { x, frame, hands } = await setup();

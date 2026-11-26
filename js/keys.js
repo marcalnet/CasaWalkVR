@@ -167,16 +167,18 @@ export class KeyPad {
 				const lateral = st.seen ? Math.hypot(L.x - st.lx, L.y - st.ly) : 0;
 				st.lx = L.x; st.ly = L.y; st.seen = true;
 				for (const e of stepTouch(st, { depth, inside, lateral, dt }, rules)) {
-					if (e === 'contact') { if (flat) this.feel('deny', c, 'deny'); else this.feel('tick', c, 'tick', 0.5); }
-					else if (e === 'click' && !flat && k.spec?.hold) st.holdT = 0; // (held: counted below)
+					if (e === 'contact') {
+						if (flat) this.feel('deny', c, 'deny'); else this.feel('tick', c, 'tick', 0.5);
+						if (!flat && k.spec?.hold) st.holdT = 0; // (a held key fills from the first contact, with the touch sound: the asks 3.2; the UX review's C2)
+					} else if (e === 'click' && !flat && k.spec?.hold) st.holdT ??= 0; // (held: counted below; a click doesn't restart it)
 					else if (e === 'click' && !flat && now - (this.lastClick[c.index] ?? -1) >= TOUCH.PANEL_GAP) {
 						this.lastClick[c.index] = now;
 						action = this.press(k, c) ?? action;
 					} else if (e === 'release') this.feel('release', null, null, 0.6);
 				}
-				// A held key: pressed once it has stayed pushed in for spec.hold.
+				// A held key: pressed once the tip has stayed on it (in contact or pushed in) for spec.hold.
 				if (st.holdT != null) {
-					if (st.phase !== 'pressed') st.holdT = null;
+					if (st.phase !== 'pressed' && st.phase !== 'contact') st.holdT = null;
 					else if (st.holdT >= 0) {
 						st.holdT += dt;
 						k.progress = Math.max(k.progress, st.holdT / k.spec.hold);
