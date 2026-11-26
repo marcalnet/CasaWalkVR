@@ -9,9 +9,10 @@
 //
 // Bare hands (js/gestures.js; eager since 25 Nov): pinch and hold 0.1 s, with
 // any palm but one facing your eyes, the hand in front of you: the arc grows
-// from the pinch (aimed from the shoulder through it), its ring white while it
-// moves and blue once steady 0.3 s, red where you can't go. Open the pinch on
-// blue: go; on white or red: nothing (the arc draws back). Turn the palm
+// from the pinch (aimed from the shoulder through it), its ring blue where you
+// can land, red where you can't (build 120: no white "not yet"). Open the pinch
+// on blue: go, once the arc has shown 0.3 s (a quick pinch-and-open never moves
+// you), to where the ring was 0.1 s before; on red: nothing (the arc draws back). Turn the palm
 // towards your eyes or drop the hand below the waist: cancel. A quick wrist flick while aiming turns 30°; the arc stays. A pinch
 // near a key, the fan, the model or a tool never aims (XRExperience.aimBlock).
 // The ring snaps to hotspots (room middles, doorways: js/hotspots.js), for
@@ -32,8 +33,11 @@ const FADE_OUT = 0.1, FADE_IN = 0.15; // teleport fade, seconds
 // Highest the teleport arc may rise above your feet: under a door frame
 // (doors are about 2.0-2.1 m), so you can teleport through a doorway.
 const ARC_CEILING = 1.85;
-const STEADY = 0.3; // a bare hand's ring turns blue once it has stayed put this long (s)
-const STEADY_MOVE = 0.15; // ... within this distance (m)
+// A bare hand's teleport is eager (build 120's design, B6): blue or red, never a white "not yet";
+// let go on blue and you go. Against a stray pinch, a release counts only once the arc has shown
+// SHOWN_FOR; against the flick of opening fingers, the landing is where the ring was LOOK_BACK
+// before the release; far aims are smoothed more (AIM_SMOOTH seconds per metre away).
+const SHOWN_FOR = 0.3, LOOK_BACK = 0.1, AIM_SMOOTH = 0.05;
 const WAIST = 0.8; // a pinching hand this far below the eyes is at your side: it never aims, and an aim cancels (m)
 const MAX_DISCS = 48; // hotspot discs shown while aiming
 
@@ -217,7 +221,7 @@ export class Walk {
 			const mine = this.tele?.c === c;
 			for (const e of c.gestures) {
 				if (e.type === 'pinch' && !this.tele && !this.fade && xr.teleportHand(c) && !xr.aimBlock(c, c.gesture.shape?.pinchAt) && c.gesture.shape.pinchAt.y >= xr.headWorld().y - WAIST) { // (a hand at your side never aims)
-					this.tele = { c, via: 'hand', steady: 0, anchor: null };
+					this.tele = { c, via: 'hand', age: 0, dir: null, past: [] };
 					xr.sound.play('aim');
 					xr.lessons?.note('arc');
 				} else if (e.type === 'pinch' && !this.tele && !xr.teleportHand(c) && !xr.aimBlock(c, c.gesture.shape?.pinchAt) && c.gesture.shape?.pinchAt) {
@@ -225,14 +229,14 @@ export class Walk {
 				} else if (!mine) {
 					continue;
 				} else if (e.type === 'pinchEnd') {
-					const r = this.tele.result;
-					if (r?.valid && this.tele.steady >= STEADY) {
+					const r = this.landingBefore(this.tele, LOOK_BACK);
+					if (r?.valid && this.tele.age >= SHOWN_FOR) {
 						this.tele = null;
 						this.hideAim();
 						this.go(r.point);
 						this.teleports = (this.teleports ?? 0) + 1;
 						xr.ui.onTeleport?.(this.teleports);
-					} else cancel(); // (let go on white or red: a slip never moves you)
+					} else cancel(); // (let go on red, or a quick pinch-and-open: a slip never moves you)
 				} else if (e.type === 'open' || e.type === 'lost') {
 					cancel();
 				} else if (e.type === 'turn') {
@@ -248,11 +252,24 @@ export class Walk {
 		if (xr.boardOpen || xr.ui.wrist.open || !tele.c.touch.tracked || !at) { this.tele = null; this.hideAim(); return; }
 		if (at.y < xr.headWorld().y - WAIST) { cancel(); return; } // (the hand dropped below the waist)
 		const { origin, dir } = handAimRay(xr.headWorld(), xr.viewAxes().right, at, tele.c.handedness);
-		const r = this.aim(origin, dir, { pending: tele.steady < STEADY });
-		// Steady: the landing stays within STEADY_MOVE for STEADY seconds.
-		if (r.valid && r.point && tele.anchor && r.point.distanceTo(tele.anchor) < STEADY_MOVE) tele.steady += dt;
-		else { tele.steady = 0; tele.anchor = r.point?.clone() ?? null; }
+		// Smoothed more the further it lands (0.05 s a metre: about 0.15 s at 3 m, 0.3 s at 6 m).
+		const far = tele.result?.point ? Math.hypot(tele.result.point.x - origin.x, tele.result.point.z - origin.z) : 0;
+		if (!tele.dir) tele.dir = dir.clone();
+		else tele.dir.lerp(dir, 1 - Math.exp(-dt / Math.max(1e-3, AIM_SMOOTH * far))).normalize();
+		const r = this.aim(origin, tele.dir);
+		tele.age += dt;
 		tele.result = r;
+		// The last moments' landings (the release uses the one LOOK_BACK ago).
+		tele.past.push({ age: tele.age, valid: r.valid, point: r.point?.clone() ?? null });
+		while (tele.past.length > 2 && tele.age - tele.past[1].age > LOOK_BACK) tele.past.shift();
+	}
+
+	/** The landing a hand's aim showed `back` seconds ago (or its oldest kept), else now's. */
+	landingBefore(tele, back) {
+		const want = tele.age - back;
+		let best = null;
+		for (const e of tele.past) if (e.age <= want + 1e-6) best = e;
+		return best ?? tele.past[0] ?? tele.result ?? null;
 	}
 
 	/** Lift that puts the eyes at the chosen person height (0 = your own). */

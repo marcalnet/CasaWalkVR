@@ -1,10 +1,10 @@
-// The wall portal (planning: the UX design of 24 Nov 2026, approved by the
+// The wall portal (the UX design of 24 Nov 2026, approved by the
 // user; SPEC.md, walk mode): a round window that fades open in a wall or a
 // closed door where you touch it, so you can peek into the next room.
 //
 //   Hand portal  an index fingertip (or a controller's tip) within 3 cm in
 //                front of a wall or door, or behind its surface, opens a
-//                circle there: 0.35 m radius over 0.25 s (ease-out), following
+//                circle there: 0.42 m radius over 0.25 s (ease-out), following
 //                the fingertip along the wall (smoothed 0.1 s). It closes over
 //                0.4 s once the fingertip is more than 15 cm from the surface.
 //                Each hand opens its own (two at most).
@@ -15,7 +15,7 @@
 //                closing is silent.
 //   Eye portal   the eyes within 0.30 m of a wall or door open a circle round
 //                the point of it nearest the eyes, growing with closeness
-//                (eased in): 0 at 0.30 m, 0.40 m radius at 0.20 m and closer,
+//                (eased in): 0 at 0.30 m, 0.48 m radius at 0.20 m and closer,
 //                so the near plane never cuts the wall in a hard edge. It
 //                follows the head (no tween), is silent, and is set at once
 //                behind a teleport's fade. Not needed with Solid walls on (the
@@ -27,7 +27,8 @@
 // every hooked material and updated in place once a frame. The cut is a
 // sphere whose centre is pushed 0.1 m into the wall, so the hole goes right
 // through it; the last 8 cm of the radius fade (alpha-to-coverage, 4x MSAA)
-// and a faint 1 cm rim marks the edge. Floors, ceilings, furniture and the
+// and a soft 3.5 cm frame marks the edge (20% bigger, thicker and blurred
+// after build 120's test, the user's decision). Floors, ceilings, furniture and the
 // ground are never cut. Photos and the street camera's viewfinder see the
 // walls whole (hide() around their draws). Lasers, the arc and Solid walls
 // still meet the wall: the portal is only drawn.
@@ -40,11 +41,11 @@ import { isOpening } from './optimise.js';
 export const PORTAL = {
 	INSET: 0.1, // the cut sphere's centre this far into the wall (m)
 	SOFT: 0.08, // the soft edge's width (m); 0: the hard-cut fallback
-	RIM: 0.01, // the rim line's width (m)
-	HAND_R: 0.35, HAND_OPEN: 0.25, HAND_CLOSE: 0.4, // radius (m), opening and closing (s)
+	RIM: 0.035, // the frame's width (m): thick and blurred, fading out on both sides (build 120: was a 1 cm line)
+	HAND_R: 0.42, HAND_OPEN: 0.25, HAND_CLOSE: 0.4, // radius (m), opening and closing (s)
 	TOUCH: 0.03, LEAVE: 0.15, // a fingertip opens it this close (m), and lets go this far
 	FOLLOW: 0.1, // seconds: the centre's smoothing
-	EYE_OPEN: 0.3, EYE_FULL: 0.2, EYE_R: 0.4, // the eyes this close start it (m), fully open this close, its radius
+	EYE_OPEN: 0.3, EYE_FULL: 0.2, EYE_R: 0.48, // the eyes this close start it (m), fully open this close, its radius
 	TICK_EVERY: 1, // seconds: a touch's vibration at most this often
 	RING_TIME: 0.3, // seconds: the Solid walls touch ring
 };
@@ -76,11 +77,12 @@ float cwPortalOpen(vec4 p) {
 	float rho = cwPortalRho(p);
 	return cwPortalLook.x > 0.0 ? 1.0 - smoothstep(p.w - cwPortalLook.x, p.w, rho) : step(rho, p.w);
 }
-// The rim: a thin line where the edge is half open (just outside a hard cut).
+// The frame: a soft band centred where the edge is half open (just outside a hard cut), blurred on both sides.
 float cwPortalRimAt(vec4 p) {
 	if (p.w <= 0.0) return 0.0;
 	float at = cwPortalLook.x > 0.0 ? p.w - 0.5 * cwPortalLook.x : p.w + 0.5 * cwPortalLook.y;
-	return 1.0 - smoothstep(0.0, 0.5 * cwPortalLook.y, abs(cwPortalRho(p) - at));
+	float x = abs(cwPortalRho(p) - at) / cwPortalLook.y; // 0 on the band's middle, 1 at its outer edge
+	return x >= 1.0 ? 0.0 : exp(-4.0 * x * x) * (1.0 - x * x); // (a gaussian-like falloff, exactly 0 at the edge)
 }`;
 const FRAGMENT_CUT = 'float cwOpen = max(max(cwPortalOpen(cwPortalHand), cwPortalOpen(cwPortalHand2)), cwPortalOpen(cwPortalEye));\nif (cwOpen > 0.999) discard;';
 const FRAGMENT_EDGE = `float cwRim = max(max(cwPortalRimAt(cwPortalHand), cwPortalRimAt(cwPortalHand2)), cwPortalRimAt(cwPortalEye)) * cwPortalLook.z;

@@ -20,6 +20,8 @@ export const ease = {
 	out: (t) => 1 - (1 - t) ** 3,
 	/** Gentle start and stop (sine). */
 	inOut: (t) => 0.5 - 0.5 * Math.cos(Math.PI * t),
+	/** Smoother start and stop (no jolt at either end: speed and acceleration both start and end at 0). */
+	smooth: (t) => t * t * t * (t * (6 * t - 15) + 10),
 	/** Overshoots a little and settles: "springs into the hand". */
 	spring: (t) => (t >= 1 ? 1 : springRaw(t) / SPRING_END),
 };

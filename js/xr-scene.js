@@ -7,13 +7,17 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 export const PLINTH_HEIGHT = 0.6; // low table: you look down into the rooms (while a controller is tracked)
-export const PLINTH_HEIGHT_HANDS = 0.9; // worktop height: with only bare hands the model is held at the arm's working height (build 111's design)
+// With only bare hands the model is at the arm's working height (build 111's design), stomach
+// height so there is no bending (the user's decision after build 120): the top 0.65 m below the eyes,
+// measured from the eyes because the scale model's view lifts them to a 2 m person's (1.89 m on the
+// stage), so it suits any real height, seated too (build 120's design, corrections to item 5).
+export const PLINTH_HEIGHT_HANDS = 1.24;
 // The model rests a few millimetres above the plinth, never exactly on it:
 // two surfaces at the same height fight for the same pixels ("z-fighting"),
 // which showed as flickering polygon-shaped patches all over the floors.
 export const PLINTH_REST = PLINTH_HEIGHT + 0.004;
 const SLAB = 0.03, GAP = 0.05, INSET = 0.025; // the plinth's top slab, its dark base gap, the base's inset
-const PLINTH_MARGIN = 0.2; // table left around the model (it is ~1.2 m across)
+export const PLINTH_MARGIN = 0.2, PLINTH_MARGIN_HANDS = 0.3; // table left around the model (at most 1.4 m across), with a controller / only bare hands (build 120's design, item 8)
 // From where you stand to the plinth's front edge (60 cm at the user's request:
 // you can't walk around in the gallery, and 30 cm put the model too close).
 const PLINTH_FRONT_GAP = 0.6;

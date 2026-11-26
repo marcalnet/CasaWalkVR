@@ -71,7 +71,7 @@ import { Sound } from './sound.js';
 // Clip planes for the headset, set explicitly: left alone they come from how
 // the 2D page framed the model, which can clip things held near the face.
 const XR_NEAR = 0.05, XR_FAR = 300;
-const DOLLHOUSE_SIZE = 1.2; // metres across
+const DOLLHOUSE_SIZE = 1.4; // metres across at most (build 120's design, item 8: was 1.2 m; wider pushes the wings to their limit)
 /** Stepping inside: how long the model grows towards you (s), eased in and out, before the fade. 0.8 is the fallback if the slow growth is uncomfortable (build 111's design, item 4), 0.3 the old blink. */
 export const WALK_IN_GROW = 1.3;
 
@@ -136,7 +136,7 @@ export class XRExperience {
 		Object.assign(this, buildShowroom(scene)); // showroom, showroomSky
 		Object.assign(this, buildStage(scene)); // stage, gallery, pedestal, plinthMaterials
 		this.plate = new ScalePlate(); // the model's true scale, on the plinth (SPEC.md B2)
-		this.plinthH = PLINTH_HEIGHT; // the plinth's height now: 0.6 m with a controller, 0.9 m with only bare hands (animated between: js/xr-dollhouse.js)
+		this.plinthH = PLINTH_HEIGHT; // the plinth's height now: 0.6 m with a controller, 1.24 m with only bare hands (animated between: js/xr-dollhouse.js)
 		this.setPlinth(1.2, 0.9);
 		this.walkSky = buildWalkSky(camera);
 		Object.assign(this, buildMenus(rig)); // menus: the settings boards
@@ -188,6 +188,7 @@ export class XRExperience {
 		this.plate.mesh.removeFromParent(); // (fitPlinth rebuilds the plinth's parts)
 		const { W, D, distance } = fitPlinth(this, w, d, this.plinthH);
 		this.plinthSize = { W, D };
+		this.plinthBase = { W, D }; // (with a controller's margin: bare hands widen it, js/xr-dollhouse.js setPlinthNow)
 		this.plinthDistance = distance; // from where you stand to the plinth's centre
 		placePlate(this.plate.mesh, this.pedestal, W, D, this.plinthH);
 	}

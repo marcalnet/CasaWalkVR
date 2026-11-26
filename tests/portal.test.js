@@ -86,7 +86,7 @@ test('nearestSurface: the point, the outward normal, behind the face', () => {
 	assert.equal(nearestSurface([r.wall], V(0, 1.2, 0.5), 0.15, { point: V(), normal: V() }), null);
 });
 
-test('a fingertip touching a wall opens a 0.35 m portal in 0.25 s, centred on the touch; pulled back 15 cm, it closes', () => {
+test('a fingertip touching a wall opens a 0.42 m portal in 0.25 s, centred on the touch; pulled back 15 cm, it closes', () => {
 	const r = room(), tip = V(0.5, 1.3, 0.02), xr = fakeXR(r, tip), p = new Portals();
 	p.setModel(r.layers);
 	run(p, xr, 0.3);
@@ -132,7 +132,7 @@ test('a jump shuts the hand portal at once; a photo sees the walls whole', () =>
 	assert.equal(u.w, 0, 'the teleport fade: shut at once');
 });
 
-test('the eye portal: none at 0.35 m, opening from 0.30 m, 0.40 m radius at 0.20 m; none with Solid walls; set at once behind a fade', () => {
+test('the eye portal: none at 0.35 m, opening from 0.30 m, 0.48 m radius at 0.20 m; none with Solid walls; set at once behind a fade', () => {
 	assert.equal(eyeOpening(0.35), 0);
 	assert.equal(eyeOpening(0.3), 0);
 	assert.ok(eyeOpening(0.29) > 0 && eyeOpening(0.29) < 0.02, 'eased in: a small hole first');

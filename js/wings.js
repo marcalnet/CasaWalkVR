@@ -1,4 +1,5 @@
-// Where the two settings wings go (planning design, build 111 asks, item 1):
+// Where the two settings wings go (build 111's design, item 1; 45° from build
+// 120's test, the user's decision):
 // How to move on the left, Settings on the right, beside the scale model like
 // an open book with the model in its spine. The rule: nothing ever covers the
 // model. Pure maths in view angles (Node-testable): the model's box seen from
@@ -11,11 +12,12 @@ import * as THREE from 'three';
 const D = THREE.MathUtils.degToRad;
 export const WING = {
 	dist: 0.55, // metres from the eyes
-	side: D(40), // from straight ahead
+	side: D(45), // from straight ahead (the user tested it: the model stays clear)
 	drop: D(15), // centre below eye level
 	tilt: D(20), // leaned back
 	margin: D(5), // keep-clear margin round the model
-	maxSide: D(48), // (the Quest's view reaches about 50° to a side: further out a wing is mostly out of sight)
+	maxSide: D(50), // (the Quest's view reaches about 50° to a side: further out a wing is mostly out of sight; build 120's design)
+	minSide: D(30), // never nearer straight ahead than this, whatever happens (build 120's design, B8)
 	maxDist: 0.9, // the last resort: further away a wing covers less of the view (lasers reach it; touch does not)
 	maxUp: D(-5), // the centre never higher than this
 };
@@ -78,5 +80,6 @@ export function placeWing(side, w, h, zone) {
 	while (hits() && Math.abs(az) < WING.maxSide) az += side * D(1); // outward first
 	while (hits() && el < WING.maxUp) el += D(1); // then up
 	while (hits() && dist < WING.maxDist) dist += 0.05; // then back
+	if (Math.abs(az) < WING.minSide) az = side * WING.minSide; // (never inwards: only a guard)
 	return { az, el, dist, clear: !hits() };
 }

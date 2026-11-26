@@ -180,7 +180,9 @@ export class WristMenu {
 
 		if (action) this.close(); // after any key (Help opens the board, like Settings)
 		else if (toggle && !action) {
-			if (this.open) this.close(true);
+			// The orb with a wing open closes everything: both wings and the arc (build 120's design, item 3).
+			if (xr.ui?.menu || xr.ui?.guide) { xr.ui.closeAll(); this.pad.feel('close'); }
+			else if (this.open) this.close(true);
 			else this.show({ pinned: byController });
 		}
 		return { action };

@@ -1,7 +1,7 @@
 // The hand model (C0.5): the generic hand of the WebXR Input Profiles (MIT,
 // © 2019 Amazon; vendor/generic-hand/, never the CDN path three.js's
 // XRHandMeshModel uses), dressed in CasaWalk's hand look: frosted paper
-// white, a light rim, the index tip blue, fading out behind the wrist. Its
+// white, a light rim, the thumb and index blue (about half of each), fading out behind the wrist. Its
 // bones carry the 25 WebXR joint names, so posing it is copying each joint's
 // pose into the bone of the same name (as XRHandMeshModel does). Two passes
 // like js/hands.js's capsule hand (depth, then colour where the hand is the
@@ -21,6 +21,9 @@ export const JOINT_NAMES = [
 	'thumb-metacarpal', 'thumb-phalanx-proximal', 'thumb-phalanx-distal', 'thumb-tip',
 	...['index-finger', 'middle-finger', 'ring-finger', 'pinky-finger'].flatMap((f) => ['metacarpal', 'phalanx-proximal', 'phalanx-intermediate', 'phalanx-distal', 'tip'].map((p) => `${f}-${p}`)),
 ];
+
+// How far the glow reaches down each pinching finger from its tip (m; about half the finger), and its soft edge.
+const HAND_GLOW = { 'index-finger': { reach: 0.045, soft: 0.01 }, thumb: { reach: 0.038, soft: 0.01 } };
 
 const smooth = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 
@@ -60,20 +63,29 @@ export function dressHand(gltf, handedness) {
 	const source = object.getObjectByProperty('type', 'SkinnedMesh');
 	const skeleton = source.skeleton;
 	const geometry = source.geometry.clone();
-	// The two masks the material reads: the index tip (its last 1.5 cm) and the fade behind the wrist.
+	// The two masks the material reads: the pinching fingers' glow, and the fade behind the wrist.
+	// The glow covers about half of the index and of the thumb, the same blue on both (the
+	// user's decision after build 120: they are the teleport fingers; before, only the
+	// index's last 1.5 cm).
 	const bindPos = (name) => {
 		const i = skeleton.bones.findIndex((b) => b.name === name);
 		return new THREE.Vector3().setFromMatrixPosition(skeleton.boneInverses[i].clone().invert());
 	};
-	const tipP = bindPos('index-finger-tip'), wristP = bindPos('wrist'), along = bindPos('middle-finger-metacarpal').sub(wristP).normalize();
+	const wristP = bindPos('wrist'), along = bindPos('middle-finger-metacarpal').sub(wristP).normalize();
 	const pos = geometry.attributes.position, si = geometry.attributes.skinIndex, sw = geometry.attributes.skinWeight;
-	const indexBones = new Set(['index-finger-phalanx-distal', 'index-finger-tip'].map((n) => skeleton.bones.findIndex((b) => b.name === n)));
+	const boneIds = (names) => new Set(names.map((n) => skeleton.bones.findIndex((b) => b.name === n)));
+	const fingers = Object.entries(HAND_GLOW).map(([finger, g]) => ({
+		...g, tipP: bindPos(`${finger}-tip`),
+		bones: boneIds(['phalanx-proximal', 'phalanx-intermediate', 'phalanx-distal', 'tip'].map((p) => `${finger}-${p}`)),
+	}));
 	const tip = new Float32Array(pos.count), fade = new Float32Array(pos.count), v = new THREE.Vector3();
 	for (let i = 0; i < pos.count; i++) {
 		v.fromBufferAttribute(pos, i);
-		let onIndex = 0;
-		for (let k = 0; k < 4; k++) if (indexBones.has(si.getComponent(i, k))) onIndex += sw.getComponent(i, k);
-		tip[i] = onIndex > 0.5 ? 1 - smooth(0.012, 0.019, v.distanceTo(tipP)) : 0;
+		for (const f of fingers) {
+			let on = 0;
+			for (let k = 0; k < 4; k++) if (f.bones.has(si.getComponent(i, k))) on += sw.getComponent(i, k);
+			if (on > 0.5) tip[i] = Math.max(tip[i], 1 - smooth(f.reach - f.soft, f.reach, v.distanceTo(f.tipP)));
+		}
 		fade[i] = smooth(-0.028, -0.004, v.clone().sub(wristP).dot(along));
 	}
 	geometry.setAttribute('tip', new THREE.BufferAttribute(tip, 1));

@@ -31,6 +31,7 @@ const TAB_H = 66, TAB_GAP = 18; // the row of tabs, and the space under it
 const TAB = '#tab'; // a click target's id for a tab (its value is the tab's id)
 const CHOICE_MAX = 6; // more options than this: a stepper
 const SWITCH_W = 96, SWITCH_H = 52;
+const SWITCH_LABEL_MIN = 26; // px: a switch label smaller than this goes onto two lines instead
 const OPTION_H = 64, OPTION_MIN_H = 40; // dropdown list rows (shrunk to fit a long list)
 
 export class Panel {
@@ -377,8 +378,11 @@ export class Panel {
 		ctx.strokeStyle = whole ? COLOURS.hoverEdge : COLOURS.edge;
 		ctx.stroke();
 		ctx.fillStyle = c.disabled ? COLOURS.offText : COLOURS.text;
-		fitFont(ctx, c.label, this.labelWidth(b) - 36, 32, 20, 500);
-		ctx.fillText(c.label, b.x + 24, b.y + b.h / 2 + 2);
+		if (c.type === 'switch') this.drawSwitchLabel(ctx, b, c.label);
+		else {
+			fitFont(ctx, c.label, this.labelWidth(b) - 36, 32, 20, 500);
+			ctx.fillText(c.label, b.x + 24, b.y + b.h / 2 + 2);
+		}
 		if (c.disabled) {
 			if (c.note) {
 				// (The note may use the space after the label, also over a switch's.)
@@ -395,6 +399,36 @@ export class Panel {
 		else if (c.type === 'choice') this.drawChoice(ctx, b);
 		else if (c.type === 'slider') this.drawSlider(ctx, b, hot);
 		else if (c.type === 'dropdown') this.drawDropdown(ctx, b, hot && !this.open);
+	}
+
+	/**
+	 * A switch's label, in all the room left of the switch: one line if it
+	 * reads at SWITCH_LABEL_MIN px or more, else two lines (split at the space
+	 * nearest its middle), so "Depth shading" and "Passthrough" are never
+	 * shrunk under the switch (build 120: they were clipped by it).
+	 */
+	drawSwitchLabel(ctx, b, label) {
+		const room = b.w - SWITCH_W - 20 - 24 - 14; // (from the label's start to 14 px before the switch)
+		const x = b.x + 24, cy = b.y + b.h / 2 + 2;
+		fitFont(ctx, label, room, 32, SWITCH_LABEL_MIN - 1, 500);
+		const words = label.split(' ');
+		if (ctx.measureText(label).width <= room || words.length < 2) {
+			if (ctx.measureText(label).width > room) fitFont(ctx, label, room, 32, 16, 500);
+			ctx.fillText(label, x, cy);
+			return;
+		}
+		let best = null; // the split whose longer line is shortest
+		for (let i = 1; i < words.length; i++) {
+			const lines = [words.slice(0, i).join(' '), words.slice(i).join(' ')];
+			ctx.font = `500 30px ${FONT}`;
+			const w = Math.max(...lines.map((l) => ctx.measureText(l).width));
+			if (!best || w < best.w) best = { lines, w };
+		}
+		const longer = best.lines.reduce((a, l) => (ctx.measureText(l).width > ctx.measureText(a).width ? l : a));
+		fitFont(ctx, longer, room, 30, 16, 500);
+		const px = parseInt(ctx.font.split(' ')[1], 10), lead = Math.min(px * 1.05, (b.h - 12) / 2);
+		ctx.fillText(best.lines[0], x, cy - lead / 2);
+		ctx.fillText(best.lines[1], x, cy + lead / 2);
 	}
 
 	drawSwitch(ctx, b) {

@@ -66,8 +66,16 @@ export const RECIPES = {
 	// The teleport arc appears: a soft rising blip.
 	aim: { layers: [{ tone: 'sine', hz: [500, 900], env: [[0, 0], [0.01, 0.15], [0.06, 0]] }] },
 	// Going one layer deeper (stepping inside), and back up (to the scale model): a soft falling whoosh, and rising.
-	// (Stretched to the slow growth stepping inside, 1.3 s and the fade: a long falling breath.)
-	dive: { layers: [{ noise: true, band: [1800, 300], q: 0.8, env: [[0, 0], [0.5, 0.26], [1.2, 0.22], [1.65, 0]] }] },
+	// Stepping inside is a welcome: a soft magic chime (the user's decision after build 120,
+	// replacing a noisy falling breath), a rising major arpeggio of bell-like sines that rings
+	// on through the slow growth (1.3 s) and the fade, the last note with a faint octave shimmer.
+	dive: { layers: [
+		{ tone: 'sine', hz: 1047, env: [[0, 0], [0.012, 0.15], [0.25, 0.06], [0.9, 0]] }, // C6
+		{ at: 0.17, tone: 'sine', hz: 1319, env: [[0, 0], [0.012, 0.14], [0.25, 0.06], [0.9, 0]] }, // E6
+		{ at: 0.34, tone: 'sine', hz: 1568, env: [[0, 0], [0.012, 0.14], [0.25, 0.06], [0.95, 0]] }, // G6
+		{ at: 0.55, tone: 'sine', hz: 2093, env: [[0, 0], [0.015, 0.16], [0.35, 0.07], [1.1, 0]] }, // C7, ringing on
+		{ at: 0.55, tone: 'sine', hz: 4186, env: [[0, 0], [0.02, 0.04], [0.3, 0.015], [0.8, 0]] }, // its shimmer
+	] },
 	surface: { layers: [{ noise: true, band: [400, 1800], q: 0.8, env: [[0, 0], [0.08, 0.3], [0.3, 0]] }] },
 	// A teleport or stepping inside: soft air, shorter and lower than whoosh.
 	// The wall portal opening: an airy swell with no pitch (draft, until the Graphic Designer's recipe).

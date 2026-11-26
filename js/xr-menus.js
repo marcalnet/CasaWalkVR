@@ -62,7 +62,7 @@ const CELLS = {
 
 /** The board's tabs (the same at both layers), each with rows of cell ids. Camera lens joins General in milestone D. */
 export const TABS = [
-	{ id: 'view', label: 'View', rows: [['light'], ['shadows', 'depth'], ['ceilings', 'view'], ['seethrough']] },
+	{ id: 'view', label: 'View', rows: [['light'], ['shadows', 'ceilings'], ['depth'], ['view'], ['seethrough']] }, // (the long words on full rows: half a row clipped "Depth shading" and "Passthrough", build 120)
 	{ id: 'walk', label: 'Walk', rows: [['height'], ['solid']] }, // (Turn left the board: 30° stays, the user's call)
 	{ id: 'tools', label: 'Tools', rows: [['lens']] }, // (the street camera's lens: wide for interiors; to get closer, walk closer)
 	{ id: 'general', label: 'General', rows: [['mainHand'], ['sound']] },

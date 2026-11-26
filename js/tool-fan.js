@@ -41,13 +41,31 @@ const REACH_HAND = 0.07; // a bare fingertip: tracking is looser, and the tools 
 const PALM_REACH = 0.09; // a closing bare hand: its palm this close to a tool still takes it (the fingers curl away from the tool as the hand closes)
 const MEMORY = 0.6; // seconds a touched tool stays the one a closing hand takes
 const BUSY = 0.2; // the taking hand this close to the open fan: the orb ignores touches
-const KEEP_CLEAR = 0.2; // the fan hand's index this close to any key (the orb, the doors and levels, the wrist keys, the wings): the fan stays closed
-const WATCH = 0.5; // the fan opens only with the hand's palm (a controller's face) within 60 degrees of the direction to your eyes: "look at your watch"
-const FIELD = 0.45, KEEP = 0.2, FIELD_PUSH = 0.1, FIELD_SPRING = 0.08; // the orb's field: felt from 45 cm, tools nudged out of the way and never nearer than 20 cm (a spring of about 0.25 s)
+// When the fan opens (build 120's design, item 1: a key always beats the fan): the watch pose, the
+// hand high enough, and no key near; open, a key within KEY_CLOSE closes it until the hand is KEY_CLEAR away.
+const KEY_CLEAR = 0.25; // the fan hand's tip this close to any key (the orb, the doors and levels, the wrist keys, the wings): it stays closed
+const KEY_CLOSE = 0.15; // open, the tip this close to a key: it fades out (KEY_FADE) and stays closed until KEY_CLEAR away
+const KEY_FADE = 0.15; // seconds
+const HIGH = 0.5; // the fan hand's wrist no lower than this below the eyes (the doors and the level keys are 0.65 m below)
+const WATCH = 0.5; // the palm (a controller's face, its buttons' side) within 60 degrees of the direction to your eyes: "look at your watch"
+const OUT = 0.08; // the open fan sits this far to the fan hand's outer side, beside its ABOVE
+// The orb's field (build 120's design, item 2): the whole fan slides outward across the view as a group,
+// held there while the orb stays near, and glides back once it has gone.
+const FIELD = 0.45; // the orb this close to the nearest tool: the fan slides
+const KEEP = 0.25; // ... until its nearest tool is this far from the orb
+const LINE_CLEAR = 0.1; // and no tool this close to the line from the eyes to the orb
+const HOLD_FIELD = 0.55; // it stays slid while the orb is this close to the fan's own place
+const LEASH = 0.35; // never further than this from the fan hand
+const RETURN_AFTER = 0.5, SLIDE_SPRING = 0.1; // the orb gone this long (s), the fan glides back; the slide's spring (s)
+// Bare hands (build 120's design, item 4): the tools rest small on the back of the fan wrist, docked,
+// whenever that hand is in view, and open into the fan on the watch pose.
+const DOCK = { above: 0.05, scale: 0.5, opacity: 0.6, nearKey: 0.2, inView: THREE.MathUtils.degToRad(60), change: 0.2 };
+const DOCKED_HANDS = true; // the docked row with bare hands (for controllers it waits for the user's answer: build 120's design, item 4)
 const REACHING = 0.35; // the taking hand's fingertip this close to the fan: it is reaching into the fan (its orb is not a key the fan hand reaches for)
+const REACH_POINT = THREE.MathUtils.degToRad(40); // ... and pointing within this of a tool: it is taking (the tools never flee the fingertip)
 const YIELD_NEAR = 0.2; // the taking hand's fingertip this close to the open fan: its orb shrinks and fades
 const RETURN = 0.08; // a bare hand bringing its tool this close to its place puts it back
-const FADE = 0.2; // seconds
+const FADE = 0.2; // seconds (opening and closing)
 
 export class ToolFan {
 	/** xr: the XRExperience (its ToolSystem gets the tools). */
@@ -62,6 +80,7 @@ export class ToolFan {
 		this.fanBusy = false;
 		this.target = null; // the slot a closing bare hand would take: the touched one, one touched a moment ago, or the one at the palm
 		this.mem = null; // { slot, t }: the last slot a bare fingertip touched
+		this._outward = new THREE.Vector3(); // across the view, away from the middle, on the fan hand's side
 		this.force = 0; // seconds the fan stays open by itself (the tools' show: js/tools-intro.js)
 		const make = (name, object, live, tool = null) => {
 			const slot = { name, object, live, home: new THREE.Group(), pose: new THREE.Group(), wobble: 0, tagGrow: 0, held: false };
@@ -111,7 +130,7 @@ export class ToolFan {
 	/** The fan hand and the taking hand (input entries, or null). */
 	hands() {
 		const xr = this.xr, fanSide = xr.toolFan === 'right' ? 'right' : 'left', takeSide = fanSide === 'left' ? 'right' : 'left';
-		const find = (side) => xr.input.controllers.find((c) => c.handedness === side && (c.isController || (c.isHand && c.touch.tracked))) ?? null;
+		const find = (side) => xr.input.controllers.find((c) => c.handedness === side && ((c.isController && !c.resting) || (c.isHand && c.touch.tracked))) ?? null;
 		return { fan: find(fanSide), take: find(takeSide) };
 	}
 
@@ -123,31 +142,49 @@ export class ToolFan {
 		const held = xr.tools.held;
 		// Where the fan floats: above the fan hand, facing you. (Reused vectors: nothing allocated per frame.)
 		const head = xr.headWorld();
-		let open = false;
-		const anchor = this._anchor ??= new THREE.Vector3(), look = this._look ??= new THREE.Vector3(), to = this._to ??= new THREE.Vector3(), orb = this._orb ??= new THREE.Vector3(), at = this._at ??= new THREE.Vector3();
+		let open = false, docked = false, keyNear = false;
+		const anchor = this._anchor ??= new THREE.Vector3(), look = this._look ??= new THREE.Vector3(), to = this._to ??= new THREE.Vector3(), orb = this._orb ??= new THREE.Vector3(), at = this._at ??= new THREE.Vector3(), wrist = this._wr ??= new THREE.Vector3();
 		if (fan && xr.session) {
-			input.wristOf(fan).getWorldPosition(anchor);
+			input.wristOf(fan).getWorldPosition(wrist);
+			const { forward, right } = xr.viewAxes();
+			// The open fan's place: above the fan hand and to its outer side (across the view).
+			const outward = this._outward ??= new THREE.Vector3();
+			outward.copy(right).multiplyScalar(xr.toolFan === 'right' ? 1 : -1);
+			anchor.copy(wrist).addScaledVector(outward, OUT);
 			anchor.y += ABOVE;
-			const { forward } = xr.viewAxes();
 			look.setFromMatrixColumn(xr.camera.matrixWorld, 2).negate();
 			to.copy(anchor).sub(head).normalize();
-			const raised = anchor.y > head.y - 0.55;
+			const raised = wrist.y > head.y - HIGH;
 			xr.ui.wrist.orb.group.getWorldPosition(orb);
-			// (The orb's own hand reaching into the fan brings its orb past the fan hand's index: that is not the fan hand reaching for the orb.)
+			// (The orb's own hand reaching into the fan brings its orb past the fan hand's tip: that is not the fan hand reaching for the orb.)
 			const reaching = !!take?.touch.tracked && take.touch.tip.distanceTo(anchor) < REACHING;
-			const indexNear = fan.touch.tracked && xr.nearKey(fan.touch.tip, KEEP_CLEAR, reaching);
+			// A key always beats the fan: within KEY_CLEAR it never opens; open, within KEY_CLOSE it closes (and stays so until KEY_CLEAR).
+			const tip = fan.touch.tracked ? fan.touch.tip : null;
+			const nearClear = !!tip && xr.nearKey(tip, KEY_CLEAR, reaching), nearClose = !!tip && xr.nearKey(tip, KEY_CLOSE, reaching);
+			if (nearClose && !this.fanBusy) this.keyShut = true;
+			if (!nearClear) this.keyShut = false;
+			keyNear = nearClear;
 			// The "look at your watch" pose: a palm (or a controller's face) turned to your eyes. A hand reaching to press a key has its palm down or forward.
 			const watching = this.palmToEyes(fan, head) > WATCH;
 			// (Closed over a bare hand that is aiming: it would sit in the arc's way; the tester's finding. Not
 			// merely in the ready pose: a curled hand raised to look at the fan reads as ready.)
 			const aiming = xr.modes.walk?.tele?.c === fan || xr.modes.dollhouse?.handAim?.c === fan;
-			// (The taking hand reaching in brings the orb on its wrist near the fan hand's index: the fan stays open while it reaches.)
-			open = raised && look.angleTo(to) < IN_VIEW && (watching || this.alpha > 0.5) && !xr.ui.wrist.open && (!indexNear || this.fanBusy) && !aiming && forward.lengthSq() > 0;
+			const keysOk = this.alpha > 0.5 ? !this.keyShut : !nearClear || this.fanBusy;
+			open = raised && look.angleTo(to) < IN_VIEW && (watching || this.alpha > 0.5) && !xr.ui.wrist.open && keysOk && !aiming && forward.lengthSq() > 0;
 			if (this.force > 0) { this.force -= dt; open = true; } // (the tools' show: the one time it opens without a look)
+			// Docked (bare hands): the tools rest on the back of the wrist whenever that hand is in view; not while it holds the model.
+			const holding = xr.modes.dollhouse?.grab?.c === fan;
+			to.copy(wrist).sub(head).normalize();
+			docked = DOCKED_HANDS && fan.isHand && fan.touch.tracked && look.angleTo(to) < DOCK.inView && !holding && !aiming;
+			to.copy(anchor).sub(head).normalize();
 		}
-		this.alpha = THREE.MathUtils.clamp(this.alpha + (open ? dt : -dt) / FADE, 0, 1);
-		this.group.visible = this.alpha > 0;
-		if (this.group.visible) this.place(anchor, head, dt);
+		const fade = open ? FADE : this.keyShut ? KEY_FADE : FADE;
+		this.alpha = THREE.MathUtils.clamp(this.alpha + (open ? dt : -dt) / fade, 0, 1);
+		// The docked row's presence (0..1), dimmed near a key so it never crowds the level keys.
+		this.dock = THREE.MathUtils.clamp((this.dock ?? 0) + (docked ? dt : -dt) / DOCK.change, 0, 1);
+		this.dockDim = keyNear ? DOCK.nearKey / DOCK.opacity : 1;
+		this.group.visible = this.alpha > 0 || this.dock > 0;
+		if (this.group.visible) this.place(anchor, head, dt, wrist);
 		// Touching a tool with the taking hand's tip.
 		let hot = null;
 		if (this.alpha > 0.5 && take?.touch.tracked) {
@@ -216,59 +253,86 @@ export class ToolFan {
 		c.grip.updateMatrixWorld(true);
 		n.set(0, 1, 0).transformDirection(c.grip.matrixWorld);
 		d.subVectors(head, this.xr.input.wristOf(c).getWorldPosition(this._d2 ??= new THREE.Vector3())).normalize();
-		return Math.abs(n.dot(d)); // (either face: the grip's axis differs a little between the Touch controllers, and a controller is looked at from either side)
-	}
-
-	/** The arc above the fan hand, turned to face you; tools bob gently (not the inactive camera). */
-	place(anchor, head, dt = 1 / 72) {
-		this.group.position.copy(anchor);
-		this.group.lookAt(head);
-		this.slots.forEach((s, i) => {
-			const lift = s === this.hot && s.live ? 0.012 : 0;
-			const bob = s.live ? 0.004 * Math.sin(this.t * 2 + i * 1.7) : 0;
-			s.home.position.set((i - 1) * SPACING, Math.cos((i - 1) * 0.5) * 0.02 - 0.02 + lift + bob, 0);
-		});
-		this.slideAside(dt);
-		for (const s of this.slots) {
-			if (!s.held) s.object.visible = this.alpha > 0.05;
-			s.label.mesh.visible = !s.held && this.alpha > 0.05; // (the name tags go with the fan, and while the tool is in your hand)
-		}
+		// Only the face, the buttons' side (build 120's design, item 1: "either face" let a controller held flat to press a key open it).
+		return n.dot(d);
 	}
 
 	/**
-	 * The orb's field (the user's "magnet"): when the orb nears a tool the tool
-	 * is nudged straight away from it, felt from 45 cm and never nearer than
-	 * 20 cm, following with a soft spring: the tools slide aside, never vanish.
-	 * (Only the fan hand's index reaching the orb matters here; the orb's own
-	 * hand reaching in makes the orb yield instead: see orbYield.)
+	 * The fan above the fan hand, turned to face you; tools bob gently (not the
+	 * inactive camera). Bare hands: between the docked row on the back of the
+	 * wrist (small, still, dimmed, no names) and the open fan, as it opens.
 	 */
-	slideAside(dt) {
-		const xr = this.xr, orb = xr.ui.wrist.orb.group, o = this._orb2 ??= new THREE.Vector3(), p = this._p2 ??= new THREE.Vector3(), q = this._q2 ??= new THREE.Quaternion();
-		orb.getWorldPosition(o);
-		this.group.updateMatrixWorld(true);
-		this.group.getWorldQuaternion(q).invert();
-		const k = 1 - Math.exp(-dt / FIELD_SPRING);
-		for (const s of this.slots) {
-			s.push ??= new THREE.Vector3();
-			const want = this._w ??= new THREE.Vector3();
-			want.set(0, 0, 0);
-			// (Only while the other hand reaches for the orb: the orb's own hand reaching into the fan makes the orb yield instead.)
-			const fanHand = this.hands().fan;
-			if (xr.ui.wrist.wearer && !s.held && !xr.ui.wrist.orbYield && fanHand?.touch.tracked && fanHand.touch.tip.distanceTo(o) < FIELD) { // (the orb's own hand in the fan: the orb yields, the tools stay put)
-				s.home.getWorldPosition(p); // (its place without the push: place() has just set it)
-				const away = this._a2 ??= new THREE.Vector3();
-				away.subVectors(p, o);
-				const d = away.length();
-				if (d < FIELD && d > 1e-4) {
-					const t = THREE.MathUtils.smoothstep(FIELD - d, 0, FIELD - KEEP); // 0 at 45 cm, 1 at 20 cm
-					const to = Math.max(d + t * FIELD_PUSH, KEEP);
-					want.copy(away).multiplyScalar((to - d) / d);
-				}
-			}
-			s.pushWorld ??= new THREE.Vector3();
-			s.pushWorld.lerp(want, k);
-			s.home.position.add(s.push.copy(s.pushWorld).applyQuaternion(q));
-		}
+	place(anchor, head, dt = 1 / 72, wrist = anchor) {
+		const xr = this.xr, fan = this.hands().fan;
+		const k = DOCKED_HANDS && fan?.isHand ? ease.inOut(this.alpha) : 1; // 0 docked .. 1 open
+		const dockAt = this._dockAt ??= new THREE.Vector3();
+		if (fan) dockAt.set(0, DOCK.above, 0).applyMatrix4(xr.input.wristOf(fan).matrixWorld); else dockAt.copy(wrist);
+		const open = this._openAt ??= new THREE.Vector3();
+		const slide = this.slideAside(dt, anchor, head);
+		open.copy(anchor).addScaledVector(this._outward, slide);
+		this.group.position.lerpVectors(dockAt, open, k);
+		this.group.lookAt(head);
+		const size = DOCK.scale + (1 - DOCK.scale) * k;
+		const shown = this.alpha > 0.05 || this.dock > 0.05;
+		const opacity = k >= 1 ? 1 : (DOCK.opacity * this.dockDim * Math.min(1, this.dock * 2)) * (1 - k) + k;
+		this.slots.forEach((s, i) => {
+			const lift = s === this.hot && s.live ? 0.012 : 0;
+			const bob = s.live ? 0.004 * Math.sin(this.t * 2 + i * 1.7) : 0;
+			s.home.position.set((i - 1) * SPACING * size, (Math.cos((i - 1) * 0.5) * 0.02 - 0.02 + lift + bob) * k, 0);
+			if (s.held) return;
+			s.object.visible = shown;
+			s.object.scale.setScalar(s.object.userData.fanScale * size);
+			setOpacity(s.object, opacity);
+		});
+		for (const s of this.slots) s.label.mesh.visible = !s.held && this.alpha > 0.05 && k > 0.5; // (the name tags go with the open fan, and while the tool is in your hand)
+	}
+
+	/**
+	 * The orb's field (build 120's design, item 2): when the orb nears the open
+	 * fan, the whole fan slides outward across the view as a group, until its
+	 * nearest tool is KEEP from the orb and none is near the line from the eyes
+	 * to the orb, never more than LEASH from the hand; it stays slid while the
+	 * orb stays within HOLD_FIELD of the fan's place, and glides back once the
+	 * orb has been away RETURN_AFTER. Never while the taking hand takes a tool
+	 * (the orb yields instead: orbYield). Returns the slide (m).
+	 */
+	slideAside(dt, base, head) {
+		const xr = this.xr, wrist = xr.ui.wrist, out = this._outward;
+		if (!out.lengthSq()) return this.slide ?? 0;
+		const o = wrist.orb.group.getWorldPosition(this._orb2 ??= new THREE.Vector3());
+		const right = this._right ??= new THREE.Vector3().copy(xr.viewAxes().right);
+		right.copy(xr.viewAxes().right);
+		const tool = this._tp ??= new THREE.Vector3();
+		const at = (sl, i) => tool.copy(base).addScaledVector(out, sl).addScaledVector(right, (i - 1) * SPACING);
+		const nearest = (sl) => Math.min(...this.slots.map((_, i) => at(sl, i).distanceTo(o)));
+		const lineD = (sl) => Math.min(...this.slots.map((_, i) => segmentDistance(at(sl, i), head, o)));
+		this.slide ??= 0; this.slideTarget ??= 0; this.awayT ??= 0;
+		const taking = this.taking(), active = !!wrist.wearer && this.alpha > 0 && !taking && !wrist.orbYield
+			&& (nearest(this.slide) < FIELD || (this.slide > 0.005 && o.distanceTo(base) < HOLD_FIELD));
+		if (active) {
+			this.awayT = 0;
+			let want = LEASH;
+			for (let sl = 0; sl <= LEASH + 1e-9; sl += 0.01) if (nearest(sl) >= KEEP && lineD(sl) >= LINE_CLEAR) { want = sl; break; }
+			this.slideTarget = Math.max(want, this.slideTarget); // (held while the orb stays: never bobbing back towards it)
+		} else if ((this.awayT += dt) > RETURN_AFTER) this.slideTarget = 0;
+		this.slide += (this.slideTarget - this.slide) * (1 - Math.exp(-dt / SLIDE_SPRING));
+		if (this.slide < 1e-4 && this.slideTarget === 0) this.slide = 0;
+		return this.slide;
+	}
+
+	/** The taking hand is taking a tool: its tip within REACHING of one and pointing within REACH_POINT of it. */
+	taking() {
+		const take = this.hands().take;
+		if (!take?.touch.tracked) return false;
+		const dir = this._td ??= new THREE.Vector3(), p = this._tp2 ??= new THREE.Vector3();
+		if (take.isHand) dir.subVectors(take.touch.tip, take.wrist.getWorldPosition(p)).normalize();
+		else { take.ray.updateMatrixWorld(true); dir.set(0, 0, -1).transformDirection(take.ray.matrixWorld); }
+		return this.slots.some((s) => {
+			if (s.held) return false;
+			s.home.getWorldPosition(p);
+			const d = p.distanceTo(take.touch.tip);
+			return d < REACHING && (d < 0.05 || dir.angleTo(p.sub(take.touch.tip)) < REACH_POINT);
+		});
 	}
 
 	/** The inactive camera: a small shake of the head, sound deny, and its tag grows for 2 s. */
@@ -302,6 +366,7 @@ export class ToolFan {
 		slot.settled = false;
 		at.add(o);
 		const grip = o.getObjectByName('grip');
+		setOpacity(o, 1); // (never dimmed in the hand)
 		o.scale.setScalar(1);
 		o.rotation.set(0, 0, 0);
 		// (Controllers: a little back from the ray's start, at the front of the controller, and below it.
@@ -341,4 +406,27 @@ export class ToolFan {
 		this.target = this.mem = null;
 		this.fanBusy = false;
 	}
+}
+
+/** Distance from point p to the segment a-b. */
+function segmentDistance(p, a, b) {
+	const abx = b.x - a.x, aby = b.y - a.y, abz = b.z - a.z;
+	const len2 = abx * abx + aby * aby + abz * abz;
+	const t = len2 > 0 ? Math.max(0, Math.min(1, ((p.x - a.x) * abx + (p.y - a.y) * aby + (p.z - a.z) * abz) / len2)) : 0;
+	return Math.hypot(p.x - a.x - abx * t, p.y - a.y - aby * t, p.z - a.z - abz * t);
+}
+
+/** A tool's materials at `a` times their own opacity (recorded once): the docked row is dimmed. */
+function setOpacity(object, a) {
+	if (object.userData.cwOpacity === a) return;
+	object.userData.cwOpacity = a;
+	object.traverse((o) => {
+		for (const m of [].concat(o.material ?? [])) {
+			m.userData.baseOpacity ??= m.opacity;
+			m.userData.baseTransparent ??= m.transparent;
+			const t = a < 0.999 || m.userData.baseTransparent;
+			if (m.transparent !== t) { m.transparent = t; m.needsUpdate = true; }
+			m.opacity = m.userData.baseOpacity * a;
+		}
+	});
 }

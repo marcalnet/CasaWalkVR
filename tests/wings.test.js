@@ -15,7 +15,7 @@ test('angleOf: straight ahead is 0, left is positive, below is negative', () => 
 	assert.ok(angleOf(new THREE.Vector3(0, 0.9, -1), head, 0).el < -0.7);
 });
 
-test('at the default zoom the wings stay within 15 degrees of 40 and 15 below, and are clear of the model', () => {
+test('at the default zoom the wings stay within 15 degrees of 45 and 15 below, and are clear of the model', () => {
 	const zone = zoneOf(corners(), head, 0);
 	for (const side of [1, -1]) {
 		const p = placeWing(side, side > 0 ? 0.34 : 0.4, side > 0 ? 0.3 : 0.34, zone);
@@ -34,6 +34,6 @@ test('a zoomed-up model pushes the wings outward, then up, and never under it', 
 	}
 });
 
-test('no model in view (inside the home): the wings sit at 40 degrees, 15 below', () => {
+test('no model in view (inside the home): the wings sit at 45 degrees, 15 below', () => {
 	assert.deepEqual(placeWing(1, 0.34, 0.3, null), { az: WING.side, el: -WING.drop, dist: WING.dist, clear: true });
 });

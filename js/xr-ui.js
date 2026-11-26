@@ -27,7 +27,7 @@ import * as THREE from 'three';
 import { WelcomeCard, Label } from './panel.js';
 import { BUILD } from './version.js';
 import { buildLabel } from './build-label.js';
-import { yawOf } from './xr-input.js';
+import { headHeading } from './xr-dollhouse.js';
 import { TOUCH, touchState, stepTouch, reset as resetTouch, ringSize } from './touch.js';
 import { KEY } from './theme.js';
 import { WING, placeWing, zoneOf } from './wings.js';
@@ -61,7 +61,7 @@ export class XRUI {
 		this.menu = null; // the open settings wing, on the right (a Panel), or null
 		this.guide = null; // the open How to move wing, on the left (a Panel), or null
 		this.tab = null; // the settings tab last shown (kept between the two layers' boards); null: none yet this session
-		this.opened = false; // Settings has opened this session (its first time, until a teleport, opens How to move with it)
+		this.opened = false; // Settings has opened this session
 		this.pinchNotes = 0; // the wrong-hand notes shown this session (at most 3)
 		this.pinchNote = null;
 		this.teleports = 0; // this session's teleports
@@ -226,14 +226,20 @@ export class XRUI {
 	// -----------------------------------------------------------------------
 
 	/**
-	 * Puts a wing (a Panel) beside the model: 40° to its side, 15° below eye
+	 * Puts a wing (a Panel) beside the model: 45° to its side (Settings on
+	 * the main hand's side, How to move on the other: wingSide()), 15° below eye
 	 * level, 0.55 m from the eyes, leaned back 20°, and out of the way of the
 	 * model (js/wings.js: moves outward, then up, if it would cover it).
-	 * side: +1 the left wing, -1 the right.
+	 * side: +1 the left wing, -1 the right. The heading is where the head
+	 * faces even looking down at the wrist (headHeading: a bare forward
+	 * direction flattened is unstable then, and put a wing in front: build 120).
 	 */
 	placeWing(panel, side, headMatrix = this.xr.camera.matrix) {
 		const xr = this.xr, mesh = panel.mesh, g = mesh.geometry.parameters;
-		const head = new THREE.Vector3().setFromMatrixPosition(headMatrix), yaw = yawOf(headMatrix);
+		const head = new THREE.Vector3().setFromMatrixPosition(headMatrix);
+		// The second wing shares the first's heading: they open as a pair round one front (the
+		// Tester's B8: looking at Settings and opening How to move put it over the model).
+		const yaw = this.menu || this.guide ? this.wingYaw : (this.wingYaw = headHeading(headMatrix));
 		let zone = null;
 		if (xr.mode === 'dollhouse' && xr.model) {
 			// The model's box in the rig's space (where the wings live), seen from the eyes.
@@ -252,17 +258,16 @@ export class XRUI {
 	}
 
 	/**
-	 * Opens this layer's settings wing (the right one) on `tab` if given, else
-	 * the tab last shown (View at first). A session's first opening, until you
-	 * have teleported once, opens the How to move wing with it: seen once
-	 * without being looked for. Afterwards it opens from its own key.
+	 * Opens this layer's settings wing (on the main hand's side) on `tab` if
+	 * given, else the tab last shown (View at first). The wrist key opens it
+	 * with How to move (toggleBoard).
 	 */
 	openMenu(headMatrix, tab = null) {
 		const xr = this.xr;
 		this.closeMenu();
 		const panel = xr.menus[xr.mode];
 		if (!panel) return;
-		this.placeWing(panel, -1, headMatrix);
+		this.placeWing(panel, this.wingSide('settings'), headMatrix);
 		panel.setTab(tab ?? this.tab ?? 'view');
 		panel.lead.on = !!this.guide;
 		panel.draw();
@@ -270,8 +275,13 @@ export class XRUI {
 		panel.mesh.visible = true;
 		this.menu = panel;
 		this.feel(null, 'open');
-		if (!this.opened && this.teleports === 0 && !this.guide) this.openGuide(headMatrix);
 		this.opened = true;
+	}
+
+	/** Which side a wing opens on: Settings on the main hand's (+1 left, -1 right), How to move on the other. */
+	wingSide(which) {
+		const main = this.xr.mainHand === 'left' ? 1 : -1;
+		return which === 'settings' ? main : -main;
 	}
 
 	/** Closes the settings wing. */
@@ -287,7 +297,7 @@ export class XRUI {
 		this.closeGuide();
 		const panel = xr.guides[xr.mode];
 		if (!panel) return;
-		this.placeWing(panel, 1, headMatrix);
+		this.placeWing(panel, this.wingSide('guide'), headMatrix);
 		this.prepareGuide(panel);
 		panel.draw();
 		panel.setHover(null);
@@ -313,7 +323,7 @@ export class XRUI {
 		cell.foot = buildLabel(BUILD) + (xr.newerBuild > BUILD.number ? ' · Newer version: reload after VR' : '');
 	}
 
-	/** Counts this session's teleports (after the first, Settings no longer opens How to move by itself). */
+	/** Counts this session's teleports. */
 	onTeleport() { this.teleports++; } // (walk mode's own count runs across sessions: this one is per session)
 
 	/** Closes everything: both wings and the wrist menu (moving between layers). */
@@ -329,8 +339,11 @@ export class XRUI {
 	/** True while a wing or the wrist menu is open. */
 	get anyOpen() { return !!this.menu || !!this.guide || this.wrist.open; }
 
-	/** Settings on the wrist: opens the right wing; with any wing open, closes both. */
-	toggleBoard() { if (this.menu || this.guide) { this.closeMenu(); this.closeGuide(); } else this.openMenu(); }
+	/**
+	 * "Settings, and help" on the wrist: opens both wings; with either open,
+	 * closes both (build 120's design: help closed alone was never found again).
+	 */
+	toggleBoard() { if (this.menu || this.guide) { this.closeMenu(); this.closeGuide(); } else { this.openMenu(); this.openGuide(); } }
 
 	/** How to move: opens the left wing, or closes it. */
 	toggleHelp() { if (this.guide) this.closeGuide(); else this.openGuide(); }
@@ -490,6 +503,7 @@ export class XRUI {
 	buttons() {
 		const wearer = this.wrist.wearer;
 		for (const c of this.xr.input.active()) {
+			if (c.state.down.a && !c.claim.a && c === wearer && (this.menu || this.guide)) { this.closeAll(); this.feel(c, 'close'); return true; } // (with a wing open, like the orb: closes everything)
 			if (c.state.down.a && !c.claim.a && c === wearer) { this.wrist.toggle({ pinned: true }); if (this.wrist.open) { this.setWelcome(false); this.xr.lessons?.note('wrist'); } return true; }
 			if (c.state.down.b && !c.claim.b && this.anyOpen) { this.closeMenu(); this.closeGuide(); this.wrist.close(true); return true; }
 		}
@@ -509,7 +523,7 @@ export class XRUI {
 		this.errorNote.mesh.visible = false;
 		this.wrist.reset();
 		this.tab = null;
-		this.opened = false; // (a new session's first Settings opens How to move with it again)
+		this.opened = false;
 		this.teleports = 0;
 		this.pinchNotes = 0;
 		this.pinchNote = null;

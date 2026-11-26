@@ -16,6 +16,22 @@ test('easing curves start at 0 and end exactly at 1', () => {
 	assert.ok(ease.out(0.5) > 0.5 && Math.abs(ease.inOut(0.5) - 0.5) < 1e-12);
 });
 
+test('the smooth ease starts and stops without a jolt (the glide home, build 120)', () => {
+	const h = 1e-4, slope = (t) => (ease.smooth(t + h) - ease.smooth(t)) / h;
+	assert.ok(slope(0) < 1e-6 && slope(1 - h) < 1e-6, 'no speed at either end');
+	assert.ok(Math.abs(ease.smooth(0.5) - 0.5) < 1e-12 && slope(0.5) > 1.8, 'fastest in the middle');
+});
+
+test('motion longer than the feedback cap is marked long (the 1.6 s glide home ran 0.3 s in build 120)', async () => {
+	const fs = await import('node:fs');
+	const src = fs.readFileSync(new URL('../js/xr-dollhouse.js', import.meta.url), 'utf8');
+	for (const name of ['RETURN_GLIDE', 'PLINTH_MOVE']) {
+		const value = Number(src.match(new RegExp(`${name} = ([0-9.]+)`))[1]);
+		assert.ok(value > FEEDBACK_MAX, name);
+		assert.match(src, new RegExp(`duration: ${name},[^\\n]*long: true`), `${name} is long`);
+	}
+});
+
 test('the spring overshoots a little, then settles', () => {
 	let peak = 0;
 	for (let t = 0; t <= 1; t += 0.001) peak = Math.max(peak, ease.spring(t));

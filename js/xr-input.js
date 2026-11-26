@@ -52,6 +52,7 @@ import { KEY } from './theme.js';
 import { HandGestures, JOINTS } from './gestures.js';
 
 const DEADZONE = 0.2;
+const REST_MOVE = 0.002, REST_TURN = THREE.MathUtils.degToRad(1.5), REST_AFTER = 1.5; // a controller this still (m, rad) this long (s) while a bare hand is tracked has been put down
 const RAY_LENGTH = 5;
 const NO_EVENTS = Object.freeze([]);
 export const PINCH_ON = 0.015; // metres between thumb and index tips: a pinch starts
@@ -177,8 +178,9 @@ export class XRInput {
 				held = nextPinch(was, d);
 			}
 		} else if (c.isController) {
-			t.tracked = c.grip.visible !== false;
 			c.grip.updateMatrixWorld(true);
+			this.updateResting(c);
+			t.tracked = c.grip.visible !== false && !c.resting;
 			t.tip.copy(TIP_OFFSET).applyMatrix4(c.grip.matrixWorld);
 			t.radius = TIP_RADIUS;
 			sel.value = c.source?.gamepad?.buttons[0]?.value ?? (c.state.trigger ? 1 : 0);
@@ -240,8 +242,27 @@ export class XRInput {
 	/** Bare hands with gesture readers (tracked or not), as of this frame's readGestures(). */
 	gestureHands() { return this._gh ?? this.controllers.filter((c) => c.gesture); }
 
-	/** Active controllers (connected, with a gamepad). */
-	active() { return this.controllers.filter((c) => c.source && c.isController); }
+	/** Active controllers (connected, with a gamepad, not put down: updateResting). */
+	active() { return this.controllers.filter((c) => c.source && c.isController && !c.resting); }
+
+	/**
+	 * A controller put down while a bare hand is tracked (build 120's B3: the
+	 * Quest still reports it for a while; its laser pointed at the ceiling and
+	 * the orb floated where it lay): still within 2 mm and 1.5° for 1.5 s (a held one always drifts more), it
+	 * counts as resting (no laser, no orb, not active) until it moves.
+	 */
+	updateResting(c) {
+		const now = performance.now() / 1000, r = c.rest ??= { p: new THREE.Vector3(), q: new THREE.Quaternion(), since: now };
+		const p = _v.setFromMatrixPosition(c.grip.matrixWorld), q = _q.setFromRotationMatrix(c.grip.matrixWorld);
+		const scale = c.grip.matrixWorld.getMaxScaleOnAxis() || 1; // (real metres, whatever the rig's scale)
+		if (p.distanceTo(r.p) / scale > REST_MOVE || r.q.angleTo(q) > REST_TURN || c.state.trigger || c.state.grip || c.state.stick.lengthSq() > 0) {
+			r.p.copy(p); r.q.copy(q); r.since = now;
+		}
+		const handIn = this.controllers.some((h) => h.isHand && h.touch.tracked);
+		const was = c.resting;
+		c.resting = handIn && now - r.since > REST_AFTER;
+		if (c.resting && !was) { c.line.visible = false; c.dot.visible = false; }
+	}
 
 	/**
 	 * True while the Quest reports bare hands without joints (hand tracking not
@@ -253,7 +274,7 @@ export class XRInput {
 	}
 
 	/** Entries that wear an orb: controllers, and bare hands with tracked joints. */
-	wearers() { return this.controllers.filter((c) => c.source && (c.isController || (c.isHand && c.touch.tracked))); }
+	wearers() { return this.controllers.filter((c) => c.source && ((c.isController && !c.resting) || (c.isHand && c.touch.tracked))); }
 
 	/** Where an entry wears the orb: a controller's grip, or a bare hand's wrist anchor. */
 	wristOf(c) { return c.isHand ? c.wrist : c.grip; }
@@ -288,7 +309,7 @@ export class XRInput {
 
 	/** Shows or hides one controller's laser (walk mode hides it unless pointing at the menu). */
 	setLaser(c, v) {
-		c.line.visible = v && c.isController;
+		c.line.visible = v && c.isController && !c.resting;
 		if (!v) c.dot.visible = false;
 	}
 
@@ -326,6 +347,7 @@ export function pinchValue(distance) {
 }
 
 const _v = new THREE.Vector3();
+const _q = new THREE.Quaternion();
 
 function emptyTouch(lost = false) {
 	return { kind: null, tracked: false, tip: new THREE.Vector3(), radius: TIP_RADIUS, select: { value: 0, held: false, down: false, up: false, lost, blocked: true } };

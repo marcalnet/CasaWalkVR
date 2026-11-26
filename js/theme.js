@@ -51,7 +51,7 @@ export const PLATE = {
  * The wall portal's rim (js/portal.js): warm off-white (the ceiling white),
  * about 40%, no signal colour. Draft until the Graphic Designer's colour table.
  */
-export const PORTAL = { rim: '#f4efe6', rimStrength: 0.4 };
+export const PORTAL = { rim: '#f4efe6', rimStrength: 0.55 }; // the portal's soft frame
 
 /**
  * Bare hands (milestone C0.2): frosted paper white, translucent, with the

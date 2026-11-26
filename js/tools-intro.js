@@ -20,7 +20,7 @@ import { readSetting, writeSetting } from './settings.js';
 const AHEAD = 1.3, DOWN = 15, SPACING = 0.38, BIG = 0.32; // metres (DOWN: degrees below eye level)
 const LOOK = THREE.MathUtils.degToRad(30), LOOK_WIDE = THREE.MathUtils.degToRad(60), SETTLE = 1; // it starts when you look towards the model (within 30°) a second after arriving, within 60° after 4 s, and by itself after 10 s
 const WIDE_AFTER = 4, TIMED_AFTER = 10; // (seconds; the Tester's finding: waiting for a look within 30° it might never be seen)
-const MODEL_MIDDLE = 0.8; // metres above the stage floor: about the middle of the model on the plinth
+const MODEL_MIDDLE = 0.2; // metres above the plinth's top: about the middle of the model on it (0.6 m or 1.3 m high)
 const FAN_OPEN = 2; // seconds the fan opens by itself as the tools land
 const HOLD = 5; // seconds before they fly, unless reached for
 const REACH = 0.9; // a hand (or a laser's aim) within this of a tool: it starts
@@ -80,13 +80,16 @@ export class ToolsIntro {
 		this.right = right.clone();
 		this.state = { t: 0, flying: null };
 		this.group.visible = true;
+		// Seen once is seen: remembered as it appears, not when the last tool lands (build 120:
+		// stepping inside during it, it played again by itself at the next visit).
+		if (!this.again) writeSetting('toolsIntro', true);
 	}
 
 	/** True while the head looks towards the scale model (within `limit`, 30° by default). */
 	lookingAtModel(limit = LOOK) {
 		const xr = this.xr, head = xr.headWorld(), look = this._look ??= new THREE.Vector3(), to = this._to ??= new THREE.Vector3();
 		look.setFromMatrixColumn(xr.camera.matrixWorld, 2).negate();
-		to.set(0, MODEL_MIDDLE, -xr.plinthDistance); xr.stage.localToWorld(to); to.sub(head).normalize(); // (about the middle of the model, above the plinth's middle)
+		to.set(0, xr.plinthH + MODEL_MIDDLE, -xr.plinthDistance); xr.stage.localToWorld(to); to.sub(head).normalize(); // (about the middle of the model, above the plinth's middle)
 		return look.angleTo(to) < limit;
 	}
 
@@ -145,7 +148,6 @@ export class ToolsIntro {
 		});
 		if (done === this.items.length) {
 			this.stop();
-			writeSetting('toolsIntro', true);
 			onDone?.();
 		}
 	}

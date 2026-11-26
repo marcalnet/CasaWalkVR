@@ -77,8 +77,8 @@ test('the settings boards: the same tabs at both layers, a Close key, every targ
 	for (const p of Object.values(x.menus)) {
 		assert.deepEqual(p.tabs.map((t) => t.label), ['View', 'Walk', 'Tools', 'General']);
 		assert.equal(p.lead.label, '? How to move', 'the How to move key at the tabs\' left end');
-		assert.deepEqual(shape(p.tabs[0].rows), ['light:choice:Time of day:Morning:Noon:Sunset:Night', 'shadows:switch:Shadows | depth:switch:Depth shading',
-			'ceilings:switch:Ceilings | view:switch:Passthrough', 'seethrough:switch:Transparent walls']);
+		assert.deepEqual(shape(p.tabs[0].rows), ['light:choice:Time of day:Morning:Noon:Sunset:Night', 'shadows:switch:Shadows | ceilings:switch:Ceilings',
+			'depth:switch:Depth shading', 'view:switch:Passthrough', 'seethrough:switch:Transparent walls']);
 		assert.deepEqual(shape(p.tabs[1].rows), ['height:choice:Height:Yours:1.4 m:1.7 m:2.0 m', 'solid:switch:Solid walls']);
 		assert.deepEqual(shape(p.tabs[2].rows), ['lens:choice:Camera lens:24 mm:28 mm:35 mm:50 mm']);
 		assert.deepEqual(shape(p.tabs[3].rows), ['mainHand:choice:Main hand:Right:Left', 'sound:choice:Sound:Off:Effects']);
@@ -509,26 +509,141 @@ test('the plinth doors fade out while the board is open, take no presses, and co
 	assert.ok(d.doorGroup.visible && d.doorAlpha === 1, 'back once it closes');
 });
 
-test('a session\'s first Settings opens How to move with it, until a teleport; afterwards How to move opens from its own key; the tab you left is kept', async () => {
+test('a new home loaded while the doors are faded: they come back whole (build 120, B1)', async () => {
+	const { x, frame } = await setup();
+	const d = x.modes.dollhouse;
+	frame();
+	const base = new Map();
+	d.doorGroup.traverse((o) => { for (const m of [].concat(o.material ?? [])) base.set(m, m.opacity); });
+	x.ui.openMenu();
+	for (let i = 0; i < 20; i++) frame();
+	assert.equal(d.doorAlpha, 0, 'faded');
+	d.setModel(); // (the page opened another home: the levels are built again)
+	x.ui.closeAll();
+	for (let i = 0; i < 20; i++) frame();
+	d.doorGroup.traverse((o) => { for (const m of [].concat(o.material ?? [])) if (base.has(m)) assert.equal(m.opacity, base.get(m), `${o.name}: back to its own opacity`); });
+	x.ui.openMenu(); for (let i = 0; i < 20; i++) frame();
+	d.begin(); // (a new session with the doors faded)
+	assert.ok(d.doorAlpha === 1 && d.doorGroup.visible, 'a new session shows them at once');
+	x.ui.closeAll();
+});
+
+test('a controller put down while a bare hand is tracked rests: no laser, no orb, not active, until it moves (build 120, B3)', async () => {
+	const { x, hands } = await setup();
+	const input = x.input, c = input.controllers.find((e) => e.isController);
+	c.grip.visible = true;
+	const hand = { isHand: true, touch: { tracked: true } }; // (a tracked bare hand)
+	const step = (n) => { for (let i = 0; i < n; i++) { c.grip.updateMatrixWorld(true); input.updateResting(c); } };
+	const realNow = performance.now.bind(performance);
+	let t = realNow();
+	performance.now = () => t;
+	try {
+		input.controllers.push(hand);
+		step(1); t += 1000; step(1);
+		assert.ok(!c.resting, 'still for 1 s: not yet');
+		t += 600; step(1);
+		assert.ok(c.resting && !input.active().includes(c) && !input.wearers().includes(c) && !c.line.visible, 'still for 1.6 s: put down');
+		c.grip.position.x += 0.01; step(1);
+		assert.ok(!c.resting && input.active().includes(c), 'picked up: at once');
+		input.controllers.pop();
+		t += 5000; step(1);
+		assert.ok(!c.resting, 'no hand tracked: a still controller is never put down');
+	} finally { performance.now = realNow; if (input.controllers.at(-1) === hand) input.controllers.pop(); }
+});
+
+test('a bare hand\'s teleport lands where the ring was 0.1 s before the release (build 120, B6)', async () => {
 	const { x } = await setup();
-	x.ui.openMenu();
-	assert.ok(x.menu && x.ui.guide, 'the first Settings of a session: both wings');
+	const w = x.modes.walk, P = (z) => new THREE.Vector3(0, 0, z);
+	const tele = { age: 1, past: [{ age: 0.85, valid: true, point: P(-3) }, { age: 0.9, valid: true, point: P(-3.1) }, { age: 0.95, valid: false, point: P(-6) }, { age: 1, valid: false, point: P(-7) }] };
+	const r = w.landingBefore(tele, 0.1);
+	assert.ok(r.valid && r.point.z === -3.1, 'the landing from before the fingers opened, not the flick');
+	assert.equal(w.landingBefore({ age: 0.05, past: [{ age: 0.05, valid: true, point: P(-1) }] }, 0.1).point.z, -1, 'a young aim: its oldest');
+});
+
+test('bare hands: the main hand between the eyes and the model shows a faint aim and the marker before any pinch (build 120, item 5)', async () => {
+	const { x, frame } = await setup();
+	frame();
+	const d = x.modes.dollhouse, c = x.input.hands.right, left = x.input.hands.left, leftSource = left.source;
+	c.isHand = true; c.isController = false;
+	left.source = null; // (bare hands only: no controller in use)
+	c.touch.tracked = true;
+	const head = x.headWorld(), box = d.modelBox(), mid = box.getCenter(new THREE.Vector3());
+	const through = head.clone().lerp(mid, 0.4);
+	c.gesture = { shape: { pinchAt: through } };
+	c.gestures = [];
+	x.input._gh = [c];
+	const spots = [];
+	d.handMoves(1 / 72, spots);
+	assert.ok(!d.handRays[c.index].visible, 'one frame: not yet');
+	d.handMoves(1 / 72, spots);
+	const ray = d.handRays[c.index];
+	assert.ok(ray.visible && ray.material.opacity < 0.5, 'two frames: a faint ray at once, no pinch');
+	assert.equal(d.handAim, null, 'not an aim yet');
+	// The hand leaves the zone: gone 0.2 s later.
+	c.gesture.shape.pinchAt = head.clone().add(new THREE.Vector3(0.6, -0.2, 0));
+	for (let i = 0; i < 10; i++) d.handMoves(1 / 72, []);
+	assert.ok(ray.visible, 'lingers a moment');
+	for (let i = 0; i < 10; i++) d.handMoves(1 / 72, []);
+	assert.ok(!ray.visible, 'then goes');
+	x.input._gh = null; c.isHand = false; c.isController = true; left.source = leftSource;
+});
+
+test('the wrist key opens both wings and closes both; each Close closes its own; How to move reopens from its key every time; the tab you left is kept', async () => {
+	const { x } = await setup();
+	x.menuAction('settings');
+	assert.ok(x.menu && x.ui.guide, 'Settings, and help: both wings');
 	assert.equal(x.menu.tab, 'view');
-	x.menu.setTab('walk'); x.ui.toggleBoard();
-	assert.ok(!x.menu && !x.ui.guide, 'Settings on the wrist closes both');
-	x.ui.openMenu();
-	assert.ok(x.menu && !x.ui.guide, 'the second time: only Settings');
+	x.menu.setTab('walk'); x.menuAction('settings');
+	assert.ok(!x.menu && !x.ui.guide, 'again: both close');
+	x.menuAction('settings');
+	assert.ok(x.menu && x.ui.guide, 'and both again (build 120: help closed alone was never found again)');
 	assert.equal(x.menu.tab, 'walk', 'the tab you left');
-	x.menuAction('guideKey');
-	assert.ok(x.ui.guide, 'the How to move key opens the left wing');
-	x.menuAction('closeGuide');
-	assert.ok(x.menu && !x.ui.guide, 'its Close key closes only that wing');
+	for (let i = 0; i < 3; i++) {
+		x.menuAction('closeGuide');
+		assert.ok(x.menu && !x.ui.guide, 'its Close key closes only that wing');
+		x.menuAction('guideKey');
+		assert.ok(x.ui.guide && x.ui.guide.mesh.visible, 'the How to move key opens it again, every time');
+	}
+	x.menuAction('close');
+	assert.ok(!x.menu && x.ui.guide, 'Settings\' Close closes only Settings');
 	x.ui.closeAll();
-	x.ui.reset(); // (a new session)
-	x.ui.onTeleport();
-	x.ui.openMenu();
-	assert.ok(x.menu && !x.ui.guide, 'after a teleport, even a new session\'s first Settings opens alone');
-	x.ui.closeAll();
+});
+
+test('the wings: Settings on the main hand\'s side, How to move on the other, both 30° or more off straight ahead; the second shares the first\'s front (B8)', async () => {
+	const { x, frame } = await setup();
+	frame();
+	const angle = (panel) => { // degrees, + to the left of straight ahead (the rig looks along -Z)
+		const p = panel.mesh.position, h = new THREE.Vector3().setFromMatrixPosition(x.camera.matrix);
+		return THREE.MathUtils.radToDeg(Math.atan2(-(p.x - h.x), -(p.z - h.z)));
+	};
+	for (const main of ['right', 'left']) {
+		x.menuAction({ id: 'mainHand', value: main });
+		x.ui.closeAll();
+		x.menuAction('settings');
+		const s = angle(x.menu), g = angle(x.ui.guide), side = main === 'right' ? -1 : 1;
+		assert.ok(Math.sign(s) === side && Math.abs(s) >= 30 && Math.sign(g) === -side && Math.abs(g) >= 30, `${main}: settings ${s.toFixed(0)}, guide ${g.toFixed(0)}`);
+		// Turn the head 45° towards Settings, then reopen How to move: it keeps the pair's front.
+		x.menuAction('closeGuide');
+		x.camera.rotation.y = THREE.MathUtils.degToRad(45 * side); x.camera.updateMatrix();
+		x.menuAction('guideKey');
+		assert.ok(Math.abs(angle(x.ui.guide) - g) < 1, `${main}: How to move back where it was (${angle(x.ui.guide).toFixed(0)}), not in front`);
+		x.camera.rotation.y = 0; x.camera.updateMatrix();
+		x.ui.closeAll();
+	}
+	x.menuAction({ id: 'mainHand', value: 'right' });
+});
+
+test('the orb, or A, with a wing open closes everything', async () => {
+	const { x, frame } = await setup();
+	frame();
+	x.menuAction('settings');
+	assert.ok(x.menu && x.ui.guide);
+	const wearer = x.ui.wrist.wearer;
+	assert.ok(wearer, 'the orb is worn');
+	wearer.state.down.a = true;
+	x.ui.buttons();
+	wearer.state.down.a = false;
+	assert.ok(!x.menu && !x.ui.guide && !x.ui.wrist.open, 'A: both wings and the arc');
 });
 
 test('holding the model: it follows the grip, level (turned only about the vertical); let go in the air it floats, then goes home by itself', async () => {
@@ -536,6 +651,7 @@ test('holding the model: it follows the grip, level (turned only about the verti
 	const d = x.modes.dollhouse;
 	const home = new THREE.Vector3(0, d.doll.pos.y, -x.plinthDistance); // (the middle of the plinth)
 	const grip = hands.right.grip;
+	hands.left.grip.visible = grip.visible = true; // (tracked)
 	grip.position.set(0.1, 1.0, -0.4);
 	frame();
 	press('right', 'grip'); frame();
@@ -551,15 +667,17 @@ test('holding the model: it follows the grip, level (turned only about the verti
 	grip.rotation.set(0, 0, 0);
 	press('right', 'grip', false); frame();
 	assert.ok(!d.grab && d.floating, 'let go in the air: it floats');
-	// A controller near it (within 30 cm) keeps it waiting.
-	for (let i = 0; i < 72 * 5; i++) frame();
+	// A controller near it (within 30 cm) keeps it waiting (held: never perfectly still).
+	for (let i = 0; i < 72 * 5; i++) { grip.position.x += i % 2 ? 0.004 : -0.004; frame(); }
 	assert.ok(d.floating && !d.floating.going, 'a hand near it: it waits');
-	// Hands away: 4 s, then the glide home (0.8 s), level again.
+	// Hands away: 4 s, then the glide home (1.6 s), level again.
 	grip.position.set(2, 0, 2);
 	hands.left.grip.position.set(-2, 0, 2);
 	for (let i = 0; i < 72 * 3.5; i++) frame();
 	assert.ok(d.floating && !d.floating.going, 'still counting down');
-	for (let i = 0; i < 72 * 2; i++) frame();
+	for (let i = 0; i < 72 * 1.5; i++) frame();
+	assert.ok(d.floating?.going, 'gliding home: it takes its time (1.6 s, not cut to 0.3 s)');
+	for (let i = 0; i < 72 * 1.5; i++) frame();
 	assert.equal(d.floating, null, 'home');
 	assert.ok(d.doll.pos.distanceTo(home) < 1e-6 && d.level(), 'back in its place, level');
 	// Taking hold again while it floats cancels the return.
@@ -988,7 +1106,7 @@ test('bare hands teleport with one hand: the main hand while it is empty, the ot
 	x.menuAction({ id: 'mainHand', value: 'right' });
 });
 
-test('the fan: opens only on the "look at your watch" pose; tools slide aside from the orb (20 cm kept); the orb yields to its own hand', async () => {
+test('the fan: opens only on the "look at your watch" pose; the fan slides outward as a group from the orb (25 cm kept); the orb yields to its own hand', async () => {
 	const { x, frame, hands } = await setup();
 	const fan = x.fan;
 	x.lessons.stop();
@@ -1003,7 +1121,7 @@ test('the fan: opens only on the "look at your watch" pose; tools slide aside fr
 	hands.left.grip.rotation.x = 0.6; // tilted so the face looks at the eyes
 	for (let i = 0; i < 20; i++) frame();
 	assert.ok(fan.group.visible && fan.alpha === 1, 'the face towards the eyes: the fan opens');
-	// The orb (on the right wrist) brought near the open fan: the tools slide away, never nearer than 20 cm.
+	// The orb (on the right wrist) brought near the open fan: the whole fan slides outward, its nearest tool 25 cm from the orb.
 	const orb = x.ui.wrist.orb.group, o = new THREE.Vector3(), p = new THREE.Vector3();
 	const meter = fan.slots.find((s) => s.name === 'meter');
 	meter.home.getWorldPosition(p);
@@ -1013,15 +1131,16 @@ test('the fan: opens only on the "look at your watch" pose; tools slide aside fr
 	orb.getWorldPosition(o);
 	meter.home.getWorldPosition(p);
 	assert.ok(fan.group.visible, 'the fan stays open');
-	assert.ok(meter.pushWorld.length() > 0.01, 'the tools were pushed aside');
-	assert.ok(p.distanceTo(o) >= 0.19, `the meter keeps its distance: ${p.distanceTo(o).toFixed(3)}`);
+	assert.ok(fan.slide > 0.01, `the fan slid aside (${fan.slide.toFixed(3)} m)`);
+	const nearest = Math.min(...fan.slots.map((s) => s.home.getWorldPosition(new THREE.Vector3()).distanceTo(o)));
+	assert.ok(nearest >= 0.23 || fan.slide >= 0.34, `its nearest tool keeps its distance: ${nearest.toFixed(3)} m`);
 	// The orb's own hand reaching into the fan: no push; the orb shrinks and fades instead.
 	meter.home.getWorldPosition(p);
 	hands.right.grip.position.copy(x.rig.worldToLocal(p.clone().add(new THREE.Vector3(0.05, 0, 0.05))));
 	for (let i = 0; i < 60; i++) frame();
 	assert.ok(x.ui.wrist.orbYield && x.ui.wrist.orb.yieldK > 0.9, 'the orb yields');
 	assert.ok(x.ui.wrist.orb.body.scale.x < 0.7 && x.ui.wrist.orb.shellMat.opacity < 0.3, 'half size, a third of the strength');
-	assert.ok(meter.pushWorld.length() < 0.01, 'the tools stay put');
+	assert.ok(fan.slideTarget === 0, 'taking: the fan no longer slides away (it glides back)');
 });
 
 test('the tools show also starts on a wider look after 4 s, and by itself after 10 s, never behind an open board', async () => {
@@ -1040,8 +1159,9 @@ test('the tools show also starts on a wider look after 4 s, and by itself after 
 	intro.stop();
 });
 
-test('the plinth: 0.60 m with a controller, 0.90 m with only bare hands; a switch waits 1 s, then rises over 0.8 s with the model on it; never while the model floats', async () => {
+test('the plinth: 0.60 m with a controller, 1.24 m with only bare hands, 30 cm of table each side; a switch waits 1 s, then rises over 0.8 s with the model on it; never while the model floats', async () => {
 	const { x, frame } = await setup();
+	const { PLINTH_HEIGHT_HANDS: H } = await import('../js/xr-scene.js');
 	const d = x.modes.dollhouse;
 	frame();
 	assert.equal(x.plinthH, 0.6, 'controllers: 0.60 m');
@@ -1050,19 +1170,24 @@ test('the plinth: 0.60 m with a controller, 0.90 m with only bare hands; a switc
 	// The controllers put down: only bare hands (no controller source).
 	const sources = x.input.controllers.map((c) => c.source);
 	x.input.controllers.forEach((c) => { c.source = null; });
+	// (A bare hand is seen: the plinth rises only for a hand that is really there.)
+	const handEntry = x.input.controllers[0], realTouch = x.input.updateTouch;
+	x.input.updateTouch = function (c) { realTouch.call(this, c); if (c === handEntry && !c.source) { c.isHand = true; c.touch.tracked = true; } };
 	for (let i = 0; i < 40; i++) frame(); // 0.55 s: still waiting (a flicker must not bob the plinth)
 	assert.equal(x.plinthH, 0.6, 'waits 1 s');
 	for (let i = 0; i < 40; i++) frame(); // 1.1 s: the move began
-	assert.ok(x.plinthH > 0.6 && x.plinthH < 0.9 || x.plinthH === 0.9, 'moving');
+	assert.ok(x.plinthH > 0.6 && x.plinthH < H || x.plinthH === H, 'moving');
 	for (let i = 0; i < 100; i++) frame();
-	assert.ok(Math.abs(x.plinthH - 0.9) < 1e-6 && Math.abs(top() - 0.9) < 1e-6, 'bare hands: 0.90 m');
-	assert.ok(Math.abs(d.doll.pos.y - 0.904) < 1e-6, 'the model rode up with it');
-	assert.ok(Math.abs(x.plate.mesh.position.y - (0.9 + x.plate.mesh.userData.tiltHalf)) < 1e-6, 'and the plate');
+	assert.ok(Math.abs(x.plinthH - H) < 1e-6 && Math.abs(top() - H) < 1e-6, 'bare hands: 1.24 m');
+	assert.ok(Math.abs(d.doll.pos.y - H - 0.004) < 1e-6, 'the model rode up with it');
+	assert.ok(Math.abs(x.plinthSize.W - x.plinthBase.W - 0.2) < 1e-6 && Math.abs(x.plate.mesh.scale.x * x.pedestal.scale.x - 1) < 1e-9, '10 cm more table each side, the plate unstretched');
+	assert.ok(Math.abs(x.plate.mesh.position.y - (H + x.plate.mesh.userData.tiltHalf)) < 1e-6, 'and the plate');
 	// A controller is back, but the model is floating: it waits.
 	d.floating = { wait: 0, going: null };
 	x.input.controllers.forEach((c, i) => { c.source = sources[i]; });
+	handEntry.isHand = false; handEntry.isController = true; x.input.updateTouch = realTouch;
 	for (let i = 0; i < 200; i++) frame();
-	assert.equal(x.plinthH, 0.9, 'not while the model floats');
+	assert.equal(x.plinthH, H, 'not while the model floats');
 	d.stopFloating();
 	for (let i = 0; i < 200; i++) frame();
 	assert.ok(Math.abs(x.plinthH - 0.6) < 1e-6, 'back to 0.60 m once at rest');

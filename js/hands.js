@@ -7,7 +7,7 @@
 // overlap). The index fingertip carries the orange accent, the "pen": faint,
 // and full when a key is near. In passthrough only a faint outline and the
 // fingertip show. When tracking is lost the hand fades out. Never in photos.
-// Draw calls: 3 per hand.
+// Draw calls: 4 per hand (the index and thumb tips glow; the capsules are the fallback).
 
 import * as THREE from 'three';
 import { HAND } from './theme.js';
@@ -65,10 +65,11 @@ export class HandView {
 		this.tipMat = new THREE.MeshBasicMaterial({ color: HAND.tip, transparent: true, opacity: HAND.tipIdle, depthWrite: false });
 		this.tip = new THREE.Mesh(new THREE.SphereGeometry(0.0075, 12, 8), this.tipMat);
 		this.tip.renderOrder = 32;
+		this.thumbTip = this.tip.clone(); // (the thumb glows like the index: the pinching fingers, build 120)
 		this.group = new THREE.Group();
 		this.group.name = 'hand-view';
-		this.group.add(this.depthMesh, this.colourMesh, this.tip);
-		for (const m of [this.depthMesh, this.colourMesh, this.tip]) m.frustumCulled = false;
+		this.group.add(this.depthMesh, this.colourMesh, this.tip, this.thumbTip);
+		for (const m of [this.depthMesh, this.colourMesh, this.tip, this.thumbTip]) m.frustumCulled = false;
 		this.group.visible = false;
 		// The joints are in the hand group's space, which is the rig's: the view sits there too.
 		c.hand.parent?.add(this.group);
@@ -90,7 +91,7 @@ export class HandView {
 			this.model?.removeFromParent();
 			this.model = want;
 			if (want) this.group.add(want);
-			this.depthMesh.visible = this.colourMesh.visible = this.tip.visible = !want;
+			this.depthMesh.visible = this.colourMesh.visible = this.tip.visible = this.thumbTip.visible = !want;
 		}
 		if (tracked) this.model ? this.model.userData.pose(c.hand.joints) : this.rebuild();
 		this.alpha = tracked ? 1 : Math.max(0, this.alpha - dt / HAND.fade);
@@ -130,8 +131,9 @@ export class HandView {
 		}
 		this.geometry.attributes.position.needsUpdate = true;
 		this.geometry.attributes.normal.needsUpdate = true;
-		const tip = joints['index-finger-tip'];
+		const tip = joints['index-finger-tip'], thumb = joints['thumb-tip'];
 		if (tip?.visible) this.tip.position.copy(tip.position);
+		if (thumb?.visible) this.thumbTip.position.copy(thumb.position);
 	}
 
 	/** Leaving VR. */

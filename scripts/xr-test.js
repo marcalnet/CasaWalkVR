@@ -286,7 +286,8 @@ const entry = () => page.evaluate(() => {
 	want('dollhouse', x.mode === 'dollhouse' && x.menu === null && x.ui.welcome.mesh.visible && x.ui.welcomeOn);
 	want('gallery', x.showroom.visible && x.stage.visible && x.gallery.visible && x.pedestal.visible && !x.walkSky.visible && !x.model.layers.ground.visible);
 	want('model reset', x.modes.dollhouse.doll.yaw === 0 && x.modes.dollhouse.doll.zoom === 1 && Math.abs(x.anchor.scale.x - x.baseScale) < 1e-9);
-	want('idle', !x.modes.dollhouse.grab && !x.modes.walk.tele && !x.modes.walk.fade && !x.ui.drag && !x.modes.walk.arc.dots.visible && !(x.veil.amount('teleport') > 0) && x.modes.dollhouse.markers.every((m) => !m.visible));
+	want('idle: grab', !x.modes.dollhouse.grab); want('idle: aim', !x.modes.walk.tele); want('idle: fade', !x.modes.walk.fade && !(x.veil.amount('teleport') > 0));
+	want('idle: drag', !x.ui.drag); want('idle: arc', !x.modes.walk.arc.dots.visible); want('idle: markers', x.modes.dollhouse.markers.every((m) => !m.visible));
 	want('orb on the right grip', x.ui.wrist.orb.holder?.handedness === 'right' && x.ui.wrist.orb.group.parent === x.ui.wrist.orb.holder.grip && !x.ui.wrist.open);
 	want('lasers', x.input.active().length === 2 && x.input.active().every((c) => c.line.visible));
 	want('eyes 1.89', Math.abs(x.headWorld().y - 1.89) < 0.005);
@@ -486,7 +487,7 @@ const crossSeen = () => page.evaluate(() => {
 		const angle = Math.atan2(fwd.clone().cross(to.clone().normalize()).y, fwd.dot(to.clone().normalize())) * 180 / Math.PI; // + = left
 		return { angle: +angle.toFixed(1), distance: +to.length().toFixed(2), below: +(head.y - menu.y).toFixed(2), wrist: x.ui.wrist.open, title: x.menu.title };
 	});
-	check('Settings opens the right wing beside the model: about 40° to the right (out of the model\'s way), 0.55 m from the eyes, 15° below; the wrist menu closes', s.menu === 'dollhouse' && m.angle < -34 && m.angle > -56 && m.distance > 0.45 && m.distance < 0.56 && m.below > 0.08 && m.below < 0.3 && !m.wrist && /Scale model/.test(m.title), JSON.stringify(m));
+	check('Settings opens the right wing beside the model: about 45° to the right (out of the model\'s way), 0.55 m from the eyes, 15° below; the wrist menu closes', s.menu === 'dollhouse' && m.angle < -34 && m.angle > -56 && m.distance > 0.45 && m.distance < 0.56 && m.below > 0.08 && m.below < 0.3 && !m.wrist && /Scale model/.test(m.title), JSON.stringify(m));
 	// Nothing covers the model: no open wing overlaps the model's outline seen from the eyes, with the 5° margin.
 	const cover = await page.evaluate(async () => {
 		const THREE = await import('three'), W = await import('/js/wings.js');
@@ -769,7 +770,8 @@ check('B closes the board', (await state()).menu === null);
 	const c4v = await ceilings(), still = await state();
 	check('a fingertip from behind, and pinches over a key, click nothing', c3v === c0v && c4v === c0v && still.menu === 'dollhouse' && still.mode === 'dollhouse', JSON.stringify({ c3v, c4v, menu: still.menu }));
 	await pressKey('hand', 'right', 'dollhouse', 'close');
-	check('the board\'s Close key, pressed with a fingertip, closes it', (await state()).menu === null);
+	check('the Settings wing\'s Close key, pressed with a fingertip, closes it (How to move stays: each wing closes on its own)', (await state()).menu === null);
+	await page.evaluate(() => window.__casawalk.xr.ui.closeAll()); await frames(3); // (How to move opened with it: the wrist key opens both)
 
 	// Moving with bare hands (C0.4). The gestures themselves are read from the joints
 	// (js/gestures.js, its Node tests); here scripted gesture events drive the app:
@@ -840,10 +842,10 @@ check('B closes the board', (await state()).menu === null);
 	const settling = await page.evaluate(() => { const x = window.__casawalk.xr, w = x.modes.walk, c = x.input.controllers.find((c) => c.handedness === 'right');
 		return { via: w.tele?.via, dots: w.arc.dots.visible, colour: w.arc.dots.material.color.getHexString(), block: x.aimBlock(c, c.gesture?.shape?.pinchAt) }; });
 	await handAimAt(floorAhead); await frames(10);
-	// (Steady is 0.3 s of the app's own time: a slow emulator needs more real time.)
-	await page.waitForFunction(() => (window.__casawalk.xr.modes.walk.tele?.steady ?? 0) >= 0.3, null, { timeout: 8000, polling: 'raf' }).catch(() => {});
-	const steady = await page.evaluate(() => { const w = window.__casawalk.xr.modes.walk; return { steady: w.tele?.steady ?? 0, valid: !!w.tele?.result?.valid, colour: w.arc.dots.material.color.getHexString(), discs: w.discs.count }; });
-	check('bare hands walking: a pinch held shows the arc from the hand, white while it settles, blue once steady', settling.via === 'hand' && settling.dots && settling.colour === 'ffffff' && steady.valid && steady.colour === '3d8bfd', JSON.stringify({ settling, steady, targets: targets.length }));
+	// (The arc must have shown 0.3 s of the app's own time: a slow emulator needs more real time.)
+	await page.waitForFunction(() => (window.__casawalk.xr.modes.walk.tele?.age ?? 0) >= 0.4, null, { timeout: 8000, polling: 'raf' }).catch(() => {});
+	const steady = await page.evaluate(() => { const w = window.__casawalk.xr.modes.walk; return { age: w.tele?.age ?? 0, valid: !!w.tele?.result?.valid, colour: w.arc.dots.material.color.getHexString(), discs: w.discs.count }; });
+	check('bare hands walking: a pinch held shows the arc from the hand, blue at once on a floor (no white "not yet")', settling.via === 'hand' && settling.dots && settling.colour === '3d8bfd' && steady.valid && steady.colour === '3d8bfd', JSON.stringify({ settling, steady, targets: targets.length }));
 	await shot('hands-teleport-aim');
 	const head0 = await page.evaluate(() => window.__casawalk.xr.headWorld().toArray());
 	await gesture('right', { type: 'pinchEnd' }); await frames(4);
@@ -858,11 +860,11 @@ check('B closes the board', (await state()).menu === null);
 	const t1 = await page.evaluate(() => ({ yaw: window.__casawalk.xr.rig.rotation.y, aiming: window.__casawalk.xr.modes.walk.tele?.via === 'hand' }));
 	check('bare hands: a wrist flick to the right while aiming turns right by 30°, the arc stays', Math.abs((yaw0 - t1.yaw) - Math.PI / 6) < 1e-3 && t1.aiming, JSON.stringify({ turned: +((yaw0 - t1.yaw) * 180 / Math.PI).toFixed(1), aiming: t1.aiming }));
 	const s0 = await page.evaluate(() => window.__casawalk.xr.headWorld().toArray());
-	await page.evaluate(() => { const t = window.__casawalk.xr.modes.walk.tele; if (t) t.steady = 0; }); // (white again: a slip)
+	await page.evaluate(() => { const t = window.__casawalk.xr.modes.walk.tele; if (t) { t.age = 0.1; t.past.length = 0; } }); // (a quick pinch-and-open: shown under 0.3 s)
 	await gesture('right', { type: 'pinchEnd' }); await frames(10);
 	const s1 = await page.evaluate(() => ({ head: window.__casawalk.xr.headWorld().toArray(), tele: !!window.__casawalk.xr.modes.walk.tele, fade: !!window.__casawalk.xr.modes.walk.fade }));
 	const slid = Math.hypot(s1.head[0] - s0[0], s1.head[2] - s0[2]);
-	check('bare hands: opening the pinch before the ring is blue moves nothing; the arc goes', slid < 0.01 && !s1.tele && !s1.fade, JSON.stringify({ moved: +slid.toFixed(3), ...s1 }));
+	check('bare hands: a quick pinch-and-open (the arc shown under 0.3 s) moves nothing; the arc goes', slid < 0.01 && !s1.tele && !s1.fade, JSON.stringify({ moved: +slid.toFixed(3), ...s1 }));
 	// Help inside: the board on How to move, for bare hands.
 	await page.evaluate(() => window.__casawalk.xr.menuAction('help'));
 	await frames(3);
@@ -1303,7 +1305,7 @@ const walkUntil = async (pred, arg, timeout = 15000) => {
 		await touchWall(0.3); await frames(5);
 		touched = await touchWall(0.02); await frames(30);
 		pt = await portal();
-		check('a fingertip touching a wall opens a 0.35 m portal, centred on the touch (0.1 m inside)', touched && pt.r === 0.35 && Math.hypot(pt.at[0] - touched.wall[0], pt.at[1] - touched.wall[1], pt.at[2] - touched.wall[2]) < 0.13, JSON.stringify({ pt, touched }));
+		check('a fingertip touching a wall opens a 0.42 m portal, centred on the touch (0.1 m inside)', touched && pt.r === 0.42 && Math.hypot(pt.at[0] - touched.wall[0], pt.at[1] - touched.wall[1], pt.at[2] - touched.wall[2]) < 0.13, JSON.stringify({ pt, touched }));
 		await shot('walk-portal');
 		await touchWall(0.3); await frames(40);
 		pt = await portal();
@@ -1323,7 +1325,7 @@ const walkUntil = async (pred, arg, timeout = 15000) => {
 			return page.evaluate(() => +window.__casawalk.xr.portals.uniforms.cwPortalEye.value.w.toFixed(3));
 		};
 		const eye = [await eyesAt(0.35), await eyesAt(0.25), await eyesAt(0.2)];
-		check('the eye portal: none at 0.35 m, opening at 0.25 m, 0.40 m radius at 0.20 m', eye[0] === 0 && eye[1] > 0 && eye[1] < 0.4 && eye[2] === 0.4, JSON.stringify(eye));
+		check('the eye portal: none at 0.35 m, opening at 0.25 m, 0.48 m radius at 0.20 m', eye[0] === 0 && eye[1] > 0 && eye[1] < 0.48 && eye[2] === 0.48, JSON.stringify(eye));
 		await shot('walk-eye-portal');
 		await eyesAt(0.6);
 		await walkUntil(({ start, a, d }) => {
@@ -1579,7 +1581,7 @@ check('example home: two storeys, all shown', lv.count === 2 && lv.multi && lv.h
 	// The plinth stands 60 cm in front of you, and its plate shows the true scale.
 	const pl = await page.evaluate(() => {
 		const x = window.__casawalk.xr, V = x.rig.position.constructor, head = x.headWorld();
-		const front = x.stage.localToWorld(new V(0, 0, -x.plinthDistance + x.plinthSize.D / 2));
+		const front = x.stage.localToWorld(new V(0, 0, x.pedestal.position.z + x.plinthSize.D / 2)); // (the plinth's own front edge: bare hands widen it backwards)
 		return { gap: Math.hypot(front.x - head.x, front.z - head.z), plate: x.plate.text, ratio: 1 / x.anchor.scale.x, onPlinth: x.plate.mesh.parent === x.pedestal && x.plate.mesh.visible };
 	});
 	check('the plinth\'s front edge is 60 cm in front of you; its plate shows the scale', Math.abs(pl.gap - 0.6) < 0.01 && pl.plate === `1:${Math.round(pl.ratio)}` && pl.onPlinth, JSON.stringify(pl));
