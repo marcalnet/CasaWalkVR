@@ -81,7 +81,7 @@ test('the settings boards: the same tabs at both layers, no Close key (the foot 
 		assert.deepEqual(shape(p.tabs[1].rows), ['height:choice:Height:Yours:1.4 m:1.7 m:2.0 m', 'solid:switch:Solid walls']);
 		assert.deepEqual(shape(p.tabs[2].rows), ['lens:choice:Camera lens:24 mm:28 mm:35 mm:50 mm']);
 		assert.deepEqual(shape(p.tabs[3].rows), ['mainHand:choice:Main hand:Right:Left', 'sound:choice:Sound:Off:Effects']);
-		assert.equal(p.actions.length, 0, 'no actions on the board: the doors are on the wrist');
+		assert.equal(p.actions, undefined, 'no action rows on the board: the doors are on the wrist');
 		assert.ok(!p.rects().some((r) => /close/i.test(r.id)) && /outside to close$/.test(p.hint), 'no Close key: the foot says how to close (build 120, M1)');
 		assert.ok(!p.get('levels'), 'Levels is not on the board: a stack of keys beside the doors');
 		// Touch targets: at least 4 cm (the wing is 40 cm wide).
@@ -342,11 +342,10 @@ test('leaving VR in the middle of a walk leaves nothing behind', async () => {
 	Object.assign(walk, { tele: { c, via: 'trigger' }, fade: { t: 0, action: () => { throw new Error('a stale teleport ran'); } } });
 	walk.arc.dots.visible = true;
 	x.veil.set('teleport', 1);
-	x.ui.drag = { c, id: 'seethrough' };
 	x.photoPending = true;
 	x.tools.annotations.add(new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshBasicMaterial()));
 	x.end();
-	assert.deepEqual([x.mode, x.menu, walk.tele, walk.fade, x.ui.drag, x.modes.dollhouse.grab, x.pendingRecentre, x.photoPending], [null, null, null, null, null, null, false, false]);
+	assert.deepEqual([x.mode, x.menu, walk.tele, walk.fade, x.modes.dollhouse.grab, x.pendingRecentre, x.photoPending], [null, null, null, null, null, false, false]);
 	const shown = [walk.arc.dots, walk.arc.ring, x.veil.mesh, x.ui.photoNote.mesh, x.walkSky, x.showroom, x.stage, ...x.modes.dollhouse.markers, ...Object.values(x.menus).map((p) => p.mesh)].filter((o) => o.visible);
 	assert.deepEqual(shown.map((o) => o.name || o.type), []);
 	assert.ok(!x.ui.wrist.orb.group.parent && !x.ui.wrist.orb.holder && !x.ui.wrist.open);
@@ -503,12 +502,12 @@ test('the doors at the scale model: a big Walk in →, a small ← Back on its l
 test('Help opens the board on How to move (for the input in hand, here, with the build at its foot); Help again closes it', async () => {
 	const { x, frame } = await setup();
 	frame();
-	x.menuAction('help');
+	x.menuAction('guideKey');
 	assert.ok(x.ui.guide && x.ui.guide.mesh.visible && !x.menu, 'the left wing, How to move; Settings stays shut');
 	const cell = x.ui.guide.cells.get('guide');
 	assert.equal(cell.kind, 'dollhouse-controllers');
 	assert.match(cell.foot, /^Build /);
-	x.menuAction('help');
+	x.menuAction('guideKey');
 	assert.equal(x.ui.guide, null, 'Help again: closed');
 });
 

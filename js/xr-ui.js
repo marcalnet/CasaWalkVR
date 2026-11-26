@@ -69,7 +69,6 @@ export class XRUI {
 		this.pinchNotes = 0; // the wrong-hand notes shown this session (at most 3)
 		this.pinchNote = null;
 		this.teleports = 0; // this session's teleports
-		this.drag = null; // a slider being dragged: { c, id }
 		this.wrist = new WristMenu(xr);
 		guideSheet.onLoad = () => this.guide?.draw(); // (the How to move pictures, once loaded)
 		this.touches = []; // per input entry: its touch on the open board (js/touch.js)
@@ -245,9 +244,8 @@ export class XRUI {
 
 	/** Closes the settings wing. */
 	closeMenu() {
-		if (this.menu) { this.tab = this.menu.tab; this.menu.closeDropdown(); this.menu.mesh.visible = false; this.feel(null, 'close'); }
+		if (this.menu) { this.tab = this.menu.tab; this.menu.mesh.visible = false; this.feel(null, 'close'); }
 		this.menu = null;
-		this.drag = null;
 	}
 
 	/** Opens How to move, the left wing: the pictures for the input in hand, here, the replay keys, the build at its foot. */
@@ -405,7 +403,6 @@ export class XRUI {
 		this.runPinchNote(dt);
 		let { action } = this.wrist.update(dt);
 		const active = input.active();
-		if (this.drag && (!this.menu || !this.drag.c.source || !this.drag.c.state.trigger)) this.drag = null; // let go
 		let panels = this.openPanels();
 		let closable = panels.length > 0 || (this.wrist.open && this.wrist.pinned);
 		for (const c of active) {
@@ -420,16 +417,6 @@ export class XRUI {
 				const h = raycaster.intersectObject(p.mesh, false)[0];
 				if (h && (!menuHit || h.distance < menuHit.distance)) { menuHit = h; panel = p; }
 			}
-			if (this.drag?.c === c) {
-				// Dragging a slider: follow the laser along the track while the trigger is held.
-				c.claim.trigger = 'ui';
-				const hit = menuHit && panel === this.menu ? menuHit : null;
-				input.showHit(c, hit?.distance ?? null);
-				const value = hit ? this.menu.sliderValue(this.drag.id, hit.uv) : null;
-				if (value !== null) action = { id: this.drag.id, value };
-				hover = { id: this.drag.id, slider: true, panel: this.menu };
-				continue;
-			}
 			if (menuHit) {
 				c.claim.trigger = 'ui';
 				input.showHit(c, menuHit.distance);
@@ -437,9 +424,7 @@ export class XRUI {
 				if (target && !hover) hover = { ...target, panel };
 				if (c.state.down.trigger) {
 					if (target) {
-						// (Opening or closing a dropdown's list is handled by the panel itself.)
 						action = panel.press(target) ?? action;
-						if (action?.slider) this.drag = { c, id: action.id };
 						this.feel(c, 'press', 'click');
 					} else if (panel.disabledAt(menuHit.uv)) this.feel(c, 'deny', 'deny');
 				}
@@ -475,17 +460,17 @@ export class XRUI {
 		// (A wing that closed: its touches forget what was in progress.)
 		for (const row of this.touches) {
 			if (!row) continue;
-			for (const [panel, st] of row) if (!panels.includes(panel)) { resetTouch(st.s); st.ring.visible = false; st.last = null; st.slider = null; }
+			for (const [panel, st] of row) if (!panels.includes(panel)) { resetTouch(st.s); st.ring.visible = false; st.last = null; }
 		}
 		for (const c of xr.input.controllers) {
 			const row = this.touches[c.index] ||= new Map();
 			for (const panel of panels) {
 				const st = row.get(panel) ?? row.set(panel, this.newTouch()).get(panel);
-				const busy = c.claim.trigger === 'tool' || c.claim.trigger === 'ui' && this.drag?.c === c;
+				const busy = c.claim.trigger === 'tool';
 				if (!c.touch.tracked || busy || st.kind !== c.touch.kind) {
 					// Gone, or switched: nothing in progress completes.
 					resetTouch(st.s);
-					st.kind = c.touch.kind; st.last = null; st.slider = null;
+					st.kind = c.touch.kind; st.last = null;
 					st.ring.visible = false;
 					if (!c.touch.tracked || busy) continue;
 				}
@@ -508,17 +493,12 @@ export class XRUI {
 						if (target) {
 							st.lastClick = now; st.lastKey = key;
 							action = panel.press(target) ?? action;
-							if (action?.slider) st.slider = action.id;
 							this.feel(c, 'press', 'click');
 						} else if (panel.disabledAt(uv)) this.feel(c, 'deny', 'deny');
-					} else if (e === 'release') { st.slider = null; this.feel(c, 'release', null, 0.6); }
+					} else if (e === 'release') this.feel(c, 'release', null, 0.6);
 				}
 				const live = st.s.phase === 'hover' || st.s.phase === 'contact' || st.s.phase === 'pressed';
-				if (st.s.phase === 'pressed' && st.slider) {
-					const value = panel.sliderValue(st.slider, uv);
-					if (value !== null) action = { id: st.slider, value };
-					hover = { id: st.slider, slider: true, panel };
-				} else if (live && target) hover ||= { ...target, panel };
+				if (live && target) hover ||= { ...target, panel };
 				// The ring under the fingertip shows where it will land.
 				if (live) {
 					if (st.ring.parent !== panel.mesh) panel.mesh.add(st.ring);
@@ -538,7 +518,7 @@ export class XRUI {
 		ring.visible = false;
 		ring.name = 'touch-ring';
 		this.xr.hideFromPhotos(ring);
-		return { s: touchState(), ring, kind: null, last: null, local: new THREE.Vector3(), t: 0, slider: null, lastClick: -1, lastKey: null };
+		return { s: touchState(), ring, kind: null, last: null, local: new THREE.Vector3(), t: 0, lastClick: -1, lastKey: null };
 	}
 
 	/**
@@ -559,7 +539,6 @@ export class XRUI {
 
 	/** Leaving VR: everything closed and put away. */
 	reset() {
-		this.drag = null;
 		this.spent.clear();
 		this.closeMenu();
 		this.closeGuide();
@@ -575,7 +554,7 @@ export class XRUI {
 		this.pinchNotes = 0;
 		this.pinchNote = null;
 		if (this.pinchLabel) this.pinchLabel.mesh.visible = false;
-		for (const row of this.touches) for (const st of row?.values() ?? []) { resetTouch(st.s); st.ring.visible = false; st.slider = null; }
+		for (const row of this.touches) for (const st of row?.values() ?? []) { resetTouch(st.s); st.ring.visible = false; }
 	}
 }
 

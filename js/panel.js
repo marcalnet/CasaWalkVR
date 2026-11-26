@@ -1,74 +1,57 @@
-// Floating VR menu drawn on a canvas texture and clicked with the controller
-// laser: a settings list. Each row holds one or more cells side by side:
-//   button  an action (Walk in, Recentre, Dollhouse). `primary`: Exit VR, a
-//           taller solid orange row at the bottom, set apart.
-//   switch  on or off (Shadows, Ceilings, Solid walls); the whole cell is the
-//           target, so it is easy to hit with a laser.
+// The settings board drawn on a canvas texture (a wing: js/xr-ui.js), pressed
+// by touch or a controller's laser. Each row holds one or more cells side by side:
+//   button  an action (the two replay keys under How to move).
+//   switch  on or off (Shadows, Depth shading, Passthrough); the whole cell is
+//           the target, so it is easy to hit with a laser.
 //   choice  a few options side by side, the current one filled (Time of day,
-//           Turn, Height, View): every option is one click away, which beats
-//           a dropdown in VR. More than CHOICE_MAX options become a stepper
-//           (‹ value ›).
-//   slider  a value from 0 to 1: press the trigger on the
-//           track and drag.
-//   dropdown  a list that can be long (Levels: a home can have many): the
-//           cell shows the current option; a click opens the list over the
-//           panel, a click on an option picks it, a click anywhere else on
-//           the panel closes it.
-// A cell can be disabled, with a short note in place of its control (Levels
-// in a one-storey home: "One level").
-// hitTest() maps a ray hit (UV) to a target; press(target) returns the action
-// to run ({ id, value }: the option of a choice or dropdown, 0..1 along a
-// slider) or null when the click only opened or closed a dropdown.
+//           Height, Main hand): every option is one press away.
+//   drawn   drawn by its owner, never pressed (the How to move tab).
+// A cell can be disabled, with a short note in place of its control
+// (Passthrough in a VR session). Tabs run along the top, under the title; the
+// close line shares the title's row. hitTest() maps a ray hit (UV) to a target;
+// press(target) returns the action to run ({ id, value }: the option of a
+// choice) or null when the press only changed the tab.
+// (Dropdowns, sliders, the ‹ › stepper, action rows, the primary button and the
+// roomier non-compact layout went on 26 Nov 2026: no board used them.)
 
 import * as THREE from 'three';
 import { canvasTexture } from './canvas-card.js';
 import { FONT, COLOURS, BADGE, LABEL, PLATE } from './theme.js';
 
 const PX_PER_M = 1024; // canvas pixels per metre of panel
-const PAD = 28, GAP = 14, ROW_H = 80, TITLE_H = 72, HINT_H = 52;
-const PRIMARY_H = 108, PRIMARY_GAP = 26; // the primary button: taller, set apart
-const TAB_H = 66, TAB_GAP = 18; // the row of tabs, and the space under it
-// The spacing a board is laid out with (canvas px). A wing passes `layout: COMPACT` (the interaction harmony's
-// conflict 13: a Settings wing no taller than 34 cm, its top within 10° of eye level): the title and the close line
-// share one header row, rows of 66 px (4.5 cm with their gap), option segments exactly 4 cm tall (inset 4 px).
-const LAYOUT = { PAD, GAP, ROW_H, TITLE_H, HINT_H, TAB_H, TAB_GAP, INSET: 10, hintInTitle: false, titleFont: 40 };
-export const COMPACT = { PAD: 16, GAP: 6, ROW_H: 66, TITLE_H: 38, TAB_H: 60, TAB_GAP: 8, INSET: 4, hintInTitle: true, titleFont: 28 };
+// The spacing a board is laid out with (canvas px): a wing no taller than 34 cm, its top within 10° of eye level
+// (the interaction harmony's conflict 13): the title and the close line share one header row, rows of 66 px
+// (4.5 cm with their gap), option segments exactly 4 cm tall (inset 4 px).
+const L = { PAD: 16, GAP: 6, ROW_H: 66, TITLE_H: 38, TAB_H: 60, TAB_GAP: 8, INSET: 4, titleFont: 28 };
 const TAB = '#tab'; // a click target's id for a tab (its value is the tab's id)
-const CHOICE_MAX = 6; // more options than this: a stepper
 const SWITCH_W = 96, SWITCH_H = 52;
 const SWITCH_LABEL_MIN = 26; // px: a switch label smaller than this goes onto two lines instead
-const OPTION_H = 64, OPTION_MIN_H = 40; // dropdown list rows (shrunk to fit a long list)
 
 export class Panel {
 	/**
 	 * @param rows  [[cell, cell], [cell], ...]; a cell is
-	 *              { type: 'button', id, label, primary }
+	 *              { type: 'button', id, label }
 	 *              { type: 'switch', id, label, value: bool }
 	 *              { type: 'choice', id, label, options: [{ value, label }], value }
-	 *              { type: 'slider', id, label, value: 0..1, format(value) -> text }
-	 *              { type: 'dropdown', id, label, options: [{ value, label }], value }
 	 *              { type: 'drawn', id, h (canvas pixels), draw(ctx, box) }: drawn by its owner, never pressed (the How to move tab)
 	 *              any cell: disabled, note (text shown instead of the control when disabled)
-	 *              Or, for a menu with tabs: { tabs: [{ id, label, rows }], actions: rows }:
-	 *              a row of tabs, the chosen tab's rows, then the actions, shown on
-	 *              every tab. The panel is as tall as its tallest tab, so the
-	 *              actions never move. Clicking a tab is handled here (like a dropdown).
-	 * @param opts  { title, hint (small text at the bottom), width (m), pxPerM (canvas pixels per metre) }
+	 *              Or, for a menu with tabs: { tabs: [{ id, label, rows }] }: a row
+	 *              of tabs, then the chosen tab's rows. The panel is as tall as its
+	 *              tallest tab. Pressing a tab is handled here.
+	 * @param opts  { title, hint (the close line, in the title's row), width (m), pxPerM (canvas pixels per metre) }
 	 */
-	constructor(rows, { title = '', hint = '', width = 0.62, pxPerM = PX_PER_M, background = null, lead = null, layout = null } = {}) {
-		this.L = { ...LAYOUT, ...layout };
-		const spec = Array.isArray(rows) ? { tabs: [{ id: '', label: '', rows }], actions: [] } : rows;
+	constructor(rows, { title = '', hint = '', width = 0.62, pxPerM = PX_PER_M, background = null, lead = null } = {}) {
+		this.L = L;
+		const spec = Array.isArray(rows) ? { tabs: [{ id: '', label: '', rows }] } : rows;
 		const cellsOf = (rs) => rs.map((r) => r.map((c) => ({ type: 'button', ...c })));
 		this.tabs = spec.tabs.map((t) => ({ id: t.id, label: t.label, rows: cellsOf(t.rows) }));
-		this.actions = cellsOf(spec.actions ?? []);
 		this.tab = this.tabs[0].id; // the tab shown
-		this.cells = new Map([...this.tabs.flatMap((t) => t.rows), ...this.actions].flat().map((c) => [c.id, c]));
+		this.cells = new Map(this.tabs.flatMap((t) => t.rows).flat().map((c) => [c.id, c]));
 		this.title = title;
 		this.hint = hint;
 		this.lead = lead; // { id, label, w (canvas px) }: a key at the left end of the tab row, nearest the body (How to move)
 		this.background = background; // an image drawn under everything (the board's frame and paper), once loaded
 		this.hover = null; // key of the hovered target
-		this.open = null; // id of the dropdown whose list is open
 		const wPx = Math.round(width * pxPerM);
 		this.size = { w: wPx, h: 0 };
 		this.boxes = this.layout();
@@ -82,16 +65,15 @@ export class Panel {
 		this.draw();
 	}
 
-	/** Every row, all tabs and the actions (to read the menu's content). */
-	get rows() { return [...this.tabs.flatMap((t) => t.rows), ...this.actions]; }
+	/** Every row of every tab (to read the menu's content). */
+	get rows() { return this.tabs.flatMap((t) => t.rows); }
 
-	/** The tab a cell is on (its id), or null for the actions. */
+	/** The tab a cell is on (its id), or null. */
 	tabOf(id) { return this.tabs.find((t) => t.rows.some((r) => r.some((c) => c.id === id)))?.id ?? null; }
 
 	/** Shows another tab. */
 	setTab(id) {
 		if (id === this.tab || !this.tabs.some((t) => t.id === id)) return;
-		this.open = null;
 		this.tab = id;
 		this.hover = null;
 		this.boxes = this.layout();
@@ -102,11 +84,10 @@ export class Panel {
 	place(rows, y, boxes) {
 		const full = this.size.w - 2 * this.L.PAD;
 		rows.forEach((row, i) => {
-			const primary = row.some((c) => c.primary);
-			if (i > 0) y += primary ? PRIMARY_GAP : this.L.GAP;
-			const h = Math.max(primary ? PRIMARY_H : this.L.ROW_H, ...row.map((c) => c.h ?? 0));
+			if (i > 0) y += this.L.GAP;
+			const h = Math.max(this.L.ROW_H, ...row.map((c) => c.h ?? 0));
 			const w = (full - (row.length - 1) * this.L.GAP) / row.length;
-			row.forEach((cell, k) => boxes.push({ cell, x: this.L.PAD + k * (w + this.L.GAP), y, w, h, primary: !!cell.primary }));
+			row.forEach((cell, k) => boxes.push({ cell, x: this.L.PAD + k * (w + this.L.GAP), y, w, h }));
 			y += h;
 		});
 		return y;
@@ -126,13 +107,11 @@ export class Panel {
 			this.tabBoxes = [];
 			this.leadBox = null;
 		}
-		// The tab's rows, in the space of the tallest tab, then the actions.
+		// The tab's rows, in the space of the tallest tab.
 		const top = y;
 		const tallest = Math.max(...this.tabs.map((t) => this.place(t.rows, top, [])));
 		this.place(this.tabs.find((t) => t.id === this.tab).rows, top, boxes);
-		y = tallest;
-		if (this.actions.length) y = this.place(this.actions, y + (this.actions[0].some((c) => c.primary) ? PRIMARY_GAP : this.L.GAP + 14), boxes);
-		this.size.h = Math.round(y + (this.hint && !this.L.hintInTitle ? this.L.HINT_H : 0) + this.L.PAD);
+		this.size.h = Math.round(tallest + this.L.PAD);
 		return boxes;
 	}
 
@@ -141,87 +120,34 @@ export class Panel {
 		return b.cell.type === 'switch' ? b.w - SWITCH_W - 40 : Math.round(Math.min(260, b.w * 0.3));
 	}
 
-	/** The control's area in a cell (choices, sliders). */
+	/** The control's area in a cell (a choice's options). */
 	controlArea(b) {
 		const x = b.x + this.labelWidth(b);
 		return { x, y: b.y + this.L.INSET, w: b.x + b.w - 12 - x, h: b.h - 2 * this.L.INSET };
 	}
 
-	/**
-	 * Clickable targets: { id, value?, slider?, toggle?, dismiss?, x, y, w, h }
-	 * in canvas pixels. While a dropdown is open, only its options are (and
-	 * the rest of the panel, which closes it).
-	 */
+	/** Clickable targets: { id, value?, x, y, w, h } in canvas pixels. */
 	rects() {
-		const out = this.open ? [] : this.tabBoxes.map((t) => ({ id: TAB, value: t.id, x: t.x, y: t.y, w: t.w, h: t.h }));
-		if (!this.open && this.leadBox) out.push({ id: this.lead.id, x: this.leadBox.x, y: this.leadBox.y, w: this.leadBox.w, h: this.leadBox.h });
-		if (this.open) {
-			const list = this.list();
-			if (list) {
-				for (const o of list.options) out.push({ id: this.open, value: o.value, x: o.x, y: o.y, w: o.w, h: o.h });
-				out.push({ id: this.open, dismiss: true, x: 0, y: 0, w: this.size.w, h: this.size.h });
-				return out;
-			}
-		}
+		const out = this.tabBoxes.map((t) => ({ id: TAB, value: t.id, x: t.x, y: t.y, w: t.w, h: t.h }));
+		if (this.leadBox) out.push({ id: this.lead.id, x: this.leadBox.x, y: this.leadBox.y, w: this.leadBox.w, h: this.leadBox.h });
 		for (const b of this.boxes) {
 			const c = b.cell;
 			if (c.disabled || c.type === 'drawn') continue;
-			if (c.type === 'dropdown') {
-				const a = this.controlArea(b);
-				out.push({ id: c.id, toggle: true, x: a.x, y: b.y, w: a.w + 12, h: b.h });
-			} else if (c.type === 'choice') {
-				for (const s of this.segments(b)) if (s.value !== undefined) out.push({ id: c.id, value: s.value, x: s.x, y: s.y, w: s.w, h: s.h });
-			} else if (c.type === 'slider') {
-				const t = this.track(b);
-				out.push({ id: c.id, slider: true, x: t.x - 24, y: b.y, w: t.w + 48, h: b.h, track: t });
+			if (c.type === 'choice') {
+				for (const s of this.segments(b)) out.push({ id: c.id, value: s.value, x: s.x, y: s.y, w: s.w, h: s.h });
 			} else {
-				out.push({ id: c.id, x: b.x, y: b.y, w: b.w, h: b.h, primary: b.primary });
+				out.push({ id: c.id, x: b.x, y: b.y, w: b.w, h: b.h });
 			}
 		}
 		return out;
 	}
 
-	/** A choice's segments: one per option, or a stepper (‹ current ›) when there are many. */
+	/** A choice's segments: one per option. */
 	segments(b) {
 		const c = b.cell, a = this.controlArea(b), gap = 6;
 		const opts = c.options ?? [];
-		if (opts.length > CHOICE_MAX || c.stepper) {
-			const i = Math.max(0, opts.findIndex((o) => o.value === c.value));
-			const arrow = 80;
-			return [
-				{ x: a.x, y: a.y, w: arrow, h: a.h, label: '‹', value: i > 0 ? opts[i - 1].value : undefined },
-				{ x: a.x + arrow + gap, y: a.y, w: a.w - 2 * (arrow + gap), h: a.h, label: opts[i]?.label ?? '', current: true },
-				{ x: a.x + a.w - arrow, y: a.y, w: arrow, h: a.h, label: '›', value: i < opts.length - 1 ? opts[i + 1].value : undefined },
-			];
-		}
 		const w = (a.w - (opts.length - 1) * gap) / Math.max(1, opts.length);
 		return opts.map((o, i) => ({ x: a.x + i * (w + gap), y: a.y, w, h: a.h, label: o.label, value: o.value, selected: o.value === c.value }));
-	}
-
-	/**
-	 * The open dropdown's list: as wide as its control, starting level with
-	 * the cell and growing upwards when there is no room below; rows shrink
-	 * so a long list still fits on the panel.
-	 */
-	list() {
-		const b = this.boxes.find((x) => x.cell.id === this.open);
-		if (!b) return null;
-		const opts = b.cell.options ?? [];
-		const room = this.size.h - 2 * this.L.PAD - 16;
-		const rowH = Math.max(OPTION_MIN_H, Math.min(OPTION_H, Math.floor(room / Math.max(1, opts.length))));
-		const h = opts.length * rowH + 16;
-		const a = this.controlArea(b);
-		const y = THREE.MathUtils.clamp(b.y + b.h - h, this.L.PAD, Math.max(this.L.PAD, this.size.h - this.L.PAD - h)); // its bottom at the cell's bottom
-		return {
-			x: a.x - 8, y, w: a.w + 16, h,
-			options: opts.map((o, i) => ({ ...o, x: a.x, y: y + 8 + i * rowH, w: a.w, h: rowH - 4, selected: o.value === b.cell.value })),
-		};
-	}
-
-	/** A slider's track (the line the knob runs along), leaving room for the value on the right. */
-	track(b) {
-		const a = this.controlArea(b), valueW = 110;
-		return { x: a.x + 24, y: b.y + b.h / 2, w: a.w - valueW - 48 };
 	}
 
 	draw() {
@@ -236,7 +162,7 @@ export class Panel {
 			ctx.fill();
 		}
 		ctx.textBaseline = 'middle';
-		const mid = this.L.PAD + this.L.TITLE_H / 2 - (this.L.hintInTitle ? 0 : 4);
+		const mid = this.L.PAD + this.L.TITLE_H / 2;
 		let titleW = 0;
 		if (this.title) {
 			ctx.fillStyle = COLOURS.text;
@@ -246,21 +172,14 @@ export class Panel {
 		}
 		this.drawTabs(ctx);
 		for (const b of this.boxes) this.drawCell(ctx, b);
-		if (this.hint && this.L.hintInTitle) {
-			// (Compact: the close line in caption size at the header's free end, in the secondary colour.)
+		if (this.hint) {
+			// (The close line in caption size at the header's free end, in the secondary colour.)
 			ctx.fillStyle = COLOURS.soft;
 			ctx.textAlign = 'right';
 			fitFont(ctx, this.hint, w - 2 * this.L.PAD - titleW - 32, 22, 14, 400);
 			ctx.fillText(this.hint, w - this.L.PAD - 8, mid + 1);
 			ctx.textAlign = 'left';
-		} else if (this.hint) {
-			ctx.fillStyle = COLOURS.soft;
-			ctx.textAlign = 'center';
-			fitFont(ctx, this.hint, w - 2 * this.L.PAD, 28, 16, 400);
-			ctx.fillText(this.hint, w / 2, h - this.L.PAD - this.L.HINT_H / 2 + 8);
-			ctx.textAlign = 'left';
 		}
-		if (this.open) this.drawList(ctx);
 		this.texture.needsUpdate = true;
 	}
 
@@ -294,74 +213,19 @@ export class Panel {
 		}
 	}
 
-	/** The open dropdown's list over a dimmed panel. */
-	drawList(ctx) {
-		const list = this.list();
-		if (!list) return;
-		roundRect(ctx, 0, 0, this.size.w, this.size.h, 36);
-		ctx.fillStyle = 'rgba(29,35,41,0.35)';
-		ctx.fill();
-		roundRect(ctx, list.x, list.y, list.w, list.h, 18);
-		ctx.fillStyle = COLOURS.cell;
-		ctx.fill();
-		ctx.lineWidth = 3;
-		ctx.strokeStyle = COLOURS.hoverEdge;
-		ctx.stroke();
-		for (const o of list.options) {
-			const hot = this.hover === `${this.open}|${o.value}`;
-			roundRect(ctx, o.x, o.y, o.w, o.h, 12);
-			ctx.fillStyle = o.selected ? COLOURS.accent : hot ? COLOURS.hover : COLOURS.cell;
-			ctx.fill();
-			if (hot && !o.selected) { ctx.lineWidth = 4; ctx.strokeStyle = COLOURS.hoverEdge; ctx.stroke(); }
-			ctx.fillStyle = o.selected ? COLOURS.accentText : COLOURS.text;
-			fitFont(ctx, o.label, o.w - 40, Math.min(30, o.h - 14), 16, o.selected ? 600 : 500);
-			ctx.fillText(o.label, o.x + 20, o.y + o.h / 2 + 2);
-		}
-	}
-
-	drawDropdown(ctx, b, hot) {
-		const c = b.cell, a = this.controlArea(b);
-		roundRect(ctx, a.x, a.y, a.w, a.h, 14);
-		ctx.fillStyle = hot ? COLOURS.hover : COLOURS.segment;
-		ctx.fill();
-		ctx.lineWidth = hot ? 4 : 2;
-		ctx.strokeStyle = hot ? COLOURS.hoverEdge : COLOURS.edge;
-		ctx.stroke();
-		const current = (c.options ?? []).find((o) => o.value === c.value)?.label ?? '';
-		ctx.fillStyle = COLOURS.text;
-		fitFont(ctx, current, a.w - 80, 30, 16, 600);
-		ctx.fillText(current, a.x + 18, a.y + a.h / 2 + 2);
-		// The arrow that says "this opens a list".
-		const ax = a.x + a.w - 34, ay = a.y + a.h / 2;
-		ctx.beginPath();
-		ctx.moveTo(ax - 11, ay - 6); ctx.lineTo(ax + 11, ay - 6); ctx.lineTo(ax, ay + 8);
-		ctx.closePath();
-		ctx.fillStyle = COLOURS.soft;
-		ctx.fill();
-	}
-
 	drawCell(ctx, b) {
 		const c = b.cell;
 		if (c.type === 'drawn') { c.draw?.(ctx, b); return; }
 		const hot = this.hover && this.hover.split('|')[0] === c.id;
 		if (c.type === 'button') {
 			roundRect(ctx, b.x, b.y, b.w, b.h, 20);
-			if (b.primary) {
-				ctx.fillStyle = hot ? COLOURS.primaryHover : COLOURS.primary;
-				ctx.fill();
-			} else {
-				ctx.fillStyle = c.disabled ? COLOURS.off : hot ? COLOURS.hover : COLOURS.cell;
-				ctx.fill();
-				if (!c.disabled) { ctx.lineWidth = hot ? 5 : 2; ctx.strokeStyle = hot ? COLOURS.hoverEdge : COLOURS.edge; ctx.stroke(); }
-			}
-			ctx.fillStyle = b.primary ? COLOURS.primaryText : c.disabled ? COLOURS.offText : COLOURS.text;
+			ctx.fillStyle = c.disabled ? COLOURS.off : hot ? COLOURS.hover : COLOURS.cell;
+			ctx.fill();
+			if (!c.disabled) { ctx.lineWidth = hot ? 5 : 2; ctx.strokeStyle = hot ? COLOURS.hoverEdge : COLOURS.edge; ctx.stroke(); }
+			ctx.fillStyle = c.disabled ? COLOURS.offText : COLOURS.text;
 			ctx.textAlign = 'center';
-			const iconW = c.icon === 'camera' ? 58 : 0; // a camera drawn before the label
-			fitFont(ctx, c.label, b.w - 32 - iconW, b.primary ? 46 : 36, 22, b.primary ? 600 : 500);
-			const tw = ctx.measureText(c.label).width;
-			const cx = b.x + b.w / 2 + iconW / 2, cy = b.y + b.h / 2;
-			if (iconW) drawCamera(ctx, cx - tw / 2 - iconW / 2 - 4, cy, c.disabled ? COLOURS.offText : COLOURS.text);
-			ctx.fillText(c.label, cx, cy + 2);
+			fitFont(ctx, c.label, b.w - 32, 36, 22, 500);
+			ctx.fillText(c.label, b.x + b.w / 2, b.y + b.h / 2 + 2);
 			ctx.textAlign = 'left';
 			return;
 		}
@@ -393,8 +257,6 @@ export class Panel {
 		}
 		if (c.type === 'switch') this.drawSwitch(ctx, b);
 		else if (c.type === 'choice') this.drawChoice(ctx, b);
-		else if (c.type === 'slider') this.drawSlider(ctx, b, hot);
-		else if (c.type === 'dropdown') this.drawDropdown(ctx, b, hot && !this.open);
 	}
 
 	/**
@@ -442,95 +304,45 @@ export class Panel {
 	drawChoice(ctx, b) {
 		const id = b.cell.id;
 		for (const s of this.segments(b)) {
-			const hot = s.value !== undefined && this.hover === `${id}|${s.value}`;
+			const hot = this.hover === `${id}|${s.value}`;
 			roundRect(ctx, s.x, s.y, s.w, s.h, 14);
 			ctx.fillStyle = s.selected ? COLOURS.accent : hot ? COLOURS.hover : COLOURS.segment;
 			ctx.fill();
 			if (hot && !s.selected) { ctx.lineWidth = 4; ctx.strokeStyle = COLOURS.hoverEdge; ctx.stroke(); }
-			const dim = !s.current && s.value === undefined; // a stepper arrow at the end of the list
-			ctx.fillStyle = s.selected ? COLOURS.accentText : dim ? COLOURS.offText : COLOURS.text;
+			ctx.fillStyle = s.selected ? COLOURS.accentText : COLOURS.text;
 			ctx.textAlign = 'center';
-			fitFont(ctx, s.label, s.w - 14, s.current ? 30 : 28, 16, s.selected || s.current ? 600 : 500);
+			fitFont(ctx, s.label, s.w - 14, 28, 16, s.selected ? 600 : 500);
 			ctx.fillText(s.label, s.x + s.w / 2, s.y + s.h / 2 + 2);
 			ctx.textAlign = 'left';
 		}
 	}
 
-	drawSlider(ctx, b, hot) {
-		const c = b.cell, t = this.track(b), v = THREE.MathUtils.clamp(c.value ?? 0, 0, 1);
-		roundRect(ctx, t.x, t.y - 5, t.w, 10, 5);
-		ctx.fillStyle = COLOURS.track;
-		ctx.fill();
-		if (v > 0) { roundRect(ctx, t.x, t.y - 5, Math.max(10, t.w * v), 10, 5); ctx.fillStyle = COLOURS.accent; ctx.fill(); }
-		ctx.beginPath();
-		ctx.arc(t.x + t.w * v, t.y, 22, 0, Math.PI * 2);
-		ctx.fillStyle = '#ffffff';
-		ctx.fill();
-		ctx.lineWidth = hot ? 6 : 3;
-		ctx.strokeStyle = COLOURS.accent;
-		ctx.stroke();
-		const text = c.format ? c.format(v) : `${Math.round(v * 100)}%`;
-		ctx.fillStyle = COLOURS.text;
-		ctx.textAlign = 'right';
-		ctx.font = `600 30px ${FONT}`;
-		ctx.fillText(text, b.x + b.w - 24, b.y + b.h / 2 + 2);
-		ctx.textAlign = 'left';
-	}
-
-	/** Target under a ray hit's UV coordinates ({ id, value } or { id, slider, value }), or null. */
+	/** Target under a ray hit's UV coordinates ({ id, value } or { id }), or null. */
 	hitTest(uv) {
 		if (!uv) return null;
 		const x = uv.x * this.size.w, y = (1 - uv.y) * this.size.h;
 		const r = this.rects().find((t) => x >= t.x && x <= t.x + t.w && y >= t.y && y <= t.y + t.h);
 		if (!r) return null;
-		if (r.slider) return { id: r.id, slider: true, value: this.sliderAt(r.track, uv) };
-		if (r.toggle || r.dismiss) return { id: r.id, toggle: !!r.toggle, dismiss: !!r.dismiss };
 		return r.value !== undefined ? { id: r.id, value: r.value } : { id: r.id };
 	}
 
 	/** The disabled cell under UV coordinates (a touch on it says no), or null. */
 	disabledAt(uv) {
-		if (!uv || this.open) return null;
+		if (!uv) return null;
 		const x = uv.x * this.size.w, y = (1 - uv.y) * this.size.h;
 		return this.boxes.find((b) => b.cell.disabled && x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h)?.cell ?? null;
 	}
 
-	/**
-	 * A click on a target: opens or closes a dropdown (returns null), picks a
-	 * dropdown option (closes the list; returns { id, value }), or returns the
-	 * target itself as the action to run.
-	 */
+	/** A press on a target: a tab is shown here (returns null); anything else is the action to run. */
 	press(target) {
 		if (!target) return null;
 		if (target.id === TAB) { this.setTab(target.value); return null; }
-		if (target.toggle) { this.open = this.open === target.id ? null : target.id; this.hover = null; this.draw(); return null; }
-		if (target.dismiss) { this.closeDropdown(); return null; }
-		if (this.open) {
-			this.closeDropdown();
-			return target.value === this.cells.get(target.id)?.value ? null : target;
-		}
 		return target;
-	}
-
-	closeDropdown() {
-		if (!this.open) return;
-		this.open = null;
-		this.draw();
-	}
-
-	/** While dragging a slider: its value under a ray hit anywhere on the panel. */
-	sliderValue(id, uv) {
-		const r = this.rects().find((t) => t.id === id && t.slider);
-		return r && uv ? this.sliderAt(r.track, uv) : null;
-	}
-
-	sliderAt(track, uv) {
-		return THREE.MathUtils.clamp((uv.x * this.size.w - track.x) / track.w, 0, 1);
 	}
 
 	/** Highlights the target under a laser (a hitTest() result, or null). */
 	setHover(target) {
-		const key = target && !target.dismiss ? `${target.id}|${target.slider || target.toggle ? '' : target.value ?? ''}` : null;
+		const key = target ? `${target.id}|${target.value ?? ''}` : null;
 		if (key === this.hover) return;
 		this.hover = key;
 		this.draw();
@@ -618,21 +430,6 @@ export class NoteCard {
 		}
 		this.texture.needsUpdate = true;
 	}
-}
-
-/** A small camera (for the Photo button), centred on (x, y). */
-function drawCamera(ctx, x, y, colour) {
-	ctx.save();
-	ctx.fillStyle = colour;
-	roundRect(ctx, x - 22, y - 13, 44, 30, 7); // body
-	ctx.fill();
-	roundRect(ctx, x - 9, y - 19, 18, 8, 3); // viewfinder bump
-	ctx.fill();
-	ctx.fillStyle = '#ffffff';
-	ctx.beginPath(); ctx.arc(x, y + 2, 9, 0, Math.PI * 2); ctx.fill(); // lens
-	ctx.fillStyle = colour;
-	ctx.beginPath(); ctx.arc(x, y + 2, 5, 0, Math.PI * 2); ctx.fill();
-	ctx.restore();
 }
 
 // ---------------------------------------------------------------------------

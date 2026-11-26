@@ -13,7 +13,7 @@ export const COLOURS = {
 	cell: '#ffffff', edge: '#d3d9df', text: '#1d2329', soft: '#5d6873',
 	hover: '#e3edfb', hoverEdge: '#3d6fd8', accent: '#3d6fd8', accentText: '#ffffff',
 	segment: '#eef1f4', track: '#c4ccd4',
-	primary: '#e07a1f', primaryHover: '#b85f12', primaryText: '#ffffff',
+	primary: '#e07a1f',
 	off: '#e2e6ea', offText: '#9aa3ac',
 	tab: '#dde3e9', tabText: '#5d6873', tabActive: '#ffffff', tabActiveText: '#1d2329',
 };

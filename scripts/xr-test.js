@@ -160,7 +160,7 @@ const state = () => page.evaluate(() => {
 });
 /**
  * World position of a target on the open menu: a button or switch (id), a
- * choice's option (id, value) or a point along a slider (id, 0..1).
+ * choice's option (id, value).
  */
 const menuPoint = (id, value) => page.evaluate(async ({ id, value }) => {
 	const THREE = await import('three');
@@ -168,9 +168,9 @@ const menuPoint = (id, value) => page.evaluate(async ({ id, value }) => {
 	// (Since 25 Nov the board opens on How to move: a cell on another tab is shown first, as a person would.)
 	const tab = p.tabOf?.(id);
 	if (tab && tab !== p.tab) p.setTab(tab);
-	const r = p.rects().find((b) => b.id === id && (b.slider || value === undefined || b.value === value));
+	const r = p.rects().find((b) => b.id === id && (value === undefined || b.value === value));
 	if (!r) throw new Error(`no menu target ${id} ${value ?? ''}`);
-	const x = r.slider ? r.track.x + r.track.w * (value ?? 0) : r.x + r.w / 2;
+	const x = r.x + r.w / 2;
 	const u = x / p.size.w, v = 1 - (r.y + r.h / 2) / p.size.h;
 	const g = p.mesh.geometry.parameters;
 	p.mesh.updateMatrixWorld(true);
@@ -261,7 +261,7 @@ const waitXR = () => page.waitForFunction(() => { const x = window.__casawalk.xr
 const leftovers = () => page.evaluate(() => {
 	const S = window.__casawalk, x = S.xr, bad = [], want = (n, ok) => ok || bad.push(n);
 	want('session', x.session === null && x.mode === null);
-	want('grab/tele/fade/drag', !x.modes.dollhouse.grab && !x.modes.walk.tele && !x.modes.walk.fade && !x.ui.drag && !x.pendingRecentre);
+	want('grab/tele/fade/drag', !x.modes.dollhouse.grab && !x.modes.walk.tele && !x.modes.walk.fade && !x.pendingRecentre);
 	want('menu', x.menu === null && Object.values(x.menus).every((p) => !p.mesh.visible && !p.open) && !x.ui.wrist.open && !x.ui.wrist.cross.visible);
 	want('layers', !x.layerFx && !(x.veil.amount('layer') > 0) && !x.arrival.mesh.visible);
 	want('hands note', !x.ui.handsNote.mesh.visible);
@@ -286,7 +286,7 @@ const entry = () => page.evaluate(() => {
 	want('gallery', x.showroom.visible && x.stage.visible && x.gallery.visible && x.pedestal.visible && !x.walkSky.visible && !x.model.layers.ground.visible);
 	want('model reset', x.modes.dollhouse.doll.yaw === 0 && x.modes.dollhouse.doll.zoom === 1 && Math.abs(x.anchor.scale.x - x.baseScale) < 1e-9);
 	want('idle: grab', !x.modes.dollhouse.grab); want('idle: aim', !x.modes.walk.tele); want('idle: fade', !x.modes.walk.fade && !(x.veil.amount('teleport') > 0));
-	want('idle: drag', !x.ui.drag); want('idle: arc', !x.modes.walk.arc.dots.visible); want('idle: markers', x.modes.dollhouse.markers.every((m) => !m.visible));
+	want('idle: arc', !x.modes.walk.arc.dots.visible); want('idle: markers', x.modes.dollhouse.markers.every((m) => !m.visible));
 	want('orb on the right grip', x.ui.wrist.orb.holder?.handedness === 'right' && x.ui.wrist.orb.group.parent === x.ui.wrist.orb.holder.grip && !x.ui.wrist.open);
 	want('lasers', x.input.active().length === 2 && x.input.active().every((c) => c.line.visible));
 	want('eyes 1.89', Math.abs(x.headWorld().y - 1.89) < 0.005);
@@ -312,12 +312,12 @@ const FINGERPRINT = async () => {
 	const where = (o) => { const p = []; for (let a = o; a && a !== S.scene; a = a.parent) p.unshift(a.name || a.type); return p.join('/'); };
 	const census = {};
 	S.scene.traverseVisible((o) => { if ((o.isMesh || o.isLine || o.isPoints) && o.material?.visible !== false) census[where(o)] = (census[where(o)] ?? 0) + 1; });
-	const menu = (p) => ({ title: p.title, size: [p.size.w, p.size.h], shown: p.mesh.visible, list: p.open,
-		rows: p.rows.map((row) => row.map((c) => [c.id, c.type, c.label, c.value ?? null, !!c.disabled, c.note ?? null, !!c.primary, (c.options ?? []).map((o) => `${o.value}=${o.label}`).join(',')].join('|'))) });
+	const menu = (p) => ({ title: p.title, size: [p.size.w, p.size.h], shown: p.mesh.visible, list: null,
+		rows: p.rows.map((row) => row.map((c) => [c.id, c.type, c.label, c.value ?? null, !!c.disabled, c.note ?? null, false, (c.options ?? []).map((o) => `${o.value}=${o.label}`).join(',')].join('|'))) });
 	const KEYS = ['casawalk.snapAngle', 'casawalk.height', 'casawalk.view', 'casawalk.solidWalls', 'casawalk.seeThrough', 'casawalk.light', 'casawalk.shadows', 'casawalk.depth', 'casawalk.mainHand'];
 	return {
 		mode: x.mode, session: x.sessionMode, view: x.view, menu: x.menu?.title ?? null,
-		busy: [!!x.modes.dollhouse.grab, !!x.modes.walk.tele, !!x.modes.walk.fade, !!x.ui.drag, !!x.pendingRecentre, !!x.photoPending],
+		busy: [!!x.modes.dollhouse.grab, !!x.modes.walk.tele, !!x.modes.walk.fade, false, !!x.pendingRecentre, !!x.photoPending],
 		shown: { ...Object.fromEntries(['showroom', 'stage', 'gallery', 'pedestal', 'walkSky'].map((k) => [k, vis(x[k])])), fadeMesh: x.veil.amount('teleport') > 0, flash: x.veil.amount('flash') > 0 }, // (one veil since A5: the same facts as the old spheres' visibility)
 		layers: Object.fromEntries(Object.entries(x.model.layers).map(([k, g]) => [k, [g.visible, g.children.filter(vis).length]])), maxStorey: x.maxStorey,
 		markers: x.modes.dollhouse.markers.map(vis), arc: [vis(x.modes.walk.arc.dots), vis(x.modes.walk.arc.ring)], note: vis(x.ui.photoNote.mesh),
@@ -479,7 +479,7 @@ const crossSeen = () => page.evaluate(() => {
 	});
 	check('no wing covers the scale model (seen from the eyes)', cover.length >= 1 && cover.every((c) => !c.over), JSON.stringify(cover));
 	await shot('dollhouse-wings');
-	// The board: switches for on/off, options with every one shown, a stepper; no buttons.
+	// The board: switches for on/off, options with every one shown; no buttons.
 	const kinds = await page.evaluate(() => {
 		const x = window.__casawalk.xr, kinds = (p) => Object.fromEntries([...p.cells.values()].map((c) => [c.id, c.type]));
 		const g = (p) => p.mesh.geometry.parameters;
@@ -487,7 +487,7 @@ const crossSeen = () => page.evaluate(() => {
 	});
 	const want = { shadows: 'switch', depth: 'switch', ceilings: 'switch', light: 'choice', view: 'switch', seethrough: 'switch', mainHand: 'choice', sound: 'choice', solid: 'switch', height: 'choice' };
 	const ok = Object.entries(want).every(([id, t]) => kinds.doll[id] === t && kinds.walk[id] === t) && !Object.values(kinds.doll).includes('button');
-	check('the settings wing: switches, options and a stepper, 40 cm wide', ok && Math.abs(kinds.width - 0.4) < 1e-6 && Math.max(...kinds.heights) < 0.5, JSON.stringify({ heights: kinds.heights, width: kinds.width }));
+	check('the settings wing: switches and options, 40 cm wide', ok && Math.abs(kinds.width - 0.4) < 1e-6 && Math.max(...kinds.heights) < 0.5, JSON.stringify({ heights: kinds.heights, width: kinds.width }));
 }
 await shot('dollhouse-board');
 await click('right', 'b-button');
@@ -878,7 +878,7 @@ check('B closes the board', (await state()).menu === null);
 	const slid = Math.hypot(s1.head[0] - s0[0], s1.head[2] - s0[2]);
 	check('bare hands: a quick pinch-and-open (the arc shown under 0.3 s) moves nothing; the arc goes', slid < 0.01 && !s1.tele && !s1.fade, JSON.stringify({ moved: +slid.toFixed(3), ...s1 }));
 	// Help inside: the board on How to move, for bare hands.
-	await page.evaluate(() => window.__casawalk.xr.menuAction('help'));
+	await page.evaluate(() => window.__casawalk.xr.menuAction('guideKey'));
 	await frames(3);
 	const guide = await page.evaluate(() => { const x = window.__casawalk.xr, m = x.ui.guide; return { tab: 'move', kind: m?.cells.get('guide')?.kind, shown: !!m?.mesh.visible }; });
 	check('inside, Help opens the board on How to move, for bare hands', guide.shown && guide.tab === 'move' && guide.kind === 'walk-hands', JSON.stringify(guide));
@@ -1759,7 +1759,7 @@ await restRight(); await frames(3); await click('right', 'a-button'); await clic
 check('A closes the wrist menu it opened', !(await state()).wrist);
 
 // Help: the board on How to move, for controllers, with the build at its foot; B closes it.
-await page.evaluate(() => window.__casawalk.xr.menuAction('help')); // (Help is no longer a wrist key: it lives in Settings, on How to move)
+await page.evaluate(() => window.__casawalk.xr.menuAction('guideKey')); // (Help is no longer a wrist key: it lives in Settings, on How to move)
 {
 	await frames(30); // (the doors fade out over the board)
 	const hp = await page.evaluate(() => { const x = window.__casawalk.xr, m = x.ui.guide, c = m?.cells.get('guide'); return { tab: m ? 'move' : null, kind: c?.kind, foot: c?.foot ?? '', wrist: x.ui.wrist.open, doors: x.modes.dollhouse.doorGroup.visible }; });

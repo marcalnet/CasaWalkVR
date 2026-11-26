@@ -1,14 +1,13 @@
 // What the headset menus say and do (SPEC.md, C0 "Hands and touch" and
 // "Layers"). ("dollhouse" in the code is the scale model on screen.)
 //
-// The wrist menu (js/wrist-menu.js) has four keys: Settings, Help, ← Back and
+// The wrist menu (js/wrist-menu.js) has three keys: ← Back, Settings and
 // Walk in →. Settings opens the settings board: one per layer ("Settings ·
 // Scale model", "Settings · Inside"), the same tabs in both (View, Walk,
 // General), with no Close key (a press at empty space closes it: js/xr-ui.js);
-// pressed by touch, or by a controller's laser.
-// On/off settings are switches, settings with a few values are options with
-// every one visible (one press), Levels is a ‹ › stepper. Help opens a card
-// of what each control does, for controllers or for bare hands.
+// pressed by touch, or by a controller's laser. On/off settings are switches,
+// settings with a few values are options with every one visible (one press).
+// How to move (the guideKey on the board's tab row) opens the left wing.
 //
 // Every cell is defined once (CELLS) and the boards list cell ids by row
 // (TABS), so the same setting looks and behaves the same at every layer.
@@ -16,7 +15,7 @@
 // cell. Opening, closing and pointing are js/xr-ui.js.
 
 import * as THREE from 'three';
-import { Panel, COMPACT } from './panel.js';
+import { Panel } from './panel.js';
 import { TIMES } from './lighting.js';
 import { SETTINGS, writeSetting } from './settings.js';
 import { BOARD } from './theme.js';
@@ -112,8 +111,8 @@ export function buildMenus(rig) {
 	const paper = typeof Image !== 'undefined' ? new Image() : null;
 	for (const [mode, { title }] of Object.entries(MENUS)) {
 		// The right wing: Settings (the tabs), with the How to move key at the tabs' left end.
-		const p = new Panel({ tabs: TABS.map((t) => ({ ...t, rows: cells(t.rows) })), actions: [] }, {
-			title, width: WING_SIZE.settings, pxPerM: BOARD_PX_PER_M, hint: CLOSE_HINT.controllers, background: paper, layout: COMPACT, // (no Close key: build 120, M1; 34 cm tall at most: the harmony's conflict 13)
+		const p = new Panel({ tabs: TABS.map((t) => ({ ...t, rows: cells(t.rows) })) }, {
+			title, width: WING_SIZE.settings, pxPerM: BOARD_PX_PER_M, hint: CLOSE_HINT.controllers, background: paper, // (no Close key: build 120, M1; 34 cm tall at most: the harmony's conflict 13)
 			lead: { id: 'guideKey', label: '? How to move', w: 150 },
 		});
 		p.mesh.visible = false;
@@ -122,8 +121,8 @@ export function buildMenus(rig) {
 		rig.add(p.mesh);
 		menus[mode] = p;
 		// The left wing: How to move (moving pictures for the input in hand), the two replay keys, the Meta button's line.
-		const g = new Panel({ tabs: [{ id: 'guide', label: '', rows: cells([['guide'], ['replayTools', 'replayPinch']]) }], actions: [] }, {
-			title: 'How to move', width: WING_SIZE.guide, pxPerM: BOARD_PX_PER_M, hint: CLOSE_HINT.controllers, background: paper, layout: COMPACT,
+		const g = new Panel({ tabs: [{ id: 'guide', label: '', rows: cells([['guide'], ['replayTools', 'replayPinch']]) }] }, {
+			title: 'How to move', width: WING_SIZE.guide, pxPerM: BOARD_PX_PER_M, hint: CLOSE_HINT.controllers, background: paper,
 		});
 		g.mesh.visible = false;
 		g.mesh.name = 'guide-wing';
@@ -138,7 +137,7 @@ export function buildMenus(rig) {
 	return { menus, guides };
 }
 
-/** Shows the current settings in both menus (switch positions, chosen options, slider, levels). */
+/** Shows the current settings in both menus (switch positions, chosen options, levels). */
 export function updateLabels(xr) {
 	const ceilings = xr.model?.layers.ceilings.visible ?? true;
 	const view = xr.sessionMode === 'vr' ? { disabled: true, note: 'Not available', value: false } : { disabled: false, value: xr.view === 'ar' };
@@ -180,17 +179,15 @@ export function menuAction(xr, target) {
 	const ui = xr.ui;
 	switch (id) {
 		// The doors: one layer at a time (no key skips a layer; SPEC.md C0, "Layers").
-		case 'in': case 'walk':
+		case 'in':
 			if (xr.mode === 'dollhouse') xr.goLayer('in', () => xr.modes.walk.walkIn(), xr.modes.walk.walkInPoint().modelPt);
 			break;
 		case 'back':
 			if (xr.mode === 'walk') xr.goLayer('back', () => xr.setMode('dollhouse'));
 			else xr.goLayer('out', () => xr.end()); // from the scale model, Back leaves VR (the door on the plinth is held 0.6 s; the wrist menu's, opened on purpose, is one press)
 			break;
-		case 'dollhouse': if (xr.mode === 'walk') xr.goLayer('back', () => xr.setMode('dollhouse')); break;
-		case 'exit': xr.goLayer('out', () => xr.end()); break;
 		case 'settings': ui.toggleBoard(); break;
-		case 'help': case 'guideKey': ui.toggleHelp(); break; // (How to move: the left wing)
+		case 'guideKey': ui.toggleHelp(); break; // (How to move: the left wing)
 		case 'replayTools':
 			ui.closeAll(); // (it must play where it can be seen)
 			if (xr.mode === 'dollhouse' && xr.toolsIntro?.start({ again: true })) xr.introAgain = true;

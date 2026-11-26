@@ -234,7 +234,7 @@ js/hand-model.js  the hand model (the WebXR generic hand, restyled)
 js/hand-poses.js  preset hand poses for the pinch hand
 js/settings.js    every remembered setting, its key and meaning
 js/tween.js, js/haptics.js, js/sound.js   feedback: motion, vibration, synthesised sounds
-js/panel.js       canvas-texture board (switches, options, stepper, Close key), cards and labels
+js/panel.js       canvas-texture board (switches, options, buttons, tabs), note cards and labels
 js/walls.js       solid walls while walking and see-through walls and furniture (headset only)
 js/photo.js       the menu's Photo button: renders the view without the menu as a JPEG
 js/rooms.js       where stepping inside lands: a room's clear middle and long direction (no DOM)
