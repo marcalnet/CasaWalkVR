@@ -240,7 +240,7 @@ function disposeCurrent() {
 
 /**
  * Loads [{ name, bytes }] and shows it.
- * source: { type: 'link', url } | { type: 'file' } | { type: 'recent', url? } (not re-saved; url = the link it first came from)
+ * source: { type: 'link', url } | { type: 'file' } | { type: 'recent', url?, id } (not re-saved; url = the link it first came from; id = its entry under Recent)
  */
 async function load(files, label, source = { type: 'file' }) {
 	// If another model is opened before this one finishes, this one is dropped.
@@ -252,7 +252,11 @@ async function load(files, label, source = { type: 'file' }) {
 	// In the headset, the old home goes first (heavy homes, step 4): the memory's peak is then the
 	// new home alone, not both. Not inside VR, where it is on view; not on a computer, where a
 	// failed open should leave the home you had.
-	if (current && DEVICE.headset && !xr.session) { disposeCurrent(); currentFiles = null; showStats(); invalidate(); }
+	let previous = null; // the home freed to make room: offered back if this open fails
+	if (current && DEVICE.headset && !xr.session) {
+		previous = { label: current.label, recentId: current.recentId ?? (current.source?.type === 'recent' ? current.source.id : null) };
+		disposeCurrent(); currentFiles = null; showStats(); invalidate();
+	}
 	try {
 		const result = await openFiles(files, { units: $('units').value, triangleLimit: DEVICE.headset ? CONFIG.triangleLimit : Infinity, simplifyAbove: DEVICE.headset ? SIMPLIFY.above : Infinity, objParser: DEV.worker ? workerObjParser() : null, onProgress: (t) => { if (seq === loadSeq) setStatus(t); } });
 		if (superseded(result)) return;
@@ -306,15 +310,46 @@ async function load(files, label, source = { type: 'file' }) {
 		if (source.type !== 'recent') addRecent({ name: label, files, source }).then((id) => {
 			renderRecents();
 			if (id === 'too large' && current?.label === label) setStatus(`${$('status').textContent} It is too large to keep under Recent.`);
+			else if (id && current?.label === label) current.recentId = id; // (offered back if the next open fails)
 		});
 	} catch (e) {
 		console.error(e);
-		if (seq === loadSeq) setStatus(e instanceof UserError ? e.message : `Could not open ${label}: ${e.message}`, true);
+		if (seq === loadSeq) {
+			setStatus(e instanceof UserError ? e.message : `Could not open ${label}: ${e.message}`, true);
+			if (previous && !current) offerPrevious(previous);
+		}
 		throw e;
 	} finally {
 		loading--;
 		updateXRButtons();
 	}
+}
+
+/**
+ * After a failed open in the headset, where the home you had was freed to make
+ * room: says so, and offers it back from Recent with one key (or, if it was too
+ * large to keep there, says to open it again from its file or link).
+ */
+function offerPrevious(previous) {
+	const status = $('status');
+	const line = document.createElement('div');
+	if (!previous.recentId) {
+		line.textContent = `${previous.label} was closed to make room: open it again from its file or link.`;
+		status.append(line);
+		return;
+	}
+	line.textContent = `${previous.label} was closed to make room. `;
+	const again = document.createElement('button');
+	again.type = 'button';
+	again.className = 'outline';
+	again.textContent = `Open ${previous.label} again`;
+	again.addEventListener('click', async () => {
+		const rec = await getRecent(previous.recentId);
+		if (!rec) { setStatus('That saved copy is no longer available.', true); renderRecents(); return; }
+		load(rec.files, rec.name, { type: 'recent', url: rec.source.url, id: previous.recentId }).catch(() => {});
+	});
+	line.append(again);
+	status.append(line);
 }
 
 let loadSeq = 0; // the newest load() call
@@ -496,7 +531,7 @@ async function renderRecents() {
 		open.addEventListener('click', async () => {
 			const rec = await getRecent(r.id);
 			if (!rec) { setStatus('That saved copy is no longer available.', true); renderRecents(); return; }
-			load(rec.files, rec.name, { type: 'recent', url: rec.source.url }).catch(() => {});
+			load(rec.files, rec.name, { type: 'recent', url: rec.source.url, id: r.id }).catch(() => {});
 		});
 		li.append(open);
 		if (r.source.type === 'link') {
