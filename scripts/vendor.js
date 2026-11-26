@@ -20,6 +20,7 @@ const ADDONS = [
 	'loaders/TDSLoader.js',
 	'loaders/DRACOLoader.js',
 	'libs/meshopt_decoder.module.js',
+	'libs/meshopt_simplifier.module.js', // (MIT; WebAssembly only, no eval: heavy pieces simplified for the Quest, js/simplify.js)
 	'utils/BufferGeometryUtils.js',
 ];
 

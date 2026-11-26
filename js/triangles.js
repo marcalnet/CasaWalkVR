@@ -78,18 +78,19 @@ export function modelTriangles(bytes, kind) {
  * Triangles of a Sweet Home 3D home's furniture: each model entry counted
  * once (count(ref) returns its triangles, or null), times the pieces that use
  * it. Walls, floors and rooms are a few thousand at most: left out. Returns
- * { triangles, unknown } (unknown: pieces whose model could not be counted).
+ * { triangles, unknown (pieces whose model could not be counted), models (ref -> { triangles, uses }) }.
  */
 export function homeTriangles(pieces, count) {
 	const uses = new Map();
 	for (const p of pieces) if (p.model) uses.set(p.model, (uses.get(p.model) ?? 0) + 1);
 	let triangles = 0, unknown = 0;
+	const models = new Map(); // ref -> { triangles, uses } (the counted ones)
 	for (const [ref, n] of uses) {
 		const t = count(ref);
 		if (t === null || t === undefined) unknown += n;
-		else triangles += t * n;
+		else { triangles += t * n; models.set(ref, { triangles: t, uses: n }); }
 	}
-	return { triangles, unknown };
+	return { triangles, unknown, models };
 }
 
 /** What to do with a home of `triangles`: 'load', 'heavy' (load, and say it may run slowly), or 'refuse'. */

@@ -32,7 +32,8 @@ test('glTF: indices or positions per triangle primitive, once per node using the
 test('a home: each model counted once, times the pieces using it; the verdict and the calm message', () => {
 	const counts = { a: 1000, b: 50 };
 	const pieces = [{ model: 'a' }, { model: 'a' }, { model: 'b' }, { model: 'c' }, { model: null }];
-	assert.deepEqual(homeTriangles(pieces, (ref) => counts[ref] ?? null), { triangles: 2050, unknown: 1 });
+	const h = homeTriangles(pieces, (ref) => counts[ref] ?? null);
+	assert.deepEqual([h.triangles, h.unknown, h.models.get('a')], [2050, 1, { triangles: 1000, uses: 2 }]);
 	const limits = { warning: 1.5e6, limit: 6e6 };
 	assert.equal(triangleVerdict(1e6, limits), 'load');
 	assert.equal(triangleVerdict(2e6, limits), 'heavy');

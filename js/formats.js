@@ -13,6 +13,7 @@
 import * as THREE from 'three';
 import { unzipSync } from 'fflate';
 import { modelTriangles, homeTriangles, tooHeavyMessage } from './triangles.js';
+import { SIMPLIFY, keepRatio, simplifyObject } from './simplify.js';
 import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
 import { defaultMtlFor, usedMaterialNames, definedMaterialNames, isWindowPaneName, WINDOW_PANE_OPACITY } from './obj-defaults.js';
@@ -588,6 +589,8 @@ export const UNIT_SCALE = { cm: 0.01, m: 1, mm: 0.001, in: 0.0254 };
  * @param files  [{ name, bytes: Uint8Array }]
  * @param opts   { units: 'auto'|'cm'|'m'|'mm'|'in', onProgress(text),
  *                 triangleLimit (refuse, before building, a home counted above it; default none),
+ *                 simplifyAbove, simplifyTarget (a home counted above the first has its heavy models
+ *                 simplified towards the second: js/simplify.js; default none),
  *                 makeTexture(ref) (a Sweet Home 3D texture image; default: decoded
  *                 by the browser. Node, which decodes no images, passes a stand-in) }
  * @returns { kind: 'sh3d'|'model', root, bounds, observer, stats, store }
@@ -596,6 +599,8 @@ export async function openFiles(files, opts = {}) {
 	if (!files.length) throw new UserError('No file selected.');
 	const progress = opts.onProgress || (() => {});
 	const limit = opts.triangleLimit ?? Infinity; // (counted from the bytes before building: js/triangles.js)
+	const simplifyAbove = opts.simplifyAbove ?? Infinity; // (a home counted over it has its heavy models simplified: js/simplify.js)
+	const toward = { target: opts.simplifyTarget ?? SIMPLIFY.target }; // (... towards this many triangles)
 
 	let store;
 	try {
@@ -603,7 +608,7 @@ export async function openFiles(files, opts = {}) {
 		if (files.length === 1 && sniff(files[0].bytes) === 'zip') {
 			progress('Unzipping…');
 			store = EntryStore.fromZip(files[0].bytes);
-			if (store.entries.has('Home.xml')) return await openSh3d(store, progress, opts.makeTexture, limit);
+			if (store.entries.has('Home.xml')) return await openSh3d(store, progress, opts.makeTexture, limit, simplifyAbove, toward);
 			if (store.entries.has('Home')) throw new UserError('Re-save this file in Sweet Home 3D 5.3 or later.');
 			mainPath = findMainModel([...store.entries.keys()], store);
 			if (!mainPath) throw new UserError('No 3D model (.sh3d, .obj, .glb, .dae, .3ds) found inside this ZIP.');
@@ -620,8 +625,14 @@ export async function openFiles(files, opts = {}) {
 		if (estimate > limit) throw new UserError(tooHeavyMessage(estimate, limit));
 		progress('Loading model…');
 		const object = await loadModelEntry(store, mainPath);
+		let simplified = null;
+		if (estimate > simplifyAbove) {
+			progress('Simplifying for the Quest…');
+			const r = keepRatio(estimate, new Map([[mainPath, { triangles: estimate, uses: 1 }]]), toward);
+			simplified = { ...(await simplifyObject(object, r)), models: 1 };
+		}
 		const isMetric = fmt === 'glb' || fmt === 'gltf' || fmt === 'dae'; // glTF is metres; COLLADA declares its own unit
-		return placeModel(object, store, { units: isMetric ? 'm' : opts.units || 'auto', name: baseName(mainPath) });
+		return { ...placeModel(object, store, { units: isMetric ? 'm' : opts.units || 'auto', name: baseName(mainPath) }), simplified };
 	} catch (e) {
 		store?.dispose(); // a failed load must not leave its files in memory
 		throw e;
@@ -637,22 +648,36 @@ async function breathe() {
 	lastPause = Date.now();
 }
 
-async function openSh3d(store, progress, makeTexture = null, limit = Infinity) {
+async function openSh3d(store, progress, makeTexture = null, limit = Infinity, simplifyAbove = Infinity, toward = {}) {
 	progress('Reading Home.xml…');
 	const home = parseHome(new TextDecoder().decode(store.entries.get('Home.xml')));
 	// Too heavy to open here: said before anything is built (the furniture counted from its bytes).
-	const { triangles } = homeTriangles(home.pieces, (ref) => { const b = store.get(ref); return b ? modelTriangles(b, sniff(b)) : null; });
+	const { triangles, models } = homeTriangles(home.pieces, (ref) => { const b = store.get(ref); return b ? modelTriangles(b, sniff(b)) : null; });
 	if (triangles > limit) throw new UserError(tooHeavyMessage(triangles, limit));
+	// Heavy: its heavy models simplified once each, before the pieces are placed (said on the page).
+	const ratio = triangles > simplifyAbove ? keepRatio(triangles, models, toward) : 1;
+	const simplified = ratio < 1 ? { before: triangles, after: triangles, models: 0 } : null;
 	const texLoader = new THREE.TextureLoader(store.manager);
 	makeTexture ??= (ref) => texLoader.load(`mem:${ref}`);
 	const built = await buildHome(home, {
 		// Pause between models so the "Loading furniture" count is actually
 		// painted instead of the page freezing until the end.
-		loadModel: async (ref) => { await breathe(); return loadModelEntry(store, ref); },
+		loadModel: async (ref) => {
+			await breathe();
+			const object = await loadModelEntry(store, ref);
+			const m = models.get(ref);
+			if (simplified && object && m && m.triangles >= SIMPLIFY.pieceMin) {
+				progress('Simplifying heavy furniture for the Quest…');
+				const r = await simplifyObject(object, ratio);
+				simplified.after -= (r.before - r.after) * m.uses;
+				simplified.models++;
+			}
+			return object;
+		},
 		loadTexture: (ref) => (store.find(ref) ? makeTexture(ref) : null),
 		onProgress: (done, total) => progress(`Loading furniture ${done}/${total}…`),
 	});
-	return { kind: 'sh3d', ...built, home, store };
+	return { kind: 'sh3d', ...built, home, store, simplified };
 }
 
 /** Wraps a generic model: unit conversion, centred on the origin, resting on y = 0. */

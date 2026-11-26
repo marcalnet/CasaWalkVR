@@ -9,6 +9,7 @@ import { openFiles, UserError, checkDecoders } from './formats.js';
 import { optimiseModel, unmergedModel, modelStats } from './optimise.js';
 import { DEV } from './dev.js';
 import { DEVICE } from './device.js';
+import { SIMPLIFY } from './simplify.js';
 import { XRExperience } from './xr.js';
 import { Lighting } from './lighting.js';
 import { DepthShading } from './depth.js';
@@ -213,6 +214,8 @@ function showStats() {
 	// Built as text nodes, never as HTML: file names come from outside.
 	const row = (text, cls) => { const d = document.createElement('div'); if (cls) d.className = cls; d.textContent = text; return d; };
 	const rows = [row(current.label || '', 'name'), ...lines.map((l) => row(l))];
+	// Said, never hidden: the page says when a home was simplified, and by how much.
+	if (current.simplified) rows.push(row(`Simplified for the Quest: ${fmt(Math.round(current.simplified.before))} → about ${fmt(Math.round(current.simplified.after))} triangles (${current.simplified.models} heavy model${current.simplified.models === 1 ? '' : 's'}; sizes kept exact). A computer shows the original.`, 'warn'));
 	if (triangles > CONFIG.triangleWarning) rows.push(row(`Heavy model: over ${fmt(CONFIG.triangleWarning)} triangles may run slowly on Quest 2.`, 'warn'));
 	$('stats').replaceChildren(...rows);
 	return { triangles, drawCalls };
@@ -246,7 +249,7 @@ async function load(files, label, source = { type: 'file' }) {
 	loading++;
 	updateXRButtons(); // no Enter VR while a model is being swapped in
 	try {
-		const result = await openFiles(files, { units: $('units').value, triangleLimit: DEVICE.headset ? CONFIG.triangleLimit : Infinity, onProgress: (t) => { if (seq === loadSeq) setStatus(t); } });
+		const result = await openFiles(files, { units: $('units').value, triangleLimit: DEVICE.headset ? CONFIG.triangleLimit : Infinity, simplifyAbove: DEVICE.headset ? SIMPLIFY.above : Infinity, onProgress: (t) => { if (seq === loadSeq) setStatus(t); } });
 		if (superseded(result)) return;
 		setStatus('Optimising for Quest…');
 		await new Promise((r) => setTimeout(r, 0)); // let the status paint
