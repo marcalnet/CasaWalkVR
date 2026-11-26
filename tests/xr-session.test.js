@@ -1287,7 +1287,7 @@ test('the areas: the tools home over the left hand in the left area; the hand ov
 	assert.ok(!fan.reach && fan.mode === 'home' && fan.group.position.distanceTo(fan._anchor) < 0.02, 'the hand gone: home again');
 });
 
-test('the orb never hides a live key: resting over the Walk in door it goes small and faint (touch unchanged); clear again it grows back after 0.4 s; looked at on purpose it stays full size', async () => {
+test('the orb never hides a live key: resting over the Walk in door it goes small and faint (touch unchanged); clear again it grows back after 0.4 s; near the eyes it still yields; touched while yielded it opens', async () => {
 	const { x, frame, hands } = await setup();
 	const w = x.ui.wrist;
 	hands.left.grip.visible = hands.right.grip.visible = true;
@@ -1306,10 +1306,16 @@ test('the orb never hides a live key: resting over the Walk in door it goes smal
 	assert.ok(w.sightYield, 'not at once');
 	for (let i = 0; i < 30; i++) frame();
 	assert.ok(!w.sightYield, 'after 0.4 s clear');
-	// Raised to the eyes to look at it: never yields to sight.
-	hands.right.grip.position.copy(x.rig.worldToLocal(eye.clone().lerp(door, 0.25)));
+	// Close to the eyes on the line (0.32-0.39 m, as measured in use), looking at the door: it still yields (no "on purpose" exception).
+	const d = door.distanceTo(eye), near = eye.clone().lerp(door, 0.35 / d);
+	for (let i = 0; i < 3; i++) { const o = w.orb.group.getWorldPosition(new THREE.Vector3()); hands.right.grip.position.add(x.rig.worldToLocal(near.clone()).sub(x.rig.worldToLocal(o))); frame(); }
 	for (let i = 0; i < 20; i++) frame();
-	assert.ok(!w.sightYield, 'looked at on purpose (within 0.40 m): full size');
+	assert.ok(w.sightYield, 'at 0.35 m on the line: it yields');
+	// Touch still works on the yielded orb: a tip within 3.5 cm of its centre opens the menu.
+	const orbAt = w.orb.group.getWorldPosition(new THREE.Vector3());
+	hands.left.grip.position.copy(x.rig.worldToLocal(orbAt.clone().add(new THREE.Vector3(0, 0.01, 0.045))));
+	for (let i = 0; i < 4; i++) frame();
+	assert.ok(w.open, 'touched while yielded: the wrist menu opens');
 });
 
 test('the fan: over the left controller however it is turned; the orb\'s own hand reaching into the fan: the orb yields', async () => {

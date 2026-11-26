@@ -31,7 +31,7 @@ import { WRIST } from './theme.js';
 import { ease } from './tween.js';
 import { KeyPad, HoldRing } from './keys.js';
 import { CLAIM } from './xr-targets.js';
-import { SIGHT, orbCovers, lookingAt } from './zones.js';
+import { SIGHT, orbCovers } from './zones.js';
 
 export const ORB_ON_GRIP = new THREE.Vector3(0, 0.035, 0.115); // the orb on a controller, in its grip space
 const ORB_SCALE = 1; // the orb at full size (about 5 cm): easy to notice (the user's Quest 2 test)
@@ -103,12 +103,12 @@ export class WristMenu {
 	/**
 	 * The orb between the eyes and a live key (the next-build asks 5.8): it
 	 * goes small and faint at once, and grows back once clear for
-	 * SIGHT.CLEAR_FOR. Not while you look at it on purpose (js/zones.js).
+	 * SIGHT.CLEAR_FOR. A live key behind it always wins; touches still open it.
 	 */
 	sightYieldNow(p, dt) {
-		const xr = this.xr, eye = xr.headWorld(), fwd = xr.viewAxes().forward;
+		const xr = this.xr, eye = xr.headWorld();
 		const keys = xr.liveKeys?.() ?? [];
-		const covering = !lookingAt(eye, fwd, p) && keys.some((k) => orbCovers(eye, p, SIGHT.ORB_R, k.p, k.r, this.sightYield));
+		const covering = keys.some((k) => orbCovers(eye, p, SIGHT.ORB_R, k.p, k.r, this.sightYield));
 		if (covering) { this.sightClear = 0; return true; }
 		if (!this.sightYield) return false;
 		this.sightClear += dt;

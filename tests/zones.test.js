@@ -57,8 +57,8 @@ test('the waiting tools: at the edge, 3° inside the fan\'s area, 10-35° below 
 	assert.ok(pos.x > 0.98 && over <= 1e-9, `there within a second, no overshoot (${pos.x.toFixed(3)})`);
 });
 
-test('the orb never hides a live key: covers when nearer and within the radii plus 1°; clear only beyond plus 3°; looking at it on purpose wins', async () => {
-	const { SIGHT, orbCovers, lookingAt } = await import('../js/zones.js');
+test('the orb never hides a live key: covers when nearer and within the radii plus 1°; clear only beyond plus 3°; a live key always wins', async () => {
+	const { SIGHT, orbCovers } = await import('../js/zones.js');
 	const eye = V(0, 1.6, 0), key = V(0, 1.0, -0.4); // (the waist door, ahead and below)
 	const onLine = eye.clone().lerp(key, 0.6);
 	assert.ok(orbCovers(eye, onLine, SIGHT.ORB_R, key, 0.17), 'on the line to the key: covers');
@@ -69,8 +69,4 @@ test('the orb never hides a live key: covers when nearer and within the radii pl
 	const toKey = key.clone().sub(eye).normalize(), axis = toKey.clone().cross(V(0, 1, 0)).normalize();
 	const dir = toKey.clone().applyAxisAngle(axis, edge), at = eye.clone().addScaledVector(dir, dO);
 	assert.ok(!orbCovers(eye, at, SIGHT.ORB_R, key, 0.17, false) && orbCovers(eye, at, SIGHT.ORB_R, key, 0.17, true), 'between +1° and +3°: it keeps what it was');
-	const fwd = key.clone().sub(eye).normalize();
-	assert.ok(lookingAt(eye, fwd, onLine), 'within 12° of where you look: you are looking at it');
-	assert.ok(lookingAt(eye, V(0, 0, -1), eye.clone().add(V(0.2, -0.2, -0.2))), 'within 0.40 m of the eyes: raised to look at');
-	assert.ok(!lookingAt(eye, V(0, 0, -1), V(0.3, 1.0, -0.4)), 'resting in the lap, looking ahead: not');
 });
