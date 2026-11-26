@@ -215,8 +215,8 @@ test('the tools show waits for you to look at the model, plays above it (5-15° 
 	const { x, frame } = await setup();
 	const intro = x.toolsIntro;
 	assert.ok(intro.start({ again: true }) && intro.state.waiting, 'waiting for a look');
-	x.camera.rotation.x = 0; x.camera.updateMatrixWorld(true);
-	assert.ok(!intro.lookingAtModel(), 'looking straight ahead, 38° above the model: not yet');
+	x.camera.rotation.x = 0.5; x.camera.updateMatrixWorld(true);
+	assert.ok(!intro.lookingAtModel(), 'looking up, well above the model: not yet');
 	intro.update(0.1, () => {});
 	assert.ok(intro.state.waiting && !intro.group.visible, 'it waits');
 	x.camera.rotation.x = -0.6; x.camera.updateMatrixWorld(true); // (looking down at the model)
@@ -224,17 +224,16 @@ test('the tools show waits for you to look at the model, plays above it (5-15° 
 	intro.update(0.1, () => {});
 	assert.ok(!intro.state.waiting && intro.group.visible, 'begins once looked at');
 	const head = x.headWorld(), p = intro.group.getWorldPosition(new THREE.Vector3());
-	// Above the model as seen (harmony, conflict 3), on both plinths: its middle 5-15° below eye level, its lower edge 3° over the model's top.
-	const W = await import('../js/wings.js'), { PLINTH_HEIGHT, PLINTH_HEIGHT_HANDS } = await import('../js/xr-scene.js'), deg = THREE.MathUtils.radToDeg;
-	for (const h of [PLINTH_HEIGHT, PLINTH_HEIGHT_HANDS]) {
-		x.modes.dollhouse.setPlinthNow(h); x.modes.dollhouse.apply?.(); x.scene.updateMatrixWorld(true);
+	// Above the model as seen (harmony, conflict 3), on the one plinth: its middle 5-15° below eye level, its lower edge 3° over the model's top.
+	const W = await import('../js/wings.js'), { PLINTH_HEIGHT } = await import('../js/xr-scene.js'), deg = THREE.MathUtils.radToDeg;
+	for (const h of [PLINTH_HEIGHT]) {
+		x.scene.updateMatrixWorld(true);
 		intro.begin();
 		const q = intro.group.getWorldPosition(new THREE.Vector3()), d = q.distanceTo(head), el = Math.asin((q.y - head.y) / d);
 		const top = Math.max(...W.zoneHull(W.zoneOf(x.modes.dollhouse.houseBox(), head, x.viewYaw())).map((a) => a.el));
 		assert.ok(deg(el) >= -15.01 && deg(el) <= -4.99, `plinth ${h}: its middle 5-15° below eye level (${deg(el).toFixed(1)}°)`);
 		assert.ok(deg(el - Math.atan(0.345 / d)) >= deg(top) + 3 - 0.01 || deg(el) > -5.01, `plinth ${h}: its lower edge ${deg(el - Math.atan(0.345 / d)).toFixed(1)}° vs the model's top ${deg(top).toFixed(1)}°`);
 	}
-	x.modes.dollhouse.setPlinthNow(PLINTH_HEIGHT);
 	for (let t = 0; t < 5.2; t += 1 / 72) intro.update(1 / 72, () => {});
 	assert.ok(x.fan.force > 0, 'the fan is told to open as they fly');
 	intro.stop();
@@ -1156,38 +1155,25 @@ test('the tools show also starts on a wider look after 4 s, and by itself after 
 	intro.stop();
 });
 
-test('the plinth: 0.60 m with a controller, 1.24 m with only bare hands, 30 cm of table each side; a switch waits 1 s, then rises over 0.8 s with the model on it; never while the model floats', async () => {
+test('the plinth: one height, 1.24 m, for controllers and bare hands, 30 cm of table each side; it never moves by itself', async () => {
 	const { x, frame } = await setup();
-	const { PLINTH_HEIGHT_HANDS: H } = await import('../js/xr-scene.js');
+	const { PLINTH_HEIGHT: H, PLINTH_MARGIN } = await import('../js/xr-scene.js');
 	const d = x.modes.dollhouse;
 	frame();
-	assert.equal(x.plinthH, 0.6, 'controllers: 0.60 m');
-	const top = () => x.pedestal.userData.parts.slab.position.y + 0.015;
-	assert.ok(Math.abs(top() - 0.6) < 1e-6);
-	// The controllers put down: only bare hands (no controller source).
-	const sources = x.input.controllers.map((c) => c.source);
+	assert.equal(H, 1.24);
+	assert.equal(x.plinthH, H, 'controllers: 1.24 m');
+	const slabTop = () => new THREE.Box3().setFromObject(x.pedestal.children[0]).max.y; // (the top slab)
+	const box = new THREE.Box3().setFromObject(x.pedestal.children[0]);
+	assert.ok(Math.abs(slabTop() - H) < 1e-6, 'its top at 1.24 m');
+	assert.ok(Math.abs(box.max.x - box.min.x - x.plinthSize.W) < 1e-6 && PLINTH_MARGIN === 0.3, '30 cm of table each side');
+	assert.ok(Math.abs(d.doll.pos.y - H - 0.004) < 1e-6, 'the model on it');
+	// The controllers put down: only bare hands. Nothing moves.
 	x.input.controllers.forEach((c) => { c.source = null; });
-	// (A bare hand is seen: the plinth rises only for a hand that is really there.)
 	const handEntry = x.input.controllers[0], realTouch = x.input.updateTouch;
 	x.input.updateTouch = function (c) { realTouch.call(this, c); if (c === handEntry && !c.source) { c.isHand = true; c.touch.tracked = true; } };
-	for (let i = 0; i < 40; i++) frame(); // 0.55 s: still waiting (a flicker must not bob the plinth)
-	assert.equal(x.plinthH, 0.6, 'waits 1 s');
-	for (let i = 0; i < 40; i++) frame(); // 1.1 s: the move began
-	assert.ok(x.plinthH > 0.6 && x.plinthH < H || x.plinthH === H, 'moving');
-	for (let i = 0; i < 100; i++) frame();
-	assert.ok(Math.abs(x.plinthH - H) < 1e-6 && Math.abs(top() - H) < 1e-6, 'bare hands: 1.24 m');
-	assert.ok(Math.abs(d.doll.pos.y - H - 0.004) < 1e-6, 'the model rode up with it');
-	assert.ok(Math.abs(x.plinthSize.W - x.plinthBase.W - 0.2) < 1e-6 && Math.abs(x.plate.mesh.scale.x * x.pedestal.scale.x - 1) < 1e-9, '10 cm more table each side, the plate unstretched');
-	assert.ok(Math.abs(x.plate.mesh.position.y - (H + x.plate.mesh.userData.tiltHalf)) < 1e-6, 'and the plate');
-	// A controller is back, but the model is floating: it waits.
-	d.floating = { wait: 0, going: null };
-	x.input.controllers.forEach((c, i) => { c.source = sources[i]; });
-	handEntry.isHand = false; handEntry.isController = true; x.input.updateTouch = realTouch;
 	for (let i = 0; i < 200; i++) frame();
-	assert.equal(x.plinthH, H, 'not while the model floats');
-	d.stopFloating();
-	for (let i = 0; i < 200; i++) frame();
-	assert.ok(Math.abs(x.plinthH - 0.6) < 1e-6, 'back to 0.60 m once at rest');
+	assert.ok(x.plinthH === H && Math.abs(slabTop() - H) < 1e-6, 'bare hands: the same plinth');
+	x.input.updateTouch = realTouch;
 });
 
 test('going home turns the model square to the plinth (unless you turned it with the stick)', async () => {
@@ -1293,7 +1279,9 @@ test('harmony, conflicts 7, 8 and 12: the two Walk-in keys are one key; the show
 	assert.ok(intro.showing && x.teaching, 'then the show (a teacher: the fan stays closed)');
 	// Conflict 7: while it shows, a pull at the model steps nowhere; a pull at the tools starts their flight.
 	const c = hands.right, orig = x.input.setRaycaster.bind(x.input), head = x.headWorld().clone();
-	let aim = x.modes.dollhouse.modelBox().getCenter(new THREE.Vector3());
+	// (At the model's front foot, well below the tools that hang above it: the plinth is 1.24 m high since 26 Nov 2026.)
+	const mb = x.modes.dollhouse.modelBox();
+	let aim = new THREE.Vector3((mb.min.x + mb.max.x) / 2, mb.min.y, mb.max.z);
 	x.input.setRaycaster = (cc, rc) => { if (cc === c) { rc.set(head, aim.clone().sub(head).normalize()); rc.far = 5; } else orig(cc, rc); };
 	press('right', 'trigger'); frame(); press('right', 'trigger', false); frame();
 	assert.ok(x.mode === 'dollhouse' && !x.layerFx && intro.state.flying === null, 'at the model: nothing (the aims wait)');
@@ -1319,15 +1307,13 @@ test('harmony, conflict 5: at the scale model a bare hand steps inside on lettin
 	assert.equal(d.spotBefore(a, 0.1), spot, 'the landing from 0.1 s before the release (not the flick at the end)');
 });
 
-test('harmony, conflict 13: no wing corner within 5° of the house as seen (its covered rooms and what stands on them, not the lawn; 2° at the very least, once every other limit is spent) nor above +10°, every wing within 0.62 m, for Pond House and the Apartment, on both plinths, with either main hand', async () => {
+test('harmony, conflict 13: no wing corner within 5° of the house as seen (its covered rooms and what stands on them, not the lawn; 2° at the very least, once every other limit is spent) nor above +10°, every wing within 0.62 m, for Pond House and the Apartment, on the one plinth, with either main hand', async () => {
 	const W = await import('../js/wings.js');
-	const { PLINTH_HEIGHT, PLINTH_HEIGHT_HANDS } = await import('../js/xr-scene.js');
+	const { PLINTH_HEIGHT } = await import('../js/xr-scene.js');
 	for (const name of ['pond-house', 'apartment']) {
 		const { x, frame } = await setup({ file: path.resolve(import.meta.dirname, `../examples/${name}.sh3d`) });
 		frame();
-		for (const h of [PLINTH_HEIGHT, PLINTH_HEIGHT_HANDS]) {
-			x.modes.dollhouse.setPlinthNow(h);
-			x.modes.dollhouse.apply?.();
+		for (const h of [PLINTH_HEIGHT]) {
 			for (const main of ['right', 'left']) {
 				x.menuAction({ id: 'mainHand', value: main });
 				x.ui.closeAll();

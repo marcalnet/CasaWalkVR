@@ -6,18 +6,17 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
-export const PLINTH_HEIGHT = 0.6; // low table: you look down into the rooms (while a controller is tracked)
-// With only bare hands the model is at the arm's working height (build 111's design), stomach
-// height so there is no bending (the user's decision after build 120): the top 0.65 m below the eyes,
-// measured from the eyes because the scale model's view lifts them to a 2 m person's (1.89 m on the
-// stage), so it suits any real height, seated too (build 120's design, corrections to item 5).
-export const PLINTH_HEIGHT_HANDS = 1.24;
+// One plinth for both inputs (the user's decision, 26 Nov 2026; until then 0.60 m with a controller):
+// the model at the arm's working height (build 111's design), stomach height so there is no bending
+// (the user's decision after build 120): the top 0.65 m below the eyes, measured from the eyes because
+// the scale model's view lifts them to a 2 m person's (1.89 m on the stage), so it suits any real
+// height, seated too (build 120's design, corrections to item 5).
+export const PLINTH_HEIGHT = 1.24;
 // The model rests a few millimetres above the plinth, never exactly on it:
 // two surfaces at the same height fight for the same pixels ("z-fighting"),
 // which showed as flickering polygon-shaped patches all over the floors.
-export const PLINTH_REST = PLINTH_HEIGHT + 0.004;
 const SLAB = 0.03, GAP = 0.05, INSET = 0.025; // the plinth's top slab, its dark base gap, the base's inset
-export const PLINTH_MARGIN = 0.2, PLINTH_MARGIN_HANDS = 0.3; // table left around the model (at most 1.4 m across), with a controller / only bare hands (build 120's design, item 8)
+export const PLINTH_MARGIN = 0.3; // table left around the model (at most 1.4 m across): the bare-hands plinth's (build 120's design, item 8), for both inputs
 // From where you stand to the plinth's front edge (60 cm at the user's request:
 // you can't walk around in the gallery, and 30 cm put the model too close).
 const PLINTH_FRONT_GAP = 0.6;
@@ -85,12 +84,11 @@ export function fitPlinth({ pedestal, gallery, plinthMaterials: M }, w, d, H = P
 		p.add(m);
 		return m;
 	};
-	// (The body is a unit-high box scaled to the height, so the plinth can rise and sink: setPlinthHeight.)
-	const slab = box(W, SLAB, D, H - SLAB / 2, M.top);
+	// (The body is a unit-high box scaled to the height.)
+	box(W, SLAB, D, H - SLAB / 2, M.top);
 	const body = box(W - 0.01, 1, D - 0.01, GAP + (H - SLAB - GAP) / 2, M.body);
 	body.scale.y = H - SLAB - GAP;
 	box(W - 2 * INSET, GAP, D - 2 * INSET, GAP / 2, M.base);
-	p.userData.parts = { slab, body };
 	return { W, D, distance };
 }
 
@@ -98,21 +96,12 @@ export function fitPlinth({ pedestal, gallery, plinthMaterials: M }, w, d, H = P
  * Puts the scale plate on the plinth top, near its front edge on the right,
  * tilted up towards you like a museum caption (the plinth is W x D).
  */
-/** Moves the plinth's top to height H (the body stretches; the slab rides on it). */
-export function setPlinthHeight(pedestal, H) {
-	const { slab, body } = pedestal.userData.parts ?? {};
-	if (!slab) return;
-	slab.position.y = H - SLAB / 2;
-	body.scale.y = H - SLAB - GAP;
-	body.position.y = GAP + (H - SLAB - GAP) / 2;
-}
-
 export function placePlate(plate, pedestal, W, D, H = PLINTH_HEIGHT) {
 	const ph = plate.geometry.parameters?.height ?? 0.05;
 	const tilt = THREE.MathUtils.degToRad(35); // up from lying flat
 	plate.rotation.set(-(Math.PI / 2 - tilt), 0, 0);
 	plate.position.set(W / 2 - 0.15, H + Math.sin(tilt) * ph / 2 + 0.002, D / 2 - 0.065);
-	plate.userData.tiltHalf = Math.sin(tilt) * ph / 2 + 0.002; // (its height above the top: setPlinthHeight's caller moves it with the plinth)
+	plate.userData.tiltHalf = Math.sin(tilt) * ph / 2 + 0.002; // (its height above the top)
 	pedestal.add(plate);
 }
 

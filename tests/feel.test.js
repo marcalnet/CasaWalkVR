@@ -25,7 +25,7 @@ test('the smooth ease starts and stops without a jolt (the glide home, build 120
 test('motion longer than the feedback cap is marked long (the 1.6 s glide home ran 0.3 s in build 120)', async () => {
 	const fs = await import('node:fs');
 	const src = fs.readFileSync(new URL('../js/xr-dollhouse.js', import.meta.url), 'utf8');
-	for (const name of ['RETURN_GLIDE', 'PLINTH_MOVE']) {
+	for (const name of ['RETURN_GLIDE']) { // (PLINTH_MOVE went with the second plinth height, 26 Nov 2026)
 		const value = Number(src.match(new RegExp(`${name} = ([0-9.]+)`))[1]);
 		assert.ok(value > FEEDBACK_MAX, name);
 		assert.match(src, new RegExp(`duration: ${name},[^\\n]*long: true`), `${name} is long`);

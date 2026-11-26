@@ -147,7 +147,7 @@ export class XRExperience {
 		Object.assign(this, buildShowroom(scene)); // showroom, showroomSky
 		Object.assign(this, buildStage(scene)); // stage, gallery, pedestal, plinthMaterials
 		this.plate = new ScalePlate(); // the model's true scale, on the plinth (SPEC.md B2)
-		this.plinthH = PLINTH_HEIGHT; // the plinth's height now: 0.6 m with a controller, 1.24 m with only bare hands (animated between: js/xr-dollhouse.js)
+		this.plinthH = PLINTH_HEIGHT; // the plinth's height (one for both inputs since 26 Nov 2026; never changes)
 		this.setPlinth(1.2, 0.9);
 		this.walkSky = buildWalkSky(camera);
 		Object.assign(this, buildMenus(rig)); // menus: the settings boards
@@ -201,7 +201,6 @@ export class XRExperience {
 		this.plate.mesh.removeFromParent(); // (fitPlinth rebuilds the plinth's parts)
 		const { W, D, distance } = fitPlinth(this, w, d, this.plinthH);
 		this.plinthSize = { W, D };
-		this.plinthBase = { W, D }; // (with a controller's margin: bare hands widen it, js/xr-dollhouse.js setPlinthNow)
 		this.plinthDistance = distance; // from where you stand to the plinth's centre
 		placePlate(this.plate.mesh, this.pedestal, W, D, this.plinthH);
 	}

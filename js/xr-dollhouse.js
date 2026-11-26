@@ -30,7 +30,7 @@
 import * as THREE from 'three';
 import { UP, DOWN, CLAIM } from './xr-targets.js';
 import { yawOf } from './xr-input.js';
-import { PLINTH_HEIGHT, PLINTH_HEIGHT_HANDS, PLINTH_MARGIN, PLINTH_MARGIN_HANDS, setPlinthHeight, EYE_BELOW_TOP, buildMarkers } from './xr-scene.js';
+import { EYE_BELOW_TOP, buildMarkers } from './xr-scene.js';
 import { KeyPad } from './keys.js';
 import { DELIBERATE } from './touch.js';
 import { roomAt, roomLanding, alongAxis, clearOfWalls, headingOf } from './rooms.js';
@@ -65,7 +65,6 @@ export function roundScaleUp(ratio) {
 }
 const ROTATE_SPEED = 1.6; // rad/s at full stick
 const HOLD_REACH = 0.08; // a closed hand within this of the model's box holds it
-const PLINTH_WAIT = 1.0, PLINTH_MOVE = 0.8, PLINTH_CLEAR = 0.3; // the input must hold this long (s); the move; no hand or controller within this of the model (m)
 const DROP_NEAR = 0.15; // let go this close to the plinth top (over it): it settles
 const DROP_NEAR_HAND = 0.3, DROP_OVER_HAND = 0.15; // bare hands, with no depth cues and a shaky hold: twice as far above it, and 15 cm beyond its edge
 const RETURN_AWAY_HAND = 0.15; // a bare hand counts as "at the model" only this close, and only above the waist (a hand hanging at your side, or one tracking lost in the model's box, never keeps it from going home)
@@ -262,82 +261,10 @@ export class Dollhouse {
 		xr.lift = 0;
 		if (measure) this.measureLift(xr.camera.matrix);
 		xr.stage.visible = true;
-		this.snapPlinth(); // (the height for the input in hand, at once: the live switch is animated)
 		for (const c of xr.input.controllers) xr.input.setLaser(c, true);
 		xr.applyView();
 		xr.applyStoreys();
 		this.apply();
-	}
-
-	// -----------------------------------------------------------------------
-	// The plinth's height: 0.60 m while any controller is tracked, 1.24 m with
-	// only bare hands (the user's decision; build 111's design, item 3)
-	// -----------------------------------------------------------------------
-
-	/** The height for the input in hand. */
-	wantedPlinth() {
-		const input = this.xr.input;
-		// (Bare hands only when a hand is really there: at a session's start no input is reported yet, and the plinth must not start tall for a controller user.)
-		return !input.active().length && input.controllers.some((c) => c.isHand && c.touch.tracked) ? PLINTH_HEIGHT_HANDS : PLINTH_HEIGHT;
-	}
-
-	/** Sets the plinth's top to h now: the body, the plate, and a model resting on it ride along. */
-	setPlinthNow(h) {
-		const xr = this.xr, resting = !this.grab && !this.floating && Math.abs(this.doll.pos.y - (xr.plinthH + 0.004)) < 0.002;
-		xr.plinthH = h;
-		setPlinthHeight(xr.pedestal, h);
-		// Bare hands: 30 cm of table round the model, not 20, grown with the height (the model and the
-		// room stay where they are; the front edge stays 0.6 m ahead, so the table grows back and sideways).
-		const base = xr.plinthBase;
-		if (base) {
-			const k = THREE.MathUtils.clamp((h - PLINTH_HEIGHT) / (PLINTH_HEIGHT_HANDS - PLINTH_HEIGHT), 0, 1), grow = 2 * (PLINTH_MARGIN_HANDS - PLINTH_MARGIN) * k;
-			xr.pedestal.scale.set((base.W + grow) / base.W, 1, (base.D + grow) / base.D);
-			xr.pedestal.position.z = -xr.plinthDistance - grow / 2; // (its front edge stays 0.6 m ahead: it grows back and sideways)
-			xr.plinthSize = { W: base.W + grow, D: base.D + grow };
-			xr.plate?.mesh.scale.set(1 / xr.pedestal.scale.x, 1, 1 / xr.pedestal.scale.z); // (the plate is on the plinth: never stretched)
-		}
-		const plate = xr.plate?.mesh;
-		if (plate) plate.position.y = h + (plate.userData.tiltHalf ?? 0.03);
-		if (resting) { this.doll.pos.y = h + 0.004; this.apply(); }
-		else if (this.grab) this.keepAbove(); // (a model in the hand is never left inside the rising plinth)
-	}
-
-	/** At once (entering): the height for the input in hand. */
-	snapPlinth() {
-		if (this.plinthAnim) { this.xr.tweens.stop(this.plinthAnim); this.plinthAnim = null; }
-		this.plinthSwitch = null;
-		this.setPlinthNow(this.wantedPlinth());
-	}
-
-	/**
-	 * Once a frame: when the input changes (controllers to bare hands, or back)
-	 * and holds for 1.0 s (the Quest flickers between them), the plinth and
-	 * everything on it rise or sink over 0.8 s (sine ease), once the model is
-	 * at rest and no hand or controller is within 30 cm of it. The room, the
-	 * doors and the levels stay still. A very soft settle sound, no vibration.
-	 */
-	updatePlinth(dt) {
-		const xr = this.xr, want = this.wantedPlinth();
-		if (this.plinthAnim) return;
-		if (Math.abs(want - xr.plinthH) < 1e-6) { this.plinthSwitch = null; return; }
-		if (this.plinthSwitch?.to !== want) this.plinthSwitch = { to: want, t: 0 };
-		this.plinthSwitch.t += dt;
-		if (this.plinthSwitch.t < PLINTH_WAIT) return;
-		// Not while the model is held, floating, gliding home or settling, or a hand or controller is near it.
-		if (this.grab || this.floating || this.settling) return;
-		const box = this.modelBox(this._box3 ??= new THREE.Box3()), p = this._p3 ??= new THREE.Vector3();
-		for (const c of xr.input.controllers) {
-			if (!c.touch.tracked || !this.holdPoint(c, p)) continue; // (a hand, or a controller in hand: not one put down)
-			if (box.distanceToPoint(p) < PLINTH_CLEAR) return;
-		}
-		const from = xr.plinthH;
-		this.plinthSwitch = null;
-		if (xr.soundLevel !== 'off') xr.sound.play('settle', 0.33);
-		this.plinthAnim = xr.tweens.start({
-			duration: PLINTH_MOVE, ease: ease.inOut, long: true, // (sine; long: not capped at 0.3 s)
-			step: (k) => this.setPlinthNow(from + (want - from) * k),
-			done: () => { this.plinthAnim = null; this.setPlinthNow(want); },
-		});
 	}
 
 	/** Leaving the dollhouse (for walking, or the session ended). */
@@ -564,7 +491,6 @@ export class Dollhouse {
 		if (this.grab && (!this.grab.c.source || (this.grab.kind === 'controller' && !this.grab.c.state.grip))) this.release();
 		if (this.grab) this.updateGrab(dt);
 		this.updateFloating(dt);
-		this.updatePlinth(dt);
 
 		// Thumbsticks: left/right turns the model (either controller); up and down do nothing.
 		let sx = 0;

@@ -1567,7 +1567,7 @@ check('example home: two storeys, all shown', lv.count === 2 && lv.multi && lv.h
 	});
 	check('the plinth\'s front edge is 60 cm in front of you; its plate shows the scale', Math.abs(pl.gap - 0.6) < 0.01 && pl.plate === `1:${Math.round(pl.ratio)}` && pl.onPlinth, JSON.stringify(pl));
 	// (The plinth may be mid-move after a hands/controllers change: wait for it, so the point aimed at stays where it was.)
-	await page.waitForFunction(() => { const d = window.__casawalk.xr.modes.dollhouse; return !d.plinthAnim && !d.plinthSwitch; }, null, { timeout: 15000 }).catch(() => {}); await frames(4);
+	await frames(4);
 	// Pointing at a room: the marker hops to its clear middle, with its name; you land there facing along the room.
 	const room = await page.evaluate(async () => {
 		const x = window.__casawalk.xr, V = x.rig.position.constructor, { roomLanding } = await import('/js/rooms.js');
