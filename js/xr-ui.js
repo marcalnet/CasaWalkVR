@@ -454,7 +454,7 @@ export class XRUI {
 			if (c.state.down.a && !c.claim.a && c === wearer) { this.wrist.toggle({ pinned: true }); return true; }
 			if (c.state.down.b && !c.claim.b && this.anyOpen) { this.closeMenu(); this.wrist.close(true); return true; }
 			// B / Y with nothing open: held BACK_HOLD it is ← Back (the same rule as the key, the next-build asks 3.2): the ring fills round the orb; a short press does nothing.
-			if (c.state.down.b && !c.claim.b) this.backHold = { c, t: 0 };
+			if (c.state.down.b && !c.claim.b) { this.backHold = { c, t: 0 }; xr.haptics.play(c, 'tick'); } // (a light tick on the press: the hold has begun; the UX review's S4)
 		}
 		const h = this.backHold;
 		if (h && (!h.c.state.b || !h.c.source)) this.backHold = null; // (let go early: it drains back)

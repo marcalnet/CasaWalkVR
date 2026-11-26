@@ -192,10 +192,14 @@ test('the wrist menu: two keys, the same at both layers: ← Back on the left (r
 	const { x } = await setup();
 	assert.ok(x.ui.wrist.keys.left.round && !x.ui.wrist.keys.right.round, '← Back is round: the shape itself says "hold"');
 });
-test('B / Y with nothing open: held 0.6 s it is ← Back (the ring fills round the orb); a short press does nothing; let go early, the ring drains', async () => {
+test('B / Y with nothing open: a light tick on the press; held 0.6 s it is ← Back (the ring fills round the orb); a short press does nothing; let go early, the ring drains', async () => {
 	const { x, press, frame, settle, go, ended } = await setup();
 	go('in');
-	press('right', 'b'); for (let i = 0; i < 10; i++) frame(); press('right', 'b', false); frame();
+	const felt = [], play = x.haptics.play.bind(x.haptics);
+	x.haptics.play = (c, name) => { felt.push(name); return play(c, name); };
+	press('right', 'b'); frame();
+	assert.deepEqual(felt, ['tick'], 'the press: a light tick at once (the hold has begun: the UX review\'s S4)');
+	for (let i = 0; i < 9; i++) frame(); press('right', 'b', false); frame();
 	assert.ok(x.mode === 'walk' && !x.layerFx, 'a short press: nothing');
 	press('right', 'b'); for (let i = 0; i < 25; i++) frame();
 	assert.ok(x.ui.wrist.backRing.group.visible && x.ui.wrist.backRing.shown > 0.4, 'the ring fills round the orb');
