@@ -32,6 +32,7 @@ export const DIAL = {
 	RADIUS: 0.06, STOP: 0.022, GAP: 0.012, // the half circle and its stops (m)
 	OPEN_FOR: 3, STEP_SHOW: 1.5, LABEL_FOR: 1, // seconds: untouched it closes; a stick step shows it; the label
 	ZONE: 0.022, // a touch on the control part counts within this of its middle (the 22 mm floor)
+	TOWARDS: 0.03, // the dial floats this far in front of its centre, towards the eyes (m)
 	TURN: Math.PI / 3, // the half circle opens up and this far towards the other hand, away from the holding wrist and its orb (the audit's S8: the camera's and the meter's stops 10 cm or more from the orb)
 	PULSE: 0.8, // seconds: the cue's one soft pulse on the first take
 };
@@ -72,18 +73,28 @@ export class ToolDial {
 		this._p = new THREE.Vector3(); this._e = new THREE.Vector3();
 	}
 
-	/** The world position of a tool's control part. */
+	/** The world position of a tool's control part (where a touch opens the dial). */
 	partAt(tool, out = this._p) {
 		const o = tool.object.getObjectByName(tool.option.part);
 		return (o ?? tool.object).getWorldPosition(out);
 	}
 
+	/**
+	 * Where the dial opens: round the control part, or round option.at when the
+	 * part sits by the holding wrist (the marker's cap: its dial opens 7 cm along
+	 * the barrel, clear of the hand and the orb; the Designer, after the audit's S8).
+	 */
+	centreAt(tool, out = this._p) {
+		const o = tool.option.at ? tool.object.getObjectByName(tool.option.at) : null;
+		return o ? o.getWorldPosition(out) : this.partAt(tool, out);
+	}
+
 	/** Shows the dial round a tool's control part (stepped: by the stick, for STEP_SHOW). */
 	show(tool, { stepped = false } = {}) {
-		const xr = this.xr, at = this.partAt(tool).clone(), eye = xr.headWorld(), stops = tool.option.stops;
+		const xr = this.xr, at = this.centreAt(tool).clone(), eye = xr.headWorld(), stops = tool.option.stops;
 		// In front of the control part, towards the eyes, facing them; world-locked.
 		const toEye = this._e.copy(eye).sub(at).normalize();
-		this.group.position.copy(at).addScaledVector(toEye, 0.03);
+		this.group.position.copy(at).addScaledVector(toEye, DIAL.TOWARDS);
 		this.group.lookAt(eye);
 		// Its half circle opens up and towards the other hand (as seen), away from the holding wrist and the orb on it.
 		const holder = xr.tools?.held?.tool === tool ? xr.tools.held.c : null;

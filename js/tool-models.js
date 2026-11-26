@@ -319,6 +319,7 @@ export function buildMarker({ ink = 'blue' } = {}) {
 	point(g, 'grip', 0, 0, -0.018);
 	point(g, 'tip', 0, 0, -0.0695, [0, 0, -1]);
 	point(g, 'cap', 0, 0, 0.067); // (the posted cap's middle: the marker's control part, its colour dial)
+	point(g, 'dial', 0, 0, 0.067 - 0.07); // (its dial opens round here, 7 cm from the cap towards the nib: the cap is by the holding wrist)
 	// Its quiet ring: round the cap's domed end, facing along the axis, 0.5 mm proud of the surface (the UX review's S5).
 	g.userData.cue = { shape: 'ring', at: [0, 0, 0.0823 + 0.0005], radius: 0.0085 };
 	g.userData.fanScale = MARKER_FAN_SCALE;

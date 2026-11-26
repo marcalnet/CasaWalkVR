@@ -32,7 +32,7 @@ export class MarkerTool {
 		this.live = true;
 		this.controls = ['stickPress']; // the stick press of its hand steps its one option: the colour (js/tool-dial.js)
 		this.ink = Math.max(0, INKS.indexOf(readSetting('markerColour')));
-		this.option = { part: 'cap', stops: INKS.map((k) => ({ value: k, label: k[0].toUpperCase() + k.slice(1) })), get: () => INKS[this.ink], set: (k) => this.setInk(k) };
+		this.option = { part: 'cap', at: 'dial', stops: INKS.map((k) => ({ value: k, label: k[0].toUpperCase() + k.slice(1) })), get: () => INKS[this.ink], set: (k) => this.setInk(k) };
 		this.object = buildMarker({ ink: INKS[this.ink] });
 		this.tip = this.object.getObjectByName('tip');
 		this.strokes = [];

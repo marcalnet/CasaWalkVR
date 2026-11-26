@@ -462,13 +462,31 @@ test('the dial and the orb (the audit\'s S8): its half circle opens away from th
 	const { x, frame, hands } = await setup();
 	const { DIAL } = await import('../js/tool-dial.js');
 	if (process.env.DIAL_PROBE) DIAL.TURN = Number(process.env.DIAL_PROBE) * Math.PI / 180;
+	if (process.env.DIAL_TOWARDS) DIAL.TOWARDS = Number(process.env.DIAL_TOWARDS) / 100;
+	const { sceneOf } = await import('./glb-scene.js');
+	// The Quest 2's grip in its target-ray space (iwer's oculus-touch-v3 gripOffsetMatrix).
+	const GRIP_OFFSET = {
+		left: new THREE.Matrix4().fromArray([0.9925461411476135, 2.0823669899527886e-8, -0.12186937034130096, 0, 0.08617465198040009, 0.7071067094802856, 0.701836109161377, 0, 0.08617466688156128, -0.7071067690849304, 0.7018360495567322, 0, -0.003979838453233242, -0.015857907012104988, 0.04964181408286095, 1]),
+		right: new THREE.Matrix4().fromArray([0.9925461411476135, -8.329467959811154e-8, 0.12186941504478455, 0, -0.08617465943098068, 0.7071066498756409, 0.7018361687660217, 0, -0.08617471158504486, -0.7071068286895752, 0.7018359303474426, 0, 0.003979798872023821, -0.015857888385653496, 0.049641866236925125, 1]),
+	};
+	const controller = (hand) => { // (the Quest 2 controller's surface points, in its grip space)
+		const scene = sceneOf(path.resolve(import.meta.dirname, `../vendor/controllers/oculus-touch-v3/${hand}.glb`)), geos = [];
+		scene.updateMatrixWorld(true);
+		scene.traverse((o) => { if (o.isMesh) geos.push(o.geometry.clone().applyMatrix4(o.matrixWorld)); });
+		const g = new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(geos.flatMap((q) => [...q.attributes.position.array]), 3));
+		return new THREE.Mesh(g);
+	};
 	hands.left.grip.visible = hands.right.grip.visible = true;
 	const rows = [];
 	for (const main of ['right', 'left']) {
 		x.menuAction({ id: 'mainHand', value: main });
 		const c = hands[main], side = main === 'right' ? 1 : -1;
-		for (const o of [c.grip, c.ray]) { o.position.set(0.2 * side, 1.15, -0.35); o.rotation.set(-0.5, 0, 0); } // (held in front, at the chest, pointing a little down; a tool rides the ray)
+		// Held in front at the chest, pointing a little down. The tool rides the target ray; the grip is the ray times the
+		// device's grip offset (the Quest 2's, as IWER gives it), so the controller sits where it really does.
+		c.ray.position.set(0.2 * side, 1.15, -0.35); c.ray.rotation.set(-0.3, 0, 0); c.ray.updateMatrix();
+		c.grip.matrix.copy(c.ray.matrix).multiply(GRIP_OFFSET[main]); c.grip.matrix.decompose(c.grip.position, c.grip.quaternion, c.grip.scale);
 		hands[main === 'right' ? 'left' : 'right'].grip.position.set(-0.45 * side, 0.9, 0.05);
+		if (process.env.DIAL_AT) x.fan.marker.object.getObjectByName('dial').position.z = 0.067 - Number(process.env.DIAL_AT) / 100;
 		for (const tool of [x.fan.camera, x.fan.meter, x.fan.marker]) {
 			x.tools.take(tool, c);
 			frame(); frame();
@@ -477,10 +495,20 @@ test('the dial and the orb (the audit\'s S8): its half circle opens away from th
 			const orb = x.ui.wrist.orb.group.getWorldPosition(new THREE.Vector3());
 			let least = Infinity;
 			for (const [, k] of x.dial.pad.keys) if (k.group.visible) least = Math.min(least, k.group.getWorldPosition(new THREE.Vector3()).distanceTo(orb));
-			rows.push(`${main} ${tool.name} ${(least * 100).toFixed(1)} cm`);
+			// Clear of the holding controller (the real Quest 2 model, at its grip): 4 cm or more from its surface.
+			const ctl = controller(main);
+			ctl.matrix.copy(c.grip.matrixWorld); ctl.matrixAutoUpdate = false; ctl.updateMatrixWorld(true);
+			let clear = Infinity;
+			const pos = ctl.geometry.attributes.position, v = new THREE.Vector3();
+			for (const [, k] of x.dial.pad.keys) if (k.group.visible) {
+				const p = k.group.getWorldPosition(new THREE.Vector3());
+				for (let i = 0; i < pos.count; i++) clear = Math.min(clear, v.fromBufferAttribute(pos, i).applyMatrix4(ctl.matrixWorld).distanceTo(p));
+			}
+			rows.push(`${main} ${tool.name} ${(least * 100).toFixed(1)} cm from the orb, ${(clear * 100).toFixed(1)} cm from the controller`);
 			if (process.env.DIAL_PROBE) { x.dial.close(); x.tools.putBack(); continue; }
-			// (The marker's cap is at its back end, by the holding wrist: about 2 cm whatever the turn; the Designer decides. The orb yields and ignores touches meanwhile.)
-			if (tool !== x.fan.marker) assert.ok(least >= 0.10, `${main} hand, ${tool.name}: the nearest stop ${(least * 100).toFixed(1)} cm from the orb (10 cm or more)`);
+			assert.ok(least >= 0.10, `${main} hand, ${tool.name}: the nearest stop ${(least * 100).toFixed(1)} cm from the orb (10 cm or more)`);
+			// (Clear of the holding controller: 4 cm wanted; on the Quest 2 its ring stands over any dial round a held tool. Logged
+			// for the Designer, not yet asserted: about 1-3 cm in this pose, whatever the dial's place, turn or distance towards the eyes.)
 			// While open: the orb yields, and its stops are live keys (for the orb's sight and the touch guard).
 			frame();
 			assert.ok(x.ui.wrist.orbYield && x.liveKeys().length >= tool.option.stops.length, 'the orb yields; the stops are live keys');
@@ -490,7 +518,7 @@ test('the dial and the orb (the audit\'s S8): its half circle opens away from th
 			x.tools.putBack();
 		}
 	}
-	console.log(`# the nearest stop to the orb: ${rows.join('; ')}`);
+	console.log(`# the dial's nearest stop: ${rows.join('; ')}`);
 	x.menuAction({ id: 'mainHand', value: 'right' });
 });
 
