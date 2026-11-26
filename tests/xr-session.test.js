@@ -1676,6 +1676,20 @@ test('the plinth keys (step 1.2; the Designer\'s fix, 26 Nov): within laser reac
 	}
 });
 
+test('the waiting tools never park on the levels stack (the UX review\'s S1): Pond House, the left hand over the model', async () => {
+	const { x, frame, hands } = await setup({ file: path.resolve(import.meta.dirname, '../examples/pond-house.sh3d') });
+	const { yawTo, angleDiff } = await import('../js/zones.js');
+	hands.left.grip.visible = hands.right.grip.visible = true;
+	hands.right.grip.position.set(0.4, 0.8, 0.1);
+	hands.left.grip.position.set(0, 1.25, -0.6); // (over the model: the tools go and wait at the edge)
+	for (let i = 0; i < 90; i++) frame();
+	const fan = x.fan, head = x.headWorld(), c = x.areas.centre;
+	assert.equal(fan.mode, 'edge');
+	const keys = x.modes.dollhouse.keyPoints(), keysLeft = Math.max(...keys.map((p) => angleDiff(c.ahead, yawTo(head, p))));
+	const toolsAt = angleDiff(c.ahead, yawTo(head, fan.group.position));
+	assert.ok(toolsAt > keysLeft + THREE.MathUtils.degToRad(1), `the tools ${THREE.MathUtils.radToDeg(toolsAt).toFixed(1)}° left, the levels' edge ${THREE.MathUtils.radToDeg(keysLeft).toFixed(1)}°`);
+});
+
 test('ladder rule 5: the tools guard the empty-space close only within 15 cm of a tool (they always show); the house box leaves the lawn out', async () => {
 	const { x, frame } = await setup();
 	frame();

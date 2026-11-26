@@ -59,18 +59,26 @@ export const yawTo = (from, to) => Math.atan2(-(to.x - from.x), -(to.z - from.z)
 /**
  * The scale model's centre: ahead (yaw from the head to the plinth's centre)
  * and its two edges (yaws), from the points that must stay clear (the model's
- * box corners, the plinth's corners, the keys), plus MARGIN each side, at
- * least MIN and at most MAX each side of ahead.
+ * box corners, the plinth's corners), plus MARGIN each side, at least MIN and
+ * at most MAX each side of ahead. The keys (the doors and the levels stack:
+ * `keys`, their edges) always count in full, plus MARGIN, past MAX if need be:
+ * the waiting tools never park on a key (the UX review's S1: the levels sit
+ * about 35-45° to the left).
  */
-export function scaleCentre(head, plinthCentre, points) {
+export function scaleCentre(head, plinthCentre, points, keys = []) {
 	const ahead = yawTo(head, plinthCentre);
-	let left = 0, right = 0;
-	for (const p of points) {
-		const a = angleDiff(ahead, yawTo(head, p));
-		left = Math.max(left, a); right = Math.min(right, a);
-	}
+	const span = (list) => {
+		let left = 0, right = 0;
+		for (const p of list) {
+			const a = angleDiff(ahead, yawTo(head, p));
+			left = Math.max(left, a); right = Math.min(right, a);
+		}
+		return { left, right: -right };
+	};
 	const clamp = (v) => THREE.MathUtils.clamp(v + ZONES.MARGIN, ZONES.MIN, ZONES.MAX);
-	return { ahead, left: ahead + clamp(left), right: ahead - clamp(-right) };
+	const m = span(points), k = span(keys);
+	const left = Math.max(clamp(m.left), keys.length ? k.left + ZONES.MARGIN : 0), right = Math.max(clamp(m.right), keys.length ? k.right + ZONES.MARGIN : 0);
+	return { ahead, left: ahead + left, right: ahead - right };
 }
 
 /** Inside: the centre ±WALK_HALF about the body's direction. */

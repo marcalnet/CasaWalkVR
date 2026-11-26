@@ -398,7 +398,7 @@ export class XRExperience {
 		let centre = null;
 		if (this.mode === 'dollhouse' && this.model) {
 			const plinth = this.stage.localToWorld((this._pc ??= new THREE.Vector3()).set(0, this.plinthH, -this.plinthDistance));
-			centre = scaleCentre(head, plinth, this.modes.dollhouse.clearPoints());
+			centre = scaleCentre(head, plinth, this.modes.dollhouse.clearPoints(), this.modes.dollhouse.keyPoints());
 		} else if (this.mode === 'walk') {
 			this.body = followBody(this.body, this.viewYaw(), dt);
 			centre = walkCentre(this.body.yaw);

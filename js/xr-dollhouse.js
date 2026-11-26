@@ -524,15 +524,24 @@ export class Dollhouse {
 
 	/**
 	 * The points the centre area keeps clear, as seen (js/zones.js): the
-	 * model's box corners, the plinth's top corners, and the doors and level
-	 * keys. World space.
+	 * model's box corners and the plinth's top corners (the keys: keyPoints()).
+	 * World space.
 	 */
 	clearPoints() {
 		const xr = this.xr, pts = [], b = this.modelBox(this._cb ??= new THREE.Box3());
 		for (const x of [b.min.x, b.max.x]) for (const y of [b.min.y, b.max.y]) for (const z of [b.min.z, b.max.z]) pts.push(new THREE.Vector3(x, y, z));
 		const { W, D } = xr.plinthSize ?? { W: 0, D: 0 };
 		for (const sx of [-1, 1]) for (const sz of [-1, 1]) pts.push(xr.stage.localToWorld(new THREE.Vector3(sx * W / 2, xr.plinthH, -xr.plinthDistance + sz * D / 2)));
-		for (const k of this.doors.list) if (k.group.visible) pts.push(k.group.getWorldPosition(new THREE.Vector3()));
+		return pts;
+	}
+
+	/** The doors' and levels' edges (world): the centre always covers them (js/zones.js scaleCentre). */
+	keyPoints() {
+		const pts = [];
+		for (const k of this.doors.list) {
+			if (!k.group.visible) continue;
+			for (const sx of [-1, 1]) pts.push(k.group.localToWorld(new THREE.Vector3(sx * k.w / 2, 0, 0)));
+		}
 		return pts;
 	}
 

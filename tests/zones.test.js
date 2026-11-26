@@ -15,6 +15,10 @@ test('the scale model\'s centre: the span of what must stay clear plus 5°, at l
 	const wide = scaleCentre(head, plinth, [V(-0.8, 1.3, -1), V(0.5, 1.3, -1)]);
 	const leftSpan = deg(Math.atan2(0.8, 1)) + 5, rightSpan = deg(Math.atan2(0.5, 1)) + 5;
 	assert.ok(Math.abs(deg(wide.left) - Math.min(40, leftSpan)) < 1e-6 && Math.abs(-deg(wide.right) - Math.min(40, rightSpan)) < 1e-6, `its span plus 5°, at most 40° (${deg(wide.left).toFixed(1)}, ${deg(wide.right).toFixed(1)})`);
+	// The keys always count in full, past 40° if need be (the UX review's S1: the levels stack at about 35-45° to the left).
+	const keyEdge = V(-0.75 * Math.sin(THREE.MathUtils.degToRad(43)), 1.0, -0.75 * Math.cos(THREE.MathUtils.degToRad(43)));
+	const keyed = scaleCentre(head, plinth, [V(-0.1, 1.3, -1.2), V(0.1, 1.3, -1.2)], [keyEdge, V(0.1, 1.0, -0.6)]);
+	assert.ok(Math.abs(deg(keyed.left) - 48) < 1e-6 && Math.abs(deg(keyed.right) + 20) < 1e-6, `a key edge at 43°: the centre reaches 48° (${deg(keyed.left).toFixed(1)})`);
 });
 
 test('inside: the body follows the head slowly (still within ±25°, a 0.8 s pull beyond, never 60° behind); the centre ±20° about it', () => {
