@@ -54,10 +54,66 @@ export function zoneOf(box, head, yaw) {
 	return pts.length ? pts : null;
 }
 
-/** The angular rectangle of a wing w x h metres, centred at (az, el), dist away. */
-export function wingRect(az, el, w, h, dist = WING.dist) {
-	const hw = Math.atan(w / 2 / dist), hh = Math.atan(h / 2 / dist);
-	return { az0: az - hw, az1: az + hw, el0: el - hh, el1: el + hh };
+/**
+ * The angular rectangle of a wing w x h metres, centred at (az, el), dist away,
+ * turned to the eyes and leaned back `tilt`: the bounds of its four real
+ * corners as seen (the lower edge leans towards you, so it spans more than a
+ * flat wing would: the interaction harmony's conflict 13).
+ */
+export function wingRect(az, el, w, h, dist = WING.dist, tilt = WING.tilt) {
+	const c = [-Math.sin(az) * Math.cos(el) * dist, Math.sin(el) * dist, -Math.cos(az) * Math.cos(el) * dist];
+	const len = Math.hypot(...c), z = c.map((v) => -v / len); // (its face towards the eyes)
+	const xl = Math.hypot(z[2], z[0]), x = [z[2] / xl, 0, -z[0] / xl]; // up × z
+	const y = [z[1] * x[2] - z[2] * x[1], z[2] * x[0] - z[0] * x[2], z[0] * x[1] - z[1] * x[0]]; // z × x
+	const r = { az0: Infinity, az1: -Infinity, el0: Infinity, el1: -Infinity }, a = { az: 0, el: 0 }, p = { x: 0, y: 0, z: 0 }, O = { x: 0, y: 0, z: 0 };
+	for (const sx of [-w / 2, w / 2]) for (const sy of [-h / 2, h / 2]) {
+		const u = sy * Math.cos(tilt), v = -sy * Math.sin(tilt); // (leaned back: the top away from you)
+		p.x = c[0] + x[0] * sx + y[0] * u + z[0] * v; p.y = c[1] + x[1] * sx + y[1] * u + z[1] * v; p.z = c[2] + x[2] * sx + y[2] * u + z[2] * v;
+		angleOf(p, O, 0, a);
+		r.az0 = Math.min(r.az0, a.az); r.az1 = Math.max(r.az1, a.az); r.el0 = Math.min(r.el0, a.el); r.el1 = Math.max(r.el1, a.el);
+	}
+	return r;
+}
+
+/** The outline of a zone (zoneOf) as seen: its convex hull, { az, el } points in order. */
+export function zoneHull(zone) {
+	const pts = [...zone].sort((p, q) => p.az - q.az || p.el - q.el);
+	if (pts.length < 3) return pts;
+	const cross = (o, a, b) => (a.az - o.az) * (b.el - o.el) - (a.el - o.el) * (b.az - o.az);
+	const lower = [], upper = [];
+	for (const p of pts) { while (lower.length >= 2 && cross(lower.at(-2), lower.at(-1), p) <= 0) lower.pop(); lower.push(p); }
+	for (const p of pts.reverse()) { while (upper.length >= 2 && cross(upper.at(-2), upper.at(-1), p) <= 0) upper.pop(); upper.push(p); }
+	return lower.slice(0, -1).concat(upper.slice(0, -1));
+}
+
+/**
+ * True if the direction a ({ az, el }) is inside the model's silhouette seen
+ * from the eyes (the hull of its zone), or within `margin` of it.
+ */
+export function inZone(a, hull, margin = 0) {
+	if (!hull?.length) return false;
+	let inside = hull.length >= 3, best = Infinity;
+	for (let i = 0; i < hull.length; i++) {
+		const p = hull[i], q = hull[(i + 1) % hull.length];
+		const ex = q.az - p.az, ey = q.el - p.el, l2 = ex * ex + ey * ey;
+		if (ex * (a.el - p.el) - ey * (a.az - p.az) < 0) inside = false; // (the hull runs anticlockwise: inside is on every edge's left)
+		const t = l2 ? Math.max(0, Math.min(1, ((a.az - p.az) * ex + (a.el - p.el) * ey) / l2)) : 0;
+		best = Math.min(best, Math.hypot(a.az - p.az - t * ex, a.el - p.el - t * ey));
+	}
+	return inside || best < margin;
+}
+
+/** True if any point along the edges of the angular rectangle r is in the silhouette (hull) or within margin of it. */
+export function edgeIn(r, hull, margin = 0) {
+	const N = 6, a = { az: 0, el: 0 };
+	for (let i = 0; i <= N; i++) {
+		const t = i / N;
+		for (const [az, el] of [[r.az0 + (r.az1 - r.az0) * t, r.el0], [r.az0 + (r.az1 - r.az0) * t, r.el1], [r.az0, r.el0 + (r.el1 - r.el0) * t], [r.az1, r.el0 + (r.el1 - r.el0) * t]]) {
+			a.az = az; a.el = el;
+			if (inZone(a, hull, margin)) return true;
+		}
+	}
+	return false;
 }
 
 /** True if any zone point is inside the rectangle r grown by margin. */

@@ -16,8 +16,13 @@ import * as THREE from 'three';
 import { buildCamera, buildMeter, buildMarker } from './tool-models.js';
 import { Label } from './panel.js';
 import { readSetting, writeSetting } from './settings.js';
+import { zoneOf, zoneHull } from './wings.js';
 
 const AHEAD = 1.3, DOWN = 15, SPACING = 0.38, BIG = 0.32; // metres (DOWN: degrees below eye level)
+// Above the model as seen (the interaction harmony's conflict 3: on the bare-hands plinth it hung inside the model):
+// its lower edge (the name tags' foot, LOWER below its middle) at least CLEAR_TOP above the model's highest point,
+// its middle between UP_MOST and DOWN below eye level; if that can't clear, BACK further away at the same angle.
+const LOWER = 0.345, CLEAR_TOP = 3, UP_MOST = 5, BACK = 0.3;
 const LOOK = THREE.MathUtils.degToRad(30), LOOK_WIDE = THREE.MathUtils.degToRad(60), SETTLE = 1; // it starts when you look towards the model (within 30°) a second after arriving, within 60° after 4 s, and by itself after 10 s
 const WIDE_AFTER = 4, TIMED_AFTER = 10; // (seconds; the Tester's finding: waiting for a look within 30° it might never be seen)
 const MODEL_MIDDLE = 0.2; // metres above the plinth's top: about the middle of the model on it (0.6 m or 1.3 m high)
@@ -65,9 +70,9 @@ export class ToolsIntro {
 	/** Puts the tools above the model, in front of you, and starts them turning. */
 	begin() {
 		const xr = this.xr, head = xr.headWorld(), { forward, right } = xr.viewAxes();
-		const down = THREE.MathUtils.degToRad(DOWN);
-		this.group.position.copy(head).addScaledVector(forward, AHEAD * Math.cos(down));
-		this.group.position.y -= AHEAD * Math.sin(down);
+		const { el, dist } = this.where(head);
+		this.group.position.copy(head).addScaledVector(forward, dist * Math.cos(el));
+		this.group.position.y += dist * Math.sin(el);
 		this.group.lookAt(head);
 		this.items.forEach((it, i) => {
 			it.holder.position.set((i - 1) * SPACING, 0, 0);
@@ -83,6 +88,25 @@ export class ToolsIntro {
 		// Seen once is seen: remembered as it appears, not when the last tool lands (build 120:
 		// stepping inside during it, it played again by itself at the next visit).
 		if (!this.again) writeSetting('toolsIntro', true);
+	}
+
+	/**
+	 * Where it floats, from the eyes: { el (radians, below is negative), dist }.
+	 * DOWN below eye level, AHEAD away; raised (to UP_MOST at most) so its lower
+	 * edge clears the model's highest point as seen by CLEAR_TOP; BACK further
+	 * away when that is not enough (the angle it shrinks to does the rest).
+	 */
+	where(head) {
+		const xr = this.xr, D = THREE.MathUtils.degToRad;
+		let el = -D(DOWN), dist = AHEAD;
+		const box = xr.mode === 'dollhouse' && xr.model ? xr.modes.dollhouse.modelBox() : null;
+		const hull = box ? zoneHull(zoneOf(box, head, xr.viewYaw()) ?? []) : [];
+		if (!hull.length) return { el, dist };
+		const top = Math.max(...hull.map((p) => p.el));
+		const need = (d) => top + D(CLEAR_TOP) + Math.atan(LOWER / d); // (the middle's angle that puts the lower edge clear)
+		if (need(dist) > -D(UP_MOST)) dist += BACK;
+		el = Math.min(-D(UP_MOST), Math.max(el, need(dist)));
+		return { el, dist };
 	}
 
 	/** True while the head looks towards the scale model (within `limit`, 30° by default). */

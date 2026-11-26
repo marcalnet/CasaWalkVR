@@ -204,7 +204,7 @@ test('the first time inside: a looping hand with its arc and ring, no card; the 
 	assert.equal(DEMO.SHOW, 15);
 });
 
-test('the tools show waits for you to look at the model, plays above it 15° below the eyes, and opens the fan for 2 s as they land', async () => {
+test('the tools show waits for you to look at the model, plays above it (5-15° below the eyes, clear of its top: harmony, conflict 3), and opens the fan for 2 s as they land', async () => {
 	const { x, frame } = await setup();
 	const intro = x.toolsIntro;
 	assert.ok(intro.start({ again: true }) && intro.state.waiting, 'waiting for a look');
@@ -217,7 +217,17 @@ test('the tools show waits for you to look at the model, plays above it 15° bel
 	intro.update(0.1, () => {});
 	assert.ok(!intro.state.waiting && intro.group.visible, 'begins once looked at');
 	const head = x.headWorld(), p = intro.group.getWorldPosition(new THREE.Vector3());
-	assert.ok(Math.abs(p.y - (head.y - 1.3 * Math.sin(THREE.MathUtils.degToRad(15)))) < 0.01, '15° below eye level');
+	// Above the model as seen (harmony, conflict 3), on both plinths: its middle 5-15° below eye level, its lower edge 3° over the model's top.
+	const W = await import('../js/wings.js'), { PLINTH_HEIGHT, PLINTH_HEIGHT_HANDS } = await import('../js/xr-scene.js'), deg = THREE.MathUtils.radToDeg;
+	for (const h of [PLINTH_HEIGHT, PLINTH_HEIGHT_HANDS]) {
+		x.modes.dollhouse.setPlinthNow(h); x.modes.dollhouse.apply?.(); x.scene.updateMatrixWorld(true);
+		intro.begin();
+		const q = intro.group.getWorldPosition(new THREE.Vector3()), d = q.distanceTo(head), el = Math.asin((q.y - head.y) / d);
+		const top = Math.max(...W.zoneHull(W.zoneOf(x.modes.dollhouse.modelBox(), head, x.viewYaw())).map((a) => a.el));
+		assert.ok(deg(el) >= -15.01 && deg(el) <= -4.99, `plinth ${h}: its middle 5-15° below eye level (${deg(el).toFixed(1)}°)`);
+		assert.ok(deg(el - Math.atan(0.345 / d)) >= deg(top) + 3 - 0.01 || deg(el) > -5.01, `plinth ${h}: its lower edge ${deg(el - Math.atan(0.345 / d)).toFixed(1)}° vs the model's top ${deg(top).toFixed(1)}°`);
+	}
+	x.modes.dollhouse.setPlinthNow(PLINTH_HEIGHT);
 	for (let t = 0; t < 5.2; t += 1 / 72) intro.update(1 / 72, () => {});
 	assert.ok(x.fan.force > 0, 'the fan is told to open as they fly');
 	intro.stop();
@@ -1303,3 +1313,19 @@ test('harmony, live keys only (rule 4; conflicts 2 and 11): the wrist arc fades 
 	assert.ok(!w.fanYield && w.orbYield === w.keyYield);
 });
 
+
+test('harmony, conflict 9: the open fan\'s tools must be 40 cm from the eyes, off the model as seen and clear of live keys to open; it fades nearer than 35 cm or on the model', async () => {
+	const W = await import('../js/wings.js');
+	const { x, frame } = await setup();
+	frame();
+	const f = x.fan, d = x.modes.dollhouse, head = x.headWorld().clone(), V = THREE.Vector3;
+	f._outward = new V(-1, 0, 0); f.slide = 0; f._yaw = x.viewYaw();
+	f._hull = W.zoneHull(W.zoneOf(d.modelBox(), head, f._yaw));
+	const at = (v) => f.arcState(head.clone().add(v), head);
+	assert.deepEqual(at(new V(-0.5, -0.25, -0.35)), { may: true, must: false }, 'to the left, 65 cm away: may open');
+	assert.deepEqual(at(new V(0, -0.1, -0.25)), { may: false, must: true }, 'a hand\'s length from the eyes: never');
+	const mid = d.modelBox().getCenter(new V());
+	assert.deepEqual(f.arcState(mid, head), { may: false, must: true }, 'over the model: never');
+	const door = [...d.doors.keys.values()][0].group.getWorldPosition(new V());
+	assert.equal(f.arcState(door, head).may, false, 'on a live key: never');
+});

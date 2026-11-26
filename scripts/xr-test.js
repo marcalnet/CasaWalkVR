@@ -488,7 +488,7 @@ const crossSeen = () => page.evaluate(() => {
 		const angle = Math.atan2(fwd.clone().cross(to.clone().normalize()).y, fwd.dot(to.clone().normalize())) * 180 / Math.PI; // + = left
 		return { angle: +angle.toFixed(1), distance: +to.length().toFixed(2), below: +(head.y - menu.y).toFixed(2), wrist: x.ui.wrist.open, title: x.menu.title };
 	});
-	check('Settings opens the right wing beside the model: about 45° to the right (out of the model\'s way), 0.55 m from the eyes, below eye level (15°, less when a large model lifts it); the wrist menu closes', s.menu === 'dollhouse' && m.angle < -34 && m.angle > -56 && m.distance > 0.45 && m.distance < 0.56 && m.below > 0.04 && m.below < 0.3 && !m.wrist && /Scale model/.test(m.title), JSON.stringify(m));
+	check('Settings opens the right wing beside the model: about 45° to the right (out of the model\'s way), 0.55 m from the eyes (up to 0.9 when a large model fills the view), below eye level (15°, less when a large model lifts it: its leaned corners count, harmony conflict 13); the wrist menu closes', s.menu === 'dollhouse' && m.angle < -34 && m.angle > -56 && m.distance > 0.45 && m.distance < 0.91 && m.below > 0.03 && m.below < 0.3 && !m.wrist && /Scale model/.test(m.title), JSON.stringify(m));
 	// Nothing covers the model: no open wing overlaps the model's outline seen from the eyes, with the 5° margin.
 	const cover = await page.evaluate(async () => {
 		const THREE = await import('three'), W = await import('/js/wings.js');
@@ -1490,8 +1490,11 @@ check('back from walking: eyes at 1.89 m again, gallery shown, lasers on', Math.
 	await page.evaluate(() => { localStorage.removeItem('casawalk.toolsIntro'); const x = window.__casawalk.xr; x.lessons.stop(); x.ui.closeAll(); x.toolsIntro.start(); }); // (it never plays behind an open wing or the wrist menu)
 	await page.waitForFunction(() => !window.__casawalk.xr.toolsIntro.state?.waiting, null, { timeout: 15000, polling: 'raf' }).catch(() => {});
 	await frames(10);
-	const i0 = await page.evaluate(() => { const x = window.__casawalk.xr, t = x.toolsIntro, V = x.rig.position.constructor, h = x.headWorld(), p = t.group.getWorldPosition(new V()); return { playing: t.playing, shown: t.group.visible, away: +p.distanceTo(h).toFixed(2), below: +(Math.asin((h.y - p.y) / p.distanceTo(h)) * 180 / Math.PI).toFixed(0), names: t.items.map((i) => i.name) }; });
-	check('the tools\' show: the three tools about 1.3 m away, 15° below your eyes (above the model), named, once you look at the model', i0.playing && i0.shown && Math.abs(i0.away - 1.3) < 0.1 && Math.abs(i0.below - 15) <= 1 && i0.names.join() === 'Street camera,Meter,Marker', JSON.stringify(i0));
+	const i0 = await page.evaluate(async () => { const x = window.__casawalk.xr, t = x.toolsIntro, V = x.rig.position.constructor, h = x.headWorld(), p = t.group.getWorldPosition(new V()), d = p.distanceTo(h);
+		const W = await import('/js/wings.js'), top = Math.max(...W.zoneHull(W.zoneOf(x.modes.dollhouse.modelBox(), h, x.viewYaw())).map((a) => a.el)) * 180 / Math.PI;
+		const below = Math.asin((h.y - p.y) / d) * 180 / Math.PI, lower = -below - Math.atan(0.345 / d) * 180 / Math.PI;
+		return { playing: t.playing, shown: t.group.visible, away: +d.toFixed(2), below: +below.toFixed(1), lowerEdge: +lower.toFixed(1), modelTop: +top.toFixed(1), names: t.items.map((i) => i.name) }; });
+	check('the tools\' show: the three tools 1.3 m away (1.6 if they must), 5-15° below your eyes and clear of the model\'s top as seen (harmony, conflict 3), named, once you look at the model', i0.playing && i0.shown && (Math.abs(i0.away - 1.3) < 0.1 || Math.abs(i0.away - 1.6) < 0.1) && i0.below >= 4.9 && i0.below <= 15.1 && (i0.lowerEdge >= i0.modelTop + 2.9 || i0.below <= 5.1) && i0.names.join() === 'Street camera,Meter,Marker', JSON.stringify(i0));
 	await shot('tools-intro');
 	const fanOpened = await page.waitForFunction(() => { const f = window.__casawalk.xr.fan; return f.force > 0 && f.alpha > 0.5 && f.group.visible; }, null, { timeout: 30000, polling: 'raf' }).then(() => true).catch(() => false);
 	check('as the tools fly, the fan opens by itself', fanOpened);

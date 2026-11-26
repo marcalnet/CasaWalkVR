@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
-import { angleOf, zoneOf, wingRect, overlaps, placeWing, WING } from '../js/wings.js';
+import { angleOf, zoneOf, wingRect, overlaps, placeWing, WING, zoneHull, inZone } from '../js/wings.js';
 
 const head = new THREE.Vector3(0, 1.89, 0);
 /** A box w x h x w m on a plinth top 0.6 m up, its front edge 0.6 m ahead. */
@@ -36,4 +36,21 @@ test('a zoomed-up model pushes the wings outward, then up, and never under it', 
 
 test('no model in view (inside the home): the wings sit at 45 degrees, 15 below', () => {
 	assert.deepEqual(placeWing(1, 0.34, 0.3, null), { az: WING.side, el: -WING.drop, dist: WING.dist, clear: true });
+});
+
+test('a wing leaned back 20°: its lower edge comes towards you and spans more below than a flat one (harmony, conflict 13)', () => {
+	const flat = wingRect(0, -0.26, 0.4, 0.5, 0.55, 0), leaned = wingRect(0, -0.26, 0.4, 0.5, 0.55);
+	const hh = Math.atan(0.25 / 0.55);
+	assert.ok(Math.abs(flat.el1 - flat.el0 - 2 * hh) < 0.06, 'flat: about the old rectangle');
+	assert.ok(leaned.el0 < flat.el0 - 0.01, `the lower edge lower: ${leaned.el0.toFixed(3)} vs ${flat.el0.toFixed(3)}`);
+});
+
+test('the model\'s silhouette as seen: inside, outside, within a margin', () => {
+	const hull = zoneHull(zoneOf(box(), head, 0));
+	const a = (azDeg, elDeg) => ({ az: azDeg * Math.PI / 180, el: elDeg * Math.PI / 180 });
+	const mid = angleOf(new THREE.Vector3(0, 0.75, -1.2), head, 0);
+	assert.ok(inZone(mid, hull), 'the model\'s middle');
+	assert.ok(!inZone(a(60, -10), hull), 'far to the side');
+	const top = Math.max(...hull.map((p) => p.el));
+	assert.ok(!inZone({ az: 0, el: top + 0.06 }, hull) && inZone({ az: 0, el: top + 0.06 }, hull, 0.087), '3.4° above its top: outside, but inside 5° of margin');
 });

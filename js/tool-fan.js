@@ -28,6 +28,7 @@ import { StreetCamera } from './street-camera.js';
 import { ease } from './tween.js';
 import { Label } from './panel.js';
 import { CLAIM } from './xr-targets.js';
+import { angleOf, zoneOf, zoneHull, inZone } from './wings.js';
 
 const ABOVE = 0.15; // the fan's middle, above the fan hand (metres)
 const SPACING = 0.115; // between tools in the arc (the marker and the meter lie across it, 9 and 11 cm long)
@@ -67,6 +68,12 @@ const REACH_POINT = THREE.MathUtils.degToRad(40); // ... and pointing within thi
 const YIELD_NEAR = CLAIM.near, YIELD_CLEAR = CLAIM.clear; // the taking hand's fingertip this close to the open fan: its orb shrinks and fades, until YIELD_CLEAR away
 const RETURN = 0.08; // a bare hand bringing its tool this close to its place puts it back
 const FADE = 0.2; // seconds (opening and closing)
+// Where the open fan may be (the interaction harmony's conflict 9; both inputs; the docked row is not affected):
+// every tool of the open arc at least EYES_OPEN from the eyes, off the model as seen (its silhouette plus
+// MODEL_MARGIN), and CLAIM.clear from any live key, to open; open, it fades (KEY_FADE) once a tool comes
+// within EYES_CLOSE, onto the silhouette itself, or within CLAIM.near of a live key.
+const EYES_OPEN = 0.4, EYES_CLOSE = 0.35; // metres
+const MODEL_MARGIN = THREE.MathUtils.degToRad(5);
 
 export class ToolFan {
 	/** xr: the XRExperience (its ToolSystem gets the tools). */
@@ -173,7 +180,14 @@ export class ToolFan {
 			// merely in the ready pose: a curled hand raised to look at the fan reads as ready.)
 			const aiming = xr.modes.walk?.tele?.c === fan || xr.modes.dollhouse?.handAim?.c === fan;
 			const keysOk = this.alpha > 0.5 ? !this.keyShut : !nearClear || this.fanBusy;
-			open = raised && look.angleTo(to) < IN_VIEW && (watching || this.alpha > 0.5) && !xr.ui.wrist.open && keysOk && !aiming && forward.lengthSq() > 0;
+			// Where its tools would be: far enough from the eyes, off the model, clear of live keys (conflict 9);
+			// and a slide with nowhere clear to go fades it (conflict 10).
+			this._hull = xr.mode === 'dollhouse' && xr.model ? zoneHull(zoneOf(xr.modes.dollhouse.modelBox(this._box ??= new THREE.Box3()), head, this._yaw = xr.viewYaw()) ?? []) : null;
+			if (this.slideBlocked && orb.distanceTo(anchor) > HOLD_FIELD) this.slideBlocked = false; // (faded for a blocked slide: until the orb has gone)
+			const arc = this.arcState(anchor, head);
+			this.posShut = this.alpha > 0.5 && (arc.must || this.slideBlocked);
+			const posOk = this.alpha > 0.5 ? !this.posShut : arc.may && !this.slideBlocked;
+			open = raised && look.angleTo(to) < IN_VIEW && (watching || this.alpha > 0.5) && !xr.ui.wrist.open && keysOk && posOk && !aiming && forward.lengthSq() > 0;
 			if (this.force > 0) { this.force -= dt; open = true; } // (the tools' show: the one time it opens without a look)
 			// Docked (bare hands): the tools rest on the back of the wrist whenever that hand is in view; not while it holds the model.
 			const holding = xr.modes.dollhouse?.grab?.c === fan;
@@ -181,7 +195,7 @@ export class ToolFan {
 			docked = DOCKED_HANDS && fan.isHand && fan.touch.tracked && look.angleTo(to) < DOCK.inView && !holding && !aiming;
 			to.copy(anchor).sub(head).normalize();
 		}
-		const fade = open ? FADE : this.keyShut ? KEY_FADE : FADE;
+		const fade = open ? FADE : this.keyShut || this.posShut ? KEY_FADE : FADE;
 		this.alpha = THREE.MathUtils.clamp(this.alpha + (open ? dt : -dt) / fade, 0, 1);
 		// The docked row's presence (0..1), dimmed near a key so it never crowds the level keys.
 		this.dock = THREE.MathUtils.clamp((this.dock ?? 0) + (docked ? dt : -dt) / DOCK.change, 0, 1);
@@ -258,6 +272,37 @@ export class ToolFan {
 	}
 
 	/**
+	 * Where the open arc's tools would be now (above the fan hand, slid as it
+	 * is): { may } open (every tool EYES_OPEN from the eyes, none within the
+	 * model's silhouette plus MODEL_MARGIN, none within CLAIM.clear of a live
+	 * key), { must } fade (a tool within EYES_CLOSE, on the silhouette itself,
+	 * or within CLAIM.near of a live key). The interaction harmony's conflict 9.
+	 */
+	arcState(anchor, head) {
+		const xr = this.xr, out = this._outward, right = xr.viewAxes().right, p = this._ap ??= new THREE.Vector3(), a = this._aa ??= { az: 0, el: 0 };
+		let near = Infinity, inside = false, margin = false, keyClose = false, keyClear = true;
+		for (let i = 0; i < this.slots.length; i++) {
+			p.copy(anchor).addScaledVector(out, this.slide ?? 0).addScaledVector(right, (i - 1) * SPACING);
+			near = Math.min(near, p.distanceTo(head));
+			if (this._hull?.length) {
+				angleOf(p, head, this._yaw, a);
+				if (inZone(a, this._hull)) inside = true;
+				if (inZone(a, this._hull, MODEL_MARGIN)) margin = true;
+			}
+			if (xr.nearKey(p, CLAIM.near, { orb: false })) keyClose = true;
+			if (xr.nearKey(p, CLAIM.clear, { orb: false })) keyClear = false;
+		}
+		return { may: near >= EYES_OPEN && !margin && keyClear, must: near < EYES_CLOSE || inside || keyClose };
+	}
+
+	/** True if a tool at p sits on a live key (CLAIM.near) or over the model's silhouette: a slide must not end there (conflict 10). */
+	onSomething(p) {
+		if (this.xr.nearKey(p, CLAIM.near, { orb: false })) return true;
+		if (!this._hull?.length) return false;
+		return inZone(angleOf(p, this.xr.headWorld(), this._yaw, this._sa ??= { az: 0, el: 0 }), this._hull);
+	}
+
+	/**
 	 * The fan above the fan hand, turned to face you; tools bob gently (not the
 	 * inactive camera). Bare hands: between the docked row on the back of the
 	 * wrist (small, still, dimmed, no names) and the open fan, as it opens.
@@ -309,12 +354,18 @@ export class ToolFan {
 		this.slide ??= 0; this.slideTarget ??= 0; this.awayT ??= 0;
 		const taking = this.taking(), active = !!wrist.wearer && this.alpha > 0 && !taking && !wrist.fanYield
 			&& (nearest(this.slide) < FIELD || (this.slide > 0.005 && o.distanceTo(base) < HOLD_FIELD));
+		// The slide's end must be clear too: no tool on a live key or over the model (conflict 10). Nowhere clear: the fan fades instead.
+		const clear = (sl) => this.slots.every((_, i) => !this.onSomething(at(sl, i)));
 		if (active) {
 			this.awayT = 0;
-			let want = LEASH;
-			for (let sl = 0; sl <= LEASH + 1e-9; sl += 0.01) if (nearest(sl) >= KEEP && lineD(sl) >= LINE_CLEAR) { want = sl; break; }
-			this.slideTarget = Math.max(want, this.slideTarget); // (held while the orb stays: never bobbing back towards it)
-		} else if ((this.awayT += dt) > RETURN_AFTER) this.slideTarget = 0;
+			let want = null;
+			for (let sl = 0; sl <= LEASH + 1e-9; sl += 0.01) if (nearest(sl) >= KEEP && lineD(sl) >= LINE_CLEAR && clear(sl)) { want = sl; break; }
+			this.slideBlocked = want === null;
+			if (want !== null) this.slideTarget = Math.max(want, this.slideTarget); // (held while the orb stays: never bobbing back towards it)
+		} else {
+			if (this.slideBlocked && o.distanceTo(base) > HOLD_FIELD) this.slideBlocked = false; // (until the orb has gone)
+			if ((this.awayT += dt) > RETURN_AFTER) this.slideTarget = 0;
+		}
 		this.slide += (this.slideTarget - this.slide) * (1 - Math.exp(-dt / SLIDE_SPRING));
 		if (this.slide < 1e-4 && this.slideTarget === 0) this.slide = 0;
 		return this.slide;
@@ -405,6 +456,7 @@ export class ToolFan {
 		this.hot = null;
 		this.target = this.mem = null;
 		this.fanBusy = false;
+		this.slideBlocked = this.posShut = false;
 	}
 }
 

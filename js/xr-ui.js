@@ -257,7 +257,8 @@ export class XRUI {
 			rigBox.setFromPoints(pts);
 			zone = zoneOf(rigBox, head, yaw);
 		}
-		const { az, el, dist } = placeWing(side, g.width, g.height, zone);
+		const { az, el, dist, clear } = placeWing(side, g.width, g.height, zone);
+		panel.placed = { az, el, dist, clear }; // (for the tests: where it went, and whether the model stays uncovered)
 		const heading = yaw + az; // (a positive angle turns left)
 		mesh.position.set(-Math.sin(heading) * Math.cos(el), Math.sin(el), -Math.cos(heading) * Math.cos(el)).multiplyScalar(dist).add(head);
 		xr.rig.updateMatrixWorld(true);
