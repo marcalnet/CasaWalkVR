@@ -50,13 +50,15 @@ js/sh3d.js        SH3D parser and scene builder (pure functions, Node-testable)
 js/formats.js     OBJ / zip / GLB / DAE / 3DS loading and unit detection
 js/triangles.js   a home's triangles counted from the raw bytes before building; too heavy for the headset: refused calmly (pure, Node-testable)
 js/simplify.js    heavy models simplified for the Quest (meshoptimizer): sizes, materials and thin parts kept, said on the page (no DOM)
+js/obj-core.js    OBJ reading shared by the page and the OBJ worker: prepare, parse, simplify, plain data, rebuilt with materials (no DOM)
+js/obj-worker.js  the OBJ worker, and js/obj-worker-client.js its page side (only with ?worker until measured on a Quest 2)
 js/obj-defaults.js Sweet Home 3D's built-in OBJ materials and see-through window panes (pure, Node-testable)
 js/optimise.js    merge-by-material and BVH
 js/xr-input.js    controllers, rays, thumbsticks, teleport arc, per-frame button claims; bare hands told apart (a pinch never clicks); touch state for hands and controllers (poke point, pinch); controller tip nub
 js/touch.js       touch keys: hover, contact, click, release, front-only (pure, Node-testable)
 js/hands.js       bare hands drawn from the WebXR joints (translucent capsules, orange fingertip)
 js/gestures.js    bare-hand gestures from the joints: the pinch-and-hold teleport and wrist flick, the closed hand, the aim ray (pure, Node-testable)
-js/dev.js         the development switches in the page address (?test, ?hands, ?stats, ?nomerge, ?sw), read in one place
+js/dev.js         the development switches in the page address (?test, ?hands, ?stats, ?nomerge, ?sw, ?worker), read in one place
 js/device.js      which device: the headset's own browser, a Quest 2 (the one place that reads the browser's name)
 js/hand-readout.js the bare-hand tuning readout over each wrist, only with ?hands on the page URL (development)
 js/frame-stats.js the headset's fps and draw-call counter, only with ?stats on the page URL (measuring)
@@ -86,7 +88,7 @@ js/build-label.js how the build reads ("Build 213 · 23 Nov 2026 14:05"), and th
 assets/ui/        replaceable interface artwork (drafts by scripts/make-ui-assets.js; listed in its README)
 examples/         sample homes (pond-house, apartment: .sh3d + card picture, listed in js/samples.js; colours from scripts/sample-palette.js) example-home.sh3d (the tests' small fixture) and heavy-home.sh3d (the budget test's heavy home, not offered on the page), each made by its generator in scripts/ (original content; commit the output)
 js/samples.js     the sample homes the page offers, as data (one entry per home)
-vendor/           vendored dependencies + licences
+vendor/           vendored dependencies + licences; vendor/worker/: addons with 'three' imported by relative path, for module workers (written by scripts/vendor.js, checked by a test)
 tests/            Node tests (node:test)
 scripts/          vendoring, fixtures, example home, UI artwork, local server, screenshots, emulated XR test, screenshot compare
 tests/fixtures/   sample .sh3d files (not committed; see README)

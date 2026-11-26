@@ -6,6 +6,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import { WORKER_COPIES, workerCopy } from './worker-copies.js';
 
 const root = path.resolve(import.meta.dirname, '..');
 const nm = path.join(root, 'node_modules');
@@ -67,6 +68,13 @@ const apache = fs.readFileSync(path.join(nm, 'playwright-core/LICENSE'), 'utf8')
 const END = 'END OF TERMS AND CONDITIONS';
 const terms = apache.slice(0, apache.indexOf(END) + END.length) + '\n';
 fs.writeFileSync(path.join(vendor, 'three/addons/libs/draco/LICENSE'), 'Draco 3D Data Compression decoder. Copyright Google LLC. https://github.com/google/draco\n\n' + terms);
+
+// The worker copies (scripts/worker-copies.js): the addons a module worker needs, with 'three'
+// imported by relative path (a worker has no import map).
+for (const [name, rel] of Object.entries(WORKER_COPIES)) {
+	fs.mkdirSync(path.join(vendor, 'worker'), { recursive: true });
+	fs.writeFileSync(path.join(vendor, 'worker', name), workerCopy(fs.readFileSync(path.join(vendor, 'three/addons', rel), 'utf8')));
+}
 
 // three-mesh-bvh (single ES module that imports 'three')
 copy(path.join(nm, 'three-mesh-bvh/build/index.module.js'), path.join(vendor, 'three-mesh-bvh/index.module.js'));

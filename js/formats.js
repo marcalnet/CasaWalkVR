@@ -13,10 +13,12 @@
 import * as THREE from 'three';
 import { unzipSync } from 'fflate';
 import { modelTriangles, homeTriangles, tooHeavyMessage } from './triangles.js';
-import { SIMPLIFY, keepRatio, simplifyObject } from './simplify.js';
-import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
+import { SIMPLIFY, keepRatio, simplifyObject, objectTriangles } from './simplify.js';
+import { prepareObjText, parseObjBytes, buildObj } from './obj-core.js';
 import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
-import { defaultMtlFor, usedMaterialNames, definedMaterialNames, isWindowPaneName, WINDOW_PANE_OPACITY } from './obj-defaults.js';
+import { defaultMtlFor, definedMaterialNames, isWindowPaneName, WINDOW_PANE_OPACITY } from './obj-defaults.js';
+
+export { prepareObjText }; // (it lives in js/obj-core.js, shared with the OBJ worker)
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { ColladaLoader } from 'three/addons/loaders/ColladaLoader.js';
 import { TDSLoader } from 'three/addons/loaders/TDSLoader.js';
@@ -389,8 +391,19 @@ export async function checkDecoders() {
 
 const MODEL_EXTS = ['obj', 'glb', 'gltf', 'dae', '3ds'];
 
-/** Loads a model from an entry path; the format is detected from its bytes. */
-export async function loadModelEntry(store, path) {
+/**
+ * Loads a model from an entry path; the format is detected from its bytes.
+ * opts: { objParser (the OBJ worker's, or null: read here), ratio (< 1: keep
+ * that share of its triangles, js/simplify.js) }.
+ */
+export async function loadModelEntry(store, path, opts = {}) {
+	const object = await readModelEntry(store, path, opts);
+	// (OBJ is simplified as it is read, in the worker when there is one; the other formats here.)
+	if ((opts.ratio ?? 1) < 1 && object && !object.userData.simplified) object.userData.simplified = await simplifyObject(object, opts.ratio);
+	return object;
+}
+
+async function readModelEntry(store, path, opts) {
 	const bytes = store.get(path);
 	if (!bytes) throw new Error(`Missing entry ${path}`);
 	const kind = sniff(bytes);
@@ -400,7 +413,7 @@ export async function loadModelEntry(store, path) {
 		const inner = store.child(bytes);
 		const main = findMainModel([...inner.entries.keys()], inner);
 		if (!main) throw new Error(`No model inside ${path}`);
-		return loadModelEntry(inner, main);
+		return readModelEntry(inner, main, opts);
 	}
 	const folder = dirOf(store.find(path));
 	const base = `mem:${folder}`;
@@ -426,148 +439,38 @@ export async function loadModelEntry(store, path) {
 			return simplifyMaterials(loader.parse(bytes.slice().buffer, base));
 		}
 		default:
-			return loadObj(store, new TextDecoder().decode(bytes), folder);
+			return loadObj(store, bytes, folder, opts);
 	}
 }
 
 /**
- * Prepares OBJ text for three.js's OBJLoader:
- *
- * 1. Removes line ("l") and point ("p") records. A single stray "l" record
- *    makes OBJLoader turn a whole object into LineSegments; Sweet Home 3D
- *    ignores them, and we never draw lines anyway.
- * 2. Triangulates faces with 4+ corners properly. OBJLoader splits polygons
- *    into a fan from the first corner, which only works for convex shapes:
- *    on a U-shaped face (e.g. Sweet Home 3D's door frame) the fan fills in
- *    the doorway. Concave quads and all larger polygons go through earcut.
- *
- * Light on memory (heavy homes, step 2): one pass over
- * the text, line by line, without splitting it into an array of lines; the
- * vertices kept as numbers in one typed array (no object per vertex); and
- * the text returned untouched when nothing changes, else built once from
- * slices of it round the changed lines. (Before, a 364 MB OBJ became a list
- * of lines, an object per vertex and a second whole text: 2 GB at the peak.)
+ * An OBJ (bytes) as a model: read, prepared and parsed, here or in the OBJ
+ * worker (objParser, js/obj-worker-client.js; ?worker), simplified there when
+ * ratio < 1, then rebuilt here with its materials: the model's own .mtl
+ * (OBJLoader supports a single material library), then Sweet Home 3D's
+ * built-in materials for the names it doesn't define (js/obj-defaults.js): a
+ * name the .mtl defines always wins. If the worker fails, it is read here.
  */
-export function prepareObjText(text) {
-	if (text.includes('\r\n')) text = text.replace(/\r\n/g, '\n'); // (as OBJLoader would: the material names must match its own; one copy, Windows files only)
-	let xyz = new Float64Array(3 * 4096), nv = 0;
-	let vtCount = 0, vnCount = 0;
-	const chunks = [];
-	let kept = 0; // the text before this index is already in chunks
-	const replace = (from, to, by) => { chunks.push(text.slice(kept, from)); if (by) chunks.push(by); kept = to; };
-	const vert = (i) => { const k = i < 0 ? nv + i : i - 1; return k >= 0 && k < nv ? new THREE.Vector3(xyz[3 * k], xyz[3 * k + 1], xyz[3 * k + 2]) : null; };
-	const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3();
-	const blank = (ch) => ch === 32 || ch === 9;
-	const n = text.length;
-	for (let start = 0; start < n;) {
-		let end = text.indexOf('\n', start);
-		if (end < 0) end = n;
-		const lineEnd = end > start && text.charCodeAt(end - 1) === 13 ? end - 1 : end; // (before a CR)
-		let i = start;
-		while (i < lineEnd && blank(text.charCodeAt(i))) i++;
-		const c0 = text.charCodeAt(i), c1 = text.charCodeAt(i + 1), c2 = text.charCodeAt(i + 2);
-		if (c0 === 118 && blank(c1)) { // v
-			const p = text.slice(i + 2, lineEnd).trim().split(/\s+/);
-			if (3 * nv + 3 > xyz.length) { const grown = new Float64Array(xyz.length * 2); grown.set(xyz); xyz = grown; }
-			xyz[3 * nv] = +p[0]; xyz[3 * nv + 1] = +p[1]; xyz[3 * nv + 2] = +p[2];
-			nv++;
-		} else if (c0 === 118 && c1 === 116 && blank(c2)) vtCount++; // vt
-		else if (c0 === 118 && c1 === 110 && blank(c2)) vnCount++; // vn
-		else if ((c0 === 108 || c0 === 112) && blank(c1)) replace(start, end + 1, null); // l, p: the whole line goes
-		else if (c0 === 102 && blank(c1)) { // f
-			let toks = text.slice(i + 2, lineEnd).split(/\s+/).filter(Boolean), done = false;
-			if (toks.some((t) => t.includes('/'))) {
-				const clean = cleanFaceRefs(toks, vtCount, vnCount);
-				if (clean !== toks) { toks = clean; if (toks.length < 4) { replace(start, lineEnd, `f ${toks.join(' ')}`); done = true; } }
-			}
-			if (!done && toks.length >= 4) {
-				const tris = triangulateFace(toks, vert, a, b, c);
-				if (tris) replace(start, lineEnd, tris.map((tri) => `f ${tri.join(' ')}`).join('\n'));
-			}
-		}
-		start = end + 1;
+async function loadObj(store, bytes, folder, { objParser = null, ratio = 1 } = {}) {
+	let parsed = null;
+	if (objParser) {
+		try { parsed = await objParser(bytes, ratio); } catch (e) { if (e?.timeout) throw e; console.warn('The OBJ worker failed: reading here', e); }
 	}
-	if (!chunks.length) return text;
-	chunks.push(text.slice(kept));
-	return chunks.join('');
-}
-
-/**
- * Face corners are "v", "v/vt", "v//vn" or "v/vt/vn". OBJLoader only checks
- * the first corner of each triangle for vt/vn, so a face that mixes corners
- * with and without them, or points at normals that don't exist, ends up with
- * NaN normals (black) once triangles start at a different corner. Keep a
- * texture/normal reference only if every corner has a valid one.
- * Returns the same array when nothing needs changing.
- */
-function cleanFaceRefs(toks, vtCount, vnCount) {
-	const parts = toks.map((tok) => tok.split('/'));
-	const valid = (s, count) => {
-		if (s === undefined || s === '') return false;
-		const i = parseInt(s, 10);
-		return Number.isFinite(i) && i !== 0 && (i > 0 ? i <= count : count + i >= 0);
-	};
-	const keepVt = parts.every((p) => valid(p[1], vtCount));
-	const keepVn = parts.every((p) => valid(p[2], vnCount));
-	const hasVt = parts.some((p) => p[1]), hasVn = parts.some((p) => p[2]);
-	if ((keepVt || !hasVt) && (keepVn || !hasVn)) return toks;
-	return parts.map((p) => p[0] + (keepVt ? `/${p[1]}` : keepVn ? '/' : '') + (keepVn ? `/${p[2]}` : ''));
-}
-
-/** Returns triangles (arrays of 3 face tokens) for an OBJ polygon, or null to keep it as is. vert(i): OBJ vertex i (1-based, or negative from the end) as a Vector3, or null. */
-function triangulateFace(toks, vert, a, b, c) {
-	const pts = toks.map((tok) => vert(parseInt(tok, 10)));
-	if (pts.some((p) => !p)) return null;
-	// Polygon normal (Newell's method)
-	const n = new THREE.Vector3();
-	for (let i = 0; i < pts.length; i++) {
-		const p = pts[i], q = pts[(i + 1) % pts.length];
-		n.x += (p.y - q.y) * (p.z + q.z);
-		n.y += (p.z - q.z) * (p.x + q.x);
-		n.z += (p.x - q.x) * (p.y + q.y);
-	}
-	if (n.lengthSq() === 0) return null;
-	const faces = (idx) => idx.map((tri) => {
-		// Keep each triangle facing the same way as the polygon.
-		const [i, j, k] = tri;
-		a.subVectors(pts[j], pts[i]); b.subVectors(pts[k], pts[i]);
-		return c.crossVectors(a, b).dot(n) < 0 ? [toks[i], toks[k], toks[j]] : [toks[i], toks[j], toks[k]];
-	});
-	if (pts.length === 4) {
-		// Convex quad: the usual split works; otherwise split along the other diagonal.
-		const ok = (i, j, k) => { a.subVectors(pts[j], pts[i]); b.subVectors(pts[k], pts[i]); return c.crossVectors(a, b).dot(n) > 0; };
-		if (ok(0, 1, 2) && ok(0, 2, 3)) return null;
-		return faces([[1, 2, 3], [1, 3, 0]]);
-	}
-	// Project on the plane most facing the normal, then earcut.
-	const ax = Math.abs(n.x), ay = Math.abs(n.y), az = Math.abs(n.z);
-	const flat = pts.map((p) => (az >= ax && az >= ay ? new THREE.Vector2(p.x, p.y) : ax >= ay ? new THREE.Vector2(p.y, p.z) : new THREE.Vector2(p.z, p.x)));
-	let idx;
-	try { idx = THREE.ShapeUtils.triangulateShape(flat, []); } catch { return null; }
-	if (!idx || idx.length < pts.length - 2) return null;
-	return faces(idx);
-}
-
-async function loadObj(store, text, folder) {
-	text = prepareObjText(text);
-	const objLoader = new OBJLoader(store.manager);
-	// The model's own .mtl (OBJLoader supports a single material library),
-	// then Sweet Home 3D's built-in materials for the names it doesn't define
-	// (js/obj-defaults.js): a name the .mtl defines always wins.
+	parsed ??= await parseObjBytes(bytes, ratio);
 	let mtlText = '';
-	for (const name of [...text.matchAll(/^\s*mtllib\s+(.+?)\s*$/gm)].map((m) => m[1])) {
+	for (const name of parsed.mtllibs) {
 		const mtlBytes = store.get(folder + name);
 		if (!mtlBytes) continue;
 		mtlText = new TextDecoder().decode(mtlBytes);
 		break;
 	}
-	mtlText += '\n' + defaultMtlFor(usedMaterialNames(text), definedMaterialNames(mtlText));
+	mtlText += '\n' + defaultMtlFor(parsed.used, definedMaterialNames(mtlText));
+	let creator = null;
 	if (mtlText.trim()) {
-		const creator = new MTLLoader(store.manager).parse(mtlText, `mem:${folder}`);
+		creator = new MTLLoader(store.manager).parse(mtlText, `mem:${folder}`);
 		creator.preload();
-		objLoader.setMaterials(creator);
 	}
-	return simplifyMaterials(objLoader.parse(text));
+	return simplifyMaterials(buildObj(parsed, creator));
 }
 
 function findMainModel(paths, store) {
@@ -591,6 +494,7 @@ export const UNIT_SCALE = { cm: 0.01, m: 1, mm: 0.001, in: 0.0254 };
  *                 triangleLimit (refuse, before building, a home counted above it; default none),
  *                 simplifyAbove, simplifyTarget (a home counted above the first has its heavy models
  *                 simplified towards the second: js/simplify.js; default none),
+ *                 objParser (the OBJ worker's: js/obj-worker-client.js; default: read here),
  *                 makeTexture(ref) (a Sweet Home 3D texture image; default: decoded
  *                 by the browser. Node, which decodes no images, passes a stand-in) }
  * @returns { kind: 'sh3d'|'model', root, bounds, observer, stats, store }
@@ -608,7 +512,7 @@ export async function openFiles(files, opts = {}) {
 		if (files.length === 1 && sniff(files[0].bytes) === 'zip') {
 			progress('Unzipping…');
 			store = EntryStore.fromZip(files[0].bytes);
-			if (store.entries.has('Home.xml')) return await openSh3d(store, progress, opts.makeTexture, limit, simplifyAbove, toward);
+			if (store.entries.has('Home.xml')) return await openSh3d(store, progress, opts.makeTexture, limit, simplifyAbove, toward, opts.objParser ?? null);
 			if (store.entries.has('Home')) throw new UserError('Re-save this file in Sweet Home 3D 5.3 or later.');
 			mainPath = findMainModel([...store.entries.keys()], store);
 			if (!mainPath) throw new UserError('No 3D model (.sh3d, .obj, .glb, .dae, .3ds) found inside this ZIP.');
@@ -624,13 +528,10 @@ export async function openFiles(files, opts = {}) {
 		const estimate = modelTriangles(store.get(mainPath), fmt);
 		if (estimate > limit) throw new UserError(tooHeavyMessage(estimate, limit));
 		progress('Loading model…');
-		const object = await loadModelEntry(store, mainPath);
-		let simplified = null;
-		if (estimate > simplifyAbove) {
-			progress('Simplifying for the Quest…');
-			const r = keepRatio(estimate, new Map([[mainPath, { triangles: estimate, uses: 1 }]]), toward);
-			simplified = { ...(await simplifyObject(object, r)), models: 1 };
-		}
+		const ratio = estimate > simplifyAbove ? keepRatio(estimate, new Map([[mainPath, { triangles: estimate, uses: 1 }]]), toward) : 1;
+		if (ratio < 1) progress('Loading and simplifying for the Quest…');
+		const object = await loadModelEntry(store, mainPath, { objParser: opts.objParser, ratio });
+		const simplified = ratio < 1 ? { before: estimate, after: objectTriangles(object), models: 1 } : null;
 		const isMetric = fmt === 'glb' || fmt === 'gltf' || fmt === 'dae'; // glTF is metres; COLLADA declares its own unit
 		return { ...placeModel(object, store, { units: isMetric ? 'm' : opts.units || 'auto', name: baseName(mainPath) }), simplified };
 	} catch (e) {
@@ -648,7 +549,7 @@ async function breathe() {
 	lastPause = Date.now();
 }
 
-async function openSh3d(store, progress, makeTexture = null, limit = Infinity, simplifyAbove = Infinity, toward = {}) {
+async function openSh3d(store, progress, makeTexture = null, limit = Infinity, simplifyAbove = Infinity, toward = {}, objParser = null) {
 	progress('Reading Home.xml…');
 	const home = parseHome(new TextDecoder().decode(store.entries.get('Home.xml')));
 	// Too heavy to open here: said before anything is built (the furniture counted from its bytes).
@@ -664,12 +565,11 @@ async function openSh3d(store, progress, makeTexture = null, limit = Infinity, s
 		// painted instead of the page freezing until the end.
 		loadModel: async (ref) => {
 			await breathe();
-			const object = await loadModelEntry(store, ref);
-			const m = models.get(ref);
-			if (simplified && object && m && m.triangles >= SIMPLIFY.pieceMin) {
-				progress('Simplifying heavy furniture for the Quest…');
-				const r = await simplifyObject(object, ratio);
-				simplified.after -= (r.before - r.after) * m.uses;
+			const m = models.get(ref), heavy = !!(simplified && m && m.triangles >= SIMPLIFY.pieceMin);
+			if (heavy) progress('Simplifying heavy furniture for the Quest…');
+			const object = await loadModelEntry(store, ref, { objParser, ratio: heavy ? ratio : 1 });
+			if (heavy && object) {
+				simplified.after -= (m.triangles - objectTriangles(object)) * m.uses;
 				simplified.models++;
 			}
 			return object;

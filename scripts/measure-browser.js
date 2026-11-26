@@ -7,6 +7,9 @@
 //   HEAP_MB=1024 node scripts/measure-browser.js test-output/stress/warehouse.sh3d
 // HEAP_MB caps the page's JavaScript heap, to see where a smaller device
 // would give up (the Quest's tab limit is not published; this is a stand-in).
+// QUERY adds page switches (QUERY=worker: OBJ models read in the worker). It
+// also reports the longest the page's thread was blocked during the load
+// (maxBlockMs: a freeze), the workers started and any console errors.
 // Prints one JSON line.
 
 import path from 'node:path';
@@ -25,10 +28,15 @@ let crashed = false;
 page.on('crash', () => { crashed = true; });
 const errors = [];
 page.on('pageerror', (e) => errors.push(e.message.slice(0, 200)));
+page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text().slice(0, 200)); });
+let workers = 0;
+page.on('worker', () => { workers++; });
+// The page's thread: a 50 ms tick that notes the longest gap between ticks (a long gap is a freeze).
+await page.addInitScript(() => { let last = performance.now(); window.__maxBlock = 0; setInterval(() => { const now = performance.now(); window.__maxBlock = Math.max(window.__maxBlock, now - last - 50); last = now; }, 50); });
 
 try {
 	const t0 = Date.now();
-	await page.goto(`http://localhost:${PORT}/?test&model=${encodeURIComponent(file)}`, { timeout: 60000 });
+	await page.goto(`http://localhost:${PORT}/?test${process.env.QUERY ? `&${process.env.QUERY}` : ''}&model=${encodeURIComponent(file)}`, { timeout: 60000 });
 	// Sample the page's JS memory while it loads (it can only answer between the load's long steps).
 	let peakMB = 0;
 	const watch = setInterval(async () => {
@@ -43,6 +51,8 @@ try {
 		return { status: document.getElementById('status').textContent.slice(0, 160), stats: S.stats(), heapMB: Math.round(m.usedJSHeapSize / 1048576), heapLimitMB: Math.round(m.jsHeapSizeLimit / 1048576) };
 	}));
 	out.peakHeapSampledMB = Math.max(peakMB, out.heapMB);
+	out.maxBlockMs = Math.round(await page.evaluate(() => window.__maxBlock));
+	out.workers = workers;
 	// The first draws: the first may still send geometry to the GPU; the second is the plain draw.
 	out.drawsMs = await page.evaluate(() => {
 		const S = window.__casawalk, gl = S.renderer.getContext(), ms = [];

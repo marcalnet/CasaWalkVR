@@ -11,11 +11,12 @@
 //   - open edges (thin flat parts, a table's top) stay put (LockBorder);
 //   - pieces under SIMPLIFY.pieceMin triangles, and walls, floors and rooms,
 //     are never touched.
-// No DOM: runs in Node tests (and later in a worker).
+// No DOM: runs in Node tests and in the OBJ worker (js/obj-worker.js).
 
-import * as THREE from 'three';
-import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
-import { MeshoptSimplifier } from 'three/addons/libs/meshopt_simplifier.module.js';
+// (By relative path: the OBJ worker has no import map. The same files as the page's map gives.)
+import * as THREE from '../vendor/three/three.module.js';
+import { mergeVertices } from '../vendor/worker/BufferGeometryUtils.js';
+import { MeshoptSimplifier } from '../vendor/three/addons/libs/meshopt_simplifier.module.js';
 
 export const SIMPLIFY = {
 	above: 1_500_000, // a home counted over this is simplified (in the headset: js/main.js)

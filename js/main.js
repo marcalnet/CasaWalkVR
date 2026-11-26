@@ -10,6 +10,7 @@ import { optimiseModel, unmergedModel, modelStats } from './optimise.js';
 import { DEV } from './dev.js';
 import { DEVICE } from './device.js';
 import { SIMPLIFY } from './simplify.js';
+import { workerObjParser } from './obj-worker-client.js';
 import { XRExperience } from './xr.js';
 import { Lighting } from './lighting.js';
 import { DepthShading } from './depth.js';
@@ -253,7 +254,7 @@ async function load(files, label, source = { type: 'file' }) {
 	// failed open should leave the home you had.
 	if (current && DEVICE.headset && !xr.session) { disposeCurrent(); currentFiles = null; showStats(); invalidate(); }
 	try {
-		const result = await openFiles(files, { units: $('units').value, triangleLimit: DEVICE.headset ? CONFIG.triangleLimit : Infinity, simplifyAbove: DEVICE.headset ? SIMPLIFY.above : Infinity, onProgress: (t) => { if (seq === loadSeq) setStatus(t); } });
+		const result = await openFiles(files, { units: $('units').value, triangleLimit: DEVICE.headset ? CONFIG.triangleLimit : Infinity, simplifyAbove: DEVICE.headset ? SIMPLIFY.above : Infinity, objParser: DEV.worker ? workerObjParser() : null, onProgress: (t) => { if (seq === loadSeq) setStatus(t); } });
 		if (superseded(result)) return;
 		setStatus('Optimising for Quest…');
 		await new Promise((r) => setTimeout(r, 0)); // let the status paint
