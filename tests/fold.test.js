@@ -47,3 +47,14 @@ test('folded: one draw call for the plain colours per side, every vertex its own
 	assert.ok(after.layers.main.children.some((m) => m.material.map), 'the textured piece keeps its own');
 	assert.ok(after.layers.main.children.some((m) => m.material.transparent), 'the glass keeps its own');
 });
+
+test('the material passes run in their one order: the ceilings\' lift, the headset, depth; the model as loaded gets no lift and no depth', async () => {
+	const { applyMaterialPasses } = await import('../js/optimise.js');
+	const order = [];
+	const passes = { liftCeilings: () => order.push('lift'), headset: () => order.push('headset'), depth: (l) => order.push(l ? 'depth' : 'no depth') };
+	applyMaterialPasses({ ceilings: {} }, true, passes);
+	assert.deepEqual(order, ['lift', 'headset', 'depth']);
+	order.length = 0;
+	applyMaterialPasses({ ceilings: {} }, false, passes);
+	assert.deepEqual(order, ['headset', 'no depth']);
+});

@@ -272,3 +272,21 @@ export function optimiseModel(root, { fold = true } = {}) {
 	}
 	return { group, layers, stats: { drawCalls, triangles: Math.round(triangles), materials: buckets.size, sourceMeshes } };
 }
+
+/**
+ * The passes that change a model's materials after the merge, in their one
+ * order (the architecture audit's step 0; each pass is its owner's, passed in):
+ *   1. the merge itself, with plain colours folded (optimiseModel, above);
+ *   2. the ceilings' light lift (js/lighting.js): their own copies, a little
+ *      emission of their colour; so ceilings never fold (it reads the colour);
+ *   3. the headset's model (js/xr.js setModel): see-through copies for the
+ *      walls and furniture (js/walls.js), the wall portal's hook (js/portal.js);
+ *   4. depth shading (js/depth.js): its shader hook on whatever materials the
+ *      layers now hold, and its bake. Last, so every copy above is hooked.
+ * merged: false for the model as loaded (?nomerge): no lift, no depth.
+ */
+export function applyMaterialPasses(layers, merged, { liftCeilings, headset, depth }) {
+	if (merged) liftCeilings?.(layers.ceilings);
+	headset?.();
+	depth?.(merged ? layers : null);
+}

@@ -8,7 +8,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { CONFIG } from '../config.js';
 import { UserError, checkDecoders } from './formats.js';
-import { modelStats } from './optimise.js';
+import { modelStats, applyMaterialPasses } from './optimise.js';
 import { ModelService } from './model-service.js';
 import { DEV } from './dev.js';
 import { DEVICE } from './device.js';
@@ -290,9 +290,13 @@ async function load(files, label, source = { type: 'file' }) {
 		// Bulbs of the home's lamps: they glow at sunset and at night.
 		const lamps = merged.stats ? lighting.setLamps(result.lamps) : lighting.setLamps(null);
 		if (lamps) model.root.add(lamps);
-		if (merged.stats) lighting.liftCeilings(model.layers.ceilings); // (ceilings read muddy at eye level: a small lift of their own)
-		xr.setModel({ group: model.root, layers: model.layers, lamps, storeys: result.storeys ?? 1, storeyNames: result.storeyNames ?? [], bounds: model.bounds, observer: model.observer, skyColor: result.home?.skyColor, multiLevel: elevations.size > 1, plan: result.plan ?? null });
-		depth.setModel(merged.stats ? model.layers : null); // (not in the ?nomerge debug view)
+		// The material passes, in their one order (js/optimise.js): the ceilings' lift (ceilings read muddy at eye
+		// level), the headset's model (see-through, portal), then depth shading (not in the ?nomerge debug view).
+		applyMaterialPasses(model.layers, !!merged.stats, {
+			liftCeilings: (ceilings) => lighting.liftCeilings(ceilings),
+			headset: () => xr.setModel({ group: model.root, layers: model.layers, lamps, storeys: result.storeys ?? 1, storeyNames: result.storeyNames ?? [], bounds: model.bounds, observer: model.observer, skyColor: result.home?.skyColor, multiLevel: elevations.size > 1, plan: result.plan ?? null }),
+			depth: (layers) => depth.setModel(layers),
+		});
 		prepareTextures(model.root);
 		lighting.setHome({ compass: result.home?.compass, skyColor: result.home?.skyColor });
 		lighting.setSubject(centerer, model.bounds);
