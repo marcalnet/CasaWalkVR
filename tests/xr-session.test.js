@@ -73,16 +73,19 @@ test('?nomerge (the model as loaded, for debugging): the headset takes it, shado
 	assert.equal(x.mode, 'dollhouse');
 });
 
-test('the settings boards: the same tabs at both layers, no Close key (the foot says how to close), every target big enough to touch', async () => {
+test('the settings wing: the same three tabs at both layers (How to move, View, General), no Close key (the foot says how to close), every target big enough to touch, 34 cm tall', async () => {
 	const { x } = await setup();
 	for (const p of Object.values(x.menus)) {
-		assert.deepEqual(p.tabs.map((t) => t.label), ['View', 'Walk', 'Tools', 'General']);
-		assert.equal(p.lead.label, '? How to move', 'the How to move key at the tabs\' left end');
-		assert.deepEqual(shape(p.tabs[0].rows), ['light:choice:Time of day:Morning:Noon:Sunset:Night', 'shadows:switch:Shadows',
+		assert.deepEqual(p.tabs.map((t) => t.label), ['How to move', 'View', 'General']);
+		assert.deepEqual(p.tabs.map((t) => t.id), ['move', 'view', 'general']);
+		assert.equal(p.lead, undefined, 'no How to move key: it is a tab');
+		assert.deepEqual(shape(p.tabs[0].rows), ['guide:drawn:'], 'How to move: the guide alone');
+		assert.deepEqual(shape(p.tabs[1].rows), ['light:choice:Time of day:Morning:Noon:Sunset:Night', 'shadows:switch:Shadows',
 			'depth:switch:Depth shading', 'view:switch:Passthrough', 'seethrough:switch:Transparent walls']);
-		assert.deepEqual(shape(p.tabs[1].rows), ['height:choice:Height:Yours:1.4 m:1.7 m:2.0 m']);
-		assert.deepEqual(shape(p.tabs[2].rows), ['lens:choice:Camera lens:24 mm:28 mm:35 mm:50 mm']);
-		assert.deepEqual(shape(p.tabs[3].rows), ['mainHand:choice:Main hand:Right:Left', 'sound:choice:Sound:Off:Effects']);
+		assert.deepEqual(shape(p.tabs[2].rows), ['height:choice:Height:Yours:1.4 m:1.7 m:2.0 m', 'mainHand:choice:Main hand:Right:Left',
+			'sound:switch:Sound', 'newVisitor:button:New visitor'], 'General: Height, Main hand, Sound, New visitor (last)');
+		assert.ok(!p.get('lens'), 'the camera\'s lens is on its dial, not on the wing');
+		assert.ok(p.size.h / p.size.w * p.mesh.geometry.parameters.width <= 0.34 + 1e-6, `34 cm tall at most (harmony conflict 13): ${(p.size.h / p.size.w * p.mesh.geometry.parameters.width * 100).toFixed(1)} cm`);
 		assert.equal(p.actions, undefined, 'no action rows on the board: the doors are on the wrist');
 		assert.ok(!p.rects().some((r) => /close/i.test(r.id)) && /outside: close$/.test(p.hint), 'no Close key: the close line says how (build 120, M1)');
 		// The close line fits beside the title at 18 px or more, both forms (about 0.55 em a character for the title's 28 px, the line's 18 px).
@@ -98,7 +101,7 @@ test('the settings boards: the same tabs at both layers, no Close key (the foot 
 	// Scale-model settings are greyed out inside; the boards are the same size whatever the tab.
 	assert.ok(Object.values(x.menus).every((p) => !p.get('figure') && !p.get('photo') && !p.get('recentre') && !p.get('exit')), 'no figure, Photo, Recentre or Exit VR');
 	const h = x.menus.dollhouse.size.h;
-	for (const tab of ['general', 'walk']) { x.menus.dollhouse.setTab(tab); assert.equal(x.menus.dollhouse.size.h, h, tab); }
+	for (const tab of ['general', 'move']) { x.menus.dollhouse.setTab(tab); assert.equal(x.menus.dollhouse.size.h, h, tab); }
 	x.menus.dollhouse.setTab('view');
 });
 
@@ -360,22 +363,41 @@ test('shared headsets: Height is per session (never stored, "Yours" at every Ent
 	frame();
 	x.menuAction({ id: 'height', value: 1.7 });
 	x.menuAction({ id: 'light', value: 'sunset' });
-	x.store.tips.seen.add('teleport:controllers'); x.store.target = true; x.ui.tab = 'general';
+	x.store.tips.seen.add('teleport:controllers'); x.store.target = true;
+	x.ui.openMenu(); x.menu.setTab('general'); // (pressed with the wing open on General: the next person still starts on How to move)
 	x.menuAction('newVisitor');
-	assert.ok(x.personHeight === 0 && x.store.tips.seen.size === 0 && !x.store.target && x.ui.tab === null, 'the next person: height "Yours", every tip, the first tab, the target ring');
+	assert.ok(x.personHeight === 0 && x.store.tips.seen.size === 0 && !x.store.target && Object.keys(x.store.tabs).length === 0 && !x.menu, 'the next person: height "Yours", every tip, the first tabs, the target ring; the wing closes');
 	assert.equal(x.lighting?.time ?? 'sunset', 'sunset', 'what you see stays');
-	assert.ok(x.guides.walk.get('newVisitor') && x.guides.dollhouse.get('newVisitor'), 'the key at How to move\'s foot');
+	x.ui.openMenu();
+	assert.equal(x.menu.tab, 'move', 'the next opening: How to move');
+	assert.ok(x.menus.walk.get('newVisitor') && x.menus.dollhouse.get('newVisitor') && x.menus.dollhouse.tabOf('newVisitor') === 'general', 'New visitor: General\'s last row');
 });
 
-test('the tab you left a board on is the one the other board opens on', async () => {
+test('which tab the wing opens on (the next-build asks 3.3): How to move the first time at each place in a session, then the last other tab used there (View at first)', async () => {
 	const { x, go } = await setup();
 	x.ui.openMenu();
-	x.menu.setTab('walk');
+	assert.equal(x.menu.tab, 'move', 'the scale model, first opening: How to move');
+	x.ui.closeMenu(); x.ui.openMenu();
+	assert.equal(x.menu.tab, 'view', 'then View');
+	x.menu.setTab('general'); x.ui.closeMenu(); x.ui.openMenu();
+	assert.equal(x.menu.tab, 'general', 'then the tab last used here');
+	x.menu.setTab('move'); x.ui.closeMenu(); x.ui.openMenu();
+	assert.equal(x.menu.tab, 'general', 'How to move is not "a settings tab used": still General');
 	x.ui.closeMenu();
 	go('in');
 	x.ui.openMenu();
 	assert.equal(x.menu, x.menus.walk);
-	assert.equal(x.menu.tab, 'walk');
+	assert.equal(x.menu.tab, 'move', 'inside, first opening: How to move');
+	x.ui.closeMenu(); x.ui.openMenu();
+	assert.equal(x.menu.tab, 'view', 'inside keeps its own last tab');
+	x.ui.closeMenu();
+	go('back');
+	x.ui.openMenu();
+	assert.equal(x.menu.tab, 'general', 'back at the scale model: its own');
+	x.ui.closeMenu();
+	x.store.start(); // (a new session: Enter VR)
+	x.ui.openMenu();
+	assert.equal(x.menu.tab, 'move');
 });
 
 test('Main hand: the wrist menu and the tool fan flip together, remembered', async () => {
@@ -389,14 +411,18 @@ test('Main hand: the wrist menu and the tool fan flip together, remembered', asy
 	assert.equal(x.ui.wrist.side, 'right');
 });
 
-test('Sound: off and on, remembered', async () => {
+test('Sound: one switch (on: the effects)', async () => {
 	const { x } = await setup();
-	x.menuAction({ id: 'sound', value: 'off' });
+	x.menuAction({ id: 'sound', value: false });
 	assert.equal(x.soundLevel, 'off');
 	assert.equal(x.sound.level, 'off');
-	assert.equal(x.menus.walk.get('sound').value, 'off');
-	x.menuAction({ id: 'sound', value: 'effects' });
+	assert.equal(x.menus.walk.get('sound').value, false, 'the switch shows off');
+	x.menuAction('sound'); // (pressed: it flips)
 	assert.equal(x.sound.level, 'effects');
+	assert.equal(x.menus.dollhouse.get('sound').value, true);
+	x.menuAction({ id: 'sound', value: 'off' }); // (an old value still works)
+	assert.equal(x.soundLevel, 'off');
+	x.menuAction({ id: 'sound', value: true });
 });
 
 test('settings keep the board open; the doors move one layer at a time', async () => {
@@ -623,16 +649,27 @@ test('the door at the scale model: one big Walk in → (no ← Back since 26 Nov
 	frame(); settle();
 });
 
-test('Help opens the board on How to move (for the input in hand, here, with the build at its foot); Help again closes it', async () => {
+test('How to move: the first tab, for the input in hand, here, with the build at its foot; at most four lines a guide, in the 355 px tab', async () => {
 	const { x, frame } = await setup();
 	frame();
-	x.menuAction('guideKey');
-	assert.ok(x.ui.guide && x.ui.guide.mesh.visible && !x.menu, 'the left wing, How to move; Settings stays shut');
-	const cell = x.ui.guide.cells.get('guide');
+	x.menuAction('settings');
+	assert.ok(x.menu?.mesh.visible && x.menu.tab === 'move', 'Settings opens on How to move the first time');
+	const cell = x.menu.cells.get('guide');
 	assert.equal(cell.kind, 'dollhouse-controllers');
 	assert.match(cell.foot, /^Build /);
-	x.menuAction('guideKey');
-	assert.equal(x.ui.guide, null, 'Help again: closed');
+	assert.equal(cell.h, 355);
+	const { GUIDES, GUIDE_MAX_LINES } = await import('../js/xr-menus.js'), { LINES } = await import('../js/guide.js');
+	for (const [kind, g] of Object.entries(GUIDES)) {
+		assert.ok(g.lines.length <= GUIDE_MAX_LINES, `${kind}: ${g.lines.length} lines`);
+		assert.ok(!g.lines.some((l) => /close/i.test(l)), `${kind}: no close line (the wing's header says it)`);
+	}
+	// Four lines fit: 128 px frames (the 548 px inner width / 4, less the gaps), 84 px to the first line, 34 px apart, the foot below.
+	const size = Math.min((x.menu.size.w - 2 * 16 - 3 * 12) / 4, cell.h * 0.42);
+	assert.ok(size + LINES.below + (GUIDE_MAX_LINES - 1) * LINES.step + 34 <= cell.h, `four lines: ${size + LINES.below + 3 * LINES.step + 34} px <= ${cell.h}`);
+	assert.ok(LINES.px === 24 && LINES.min === 20, 'lines at 24 px, never under 20');
+	assert.equal(GUIDES['dollhouse-hands'].frames[3], 'Let go to step inside');
+	x.menuAction('settings');
+	assert.equal(x.menu, null, 'Settings again: closed');
 });
 
 test('the plinth doors fade out while the board is open, take no presses, and come back', async () => {
@@ -751,26 +788,17 @@ test('the tunnel zoom (on, subtle: build 120, M2): the room and the model scale 
 	P.fx = null; x.veil.clear();
 });
 
-test('the wrist key opens both wings and closes both; the How to move key closes and reopens How to move alone; the tab you left is kept', async () => {
+test('the wrist key opens the one wing and closes it; no second wing', async () => {
 	const { x } = await setup();
 	x.menuAction('settings');
-	assert.ok(x.menu && x.ui.guide, 'Settings, and help: both wings');
-	assert.equal(x.menu.tab, 'view');
-	x.menu.setTab('walk'); x.menuAction('settings');
-	assert.ok(!x.menu && !x.ui.guide, 'again: both close');
+	assert.ok(x.menu && x.ui.openPanels().length === 1, 'one wing');
+	assert.equal(x.ui.guide, undefined, 'no How to move wing');
 	x.menuAction('settings');
-	assert.ok(x.menu && x.ui.guide, 'and both again (build 120: help closed alone was never found again)');
-	assert.equal(x.menu.tab, 'walk', 'the tab you left');
-	for (let i = 0; i < 3; i++) {
-		x.menuAction('guideKey');
-		assert.ok(x.menu && !x.ui.guide && !x.menu.lead.on, 'the How to move key closes How to move alone (build 120, M1)');
-		x.menuAction('guideKey');
-		assert.ok(x.ui.guide && x.ui.guide.mesh.visible && x.menu.lead.on, 'and opens it again, every time, filled while open');
-	}
-	x.ui.closeAll();
+	assert.ok(!x.menu && x.ui.openPanels().length === 0, 'again: closed');
+	assert.ok(!x.scene.getObjectByName('guide-wing'), 'no second wing in the scene');
 });
 
-test('the wings: Settings on the main hand\'s side, How to move on the other, both 30° or more off straight ahead; the second shares the first\'s front (B8)', async () => {
+test('the wing: on the main hand\'s side, 30° or more off straight ahead', async () => {
 	const { x, frame } = await setup();
 	frame();
 	const angle = (panel) => { // degrees, + to the left of straight ahead (the rig looks along -Z)
@@ -781,14 +809,8 @@ test('the wings: Settings on the main hand\'s side, How to move on the other, bo
 		x.menuAction({ id: 'mainHand', value: main });
 		x.ui.closeAll();
 		x.menuAction('settings');
-		const s = angle(x.menu), g = angle(x.ui.guide), side = main === 'right' ? -1 : 1;
-		assert.ok(Math.sign(s) === side && Math.abs(s) >= 30 && Math.sign(g) === -side && Math.abs(g) >= 30, `${main}: settings ${s.toFixed(0)}, guide ${g.toFixed(0)}`);
-		// Turn the head 45° towards Settings, then reopen How to move: it keeps the pair's front.
-		x.ui.closeGuide();
-		x.camera.rotation.y = THREE.MathUtils.degToRad(45 * side); x.camera.updateMatrix();
-		x.menuAction('guideKey');
-		assert.ok(Math.abs(angle(x.ui.guide) - g) < 1, `${main}: How to move back where it was (${angle(x.ui.guide).toFixed(0)}), not in front`);
-		x.camera.rotation.y = 0; x.camera.updateMatrix();
+		const s = angle(x.menu), side = main === 'right' ? -1 : 1;
+		assert.ok(Math.sign(s) === side && Math.abs(s) >= 30, `${main}: settings ${s.toFixed(0)}`);
 		x.ui.closeAll();
 	}
 	x.menuAction({ id: 'mainHand', value: 'right' });
@@ -798,13 +820,13 @@ test('the orb, or A, with a wing open closes everything', async () => {
 	const { x, frame } = await setup();
 	frame();
 	x.menuAction('settings');
-	assert.ok(x.menu && x.ui.guide);
+	assert.ok(x.menu);
 	const wearer = x.ui.wrist.wearer;
 	assert.ok(wearer, 'the orb is worn');
 	wearer.state.down.a = true;
 	x.ui.buttons();
 	wearer.state.down.a = false;
-	assert.ok(!x.menu && !x.ui.guide && !x.ui.wrist.open, 'A: both wings and the arc');
+	assert.ok(!x.menu && !x.ui.wrist.open, 'A: the wing and the arc');
 });
 
 test('holding the model: it follows the grip, level (turned only about the vertical); let go in the air it floats, then goes home by itself', async () => {
@@ -1367,7 +1389,7 @@ test('a laser on a wing hovers its cell', async () => {
 	const { x, frame, hands } = await setup();
 	hands.right.grip.visible = true;
 	frame();
-	x.ui.openMenu();
+	x.ui.openMenu(undefined, 'view');
 	frame();
 	const p = x.menu, r = p.rects().find((t) => t.id === 'seethrough');
 	const g = p.mesh.geometry.parameters;
@@ -1383,7 +1405,7 @@ test('a laser on a wing hovers its cell', async () => {
 	assert.ok(x.menu.hover?.startsWith('seethrough|'), `hover=${x.menu.hover} hit=${hit?.distance} claim=${c.claim.trigger} active=${x.input.active().length} panels=${x.ui.openPanels().length} vis=${p.mesh.visible}`);
 });
 
-test('a press at empty space closes the wings (build 120, M1): a pull at the sky closes both and stays used up until let go; at the model, or with a tool in hand, nothing closes; a quick pinch the same', async () => {
+test('a press at empty space closes the wing (build 120, M1): a pull at the sky closes it and stays used up until let go; at the model, or with a tool in hand, nothing closes; a quick pinch the same', async () => {
 	const { x, frame, press } = await setup();
 	frame();
 	const c = x.input.controllers[1], orig = x.input.setRaycaster.bind(x.input);
@@ -1395,11 +1417,11 @@ test('a press at empty space closes the wings (build 120, M1): a pull at the sky
 	x.menuAction('settings');
 	aim = { from: head.clone(), dir: x.modes.dollhouse.modelBox().getCenter(new THREE.Vector3()).sub(head).normalize() };
 	pull();
-	assert.ok(x.menu && x.ui.guide, 'at the model: nothing closes');
+	assert.ok(x.menu, 'at the model: nothing closes');
 	letGo();
 	aim = { from: head.clone(), dir: new THREE.Vector3(0, 1, 0) };
 	pull();
-	assert.ok(!x.menu && !x.ui.guide, 'at the sky: both wings close');
+	assert.ok(!x.menu, 'at the sky: the wing closes');
 	frame();
 	assert.equal(c.claim.trigger, 'ui', 'the pull is used up while held (never also an aim)');
 	letGo(); frame();
@@ -1411,7 +1433,7 @@ test('a press at empty space closes the wings (build 120, M1): a pull at the sky
 	assert.equal(tap(head.clone().add(new THREE.Vector3(0.1, -0.9, -0.3))), false, 'below the waist: nothing');
 	assert.ok(x.menu, '(still open)');
 	assert.equal(tap(head.clone().add(new THREE.Vector3(0, -0.05, -0.3))), true, 'in front, aimed over the model at nothing: closes');
-	assert.ok(!x.menu && !x.ui.guide);
+	assert.ok(!x.menu);
 	Object.assign(h, saved);
 });
 

@@ -138,8 +138,8 @@ export class XRExperience {
 		this.plinthH = PLINTH_HEIGHT; // the plinth's height (one for both inputs since 26 Nov 2026; never changes)
 		this.setPlinth(1.2, 0.9);
 		this.walkSky = buildWalkSky(camera);
-		Object.assign(this, buildMenus(rig)); // menus: the settings boards
-		this.hideFromPhotos(...Object.values(this.menus).map((p) => p.mesh), ...Object.values(this.guides).map((p) => p.mesh));
+		Object.assign(this, buildMenus(rig)); // menus: the settings wing, one per place
+		this.hideFromPhotos(...Object.values(this.menus).map((p) => p.mesh));
 		// The one sphere round the eyes (js/veil.js): the teleport fade, the move between places
 		// (dark for in and back, white for leaving VR) and the photo flash.
 		this.veil = new Veil(camera);
@@ -159,7 +159,7 @@ export class XRExperience {
 	/** The open settings board (a Panel), or null. */
 	get menu() { return this.ui.menu; } // the settings wing (right)
 	/** True while either wing (Settings, How to move) is open: nothing else claims the hands then. */
-	get boardOpen() { return !!(this.ui.menu || this.ui.guide); }
+	get boardOpen() { return !!this.ui.menu; }
 
 	/** A move between places in progress (js/pause.js), or null: the modes wait meanwhile. */
 	get layerFx() { return this.pause?.fx ?? null; }
@@ -415,12 +415,11 @@ export class XRExperience {
 	 * first-target ring. What you see stays (it is remembered).
 	 */
 	newVisitor() {
+		this.ui.closeAll(); // (first: closing keeps the tab shown, and the next person starts on How to move)
 		this.store.start();
-		this.ui.tab = null;
 		this.personHeight = readSetting('height');
 		if (this.mode === 'walk') this.setLift(this.modes.walk.personLift());
 		this.pause.target.visible = false;
-		this.ui.closeAll();
 		if (this.soundLevel !== 'off') this.sound.play('press');
 		this.updateLabels();
 	}

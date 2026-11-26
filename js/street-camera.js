@@ -10,7 +10,7 @@
 // at all when it faces away from you; it shows the lens (e.g. "28 mm").
 // After a shot a small print pops out of the camera, floats a moment and
 // drifts back into the camera. Lens: 24, 28 (default), 35 or 50 mm, set in
-// the board's Tools tab (remembered; js/settings.js cameraLens).
+// on the camera's dial (js/tool-dial.js; remembered: js/settings.js cameraLens).
 
 import * as THREE from 'three';
 import { canvasTexture } from './canvas-card.js';

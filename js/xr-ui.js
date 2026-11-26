@@ -2,20 +2,19 @@
 // C0 "Hands and touch"):
 //
 //   Wrist    the wrist menu (js/wrist-menu.js): an orb on one wrist, and
-//            four keys in a cross: Settings, Help, ← Back, Walk in →.
-//   Board    Settings opens the settings board within reach (50 cm ahead,
-//            25 cm below the eyes, tilted back 20°; at the scale model 45° to
-//            the left, clear of the model), pressed by touch (js/touch.js) or
-//            by a controller's laser; its handle moves it (a controller's
-//            grip). What it says and does: js/xr-menus.js. Both wings close
-//            with the orb, Settings again, B/Y, moving between layers, or a
-//            press at empty space (build 120's M1: a trigger pull, or a quick
-//            pinch, aimed at nothing you can use: emptyPress()); there is no
-//            Close key, and "? How to move" closes How to move alone.
-//   Help     opens the board on its first tab, How to move (js/guide.js):
-//            how to move here, for controllers or bare hands, and the build
-//            at its foot. (The help cards beside the wrist menu went on 25
-//            Nov 2026: one panel instead of two, the Quest 2 design's item 6.)
+//            two keys: ← Back and Settings.
+//   Wing     Settings opens the one settings wing beside the model, on the
+//            main hand's side (js/wings.js: 0.55 m, 40-50° out, never over
+//            the model), pressed by touch (js/touch.js) or by a controller's
+//            laser. What it says and does: js/xr-menus.js. Its tabs: How to
+//            move (js/guide.js: how to move here, for controllers or bare
+//            hands, the build at its foot), View and General. The first
+//            opening at each place in a session shows How to move; after
+//            that, the last other tab used there (View at first; the
+//            next-build asks 3.3, kept in xr.store.tabs). It closes with the
+//            orb, Settings again, B/Y, moving between layers, or a press at
+//            empty space (build 120's M1: a trigger pull, or a quick pinch,
+//            aimed at nothing you can use: emptyPress()); there is no Close key.
 //   Photo    the flash and note of a photo (the street camera, milestone D).
 //   Hands    without hand joints: "Pick up your controllers" (C0.1).
 //
@@ -62,13 +61,12 @@ export class XRUI {
 	/** xr: the XRExperience (rig, camera, input, menus, mode, model, stage, ...). */
 	constructor(xr) {
 		this.xr = xr;
-		this.menu = null; // the open settings wing, on the right (a Panel), or null
-		this.guide = null; // the open How to move wing, on the left (a Panel), or null
-		this.tab = null; // the settings tab last shown (kept between the two layers' boards); null: none yet this session
+		this.menu = null; // the open settings wing (a Panel), or null
+		this.menuPlace = null; // the place it opened at ('dollhouse' or 'walk')
 		this.opened = false; // Settings has opened this session
 		this.teleports = 0; // this session's teleports
 		this.wrist = new WristMenu(xr);
-		guideSheet.onLoad = () => this.guide?.draw(); // (the How to move pictures, once loaded)
+		guideSheet.onLoad = () => this.menu?.draw(); // (the How to move pictures, once loaded)
 		this.touches = []; // per input entry: its touch on the open board (js/touch.js)
 		this.spent = new Set(); // controllers whose trigger closed the wings: claimed until let go
 		this.buildPhotoFeedback();
@@ -151,20 +149,17 @@ export class XRUI {
 	// -----------------------------------------------------------------------
 
 	/**
-	 * Puts a wing (a Panel) beside the model: 45° to its side (Settings on
-	 * the main hand's side, How to move on the other: wingSide()), 15° below eye
-	 * level, 0.55 m from the eyes, leaned back 20°, and out of the way of the
-	 * model (js/wings.js: moves outward, then up, if it would cover it).
-	 * side: +1 the left wing, -1 the right. The heading is where the head
-	 * faces even looking down at the wrist (headHeading: a bare forward
-	 * direction flattened is unstable then, and put a wing in front: build 120).
+	 * Puts the wing (a Panel) beside the model: 45° to the main hand's side
+	 * (wingSide()), 15° below eye level, 0.55 m from the eyes, leaned back
+	 * 20°, and out of the way of the model (js/wings.js: moves outward, then
+	 * up, if it would cover it). side: +1 left, -1 right. The heading is where
+	 * the head faces even looking down at the wrist (headHeading: a bare
+	 * forward direction flattened is unstable then, and put a wing in front: build 120).
 	 */
 	placeWing(panel, side, headMatrix = this.xr.camera.matrix) {
 		const xr = this.xr, mesh = panel.mesh, g = mesh.geometry.parameters;
 		const head = new THREE.Vector3().setFromMatrixPosition(headMatrix);
-		// The second wing shares the first's heading: they open as a pair round one front (the
-		// Tester's B8: looking at Settings and opening How to move put it over the model).
-		const yaw = this.menu || this.guide ? this.wingYaw : (this.wingYaw = headHeading(headMatrix));
+		const yaw = this.wingYaw = headHeading(headMatrix); // (kept: the tests check the wing against this front)
 		let zone = null;
 		if (xr.mode === 'dollhouse' && xr.model) {
 			// The model's box in the rig's space (where the wings live), seen from the eyes.
@@ -185,63 +180,44 @@ export class XRUI {
 
 	/**
 	 * Opens this layer's settings wing (on the main hand's side) on `tab` if
-	 * given, else the tab last shown (View at first). The wrist key opens it
-	 * with How to move (toggleBoard).
+	 * given; else, the first time at this place this session, on How to move,
+	 * and after that on the last other tab used here (View at first: the
+	 * next-build asks 3.3; per session, xr.store.tabs).
 	 */
 	openMenu(headMatrix, tab = null) {
 		const xr = this.xr;
 		this.closeMenu();
 		const panel = xr.menus[xr.mode];
 		if (!panel) return;
-		this.placeWing(panel, this.wingSide('settings'), headMatrix);
-		panel.setTab(tab ?? this.tab ?? 'view');
-		panel.lead.on = !!this.guide;
-		panel.hint = this.closeHint();
-		panel.draw();
-		panel.setHover(null);
-		panel.mesh.visible = true;
-		this.menu = panel;
-		this.feel(null, 'open');
-		this.opened = true;
-	}
-
-	/** Which side a wing opens on: Settings on the main hand's (+1 left, -1 right), How to move on the other. */
-	wingSide(which) {
-		const main = this.xr.mainHand === 'left' ? 1 : -1;
-		return which === 'settings' ? main : -main;
-	}
-
-	/** Closes the settings wing. */
-	closeMenu() {
-		if (this.menu) { this.tab = this.menu.tab; this.menu.mesh.visible = false; this.feel(null, 'close'); }
-		this.menu = null;
-	}
-
-	/** Opens How to move, the left wing: the pictures for the input in hand, here, the replay keys, the build at its foot. */
-	openGuide(headMatrix) {
-		const xr = this.xr;
-		this.closeGuide();
-		const panel = xr.guides[xr.mode];
-		if (!panel) return;
-		this.placeWing(panel, this.wingSide('guide'), headMatrix);
+		const tabs = xr.store.tabs, place = xr.mode, first = !(place in tabs);
+		if (first) tabs[place] = 'view';
+		this.placeWing(panel, this.wingSide(), headMatrix);
+		panel.setTab(tab ?? (first ? 'move' : tabs[place]));
 		this.prepareGuide(panel);
 		panel.hint = this.closeHint();
 		panel.draw();
 		panel.setHover(null);
 		panel.mesh.visible = true;
-		this.guide = panel;
-		if (this.menu?.lead) { this.menu.lead.on = true; this.menu.draw(); }
+		this.menu = panel;
+		this.menuPlace = xr.mode;
 		this.feel(null, 'open');
+		this.opened = true;
 	}
 
-	/** Closes the How to move wing. */
-	closeGuide() {
-		if (this.guide) { this.guide.mesh.visible = false; this.feel(null, 'close'); }
-		this.guide = null;
-		if (this.menu?.lead) { this.menu.lead.on = false; this.menu.draw(); }
+	/** Which side the wing opens on: the main hand's (+1 left, -1 right). */
+	wingSide() { return this.xr.mainHand === 'left' ? 1 : -1; }
+
+	/** Closes the settings wing; the tab it showed (unless How to move) is the one it opens on next time at this place. */
+	closeMenu() {
+		if (this.menu) {
+			if (this.menu.tab !== 'move') this.xr.store.tabs[this.menuPlace] = this.menu.tab;
+			this.menu.mesh.visible = false;
+			this.feel(null, 'close');
+		}
+		this.menu = null;
 	}
 
-	/** The How to move wing (js/guide.js): for the input in hand, at this layer, and which build is running at its foot. */
+	/** How to move (js/guide.js): for the input in hand, at this layer, and which build is running at its foot. */
 	prepareGuide(panel) {
 		const xr = this.xr, cell = panel.cells.get('guide');
 		if (!cell) return;
@@ -250,7 +226,7 @@ export class XRUI {
 		cell.foot = buildLabel(BUILD) + (xr.newerBuild > BUILD.number ? ' · Newer version: reload after VR' : '');
 	}
 
-	/** The wings' foot line: how to close them with the input in hand (CLOSE_HINT). */
+	/** The wing's close line: how to close it with the input in hand (CLOSE_HINT). */
 	closeHint() { return this.xr.input.active().length ? CLOSE_HINT.controllers : CLOSE_HINT.hands; }
 
 	/**
@@ -285,8 +261,8 @@ export class XRUI {
 
 	/** A press at empty space: closes what is open, like the orb (sound close; a controller's vibration close). */
 	closeOnEmpty(c) {
-		const wings = !!(this.menu || this.guide);
-		this.closeAll(); // (the wings make their own close sound)
+		const wings = !!this.menu;
+		this.closeAll(); // (the wing makes its own close sound)
 		this.feel(c, wings ? null : 'close', 'close');
 	}
 
@@ -314,27 +290,20 @@ export class XRUI {
 	/** Counts this session's teleports. */
 	onTeleport() { this.teleports++; } // (walk mode's own count runs across sessions: this one is per session)
 
-	/** Closes everything: both wings and the wrist menu (moving between layers). */
+	/** Closes everything: the wing and the wrist menu (moving between layers). */
 	closeAll() {
 		this.closeMenu();
-		this.closeGuide();
 		this.wrist.close();
 	}
 
-	/** The wings open now. */
-	openPanels() { return this.guide ? (this.menu ? [this.menu, this.guide] : [this.guide]) : this.menu ? [this.menu] : []; }
+	/** The wing, if open, as a list (what a press may land on). */
+	openPanels() { return this.menu ? [this.menu] : []; }
 
-	/** True while a wing or the wrist menu is open. */
-	get anyOpen() { return !!this.menu || !!this.guide || this.wrist.open; }
+	/** True while the wing or the wrist menu is open. */
+	get anyOpen() { return !!this.menu || this.wrist.open; }
 
-	/**
-	 * "Settings, and help" on the wrist: opens both wings; with either open,
-	 * closes both (build 120's design: help closed alone was never found again).
-	 */
-	toggleBoard() { if (this.menu || this.guide) { this.closeMenu(); this.closeGuide(); } else { this.openMenu(); this.openGuide(); } }
-
-	/** How to move: opens the left wing, or closes it. */
-	toggleHelp() { if (this.guide) this.closeGuide(); else this.openGuide(); }
+	/** Settings on the wrist: opens the wing, or closes it. */
+	toggleBoard() { if (this.menu) this.closeMenu(); else this.openMenu(); }
 
 	/** A sound (if sound is on) and, on a controller, a vibration. */
 	feel(c, sound, haptic = null, gain = 1) {
@@ -481,9 +450,9 @@ export class XRUI {
 	buttons() {
 		const xr = this.xr, wearer = this.wrist.wearer, dt = xr.frameDt ?? 1 / 72;
 		for (const c of xr.input.active()) {
-			if (c.state.down.a && !c.claim.a && c === wearer && (this.menu || this.guide)) { this.closeAll(); this.feel(c, 'close'); return true; } // (with a wing open, like the orb: closes everything)
+			if (c.state.down.a && !c.claim.a && c === wearer && this.menu) { this.closeAll(); this.feel(c, 'close'); return true; } // (with the wing open, like the orb: closes everything)
 			if (c.state.down.a && !c.claim.a && c === wearer) { this.wrist.toggle({ pinned: true }); return true; }
-			if (c.state.down.b && !c.claim.b && this.anyOpen) { this.closeMenu(); this.closeGuide(); this.wrist.close(true); return true; }
+			if (c.state.down.b && !c.claim.b && this.anyOpen) { this.closeMenu(); this.wrist.close(true); return true; }
 			// B / Y with nothing open: held BACK_HOLD it is ← Back (the same rule as the key, the next-build asks 3.2): the ring fills round the orb; a short press does nothing.
 			if (c.state.down.b && !c.claim.b) this.backHold = { c, t: 0 };
 		}
@@ -509,14 +478,12 @@ export class XRUI {
 	reset() {
 		this.spent.clear();
 		this.closeMenu();
-		this.closeGuide();
 		this.photoFx = null;
 		this.xr.veil.set('flash', 0);
 		this.photoNote.mesh.visible = false;
 		this.handsNote.mesh.visible = false;
 		this.errorNote.mesh.visible = false;
 		this.wrist.reset();
-		this.tab = null;
 		this.opened = false;
 		this.teleports = 0;
 		for (const row of this.touches) for (const st of row?.values() ?? []) { resetTouch(st.s); st.ring.visible = false; }

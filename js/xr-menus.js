@@ -1,13 +1,13 @@
 // What the headset menus say and do (SPEC.md, C0 "Hands and touch" and
 // "Layers"). ("dollhouse" in the code is the scale model on screen.)
 //
-// The wrist menu (js/wrist-menu.js) has three keys: ← Back, Settings and
-// Walk in →. Settings opens the settings board: one per layer, both titled
-// "Settings", the same tabs in both (View, Walk,
-// General), with no Close key (a press at empty space closes it: js/xr-ui.js);
-// pressed by touch, or by a controller's laser. On/off settings are switches,
-// settings with a few values are options with every one visible (one press).
-// How to move (the guideKey on the board's tab row) opens the left wing.
+// The wrist menu (js/wrist-menu.js) has two keys: ← Back and Settings.
+// Settings opens the one settings wing: one per layer, both titled
+// "Settings", the same three tabs in both (How to move, View, General; the
+// next-build asks 3.1 and 3.3), with no Close key (a press at empty space
+// closes it: js/xr-ui.js); pressed by touch, or by a controller's laser.
+// On/off settings are switches, settings with a few values are options with
+// every one visible (one press).
 //
 // Every cell is defined once (CELLS) and the boards list cell ids by row
 // (TABS), so the same setting looks and behaves the same at every layer.
@@ -33,11 +33,12 @@ const sw = (id, label) => ({ type: 'switch', id, label, value: false });
 /**
  * How to move: the first tab's one cell, drawn by js/guide.js (pictures and
  * lines for the input in hand, at this layer). js/xr-ui.js sets its kind and
- * foot (the build) before the board is drawn; it is never pressed. As tall as
- * the View tab's five rows, so the board keeps its size.
+ * foot (the build) before the board is drawn; it is never pressed. 355 px:
+ * all the 34 cm wing leaves a tab (493 px less the title, the tabs and the
+ * pads), a little more than the View tab's five rows (354 px).
  */
 const GUIDE_CELL = {
-	type: 'drawn', id: 'guide', h: 390, kind: 'dollhouse-hands', foot: '',
+	type: 'drawn', id: 'guide', h: 355, kind: 'dollhouse-hands', foot: '',
 	draw(ctx, box) { drawGuide(ctx, this.kind, box, this.foot); },
 };
 
@@ -48,21 +49,23 @@ const CELLS = {
 	depth: sw('depth', 'Depth shading'),
 	seethrough: sw('seethrough', 'Transparent walls'),
 	view: sw('view', 'Passthrough'), // on: the room around you; off: the VR world
-	newVisitor: { type: 'button', id: 'newVisitor', label: 'New visitor' }, // (How to move's foot: the session starts over for the next person)
+	newVisitor: { type: 'button', id: 'newVisitor', label: 'New visitor' }, // (General's last row: the session starts over for the next person)
 	mainHand: { type: 'choice', id: 'mainHand', label: 'Main hand', options: [{ value: 'right', label: 'Right' }, { value: 'left', label: 'Left' }], value: 'right' }, // flips the wrist menu and the tool fan together
-	lens: { type: 'choice', id: 'lens', label: 'Camera lens', options: [24, 28, 35, 50].map((mm) => ({ value: mm, label: `${mm} mm` })), value: 28 },
-	sound: { type: 'choice', id: 'sound', label: 'Sound', options: [{ value: 'off', label: 'Off' }, { value: 'effects', label: 'Effects' }], value: 'effects' },
+	sound: sw('sound', 'Sound'), // on: the sound effects (a choice again when ambience comes, milestone H)
 	guide: GUIDE_CELL,
 	height: { type: 'choice', id: 'height', label: 'Height', options: HEIGHTS.map((h) => ({ value: h, label: h ? `${h.toFixed(1)} m` : 'Yours' })), value: 0 },
 };
 
 
-/** The board's tabs (the same at both layers), each with rows of cell ids. Camera lens joins General in milestone D. */
+/**
+ * The board's tabs (the same at both layers), each with rows of cell ids.
+ * How to move first (it opens there the first time at each place in a
+ * session: js/xr-ui.js). The camera's lens is on the camera's dial (js/tool-dial.js).
+ */
 export const TABS = [
+	{ id: 'move', label: 'How to move', rows: [['guide']] },
 	{ id: 'view', label: 'View', rows: [['light'], ['shadows'], ['depth'], ['view'], ['seethrough']] }, // (the long words on full rows: half a row clipped "Depth shading" and "Passthrough", build 120)
-	{ id: 'walk', label: 'Walk', rows: [['height']] }, // (Solid walls left it on 26 Nov 2026; Turn left the board: 30° stays, the user's call)
-	{ id: 'tools', label: 'Tools', rows: [['lens']] }, // (the street camera's lens: wide for interiors; to get closer, walk closer)
-	{ id: 'general', label: 'General', rows: [['mainHand'], ['sound']] },
+	{ id: 'general', label: 'General', rows: [['height'], ['mainHand'], ['sound'], ['newVisitor']] }, // (New visitor last: it resets Height and starts the tips over)
 ];
 
 /** The boards, one per layer: the title names the layer. */
@@ -71,27 +74,29 @@ export const MENUS = {
 	walk: { title: 'Settings' },
 };
 
-/** The two wings beside the model (build 111's design): Settings on the right, How to move on the left. */
-export const WING_SIZE = { settings: 0.40, guide: 0.34 }; // widths, metres
+/** The one wing beside the model, on the main hand's side: its width (metres; 34 cm tall at most, the harmony's conflict 13). */
+export const WING_SIZE = { settings: 0.40 };
 
 /**
- * The guide beside the menu (C0.4): how to move here, for bare hands or for
- * controllers. Each: a title, four frames (row of the sheet image, a word
- * each), and the lines under them.
+ * How to move (C0.4; the final words of the next-build asks 3.1): how to move
+ * here, for bare hands or for controllers. Each: four frames (row of the
+ * sheet image, a word each) and at most four lines under them (MAX_LINES:
+ * what fits the 34 cm wing at 24 px). No close line: the wing's header says it.
  */
+export const GUIDE_MAX_LINES = 4;
 export const GUIDES = {
-	'walk-hands': { title: 'How to move', row: 0,
+	'walk-hands': { row: 0,
 		frames: ['Pinch your fingers', 'Hold: aim', 'Point at the floor', 'Let go on blue: go'],
-		lines: ['While aiming, flick your wrist: turn', 'Let go on white or red: nothing happens', 'Palm towards you: cancel', 'The Meta button leaves VR at any moment'] },
-	'walk-controllers': { title: 'How to move', row: 1,
+		lines: ['While aiming, flick your wrist: turn', 'Let go on red: nothing happens', 'Palm towards you: cancel', 'The Meta button leaves VR at any moment'] },
+	'walk-controllers': { row: 1,
 		frames: ['Right stick forward', 'or hold a trigger', 'Aim at the floor', 'Let go on blue: go'],
-		lines: ['Right stick left or right: turn', 'Left stick: walk', 'Hold B or Y: back', 'The Meta button leaves VR at any moment'] },
-	'dollhouse-hands': { title: 'The scale model', row: 2,
-		frames: ['Close your hand on it: hold', 'Let go: it floats, then goes home', 'Pinch and hold, point at a room', 'Let go when it holds still: step inside'],
-		lines: ['Lift it and turn it: it stays level', 'Palm towards you: cancel', 'Hold \u2190 Back: one step back'] },
-	'dollhouse-controllers': { title: 'The scale model', row: 3,
+		lines: ['Right stick left or right: turn', 'Left stick: walk', 'Hold B or Y: back to the scale model', 'The Meta button leaves VR at any moment'] },
+	'dollhouse-hands': { row: 2,
+		frames: ['Close your hand on it: hold', 'Let go: it floats, then goes home', 'Pinch and hold, point at a room', 'Let go to step inside'],
+		lines: ['Turn it: it stays level', 'Palm towards you: cancel'] },
+	'dollhouse-controllers': { row: 3,
 		frames: ['Grip: hold it', 'Stick: turn', 'Point at a room', 'Pull the trigger: step inside'],
-		lines: ['Lift it and turn it: it stays level', 'Let go in the air: it goes home by itself', 'Hold B or Y: back'] },
+		lines: ['Turn it: it stays level', 'Let go: it floats home'] },
 };
 
 /**
@@ -109,45 +114,34 @@ export const TIPS = {
 	back: [{ id: 'grab', hands: 'Close your hand on the model to turn it.', controllers: 'Hold grip on the model to turn it.', demo: 'grab' }],
 };
 
-// The close line, in each wing's header (there is no Close key: build 120, M1; js/xr-ui.js sets it on opening): the colon form
+// The close line, in the wing's header (there is no Close key: build 120, M1; js/xr-ui.js sets it on opening): the colon form
 // How to move uses, short enough to draw at 18-22 px beside the title, never shrunk (the Lead, 26 Nov 2026; js/panel.js HINT_PX).
 export const CLOSE_HINT = { controllers: 'Trigger outside: close', hands: 'Pinch outside: close' };
 
 /**
- * Builds the settings boards (one per layer, hidden, in the rig). Returns
- * { menus: { dollhouse: Panel, walk: Panel } }. (Help opens a board on its
- * How to move tab: the help cards went on 25 Nov 2026.)
+ * Builds the settings wings (one per layer, hidden, in the rig). Returns
+ * { menus: { dollhouse: Panel, walk: Panel } }.
  */
 export function buildMenus(rig) {
-	const menus = {}, guides = {};
+	const menus = {};
 	const cells = (rows) => rows.map((row) => row.map((id) => CELLS[id]));
 	const paper = typeof Image !== 'undefined' ? new Image() : null;
 	for (const [mode, { title }] of Object.entries(MENUS)) {
-		// The right wing: Settings (the tabs), with the How to move key at the tabs' left end.
+		// The one wing: Settings, its three tabs (each layer's own copy: the guide's cell differs).
 		const p = new Panel({ tabs: TABS.map((t) => ({ ...t, rows: cells(t.rows) })) }, {
 			title, width: WING_SIZE.settings, pxPerM: BOARD_PX_PER_M, hint: CLOSE_HINT.controllers, background: paper, // (no Close key: build 120, M1; 34 cm tall at most: the harmony's conflict 13)
-			lead: { id: 'guideKey', label: '? How to move', w: 150 },
 		});
 		p.mesh.visible = false;
 		p.mesh.name = 'board';
 		p.mesh.material.depthTest = false; // never hidden inside a wall
 		rig.add(p.mesh);
 		menus[mode] = p;
-		// The left wing: How to move (moving pictures for the input in hand), the two replay keys, the Meta button's line.
-		const g = new Panel({ tabs: [{ id: 'guide', label: '', rows: cells([['guide'], ['newVisitor']]) }] }, {
-			title: 'How to move', width: WING_SIZE.guide, pxPerM: BOARD_PX_PER_M, hint: CLOSE_HINT.controllers, background: paper,
-		});
-		g.mesh.visible = false;
-		g.mesh.name = 'guide-wing';
-		g.mesh.material.depthTest = false;
-		rig.add(g.mesh);
-		guides[mode] = g;
 	}
 	if (paper) {
-		paper.onload = () => { for (const p of [...Object.values(menus), ...Object.values(guides)]) p.draw(); };
+		paper.onload = () => { for (const p of Object.values(menus)) p.draw(); };
 		paper.src = BOARD.image;
 	}
-	return { menus, guides };
+	return { menus };
 }
 
 /** Shows the current settings in both menus (switch positions, chosen options, levels). */
@@ -165,12 +159,9 @@ export function updateLabels(xr) {
 			const preparing = xr.depth.enabled && xr.depth.state === 'baking';
 			p.set('depth', { value: xr.depth.enabled, label: preparing ? `Depth shading ${xr.depth.label()}` : 'Depth shading' });
 		}
-		p.set('sound', { value: xr.soundLevel === 'off' ? 'off' : 'effects' });
-		p.set('lens', { value: xr.cameraLens });
+		p.set('sound', { value: xr.soundLevel !== 'off' });
+		p.set('height', { value: xr.personHeight });
 	}
-	// The left wing's replay keys: the tools' show is at the scale model, the pinch hand inside.
-	const walk = xr.menus.walk, doll = xr.menus.dollhouse;
-	walk.set('height', { value: xr.personHeight });
 	// (Levels are not here: a stack of keys beside the doors at the scale model, js/xr-dollhouse.js.)
 	xr.modes.dollhouse?.refreshLevels?.();
 }
@@ -194,7 +185,6 @@ export function menuAction(xr, target) {
 			else xr.goLayer('out', () => xr.end()); // from the scale model, Back leaves VR (the wrist menu's, opened on purpose: one press)
 			break;
 		case 'settings': ui.toggleBoard(); break;
-		case 'guideKey': ui.toggleHelp(); break; // (How to move: the left wing)
 		case 'newVisitor': // the next person, the headset still on: the tips, the first tabs, the height and the first-target ring start over
 			xr.newVisitor();
 			break;
@@ -254,8 +244,8 @@ export function menuAction(xr, target) {
 			xr.fan?.camera?.setLens(xr.cameraLens);
 			updateLabels(xr);
 			break;
-		case 'sound':
-			xr.soundLevel = value === 'off' ? 'off' : value === 'effects' ? 'effects' : xr.soundLevel === 'off' ? 'effects' : 'off';
+		case 'sound': // a switch: on is the effects (an old 'off' / 'effects' value still works)
+			xr.soundLevel = value === true || value === 'effects' ? 'effects' : value === false || value === 'off' ? 'off' : xr.soundLevel === 'off' ? 'effects' : 'off';
 			writeSetting('sound', xr.soundLevel);
 			xr.sound.setLevel(xr.soundLevel);
 			if (xr.soundLevel !== 'off') xr.sound.play('tick'); // (so you hear what you chose)

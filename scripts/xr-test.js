@@ -654,7 +654,7 @@ await button('right', 'trigger', 1); await frames(3);
 s = await state();
 const spentPull = await page.evaluate(() => window.__casawalk.xr.input.controllers.find((c) => c.handedness === 'right').claim.trigger);
 await button('right', 'trigger', 0); await frames(3);
-check('a pull at empty space closes the wings (build 120, M1), used up while held; no step inside', s.menu === null && !s.guide && s.mode === 'dollhouse' && spentPull === 'ui', JSON.stringify({ menu: s.menu, mode: s.mode, spentPull, whyPull }));
+check('a pull at empty space closes the wing (build 120, M1), used up while held; no step inside', s.menu === null && s.mode === 'dollhouse' && spentPull === 'ui', JSON.stringify({ menu: s.menu, mode: s.mode, spentPull, whyPull }));
 await page.evaluate(() => window.__casawalk.xr.menuAction('settings')); await frames(3);
 await click('right', 'b-button');
 check('B closes the board', (await state()).menu === null);
@@ -770,11 +770,9 @@ check('B closes the board', (await state()).menu === null);
 	await pressKey('hand', 'right', 'dollhouse', 'seethrough', { backOnly: true });
 	const c4v = await key(), still = await state();
 	check('a fingertip from behind, and pinches over a key, click nothing', c3v === c0v && c4v === c0v && still.menu === 'dollhouse' && still.mode === 'dollhouse', JSON.stringify({ c3v, c4v, menu: still.menu }));
-	const wingsNow = () => page.evaluate(() => { const ui = window.__casawalk.xr.ui; return { settings: !!ui.menu, guide: !!ui.guide, lead: !!ui.menu?.lead.on, closeKey: !!ui.menu?.rects().some((r) => /close/i.test(r.id)), foot: ui.menu?.hint ?? ui.guide?.hint ?? null }; });
+	const wingsNow = () => page.evaluate(() => { const ui = window.__casawalk.xr.ui; return { settings: !!ui.menu, wings: ui.openPanels().length, closeKey: !!ui.menu?.rects().some((r) => /close/i.test(r.id)), foot: ui.menu?.hint ?? null }; });
 	const w0 = await wingsNow();
-	await pressKey('hand', 'right', 'dollhouse', 'guideKey');
-	const w1 = await wingsNow();
-	check('no Close key, the foot says how to close; "? How to move" pressed with a fingertip closes How to move alone (build 120, M1)', !w0.closeKey && w0.foot === 'Pinch outside: close' && w0.guide && w0.lead && w1.settings && !w1.guide && !w1.lead, JSON.stringify({ w0, w1 }));
+	check('one wing, no Close key, the foot says how to close (build 120, M1; the next-build asks 3.1)', w0.settings && w0.wings === 1 && !w0.closeKey && w0.foot === 'Pinch outside: close', JSON.stringify(w0));
 	await page.evaluate(() => window.__casawalk.xr.ui.closeAll()); await frames(3);
 
 	// Moving with bare hands (C0.4). The gestures themselves are read from the joints
@@ -812,7 +810,7 @@ check('B closes the board', (await state()).menu === null);
 		const roomMid = await page.evaluate(() => window.__casawalk.xr.modes.dollhouse.modelBox().getCenter(new (window.__casawalk.xr.rig.position.constructor)()).toArray());
 		const away = await page.evaluate(() => { const h = window.__casawalk.xr.headWorld(), a = window.__casawalk.xr.viewAxes(); return h.clone().addScaledVector(a.right, 2).addScaledVector(a.forward, 3).setY(h.y + 1.2).toArray(); });
 		const leftWas = await page.evaluate(() => { const p = window.__device.hands.left.position, was = [p.x, p.y, p.z]; p.set(-0.25, 0.7, 0.1); return was; }); await frames(40); // (the left hand at your side: an open fan over it never lets a press close)
-		await page.evaluate(() => window.__casawalk.xr.ui.openGuide()); await frames(3); // (How to move alone: on the left, clear of the right hand)
+		await page.evaluate(() => window.__casawalk.xr.ui.openMenu()); await frames(3);
 		await handAimAt(roomMid); await frames(4); await handAimAt(roomMid); await frames(4);
 		await gesture('right', { type: 'tap' }); await frames(4);
 		const atModel = await wingsNow();
@@ -821,9 +819,9 @@ check('B closes the board', (await state()).menu === null);
 		const atAir = await wingsNow();
 		const why = await page.evaluate(async () => { const x = window.__casawalk.xr, c = x.input.controllers.find((c) => c.handedness === 'right'), s = c.gesture?.shape, a = x.viewAxes(), h = x.headWorld();
 			if (!s) return null;
-			const { handAimRay } = await import('./js/gestures.js'); x.ui.openGuide(); const r = handAimRay(h, a.right, s.pinchAt, c.handedness); x.raycaster.set(r.origin, r.dir); x.raycaster.far = 20;
+			const { handAimRay } = await import('./js/gestures.js'); x.ui.openMenu(); const r = handAimRay(h, a.right, s.pinchAt, c.handedness); x.raycaster.set(r.origin, r.dir); x.raycaster.far = 20;
 			const out = { at: s.pinchAt.toArray().map((v) => +v.toFixed(2)), head: h.toArray().map((v) => +v.toFixed(2)), fist: c.gesture.fist, not: x.ui.notEmpty(c, [c.touch.tracked ? c.touch.tip : null, s.pinchAt]) }; x.ui.closeAll(); return out; });
-		check('bare hands: a quick pinch at the model leaves the wing open; at empty space it closes it', atModel.guide && !atAir.guide, JSON.stringify({ atModel, atAir, why }));
+		check('bare hands: a quick pinch at the model leaves the wing open; at empty space it closes it', atModel.settings && !atAir.settings, JSON.stringify({ atModel, atAir, why }));
 		await page.evaluate(() => window.__casawalk.xr.ui.closeAll()); await page.evaluate((p) => window.__device.hands.left.position.set(...p), leftWas); await frames(3);
 	}
 	// Stepping inside by pointing: pinch and hold, point at a room, let go.
@@ -896,11 +894,11 @@ check('B closes the board', (await state()).menu === null);
 	const s1 = await page.evaluate(() => ({ head: window.__casawalk.xr.headWorld().toArray(), tele: !!window.__casawalk.xr.modes.walk.tele, fade: !!window.__casawalk.xr.modes.walk.fade }));
 	const slid = Math.hypot(s1.head[0] - s0[0], s1.head[2] - s0[2]);
 	check('bare hands: a quick pinch-and-open (the arc shown under 0.3 s) moves nothing; the arc goes', slid < 0.01 && !s1.tele && !s1.fade, JSON.stringify({ moved: +slid.toFixed(3), ...s1 }));
-	// Help inside: the board on How to move, for bare hands.
-	await page.evaluate(() => window.__casawalk.xr.menuAction('guideKey'));
+	// Settings inside, the first time this session: the wing opens on How to move, for bare hands (the next-build asks 3.3).
+	await page.evaluate(() => { const x = window.__casawalk.xr; delete x.store.tabs.walk; x.menuAction('settings'); });
 	await frames(3);
-	const guide = await page.evaluate(() => { const x = window.__casawalk.xr, m = x.ui.guide; return { tab: 'move', kind: m?.cells.get('guide')?.kind, shown: !!m?.mesh.visible }; });
-	check('inside, Help opens the board on How to move, for bare hands', guide.shown && guide.tab === 'move' && guide.kind === 'walk-hands', JSON.stringify(guide));
+	const guide = await page.evaluate(() => { const x = window.__casawalk.xr, m = x.menu; return { tab: m?.tab, kind: m?.cells.get('guide')?.kind, shown: !!m?.mesh.visible }; });
+	check('inside, the first opening shows How to move, for bare hands', guide.shown && guide.tab === 'move' && guide.kind === 'walk-hands', JSON.stringify(guide));
 	await shot('hands-guide');
 	await page.evaluate(() => window.__casawalk.xr.ui.closeAll()); await frames(4);
 	// Back to the scale model; hold it with a closed hand, let go in the air: it floats, then goes home.
@@ -1220,7 +1218,7 @@ await pressWrist('right');
 s = await state();
 check('Settings opens the inside board', s.menu === 'walk' && await page.evaluate(() => window.__casawalk.xr.menu === window.__casawalk.xr.menus.walk && window.__casawalk.xr.menu.title === 'Settings'));
 await shot('walk-menu');
-check('the Walk tab: Height (Turn and Solid walls left the board: 30° turns; the stick always stops at walls)', s.snap === 30 && await page.evaluate(() => { const p = window.__casawalk.xr.menus.walk; return !p.get('turn') && !p.get('solid') && p.tabs.find((t) => t.id === 'walk').rows.flat().map((c) => c.id).join() === 'height'; }));
+check('General: Height, Main hand, Sound, New visitor (Turn and Solid walls left the wing: 30° turns; the stick always stops at walls)', s.snap === 30 && await page.evaluate(() => { const p = window.__casawalk.xr.menus.walk; return !p.get('turn') && !p.get('solid') && p.tabs.find((t) => t.id === 'general').rows.flat().map((c) => c.id).join() === 'height,mainHand,sound,newVisitor'; }));
 const feet = (await state()).rig[1] - (await state()).lift;
 await clickMenu('height', 1.4);
 s = await state();
@@ -1740,15 +1738,15 @@ check('wrist menu open: a pull on the model does nothing (never empty space); a 
 await restRight(); await frames(3); await click('right', 'a-button'); await click('right', 'a-button');
 check('A closes the wrist menu it opened', !(await state()).wrist);
 
-// Help: the board on How to move, for controllers, with the build at its foot; B closes it.
-await page.evaluate(() => window.__casawalk.xr.menuAction('guideKey')); // (Help is no longer a wrist key: it lives in Settings, on How to move)
+// How to move: the wing's first tab (its first opening at a place), for controllers, with the build at its foot; B closes it.
+await page.evaluate(() => { const x = window.__casawalk.xr; delete x.store.tabs.dollhouse; x.menuAction('settings'); });
 {
 	await frames(30); // (the doors fade out over the board)
-	const hp = await page.evaluate(() => { const x = window.__casawalk.xr, m = x.ui.guide, c = m?.cells.get('guide'); return { tab: m ? 'move' : null, kind: c?.kind, foot: c?.foot ?? '', wrist: x.ui.wrist.open, doors: x.modes.dollhouse.doorGroup.visible }; });
+	const hp = await page.evaluate(() => { const x = window.__casawalk.xr, m = x.menu, c = m?.cells.get('guide'); return { tab: m?.tab ?? null, kind: c?.kind, foot: c?.foot ?? '', wrist: x.ui.wrist.open, doors: x.modes.dollhouse.doorGroup.visible }; });
 	await shot('dollhouse-help');
 	check('Help shows the build at the foot of How to move, and that a newer version waits (reload after VR)', /^Build \d+/.test(hp.foot) && /Newer version: reload after VR$/.test(hp.foot), JSON.stringify(hp));
 	await click('right', 'b-button');
-	check('Help: the board on How to move, for controllers; the plinth doors gone while it is open; B closes it', hp.tab === 'move' && hp.kind === 'dollhouse-controllers' && !hp.wrist && !hp.doors && !(await page.evaluate(() => window.__casawalk.xr.boardOpen)), JSON.stringify(hp));
+	check('How to move, for controllers; the plinth doors gone while the wing is open; B closes it', hp.tab === 'move' && hp.kind === 'dollhouse-controllers' && !hp.wrist && !hp.doors && !(await page.evaluate(() => window.__casawalk.xr.boardOpen)), JSON.stringify(hp));
 }
 
 // Photo: nothing of the interface in the picture, all of it back afterwards.

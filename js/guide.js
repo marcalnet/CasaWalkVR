@@ -1,14 +1,17 @@
 // How to move (SPEC.md, C0; the Quest 2 design of 24 Nov, item 6): the
 // settings board's first tab. It shows how to move in this layer, for bare
 // hands or controllers, whichever you hold: four pictures from the sheet
-// (assets/ui/guide-sheets.png, replaceable art) with a word each, a few short
-// lines (GUIDES in js/xr-menus.js), and which build is running at the foot.
+// (assets/ui/guide-sheets.png, replaceable art) with a word each, at most
+// four short lines (GUIDES in js/xr-menus.js), and which build is running at the foot.
 // (It used to be a separate card beside the board and the wrist menu, with
 // a Hide key; on the board it can't overlap anything, and choosing another
 // tab is how it hides.)
 
 import { GUIDE, FONT } from './theme.js';
 import { GUIDES } from './xr-menus.js';
+
+/** The lines under the frames (canvas px): their distance below the frames, apart, their type and its floor. */
+export const LINES = { below: 84, step: 34, px: 24, min: 20 };
 
 /** The pictures' sheet, loaded once; onLoad (set by the caller) redraws what shows it. */
 export const guideSheet = { image: null, onLoad: null };
@@ -42,13 +45,14 @@ export function drawGuide(ctx, kind, box, foot = '') {
 	});
 	ctx.textAlign = 'left';
 	ctx.fillStyle = GUIDE.soft;
-	// The lines share the room between the words and the foot: 38 px apart at most; each fits the width (24-25 px type, smaller only if it must).
-	const top = y + size + 92, bottom = y + h - (foot ? 30 : 12);
-	const step = g.lines.length > 1 ? Math.min(38, (bottom - top) / (g.lines.length - 1)) : 38;
+	// The lines (four at most), 84 px under the frames and 34 px apart (the next-build asks 3.1: four lines
+	// fit the 355 px tab with the foot); each fits the width at 24 px, smaller only if it must, never under 20.
+	const top = y + size + LINES.below, bottom = y + h - (foot ? 30 : 12);
+	const step = g.lines.length > 1 ? Math.min(LINES.step, (bottom - top) / (g.lines.length - 1)) : LINES.step;
 	g.lines.forEach((line, i) => {
-		let px = 25;
+		let px = LINES.px;
 		ctx.font = `500 ${px}px ${FONT}`;
-		while (px > 18 && ctx.measureText(line).width > w - 16) ctx.font = `500 ${--px}px ${FONT}`;
+		while (px > LINES.min && ctx.measureText(line).width > w - 16) ctx.font = `500 ${--px}px ${FONT}`;
 		ctx.fillText(line, x + 8, top + i * step);
 	});
 	if (foot) {

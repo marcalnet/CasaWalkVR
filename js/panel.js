@@ -41,7 +41,7 @@ export class Panel {
 	 *              tallest tab. Pressing a tab is handled here.
 	 * @param opts  { title, hint (the close line, in the title's row), width (m), pxPerM (canvas pixels per metre) }
 	 */
-	constructor(rows, { title = '', hint = '', width = 0.62, pxPerM = PX_PER_M, background = null, lead = null } = {}) {
+	constructor(rows, { title = '', hint = '', width = 0.62, pxPerM = PX_PER_M, background = null } = {}) {
 		this.L = L;
 		const spec = Array.isArray(rows) ? { tabs: [{ id: '', label: '', rows }] } : rows;
 		const cellsOf = (rs) => rs.map((r) => r.map((c) => ({ type: 'button', ...c })));
@@ -50,7 +50,6 @@ export class Panel {
 		this.cells = new Map(this.tabs.flatMap((t) => t.rows).flat().map((c) => [c.id, c]));
 		this.title = title;
 		this.hint = hint;
-		this.lead = lead; // { id, label, w (canvas px) }: a key at the left end of the tab row, nearest the body (How to move)
 		this.background = background; // an image drawn under everything (the board's frame and paper), once loaded
 		this.hover = null; // key of the hovered target
 		const wPx = Math.round(width * pxPerM);
@@ -99,14 +98,11 @@ export class Panel {
 		let y = this.L.PAD + (this.title ? this.L.TITLE_H : 0);
 		const boxes = [];
 		if (this.tabs.length > 1) {
-			const lead = this.lead ? this.lead.w + 8 : 0;
-			const full = this.size.w - 2 * this.L.PAD - lead, w = (full - (this.tabs.length - 1) * 8) / this.tabs.length;
-			this.leadBox = this.lead ? { ...this.lead, x: this.L.PAD, y: y - 3, w: this.lead.w, h: this.L.TAB_H + 6 } : null;
-			this.tabBoxes = this.tabs.map((t, i) => ({ id: t.id, label: t.label, x: this.L.PAD + lead + i * (w + 8), y, w, h: this.L.TAB_H }));
+			const full = this.size.w - 2 * this.L.PAD, w = (full - (this.tabs.length - 1) * 8) / this.tabs.length;
+			this.tabBoxes = this.tabs.map((t, i) => ({ id: t.id, label: t.label, x: this.L.PAD + i * (w + 8), y, w, h: this.L.TAB_H }));
 			y += this.L.TAB_H + this.L.TAB_GAP;
 		} else {
 			this.tabBoxes = [];
-			this.leadBox = null;
 		}
 		// The tab's rows, in the space of the tallest tab.
 		const top = y;
@@ -130,7 +126,6 @@ export class Panel {
 	/** Clickable targets: { id, value?, x, y, w, h } in canvas pixels. */
 	rects() {
 		const out = this.tabBoxes.map((t) => ({ id: TAB, value: t.id, x: t.x, y: t.y, w: t.w, h: t.h }));
-		if (this.leadBox) out.push({ id: this.lead.id, x: this.leadBox.x, y: this.leadBox.y, w: this.leadBox.w, h: this.leadBox.h });
 		for (const b of this.boxes) {
 			const c = b.cell;
 			if (c.disabled || c.type === 'drawn') continue;
@@ -184,22 +179,8 @@ export class Panel {
 		this.texture.needsUpdate = true;
 	}
 
-	/** The How to move key, then the row of tabs: the shown one white and raised, the others flat. */
+	/** The row of tabs: the shown one white and raised, the others flat. */
 	drawTabs(ctx) {
-		if (this.leadBox) {
-			// The How to move key: a "?" and the words, at the tabs' left end, a raised key (not a tab).
-			const b = this.leadBox, hot = this.hover === `${this.lead.id}|`, on = !!this.lead.on;
-			roundRect(ctx, b.x, b.y, b.w, b.h, 18);
-			// (Not blue-filled like a chosen tab: a key. Open: a light blue face and a blue edge.)
-			ctx.fillStyle = hot ? COLOURS.hover : on ? '#eaf1fe' : COLOURS.cell;
-			ctx.fill();
-			ctx.lineWidth = on || hot ? 5 : 2; ctx.strokeStyle = on || hot ? COLOURS.hoverEdge : COLOURS.edge; ctx.stroke();
-			ctx.fillStyle = on ? COLOURS.accent : COLOURS.text;
-			ctx.textAlign = 'center';
-			fitFont(ctx, this.lead.label, b.w - 18, 26, 14, 600);
-			ctx.fillText(this.lead.label, b.x + b.w / 2, b.y + b.h / 2 + 2);
-			ctx.textAlign = 'left';
-		}
 		for (const t of this.tabBoxes) {
 			const on = t.id === this.tab, hot = !on && this.hover === `${TAB}|${t.id}`;
 			roundRect(ctx, t.x, t.y, t.w, t.h, 18);
