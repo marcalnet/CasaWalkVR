@@ -1224,7 +1224,7 @@ const walkUntil = async (pred, arg, timeout = 15000) => {
 	await stick('left', 0, 0); await frames(3);
 	return ok;
 };
-// Solid walls: on, walking at a wall stops a body's width in front of it; off, you walk through.
+// The stick stops at walls (always, since 26 Nov 2026): walking at a wall stops a body's width in front of it, and never goes through.
 {
 	const wallAt = (a) => page.evaluate(async (a) => {
 		const THREE = await import('three');
@@ -1332,13 +1332,13 @@ const walkUntil = async (pred, arg, timeout = 15000) => {
 		check('the eye portal: none at 0.35 m, opening at 0.25 m, 0.48 m radius at 0.20 m', eye[0] === 0 && eye[1] > 0 && eye[1] < 0.48 && eye[2] === 0.48, JSON.stringify(eye));
 		await shot('walk-eye-portal');
 		await eyesAt(0.6);
-		await walkUntil(({ start, a, d }) => {
+		const passed = await walkUntil(({ start, a, d }) => {
 			const h = window.__casawalk.xr.headWorld();
 			return (h.x - start[0]) * -Math.sin(a) + (h.z - start[2]) * -Math.cos(a) > d + 0.05;
-		}, { start: w.head, a: w.a, d: w.d }, 10000);
+		}, { start: w.head, a: w.a, d: w.d }, 4000);
 		const through = await wallAt(w.a);
 		const along = (through.head[0] - w.head[0]) * -Math.sin(w.a) + (through.head[2] - w.head[2]) * -Math.cos(w.a);
-		check('Solid walls off: you walk through it', along > w.d + 0.05, `${along.toFixed(2)} m along, the wall at ${w.d.toFixed(2)} m`);
+		check('the stick never walks through the wall (4 s of pushing)', !passed && along < w.d, `${along.toFixed(2)} m along, the wall at ${w.d.toFixed(2)} m`);
 	}
 }
 if ((await state()).menu) { await click('right', 'b-button'); await frames(3); } // (the board, if still open; with nothing open, B inside is Back)
