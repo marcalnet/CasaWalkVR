@@ -783,7 +783,7 @@ test('the fan shows the camera from the front, the meter and the marker from the
 	assert.ok(x.fan.slots.every((s) => s.label.mesh.parent === s.home && s.object.parent === s.pose), 'tags beside the tools, tools in their pose');
 });
 
-test('the tool fan: opens over the raised left hand in view; the right tip touches a tool, the grip takes it, swaps, puts back', async () => {
+test('the tool fan: floats over the tracked left hand, wherever it is; the right tip touches a tool, the grip takes it, swaps, puts back', async () => {
 	const { x, press, frame, hands } = await setup();
 	const fan = x.fan;
 	// The left controller held up in front of you, the right one down at your side.
@@ -791,7 +791,7 @@ test('the tool fan: opens over the raised left hand in view; the right tip touch
 	hands.left.grip.position.set(-0.1, 1.3, -0.45);
 	hands.right.grip.position.set(0.3, 0.8, 0);
 	for (let i = 0; i < 20; i++) frame();
-	assert.ok(fan.group.visible && fan.alpha === 1, 'open: the left hand raised, in view');
+	assert.ok(fan.group.visible && fan.alpha === 1, 'over the left hand');
 	// The right controller's tip on the meter.
 	const tipTo = (name) => {
 		const s = fan.slots.find((s) => s.name === name);
@@ -826,10 +826,11 @@ test('the tool fan: opens over the raised left hand in view; the right tip touch
 	hands.right.grip.position.set(0.3, 0.8, 0); frame(); frame();
 	press('right', 'grip'); frame(); press('right', 'grip', false); frame();
 	assert.equal(x.tools.held, null, 'put back');
-	// Hand lowered: the fan fades out.
+	// Hand lowered: the tools stay over it (no raise, no watch pose since the next build's step 1).
 	hands.left.grip.position.set(-0.3, 0.7, 0);
 	for (let i = 0; i < 30; i++) frame();
-	assert.ok(!fan.group.visible, 'closed: the hand lowered');
+	const anchor = hands.left.grip.getWorldPosition(new THREE.Vector3());
+	assert.ok(fan.group.visible && fan.alpha === 1 && fan.group.position.y > anchor.y, 'still over the hand, lowered');
 });
 
 test('bare hands, Quest 2: a pinch held aims; opening it on white goes nowhere; a hand holding a tool never aims', async () => {
@@ -1121,47 +1122,22 @@ test('bare hands teleport with either empty hand; while one aims, the other\'s p
 	x.input._gh = null;
 });
 
-test('the fan: a controller raised in view opens it, a key near closes it; the fan slides outward as a group from the orb (25 cm kept); the orb yields to its own hand', async () => {
+test('the fan: over the left controller however it is turned; the orb\'s own hand reaching into the fan: the orb yields', async () => {
 	const { x, frame, hands } = await setup();
 	const fan = x.fan;
 	hands.left.grip.visible = hands.right.grip.visible = true;
 	hands.left.grip.position.set(-0.1, 1.3, -0.45);
 	hands.right.grip.position.set(0.3, 0.8, 0);
-	// A controller raised and in view opens it, however it is turned (its face axis is not measured yet: the Lead's decision).
 	hands.left.grip.rotation.set(0, 0, Math.PI / 2);
 	for (let i = 0; i < 20; i++) frame();
-	assert.ok(fan.group.visible && fan.alpha === 1, 'a controller raised in view: the fan opens');
-	// A key always wins: the fan hand's tip within 15 cm of the orb closes it.
-	const tip = fan.hands().fan.touch.tip, orbAt = x.ui.wrist.orb.group.getWorldPosition(new THREE.Vector3());
-	const right0 = hands.right.grip.position.clone();
-	hands.right.grip.position.add(x.rig.worldToLocal(tip.clone()).sub(x.rig.worldToLocal(orbAt.clone())).multiplyScalar(0.9));
-	for (let i = 0; i < 20; i++) frame();
-	assert.ok(fan.alpha < 1 || fan.keyShut, 'the orb at the fan hand\'s tip: it closes');
-	hands.right.grip.position.copy(right0);
-	frame(); x.ui.wrist.close(); // (the touch opened the wrist menu, whose keys are keys too)
-	hands.left.grip.rotation.set(0.6, 0, 0);
-	for (let i = 0; i < 40; i++) frame();
-	assert.ok(fan.group.visible && fan.alpha === 1, `the orb away again: it opens (${JSON.stringify({ a: fan.alpha, shut: fan.keyShut, near: x.nearKey(fan.hands().fan.touch.tip, 0.25), wrist: x.ui.wrist.open })})`);
-	// The orb (on the right wrist) brought near the open fan: the whole fan slides outward, its nearest tool 25 cm from the orb.
-	const orb = x.ui.wrist.orb.group, o = new THREE.Vector3(), p = new THREE.Vector3();
-	const meter = fan.slots.find((s) => s.name === 'meter');
-	meter.home.getWorldPosition(p);
-	x.ui.wrist.wearer ?? null;
-	hands.right.grip.position.copy(x.rig.worldToLocal(p.clone().add(new THREE.Vector3(0.3, 0, 0)))); // (the orb's wrist 30 cm from the meter, the fan hand's fingertip near it)
-	for (let i = 0; i < 40; i++) frame();
-	orb.getWorldPosition(o);
-	meter.home.getWorldPosition(p);
-	assert.ok(fan.group.visible, 'the fan stays open');
-	assert.ok(fan.slide > 0.01, `the fan slid aside (${fan.slide.toFixed(3)} m)`);
-	const nearest = Math.min(...fan.slots.map((s) => s.home.getWorldPosition(new THREE.Vector3()).distanceTo(o)));
-	assert.ok(nearest >= 0.23 || fan.slide >= 0.34, `its nearest tool keeps its distance: ${nearest.toFixed(3)} m`);
+	assert.ok(fan.group.visible && fan.alpha === 1, 'turned any way: the tools float over it');
+	const p = new THREE.Vector3(), meter = fan.slots.find((s) => s.name === 'meter');
 	// The orb's own hand reaching into the fan: no push; the orb shrinks and fades instead.
 	meter.home.getWorldPosition(p);
 	hands.right.grip.position.copy(x.rig.worldToLocal(p.clone().add(new THREE.Vector3(0.05, 0, 0.05))));
 	for (let i = 0; i < 60; i++) frame();
 	assert.ok(x.ui.wrist.orbYield && x.ui.wrist.orb.yieldK > 0.9, 'the orb yields');
 	assert.ok(x.ui.wrist.orb.body.scale.x < 0.7 && x.ui.wrist.orb.shellMat.opacity < 0.3, 'half size, a third of the strength');
-	assert.ok(fan.slideTarget === 0, 'taking: the fan no longer slides away (it glides back)');
 });
 
 test('the tools show also starts on a wider look after 4 s, and by itself after 10 s, never behind an open board', async () => {
@@ -1297,22 +1273,6 @@ test('harmony, live keys only (rule 4; conflicts 2 and 11): the wrist arc fades 
 	assert.ok(!w.fanYield && w.orbYield === w.keyYield);
 });
 
-
-test('harmony, conflict 9: the open fan\'s tools must be 40 cm from the eyes, off the model as seen and clear of live keys to open; it fades nearer than 35 cm or on the model', async () => {
-	const W = await import('../js/wings.js');
-	const { x, frame } = await setup();
-	frame();
-	const f = x.fan, d = x.modes.dollhouse, head = x.headWorld().clone(), V = THREE.Vector3;
-	f._outward = new V(-1, 0, 0); f.slide = 0; f._yaw = x.viewYaw();
-	f._hull = W.zoneHull(W.zoneOf(d.houseBox(), head, f._yaw));
-	const at = (v) => f.arcState(head.clone().add(v), head);
-	assert.deepEqual(at(new V(-0.5, -0.25, -0.35)), { may: true, must: false }, 'to the left, 65 cm away: may open');
-	assert.deepEqual(at(new V(0, -0.1, -0.25)), { may: false, must: true }, 'a hand\'s length from the eyes: never');
-	const mid = d.modelBox().getCenter(new V());
-	assert.deepEqual(f.arcState(mid, head), { may: false, must: true }, 'over the model: never');
-	const door = [...d.doors.keys.values()][0].group.getWorldPosition(new V());
-	assert.equal(f.arcState(door, head).may, false, 'on a live key: never');
-});
 
 test('harmony, conflicts 7, 8 and 12: the two Walk-in keys are one key; the show waits for the arrival title, the aims wait while it plays and a trigger at the tools starts their flight; then the orb calls for 30 s', async () => {
 	const { x, frame, press, hands } = await setup();

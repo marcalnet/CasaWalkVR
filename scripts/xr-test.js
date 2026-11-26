@@ -857,7 +857,7 @@ check('B closes the board', (await state()).menu === null);
 	await handAimAt(floorAhead); await frames(10);
 	// (The arc must have shown 0.3 s of the app's own time: a slow emulator needs more real time.)
 	await page.waitForFunction(() => (window.__casawalk.xr.modes.walk.tele?.age ?? 0) >= 0.4, null, { timeout: 8000, polling: 'raf' }).catch(() => {});
-	const steady = await page.evaluate(() => { const x = window.__casawalk.xr, w = x.modes.walk; return { held: x.tools.held ? `${x.tools.held.tool.name}@${x.tools.held.c.handedness}` : null, dock: +(x.fan.dock ?? 0).toFixed(2), open: +x.fan.alpha.toFixed(2), age: w.tele?.age ?? 0, valid: !!w.tele?.result?.valid, colour: w.arc.dots.material.color.getHexString(), discs: w.discs.count }; });
+	const steady = await page.evaluate(() => { const x = window.__casawalk.xr, w = x.modes.walk; return { held: x.tools.held ? `${x.tools.held.tool.name}@${x.tools.held.c.handedness}` : null, open: +x.fan.alpha.toFixed(2), age: w.tele?.age ?? 0, valid: !!w.tele?.result?.valid, colour: w.arc.dots.material.color.getHexString(), discs: w.discs.count }; });
 	check('bare hands walking: a pinch held shows the arc from the hand, blue at once on a floor (no white "not yet")', settling.via === 'hand' && settling.dots && settling.colour === '3d8bfd' && steady.valid && steady.colour === '3d8bfd', JSON.stringify({ settling, steady, targets: targets.length }));
 	await shot('hands-teleport-aim');
 	const head0 = await page.evaluate(() => window.__casawalk.xr.headWorld().toArray());
@@ -1347,17 +1347,13 @@ s = await state();
 check('← Back on the wrist menu returns to the scale model', s.mode === 'dollhouse' && s.rig[0] === 0 && s.rig[2] === 0 && s.menu === null);
 check('back from walking: eyes at 1.89 m again, gallery shown, lasers on', Math.abs(s.head[1] - 1.89) < 0.005 && s.showroom && !s.walkSky && (await lasers()) === 'left:on right:on', `eyes ${s.head[1].toFixed(3)}, lasers ${await lasers()}`);
 
-// The tool fan (milestone C): raise the left controller in front of you, look at it: the tools.
+// The tool fan (milestone C): the tools float over the left controller (no raise, no watch pose since the next build's step 1).
 {
 	await page.evaluate(() => window.__device.quaternion.set(Math.sin(-0.3 / 2), 0, 0, Math.cos(-0.3 / 2)));
-	// The fan opens on the "look at your watch" pose: the controller turned so its face looks at your eyes (tilted one way or the other: the pose of its grip).
-	for (const tilt of [0.7, -0.7, 1.2, -1.2]) {
-		await page.evaluate((t) => { const d = window.__device; d.controllers.left.position.set(-0.08, 1.35, -0.42); d.controllers.left.quaternion.set(Math.sin(t / 2), 0, 0, Math.cos(t / 2)); }, tilt);
-		await frames(20);
-		if (await page.evaluate(() => window.__casawalk.xr.fan.alpha === 1)) break;
-	}
+	await page.evaluate(() => { const d = window.__device; d.controllers.left.position.set(-0.08, 1.35, -0.42); d.controllers.left.quaternion.set(Math.sin(0.35), 0, 0, Math.cos(0.35)); });
+	await frames(20);
 	const f0 = await page.evaluate(() => { const f = window.__casawalk.xr.fan; return { shown: f.group.visible, alpha: f.alpha, tools: f.slots.map((s) => s.name) }; });
-	check('the tool fan opens over the raised left controller, in view: camera, meter, marker', f0.shown && f0.alpha === 1 && f0.tools.join() === 'camera,meter,marker', JSON.stringify(f0));
+	check('the tool fan floats over the left controller: camera, meter, marker', f0.shown && f0.alpha === 1 && f0.tools.join() === 'camera,meter,marker', JSON.stringify(f0));
 	await shot('tool-fan');
 	/** Puts the right controller's tip on a tool in the fan (corrected for where its tip really is). */
 	const tipOn = async (name) => {
@@ -1444,7 +1440,7 @@ check('back from walking: eyes at 1.89 m again, gallery shown, lasers on', Math.
 	await click('right', 'squeeze'); await frames(6);
 	check('a squeeze away from the fan puts the tool back', await page.evaluate(() => window.__casawalk.xr.tools.held === null));
 	await restLeft(); await lookDown(); await frames(20);
-	check('the fan closes when the hand is lowered', await page.evaluate(() => !window.__casawalk.xr.fan.group.visible));
+	check('the tools stay over the lowered hand', await page.evaluate(() => window.__casawalk.xr.fan.group.visible && window.__casawalk.xr.fan.alpha === 1));
 }
 
 // The tools' first-time show (C3; placed above the model 25 Nov): once you look towards the model they hang above it, then fly to the fan's wrist, and the fan opens for 2 s.
