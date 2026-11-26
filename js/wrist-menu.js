@@ -30,6 +30,7 @@ import { WRIST_ORB } from './xr-input.js';
 import { WRIST } from './theme.js';
 import { ease } from './tween.js';
 import { KeyPad } from './keys.js';
+import { CLAIM } from './xr-targets.js';
 
 export const ORB_ON_GRIP = new THREE.Vector3(0, 0.035, 0.115); // the orb on a controller, in its grip space
 const ORB_SCALE = 1; // the orb at full size (about 5 cm): easy to notice (the user's Quest 2 test)
@@ -70,7 +71,9 @@ export class WristMenu {
 		this.pad = new KeyPad(xr, 'wrist-key');
 		this.keys = {};
 		for (const slot of ORDER) { this.keys[slot] = this.pad.add(slot, slot === 'up' ? WRIST.settingsW : WRIST.key); this.cross.add(this.keys[slot].group); }
-		this.keysHot = false; this.laserNear = false; this.orbYield = false; // a fingertip is over a key: the orb ignores touches (it sits between the keys)
+		this.keysHot = false; this.laserNear = false; // a fingertip is over a key: the orb ignores touches (it sits between the keys)
+		this.fanYield = false; // the orb's own hand reaching into the fan (js/tool-fan.js sets it)
+		this.keyYield = false; // a fingertip near a live key (the doors, the levels, a wing): the orb makes room and ignores touches
 		xr.scene.add(this.cross);
 		xr.hideFromPhotos(this.cross);
 		this._p = new THREE.Vector3(); this._q = new THREE.Vector3(); this._m = new THREE.Matrix4(); this._quat = new THREE.Quaternion();
@@ -82,6 +85,20 @@ export class WristMenu {
 	setSide() {
 		this.side = this.xr.toolFan === 'right' ? 'left' : 'right';
 		this.close();
+	}
+
+	/** The orb makes room (half size, 30%): for the hand reaching into the fan, or a fingertip at a live key. */
+	get orbYield() { return this.fanYield || this.keyYield; }
+
+	/**
+	 * Either hand's tip near a live key (the doors and levels while they take
+	 * presses, an open wing): within CLAIM.near the orb yields, until every
+	 * tip is CLAIM.clear away (the interaction harmony's conflict 11: the orb
+	 * covered Walk in → as the main hand pressed it).
+	 */
+	keyYieldNow() {
+		const xr = this.xr, m = this.keyYield ? CLAIM.clear : CLAIM.near;
+		return xr.input.touches().some((c) => c.touch.tracked && xr.nearKey(c.touch.tip, m, { orb: false, wristKeys: false }));
 	}
 
 	/** The input entry wearing the menu (a controller, or a tracked bare hand), or null. */
@@ -137,6 +154,7 @@ export class WristMenu {
 		if (!wearer) { if (this.open) this.close(); animateOrb(o, performance.now() / 1000, false); return { action: null }; }
 		const p = o.group.getWorldPosition(this._p);
 		let hot = false, toggle = false, byController = false;
+		this.keyYield = this.keyYieldNow();
 
 		// Touch the orb: another fingertip or controller tip (or a whole controller)
 		// reaching into it; not while a fingertip is over a key.
@@ -149,7 +167,7 @@ export class WristMenu {
 			if (tip < ORB_TIP_RELEASE || grip < ORB_GRIP_RELEASE) clear = false;
 		}
 		// (Not while the other hand is busy at the tool fan: the fans' hands cross over each other's wrists.)
-		if (touching && o.armed && !this.keysHot && !this.xr.fan?.fanBusy) { toggle = true; o.armed = false; }
+		if (touching && o.armed && !this.keysHot && !this.keyYield && !this.xr.fan?.fanBusy) { toggle = true; o.armed = false; }
 		if (clear) o.armed = true;
 		if (!clear) hot = true;
 
@@ -174,7 +192,7 @@ export class WristMenu {
 		const { action, hot: keysHot, near: padNear } = this.pad.update(dt, { active: this.open, exclude: wearer });
 		this.keysHot = keysHot.size > 0;
 		this.laserNear = padNear; // (a laser on a key counts as near, however far the hand)
-		// The orb's own hand reaching into the fan: it shrinks and fades, out of the way (tool-fan.js sets orbYield).
+		// The orb's own hand reaching into the fan, or a fingertip at a live key: it shrinks and fades, out of the way.
 		o.yieldK += ((this.orbYield ? 1 : 0) - o.yieldK) * (1 - Math.exp(-dt / 0.15 * 1));
 		animateOrb(o, performance.now() / 1000, hot || this.open);
 

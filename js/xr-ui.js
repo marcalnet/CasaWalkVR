@@ -36,10 +36,11 @@ import { WING, placeWing, zoneOf } from './wings.js';
 import { guideSheet } from './guide.js';
 import { WristMenu } from './wrist-menu.js';
 import { FIRST_TIME_CARDS } from './lessons.js';
-import { handAimRay, tapAllowed } from './gestures.js';
+import { handAimRay, pinchGate } from './gestures.js';
+import { CLAIM } from './xr-targets.js';
 import { CLOSE_HINT } from './xr-menus.js';
 
-const KEEP_CLEAR = 0.15; // a press with the hand this near a key, the orb or a wing is never "empty" (m)
+const KEEP_CLEAR = CLAIM.near; // a press with the hand this near a live key, the orb or a wing is never "empty" (m)
 
 // The note after a photo. Photos are kept in the app and saved from the page
 // after VR (a download in VR would end the session).
@@ -357,7 +358,7 @@ export class XRUI {
 		if (this.wrist.wearer !== c && this.wrist.orb.group.visible && r.intersectObject(this.wrist.orb.group, true).length) return 'orb'; // (its own wrist's orb: the ray starts beside it)
 		if (xr.mode === 'dollhouse' && xr.model) {
 			const doll = xr.modes.dollhouse;
-			if (doll.doorGroup.visible && r.intersectObject(doll.doorGroup, true).length) return 'doors';
+			if (doll.doorsLive && r.intersectObject(doll.doorGroup, true).length) return 'doors'; // (only live keys: faded doors take no presses, so they guard nothing)
 			if (xr.pedestal?.visible && r.intersectObject(xr.pedestal, true).length) return 'plinth';
 			if (r.ray.intersectsBox(doll.modelBox(this._box ??= new THREE.Box3()))) return 'model';
 		}
@@ -378,7 +379,7 @@ export class XRUI {
 			const orb = this.wrist.orb.group;
 			if (orb.visible && orb.getWorldPosition(v).distanceTo(p) < KEEP_CLEAR) return true;
 		}
-		if (xr.mode === 'dollhouse' && xr.modes.dollhouse?.doors?.near(p, KEEP_CLEAR)) return true;
+		if (xr.mode === 'dollhouse' && xr.modes.dollhouse?.doorsLive && xr.modes.dollhouse.doors.near(p, KEEP_CLEAR)) return true;
 		return false;
 	}
 
@@ -401,7 +402,7 @@ export class XRUI {
 			const s = c.gesture.shape;
 			if (!s) continue;
 			const head = xr.headWorld(), axes = xr.viewAxes();
-			if (!tapAllowed(s.pinchAt, head, axes.forward)) continue;
+			if (!pinchGate(s, head, axes.forward)) continue;
 			const { origin, dir } = handAimRay(head, axes.right, s.pinchAt, c.handedness);
 			raycaster.set(origin, dir);
 			raycaster.far = 20;

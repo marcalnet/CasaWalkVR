@@ -21,8 +21,8 @@ import { HOLD } from '../js/xr-tools.js';
 const FILE = path.resolve(import.meta.dirname, '../examples/example-home.sh3d');
 
 /** An XRExperience with the example home, a pretend session and two pretend controllers. nomerge: the model as loaded (?nomerge). */
-async function setup({ nomerge = false } = {}) {
-	const entries = unzipSync(new Uint8Array(fs.readFileSync(FILE)));
+async function setup({ nomerge = false, file = FILE } = {}) {
+	const entries = unzipSync(new Uint8Array(fs.readFileSync(file)));
 	const home = parseHome(new TextDecoder().decode(entries['Home.xml']));
 	const built = await buildHome(home, { loadModel: async (ref) => new OBJLoader().parse(prepareObjText(new TextDecoder().decode(entries[ref])).replace(/^\s*mtllib.*$/gm, '')) });
 	const { group, layers } = nomerge ? unmergedModel(built.root) : optimiseModel(built.root);
@@ -1277,3 +1277,29 @@ test('a press at empty space closes the wings (build 120, M1): a pull at the sky
 	assert.ok(!x.menu && !x.ui.guide);
 	Object.assign(h, saved);
 });
+
+test('harmony, live keys only (rule 4; conflicts 2 and 11): the wrist arc fades the doors to 30% and they guard nothing; the orb makes room for a tip at a live key, claimed at 15 cm, let go at 25 cm', async () => {
+	const { CLAIM } = await import('../js/xr-targets.js');
+	assert.deepEqual(CLAIM, { near: 0.15, clear: 0.25 }, 'one place for every claim');
+	const { x, frame, hands } = await setup();
+	hands.left.grip.visible = hands.right.grip.visible = true; // (tracked)
+	frame();
+	const d = x.modes.dollhouse, w = x.ui.wrist;
+	const walkIn = d.doors.keys.get('in') ?? [...d.doors.keys.values()][0];
+	const doorAt = walkIn.group.getWorldPosition(new THREE.Vector3());
+	assert.ok(d.doorsLive && x.nearKey(doorAt, CLAIM.near), 'live: a key');
+	w.show({ pinned: true });
+	for (let i = 0; i < 20; i++) frame();
+	assert.ok(w.open && !d.doorsLive && Math.abs(d.doorAlpha - 0.3) < 1e-9 && d.doorGroup.visible, `the arc open: the doors at 30%, taking no presses (${d.doorAlpha})`);
+	assert.ok(!x.nearKey(doorAt, CLAIM.near), 'faded: they guard nothing');
+	w.close();
+	for (let i = 0; i < 20; i++) frame();
+	assert.ok(d.doorsLive && d.doorAlpha === 1, 'back once it closes');
+	// The left controller's tip at Walk in →, then 20 cm away (still claimed), then 40 cm (let go).
+	const put = (offset) => { const tip = doorAt.clone().add(offset); hands.left.grip.position.copy(x.rig.worldToLocal(tip.sub(new THREE.Vector3(0, 0, -0.045)))); frame(); return w.keyYield; };
+	assert.equal(put(new THREE.Vector3(0, 0.05, 0)), true, 'a tip at a live key: the orb yields');
+	assert.equal(put(new THREE.Vector3(0, 0.2, 0)), true, '20 cm: still (released at 25 cm)');
+	assert.equal(put(new THREE.Vector3(0, 0.4, 0)), false, '40 cm: the orb is back');
+	assert.ok(!w.fanYield && w.orbYield === w.keyYield);
+});
+

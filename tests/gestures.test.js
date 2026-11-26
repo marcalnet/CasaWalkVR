@@ -4,7 +4,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
-import { HandGestures, GESTURE, handShape, handAimRay, tapAllowed } from '../js/gestures.js';
+import { HandGestures, GESTURE, handShape, handAimRay, pinchGate } from '../js/gestures.js';
 
 // A right hand in its own frame, in cm: x towards the thumb, y the back of the
 // hand, z along the fingers. Curled fingers, the thumb on the side of the
@@ -176,11 +176,13 @@ test('a quick pinch (build 120, M1): closed and opened within 0.4 s is a tap; he
 	assert.ok(!run(up, DT, world(hand({ curled: false, thumb: OPENED }), UP)).includes('tap'), 'palm towards your eyes: never a tap');
 });
 
-test('the quick pinch\'s gate: in front of you (20 cm), between the waist and the eyes', () => {
+test('the pinch gate (the quick pinch and the hover ray): palm not towards you, 20 cm in front, between the waist and the eyes', () => {
 	const head = new THREE.Vector3(0, 1.6, 0), forward = new THREE.Vector3(0, 0, -1);
-	assert.ok(tapAllowed(new THREE.Vector3(0.1, 1.3, -0.35), head, forward));
-	assert.ok(!tapAllowed(new THREE.Vector3(0.1, 1.3, -0.1), head, forward), 'too near the chest');
-	assert.ok(!tapAllowed(new THREE.Vector3(0.1, 0.7, -0.4), head, forward), 'below the waist');
-	assert.ok(!tapAllowed(new THREE.Vector3(0.1, 1.7, -0.4), head, forward), 'above the eyes');
-	assert.ok(!tapAllowed(new THREE.Vector3(0.1, 1.3, 0.4), head, forward), 'behind you');
+	const at = (x, y, z, toEyes = -1) => ({ pinchAt: new THREE.Vector3(x, y, z), toEyes });
+	assert.ok(pinchGate(at(0.1, 1.3, -0.35), head, forward));
+	assert.ok(!pinchGate(at(0.1, 1.3, -0.35, 0.8), head, forward), 'the palm towards your eyes');
+	assert.ok(!pinchGate(at(0.1, 1.3, -0.1), head, forward), 'too near the chest');
+	assert.ok(!pinchGate(at(0.1, 0.7, -0.4), head, forward), 'below the waist');
+	assert.ok(!pinchGate(at(0.1, 1.7, -0.4), head, forward), 'above the eyes');
+	assert.ok(!pinchGate(at(0.1, 1.3, 0.4), head, forward), 'behind you');
 });

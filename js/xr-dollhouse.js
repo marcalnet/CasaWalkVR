@@ -27,7 +27,7 @@
 // the hand dropped: cancel. A pinch within 15 cm of the model or a key never aims.
 
 import * as THREE from 'three';
-import { UP, DOWN } from './xr-targets.js';
+import { UP, DOWN, CLAIM } from './xr-targets.js';
 import { yawOf } from './xr-input.js';
 import { PLINTH_HEIGHT, PLINTH_HEIGHT_HANDS, PLINTH_MARGIN, PLINTH_MARGIN_HANDS, setPlinthHeight, EYE_BELOW_TOP, buildMarkers } from './xr-scene.js';
 import { KeyPad } from './keys.js';
@@ -35,7 +35,7 @@ import { DELIBERATE } from './touch.js';
 import { roomAt, roomLanding, alongAxis, clearOfWalls, headingOf } from './rooms.js';
 import { Label } from './panel.js';
 import { ease } from './tween.js';
-import { handAimRay } from './gestures.js';
+import { handAimRay, pinchGate } from './gestures.js';
 import { HAND } from './theme.js';
 
 const DOLLHOUSE_PERSON = 2.0; // metres
@@ -78,7 +78,7 @@ const GRAB_SMOOTH = 0.06, GRAB_SMOOTH_HAND = 0.1; // seconds: a held model follo
 const HAND_TURN_DEAD = THREE.MathUtils.degToRad(3); // a bare hand's turn: changes under 3° are tremor, ignored
 const MAX_FRAME_TURN = THREE.MathUtils.degToRad(20); // a held model turns at most this much in one frame
 const AIM_STEADY = 0.3; // a bare hand steps inside (opening the pinch) once its landing has held still this long
-const HOVER = { frames: 2, linger: 0.2, away: 0.15, faint: 0.36, solid: 0.9 }; // the hover ray before a pinch: shown after 2 frames in the zone, gone 0.2 s after; not within 15 cm of the model; its opacity, and the aim's
+const HOVER = { frames: 2, linger: 0.2, away: CLAIM.near, faint: 0.36, solid: 0.9 }; // the hover ray before a pinch: shown after 2 frames in the zone, gone 0.2 s after; not within 15 cm of the model; its opacity, and the aim's
 const WAIST = 0.8; // a pinching hand this far below the eyes is at your side: it never aims, and an aim cancels (m)
 const ZOOM_SPEED = 1.2; // e-folds/s at full stick
 // The doors at the scale model, metres (the user's Quest 2 tests): Walk in →
@@ -97,6 +97,7 @@ const DOOR_TILT = 70;
 const LEVEL_KEY = [0.08, 0.04], LEVEL_KEY_MANY = 0.03, LEVEL_GAP = 0.012, LEVELS_LEFT = 0.12; // key size (m); with more than six levels they are 3 cm tall; the stack's middle this far left of ← Back
 const BACK_HOLD = 0.6; // ← Back (leave VR) is held this long, a ring filling (the Lead's decision)
 const DOORS_FADE = 0.15; // seconds: the doors fade out while the board is open (they showed through it), and back
+const DOORS_ARC = 0.3; // ... and to this while the wrist arc is open (still seen, never pressed)
 const DOOR_FOLLOW = 0.08; // the doors move to a new head height once it differs by this much
 const MARKER_HEIGHT = 1.7; // metres at the model's scale (the "stand here" figure)
 // A landing spot must be free of furniture from this height above the floor
@@ -467,10 +468,18 @@ export class Dollhouse {
 	 * presses: doors.update below is inactive then), so they never show
 	 * through or beside the board; they come back when it closes.
 	 */
+	/**
+	 * True while the doors and level keys take presses: not while a wing is
+	 * open (they fade out) nor while the wrist arc is open (they fade to 30%:
+	 * its keys may sit beside them; the interaction harmony's conflict 2).
+	 * Only live keys guard anything (a press, the fan, the orb).
+	 */
+	get doorsLive() { return !this.xr.boardOpen && !this.xr.ui.wrist.open; }
+
 	fadeDoors(dt) {
-		const target = this.xr.boardOpen ? 0 : 1;
+		const target = this.xr.boardOpen ? 0 : this.xr.ui.wrist.open ? DOORS_ARC : 1;
 		if (this.doorAlpha === target) return;
-		this.doorAlpha = target > this.doorAlpha ? Math.min(1, this.doorAlpha + dt / DOORS_FADE) : Math.max(0, this.doorAlpha - dt / DOORS_FADE);
+		this.doorAlpha = target > this.doorAlpha ? Math.min(target, this.doorAlpha + dt / DOORS_FADE) : Math.max(target, this.doorAlpha - dt / DOORS_FADE);
 		// (Each material's own opacity is recorded once, on first sight, and never read back from a faded
 		// state: build 120's B1, a new home loaded while the doors were faded kept them at 0 for good.)
 		this.doorMaterials ??= (() => { const list = []; this.doorGroup.traverse((o) => { for (const m of [].concat(o.material ?? [])) if (!list.includes(m)) { m.userData.baseOpacity ??= m.opacity; list.push(m); } }); return list; })();
@@ -496,7 +505,7 @@ export class Dollhouse {
 		// controllers rest (the tester's finding; the Lead's rules): by touch only a
 		// deliberate push from the front (DELIBERATE); a laser only when the door is in
 		// front of the model, pressed and let go over it; ← Back is held 0.6 s.
-		const door = this.doors.update(dt, { active: !xr.boardOpen, rules: DELIBERATE, blockers: xr.targets().pointable, laserOnRelease: true });
+		const door = this.doors.update(dt, { active: this.doorsLive, rules: DELIBERATE, blockers: xr.targets().pointable, laserOnRelease: true });
 		this.followDoors(door);
 		let action = point.action ?? door.action;
 		if (action?.id?.startsWith('level:')) { // a level key: show the home up to that level (the chosen one does nothing)
@@ -799,9 +808,10 @@ export class Dollhouse {
 	hoverAim(dt, spots, busy, box) {
 		const xr = this.xr, head = xr.headWorld();
 		const c = busy || this.grab || xr.input.active().length ? null : xr.input.gestureHands().find((h) => h.touch.tracked && xr.teleportHand(h)) ?? null;
-		const through = c ? c.gesture?.shape?.pinchAt ?? c.touch.tip : null;
+		const shape = c?.gesture?.shape, through = shape?.pinchAt ?? null;
 		let inZone = false;
-		if (c && through && through.y >= head.y - WAIST && !xr.aimBlock(c, through) && box.distanceToPoint(through) >= HOVER.away) {
+		// (The pinch gate: palm not towards you, 20 cm in front, between the waist and the eyes; the harmony's conflict 4.)
+		if (c && through && pinchGate(shape, head, xr.viewAxes().forward) && !xr.aimBlock(c, through) && box.distanceToPoint(through) >= HOVER.away) {
 			const ray = this._hoverRay ??= new THREE.Ray();
 			ray.origin.copy(head); ray.direction.subVectors(through, head).normalize();
 			inZone = ray.intersectsBox(box);

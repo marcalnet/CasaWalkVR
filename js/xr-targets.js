@@ -20,6 +20,14 @@
 import * as THREE from 'three';
 import { isOpening, isWater, isGlass } from './optimise.js';
 
+/**
+ * Every "this hand belongs to that" decision in the headset (the interaction
+ * harmony's rule 4): a hand within NEAR of a key, the orb, the fan or a wing
+ * is claimed by it; it lets go beyond CLEAR. One place, so a change moves
+ * them all (the B9 slide and the model's 30 cm are spaces, not claims).
+ */
+export const CLAIM = { near: 0.15, clear: 0.25 };
+
 export const UP = new THREE.Vector3(0, 1, 0);
 export const DOWN = new THREE.Vector3(0, -1, 0);
 

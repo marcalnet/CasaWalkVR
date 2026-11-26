@@ -27,6 +27,7 @@ import { LaserMeter } from './laser-meter.js';
 import { StreetCamera } from './street-camera.js';
 import { ease } from './tween.js';
 import { Label } from './panel.js';
+import { CLAIM } from './xr-targets.js';
 
 const ABOVE = 0.15; // the fan's middle, above the fan hand (metres)
 const SPACING = 0.115; // between tools in the arc (the marker and the meter lie across it, 9 and 11 cm long)
@@ -40,11 +41,11 @@ const REACH = 0.05; // a controller's tip this close to a tool touches it
 const REACH_HAND = 0.07; // a bare fingertip: tracking is looser, and the tools are small (the marker is 9 cm)
 const PALM_REACH = 0.09; // a closing bare hand: its palm this close to a tool still takes it (the fingers curl away from the tool as the hand closes)
 const MEMORY = 0.6; // seconds a touched tool stays the one a closing hand takes
-const BUSY = 0.2; // the taking hand this close to the open fan: the orb ignores touches
+const BUSY = CLAIM.near, BUSY_CLEAR = CLAIM.clear; // the taking hand this close to the open fan: the orb ignores touches, until it is BUSY_CLEAR away
 // When the fan opens (build 120's design, item 1: a key always beats the fan): the watch pose, the
 // hand high enough, and no key near; open, a key within KEY_CLOSE closes it until the hand is KEY_CLEAR away.
-const KEY_CLEAR = 0.25; // the fan hand's tip this close to any key (the orb, the doors and levels, the wrist keys, the wings): it stays closed
-const KEY_CLOSE = 0.15; // open, the tip this close to a key: it fades out (KEY_FADE) and stays closed until KEY_CLEAR away
+const KEY_CLEAR = CLAIM.clear; // the fan hand's tip this close to any key (the orb, the doors and levels, the wrist keys, the wings): it stays closed
+const KEY_CLOSE = CLAIM.near; // open, the tip this close to a key: it fades out (KEY_FADE) and stays closed until KEY_CLEAR away
 const KEY_FADE = 0.15; // seconds
 const HIGH = 0.5; // the fan hand's wrist no lower than this below the eyes (the doors and the level keys are 0.65 m below)
 const WATCH = 0.5; // the palm (bare hands; controllers need only be raised and in view) within 60 degrees of the direction to your eyes: "look at your watch"
@@ -63,7 +64,7 @@ const DOCK = { above: 0.05, scale: 0.5, opacity: 0.6, nearKey: 0.2, inView: THRE
 const DOCKED_HANDS = true; // the docked row with bare hands (for controllers it waits for the user's answer: build 120's design, item 4)
 const REACHING = 0.35; // the taking hand's fingertip this close to the fan: it is reaching into the fan (its orb is not a key the fan hand reaches for)
 const REACH_POINT = THREE.MathUtils.degToRad(40); // ... and pointing within this of a tool: it is taking (the tools never flee the fingertip)
-const YIELD_NEAR = 0.2; // the taking hand's fingertip this close to the open fan: its orb shrinks and fades
+const YIELD_NEAR = CLAIM.near, YIELD_CLEAR = CLAIM.clear; // the taking hand's fingertip this close to the open fan: its orb shrinks and fades, until YIELD_CLEAR away
 const RETURN = 0.08; // a bare hand bringing its tool this close to its place puts it back
 const FADE = 0.2; // seconds (opening and closing)
 
@@ -160,7 +161,7 @@ export class ToolFan {
 			const reaching = !!take?.touch.tracked && take.touch.tip.distanceTo(anchor) < REACHING;
 			// A key always beats the fan: within KEY_CLEAR it never opens; open, within KEY_CLOSE it closes (and stays so until KEY_CLEAR).
 			const tip = fan.touch.tracked ? fan.touch.tip : null;
-			const nearClear = !!tip && xr.nearKey(tip, KEY_CLEAR, reaching), nearClose = !!tip && xr.nearKey(tip, KEY_CLOSE, reaching);
+			const nearClear = !!tip && xr.nearKey(tip, KEY_CLEAR, { orb: !reaching }), nearClose = !!tip && xr.nearKey(tip, KEY_CLOSE, { orb: !reaching });
 			if (nearClose && !this.fanBusy) this.keyShut = true;
 			if (!nearClear) this.keyShut = false;
 			keyNear = nearClear;
@@ -203,8 +204,9 @@ export class ToolFan {
 			if (hot && !hot.live) this.refuse(hot, take);
 			this.hot = hot;
 		}
-		this.fanBusy = this.alpha > 0.5 && !!take?.touch.tracked && take.touch.tip.distanceTo(anchor) < BUSY;
-		xr.ui.wrist.orbYield = this.alpha > 0.5 && !!take?.touch.tracked && take.touch.tip.distanceTo(anchor) < YIELD_NEAR; // (the orb on that wrist makes room)
+		const takeD = this.alpha > 0.5 && take?.touch.tracked ? take.touch.tip.distanceTo(anchor) : Infinity;
+		this.fanBusy = takeD < (this.fanBusy ? BUSY_CLEAR : BUSY);
+		xr.ui.wrist.fanYield = takeD < (xr.ui.wrist.fanYield ? YIELD_CLEAR : YIELD_NEAR); // (the orb on that wrist makes room)
 		// A closing bare hand takes the tool it touched (a moment ago: the fingers curl away as the hand closes) or holds in its palm.
 		this.target = this.hot;
 		if (take?.isHand && this.alpha > 0.5 && take.touch.tracked) {
@@ -292,7 +294,7 @@ export class ToolFan {
 	 * to the orb, never more than LEASH from the hand; it stays slid while the
 	 * orb stays within HOLD_FIELD of the fan's place, and glides back once the
 	 * orb has been away RETURN_AFTER. Never while the taking hand takes a tool
-	 * (the orb yields instead: orbYield). Returns the slide (m).
+	 * (the orb yields instead: fanYield). Returns the slide (m).
 	 */
 	slideAside(dt, base, head) {
 		const xr = this.xr, wrist = xr.ui.wrist, out = this._outward;
@@ -305,7 +307,7 @@ export class ToolFan {
 		const nearest = (sl) => Math.min(...this.slots.map((_, i) => at(sl, i).distanceTo(o)));
 		const lineD = (sl) => Math.min(...this.slots.map((_, i) => segmentDistance(at(sl, i), head, o)));
 		this.slide ??= 0; this.slideTarget ??= 0; this.awayT ??= 0;
-		const taking = this.taking(), active = !!wrist.wearer && this.alpha > 0 && !taking && !wrist.orbYield
+		const taking = this.taking(), active = !!wrist.wearer && this.alpha > 0 && !taking && !wrist.fanYield
 			&& (nearest(this.slide) < FIELD || (this.slide > 0.005 && o.distanceTo(base) < HOLD_FIELD));
 		if (active) {
 			this.awayT = 0;

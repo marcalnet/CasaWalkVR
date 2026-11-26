@@ -458,8 +458,9 @@ const crossSeen = () => page.evaluate(() => {
 	check('the welcome card faces you', THREE_deg(await facing()) < 1, `${THREE_deg(await facing()).toFixed(2)}°`);
 	await fingerprint('doll-entry');
 	await shot('welcome-card');
-	// Raise the right wrist into view; the left controller touches its orb: the wrist menu opens and the card goes.
-	await aim('right', [0.12, 1.2, -0.4], [-0.1, 0.9, -1.2]); await frames(3);
+	// Raise the right wrist into view, clear of the waist-height doors (a tip within 15 cm of a live key makes the orb
+	// yield and ignore touches: the interaction harmony's conflict 11); the left controller touches its orb: the wrist menu opens and the card goes.
+	await aim('right', [0.12, 1.5, -0.4], [-0.1, 1.2, -1.2]); await frames(3);
 	const orb = await toLocal(await orbPoint());
 	await aim('left', orb, [orb[0], orb[1], orb[2] - 1]); await frames(5);
 	s = await state();

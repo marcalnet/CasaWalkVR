@@ -180,14 +180,16 @@ export class HandGestures {
 }
 
 /**
- * Whether a quick pinch at `at` (world) may close the wings (build 120, M1;
- * the build-101 pinch gate): the hand in front of you, at least TAP_FRONT
- * ahead of the eyes along `forward` (the view's horizontal forward), and
- * between the waist (TAP_BELOW under the eyes) and the eyes. The palm rule is
- * the tap's own (gestures never give a tap with the palm towards you).
+ * The pinch gate (the build-101 gate; the interaction harmony's conflict 4):
+ * a hand `shape` (handShape) whose palm is not towards the eyes, at least
+ * TAP_FRONT ahead of them along `forward` (the view's horizontal forward),
+ * between the waist (TAP_BELOW under the eyes) and the eyes. Used by the quick
+ * pinch that closes the wings (M1) and the hover ray; never by the teleport
+ * pinch, which keeps its own checks (the user's wish).
  */
-export function tapAllowed(at, head, forward) {
-	const G = GESTURE;
+export function pinchGate(shape, head, forward) {
+	const G = GESTURE, at = shape.pinchAt;
+	if (shape.toEyes > G.TO_EYES) return false;
 	const ahead = (at.x - head.x) * forward.x + (at.z - head.z) * forward.z;
 	return ahead >= G.TAP_FRONT && at.y <= head.y && at.y >= head.y - G.TAP_BELOW;
 }

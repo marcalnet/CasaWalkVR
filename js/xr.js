@@ -57,7 +57,7 @@ import { readSetting } from './settings.js';
 import { buildShowroom, buildStage, fitPlinth, placePlate, buildWalkSky, recolourSphere, PLINTH_HEIGHT } from './xr-scene.js';
 import { ScalePlate, Label } from './panel.js';
 import { roomAt } from './rooms.js';
-import { targetSets, findFloor } from './xr-targets.js';
+import { targetSets, findFloor, CLAIM } from './xr-targets.js';
 import { buildMenus, updateLabels, menuAction, SEE_THROUGH_ON } from './xr-menus.js';
 import { XRUI } from './xr-ui.js';
 import { Dollhouse, roundScale, roundScaleUp } from './xr-dollhouse.js';
@@ -653,11 +653,11 @@ export class XRExperience {
 	 * orb, the plinth doors and levels, the wrist keys, a lesson's keys, an
 	 * open wing): the fan stays closed over a hand reaching for one.
 	 */
-	nearKey(p, margin, ignoreOrb = false) {
+	nearKey(p, margin, { orb: withOrb = true, wristKeys = true } = {}) {
 		const wrist = this.ui.wrist, orb = wrist.orb?.group;
-		if (!ignoreOrb && orb?.visible && orb.getWorldPosition(this._nk ??= new THREE.Vector3()).distanceTo(p) < margin) return true;
-		if (this.modes.dollhouse.doors.near(p, margin)) return true;
-		if (wrist.open && wrist.pad.near(p, margin)) return true;
+		if (withOrb && orb?.visible && orb.getWorldPosition(this._nk ??= new THREE.Vector3()).distanceTo(p) < margin) return true;
+		if (this.mode === 'dollhouse' && this.modes.dollhouse.doorsLive && this.modes.dollhouse.doors.near(p, margin)) return true; // (only live keys: faded doors guard nothing)
+		if (wristKeys && wrist.open && wrist.pad.near(p, margin)) return true;
 		if (this.lessons?.keys?.near(p, margin)) return true;
 		const q = this._nk2 ??= new THREE.Vector3();
 		for (const panel of this.ui.openPanels()) {
@@ -689,7 +689,7 @@ export class XRExperience {
 	 * (world). 'board', 'wrist menu', 'key', 'fan', 'model', 'tool'.
 	 */
 	aimBlock(c, p) {
-		const NEAR = 0.15, tools = this.tools, held = tools?.held?.c;
+		const NEAR = CLAIM.near, tools = this.tools, held = tools?.held?.c;
 		if (held === c) return 'tool'; // (a hand holding a tool never aims)
 		if (this.boardOpen) return 'board';
 		if (this.ui.wrist.open) return 'wrist menu';
@@ -701,7 +701,7 @@ export class XRExperience {
 		if (this.handViews[c.index]?.near) return 'key';
 		const orb = this.ui.wrist.orb?.group; // (only the other hand: the orb rides the wearer's own wrist)
 		if (orb?.visible && this.ui.wrist.wearer !== c && orb.getWorldPosition(new THREE.Vector3()).distanceTo(p) < NEAR) return 'wrist menu';
-		if (this.mode === 'dollhouse' && this.modes.dollhouse.doors.near(p, NEAR)) return 'key';
+		if (this.mode === 'dollhouse' && this.modes.dollhouse.doorsLive && this.modes.dollhouse.doors.near(p, NEAR)) return 'key';
 		const fan = this.fan?.group;
 		if (fan?.visible && fan.getWorldPosition(new THREE.Vector3()).distanceTo(p) < NEAR + 0.1) return 'fan'; // (the fan's tools spread about 10 cm round its middle)
 		if (this.mode === 'dollhouse' && this.modes.dollhouse.modelBox().distanceToPoint(p) < NEAR) return 'model';
