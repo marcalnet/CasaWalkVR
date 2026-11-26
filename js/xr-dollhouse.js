@@ -85,13 +85,15 @@ const WAIST = 0.8; // a pinching hand this far below the eyes is at your side: i
 // wrist's ← Back, or the Meta button. Walk in → and the levels kept their places.)
 // They float at waist height in front of you (on the plinth's edge you had to
 // crouch to touch them with bare hands), close enough to touch, and low enough
-// to stay under the line from the eyes to the model (65° below the horizon at
-// their middle; the model's near edge is about 58° down from where you stand).
+// to stay under the line from the eyes to the model's near edge (at least 2°
+// below it). Within the handbook's limits (26 Nov 2026, the Designer): Walk in
+// about 60° below the eye line, the levels about 40° to the left and 53° down,
+// all about 0.72 m from the eyes (never more than 60° down or 45° of neck turn).
 const DOOR_IN = [0.32, 0.09];
 const DOOR_IN_X = 0.065; // Walk in →'s middle, right of where you stand (where it was beside ← Back)
-const LEVELS_X = -0.345; // the levels stack's middle, left of where you stand (unchanged)
-const DOOR_BELOW_EYES = 0.65; // waist height (the user's word), standing or seated (the lift keeps the eyes at the same height)
-const DOOR_AHEAD = 0.3; // in front of where you stand
+const LEVELS_X = -0.30; // the levels stack's middle, left of where you stand (about 16 cm from Walk in)
+const DOOR_BELOW_EYES = 0.62; // waist height (the user's word), standing or seated (the lift keeps the eyes at the same height)
+const DOOR_AHEAD = 0.36; // in front of where you stand
 // Nearly upright (70° from flat, facing you): a push from the front is a push forward;
 // a hand lowered onto it from above is far off its normal and never presses it.
 const DOOR_TILT = 70;

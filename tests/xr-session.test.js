@@ -211,7 +211,7 @@ test('the levels stack beside the doors: one key per level, ground at the bottom
 	assert.deepEqual([0, 1].map((i) => [key(i).spec.id, key(i).spec.look, key(i).spec.label, key(i).group.visible]), [['level:0', 'plain', 'Ground floor', true], ['level:1', 'chosen', 'First floor', true]], 'the top key means all levels');
 	assert.ok(key(0).group.position.y < key(1).group.position.y, 'ground at the bottom');
 	assert.ok(key(0).group.position.x < inn.group.position.x - inn.w / 2 - 0.1 && Math.abs(key(0).group.position.x - key(1).group.position.x) < 1e-9, 'a stack to the left of Walk in, where it was');
-	assert.ok(Math.abs(key(0).group.position.x + 0.345) < 1e-9 && Math.abs(inn.group.position.x - 0.065) < 1e-9, 'the stack and Walk in where they were beside the old ← Back');
+	assert.ok(Math.abs(key(0).group.position.x + 0.30) < 1e-9 && Math.abs(inn.group.position.x - 0.065) < 1e-9, 'the stack 30 cm left (within 45° of neck turn: the Designer, 26 Nov), Walk in where it was');
 	assert.deepEqual([key(0).w, key(0).h], [0.08, 0.04]);
 	assert.ok(d.levelTitle.mesh.visible && d.levelTitle.text === 'Levels');
 	x.menuAction({ id: 'levels', value: 0 });
@@ -1363,7 +1363,7 @@ test('the orb never hides a live key: resting over the Walk in door it goes smal
 	frame();
 	const door = x.modes.dollhouse.doors.keys.get('in').face.getWorldPosition(new THREE.Vector3()), eye = x.headWorld();
 	// The right wrist resting so its orb sits on the line from the eyes to the door.
-	const want = eye.clone().lerp(door, 0.6); // (0.43 m from the eyes: resting, not raised to look; its tip well clear of the door)
+	const want = eye.clone().lerp(door, 0.5); // (about 0.35 m from the eyes: resting, not raised to look; its tip clear of the door's 15 cm)
 	for (let i = 0; i < 3; i++) { const o = w.orb.group.getWorldPosition(new THREE.Vector3()); hands.right.grip.position.add(x.rig.worldToLocal(want.clone()).sub(x.rig.worldToLocal(o))); frame(); }
 	for (let i = 0; i < 30; i++) frame();
 	assert.ok(w.sightYield && w.orb.yieldK > 0.9 && !w.keyYield, `over the door: it yields (by sight, not by touch) ${JSON.stringify({ sight: w.sightYield, key: w.keyYield, k: w.orb.yieldK })}`);
@@ -1546,6 +1546,34 @@ test('harmony, conflict 13: no wing corner within 5° of the house as seen (its 
 			}
 		}
 		x.menuAction({ id: 'mainHand', value: 'right' });
+	}
+});
+
+test('the plinth keys (step 1.2; the Designer\'s fix, 26 Nov): within laser reach, at most 60° below the eye line and 45° of neck turn, and at least 2° under the line to the model\'s near edge, in all three homes', async () => {
+	for (const name of ['example-home', 'pond-house', 'apartment']) {
+		const { x, frame } = await setup({ file: path.resolve(import.meta.dirname, `../examples/${name}.sh3d`) });
+		for (let i = 0; i < 4; i++) frame();
+		const d = x.modes.dollhouse, eye = x.headWorld().clone();
+		x.scene.updateMatrixWorld(true);
+		const keys = [...d.doors.keys].filter(([, k]) => k.group.visible);
+		assert.ok(keys.some(([s]) => s === 'in') && (name !== 'pond-house' || keys.some(([s]) => s.startsWith('level'))), `${name}: the doors and the level keys (${keys.map(([s]) => s)})`);
+		const rows = [];
+		for (const [slot, k] of keys) {
+			const p = k.group.getWorldPosition(new THREE.Vector3()), to = p.clone().sub(eye);
+			const below = THREE.MathUtils.radToDeg(Math.atan2(-to.y, Math.hypot(to.x, to.z))), side = THREE.MathUtils.radToDeg(Math.atan2(to.x, -to.z));
+			rows.push(`${slot} ${to.length().toFixed(2)} m, ${below.toFixed(0)}° down, ${side.toFixed(0)}° across`);
+			assert.ok(to.length() < 1.5, `${name} ${slot}: ${to.length().toFixed(2)} m from the eyes, well inside the 5 m laser`);
+			assert.ok(below <= 60.5 && Math.abs(side) <= 45, `${name} ${slot}: within the handbook's limits (${rows.at(-1)})`);
+			// The model's near edge, seen from the eyes straight towards the key: the key stays at least 2° below it.
+			const box = d.houseBox(), dir = new THREE.Vector3(to.x, 0, to.z).normalize();
+			const ray = new THREE.Ray(new THREE.Vector3(eye.x, box.min.y + 1e-4, eye.z), dir), hit = ray.intersectBox(box, new THREE.Vector3());
+			if (hit) {
+				const edge = THREE.MathUtils.radToDeg(Math.atan2(eye.y - box.min.y, Math.hypot(hit.x - eye.x, hit.z - eye.z)));
+				rows[rows.length - 1] += ` (the model's near edge ${edge.toFixed(1)}° down)`;
+				assert.ok(below >= edge + 2, `${name} ${slot}: under the line to the model's near edge (${rows.at(-1)})`);
+			}
+		}
+		console.log(`# ${name}: ${rows.join('; ')}`);
 	}
 });
 
