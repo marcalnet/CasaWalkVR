@@ -738,6 +738,7 @@ export class XRExperience {
 		this.fan.update(dt); // the tool fan: home or waiting at the edge, touch, take, swap, put back (milestone C)
 		this.tools.update(dt);
 		this.dial.update(dt); // (after the tools: a stick step is already counted)
+		this.input.updateModels(dt, this.tools.held?.c ?? null, !!this.dial.open, this.tools.buttons()); // the real controllers: buttons moving, faded while holding a tool
 		this.tweens.update(dt);
 		this.haptics.update(dt);
 		this.sound.update(dt);

@@ -56,6 +56,7 @@ export class ToolSystem {
 	take(tool, c) {
 		if (this.held) this.putBack();
 		this.held = { tool, c, hold: 0, fired: true, controls: (tool.controls ?? NONE).filter((k) => EXTRA.includes(k)) };
+		this.held.buttons = ['trigger', ToolSystem.secondKey(c), ...this.held.controls]; // (the controller model lights these: js/controller-model.js)
 		tool.take?.(c);
 	}
 
@@ -65,6 +66,11 @@ export class ToolSystem {
 		if (!h) return;
 		this.held = null;
 		h.tool.putBack?.();
+	}
+
+	/** The held tool's buttons (xr-input names): its trigger, its second button and any extra (the stick press). Empty if none. */
+	buttons() {
+		return this.held?.buttons ?? NONE;
 	}
 
 	/** The second button of the hand holding a tool: A on the right, Y on the left. */

@@ -996,12 +996,12 @@ check('B closes the board', (await state()).menu === null);
 		const v0 = await page.evaluate(() => window.__casawalk.xr.menus.dollhouse.get('seethrough').value);
 		await pressKey('controller', 'right', 'dollhouse', 'seethrough');
 		const v1 = await page.evaluate(() => window.__casawalk.xr.menus.dollhouse.get('seethrough').value);
-		const nub = await page.evaluate(() => window.__casawalk.xr.input.active().every((c) => c.body.children.length === 2 && c.body.visible));
+		const nub = await page.evaluate(() => window.__casawalk.xr.input.active().every((c) => c.nubEnd.visible && (c.model ? c.model.mesh.visible && !c.body.visible : c.body.visible))); // (the real controller, or the bars until it loads: next-build asks §6)
 		check('a controller\'s tip nub presses a key by touch', v1 === !v0 && nub, JSON.stringify({ v0, v1, nub }));
 		await pressKey('controller', 'right', 'dollhouse', 'seethrough');
 		await click('right', 'b-button');
 	}
-	const back = await page.evaluate(() => { const x = window.__casawalk.xr; return { note: x.ui.handsNote.mesh.visible, active: x.input.active().length, lasers: x.input.active().every((c) => c.line.visible && c.body.visible) }; });
+	const back = await page.evaluate(() => { const x = window.__casawalk.xr; return { note: x.ui.handsNote.mesh.visible, active: x.input.active().length, lasers: x.input.active().every((c) => c.line.visible && (c.body.visible || c.model?.mesh.visible)) }; });
 	check('controllers again: the note goes, lasers back', !back.note && back.active === 2 && back.lasers, JSON.stringify(back));
 	await restRight(); await restLeft(); await frames(5);
 }

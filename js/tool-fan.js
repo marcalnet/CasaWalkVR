@@ -34,7 +34,7 @@ import { Label } from './panel.js';
 import { CLAIM } from './xr-targets.js';
 import { TOOLS, edgeSpot, keepFromEyes, dampTowards } from './zones.js';
 
-const ABOVE = 0.15; // the fan's middle, above the fan hand (metres)
+export const ABOVE = 0.15; // the fan's middle, above the fan hand (metres)
 const SPACING = 0.115; // between tools in the arc (the marker and the meter lie across it, 9 and 11 cm long)
 // How each tool shows in the fan (the user's note, 24 Nov): the camera from the front, its lens towards you; the meter and
 // the marker from the side, their length across the fan like tools on a pegboard, nib to the left as you see it.

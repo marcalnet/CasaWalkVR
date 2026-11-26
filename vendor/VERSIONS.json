@@ -4,5 +4,6 @@
   "fflate": "0.8.3",
   "@fontsource/kalam": "5.3.0",
   "peerjs": "1.5.5",
-  "@webxr-input-profiles/assets (generic-hand)": "1.0.20"
+  "@webxr-input-profiles/assets (generic-hand)": "1.0.20",
+  "@webxr-input-profiles/assets (controllers)": "1.0.20"
 }

@@ -1,5 +1,6 @@
-// XR controllers: laser rays, simple controller bodies, and per-frame
-// button/thumbstick state with press/release edges.
+// XR controllers: laser rays, the controllers drawn (the real model for the
+// device, js/controller-model.js, or plain bars until it loads or if the
+// device has none), and per-frame button/thumbstick state with press/release edges.
 //
 // Quest controllers use the WebXR "xr-standard" gamepad mapping:
 //   buttons[0] trigger, [1] grip (squeeze), [3] thumbstick press,
@@ -27,7 +28,8 @@
 //   kind     'hand', 'controller' or null (nothing connected)
 //   tracked  false while the headset has lost the hand (or nothing is there)
 //   tip      the poke point in world space: the index fingertip, or a point
-//            just in front of a controller (TIP_OFFSET in its grip space)
+//            just in front of a controller (c.tipOffset in its grip space:
+//            the real model's nose once measured, TIP_OFFSET before)
 //   radius   how big the poke point is (the fingertip joint's radius)
 //   select   { value 0..1, held, down, up, lost }: a pinch for a hand (thumb
 //            and index tips together), the trigger for a controller. A pinch
@@ -50,6 +52,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { TOUCH } from './touch.js';
 import { KEY } from './theme.js';
 import { HandGestures, JOINTS } from './gestures.js';
+import { loadControllerModel, LOOK } from './controller-model.js';
 
 const DEADZONE = 0.2;
 const REST_MOVE = 0.002, REST_TURN = THREE.MathUtils.degToRad(1.5), REST_AFTER = 1.5; // a controller this still (m, rad) this long (s) while a bare hand is tracked has been put down
@@ -94,13 +97,14 @@ export class XRInput {
 			nub.rotation.x = Math.PI / 2;
 			const nubEnd = new THREE.Mesh(nubEndGeo, nubEndMat);
 			nubEnd.position.copy(TIP_OFFSET);
-			body.add(nub, nubEnd);
+			body.add(nub);
+			grip.add(nubEnd); // (on the grip: it stays with the real model, at its nose)
 			// Where a bare hand wears the orb: follows the wrist joint (controllers wear it on the grip).
 			const wrist = new THREE.Group();
 			wrist.name = 'wrist';
 			rig.add(wrist);
 
-			const c = { index: i, ray, grip, hand, wrist, line, dot, body, touch: emptyTouch(), gesture: null, gestures: [], source: null, handedness: null, isController: false, isHand: false, state: emptyState(), claim: { trigger: null, grip: null, a: null, b: null, stickPress: null } };
+			const c = { index: i, ray, grip, hand, wrist, line, dot, body, nubEnd, model: null, tipOffset: TIP_OFFSET.clone(), touch: emptyTouch(), gesture: null, gestures: [], source: null, handedness: null, isController: false, isHand: false, state: emptyState(), claim: { trigger: null, grip: null, a: null, b: null, stickPress: null } };
 			ray.addEventListener('connected', (e) => {
 				c.source = e.data;
 				c.handedness = e.data.handedness;
@@ -108,6 +112,9 @@ export class XRInput {
 				c.isController = !c.isHand;
 				line.visible = c.isController;
 				body.visible = c.isController;
+				nubEnd.visible = c.isController;
+				this.dropModel(c);
+				if (c.isController) this.loadModel(c, e.data);
 				c.state = emptyState();
 				c.touch = emptyTouch();
 				c.gesture = c.isHand ? new HandGestures(c.handedness) : null;
@@ -122,6 +129,8 @@ export class XRInput {
 				c.touch = emptyTouch(c.touch.select.held); // a hand that goes away mid-pinch never clicks
 				line.visible = false;
 				dot.visible = false;
+				nubEnd.visible = false;
+				this.dropModel(c);
 			});
 			this.controllers.push(c);
 		}
@@ -181,7 +190,7 @@ export class XRInput {
 			c.grip.updateMatrixWorld(true);
 			this.updateResting(c);
 			t.tracked = c.grip.visible !== false && !c.resting;
-			t.tip.copy(TIP_OFFSET).applyMatrix4(c.grip.matrixWorld);
+			t.tip.copy(c.tipOffset).applyMatrix4(c.grip.matrixWorld);
 			t.radius = TIP_RADIUS;
 			sel.value = c.source?.gamepad?.buttons[0]?.value ?? (c.state.trigger ? 1 : 0);
 			held = c.state.trigger;
@@ -314,7 +323,54 @@ export class XRInput {
 	}
 
 	setVisible(v) {
-		for (const c of this.controllers) { c.ray.visible = v; c.grip.visible = v; c.body.visible = v && c.isController; }
+		for (const c of this.controllers) { c.ray.visible = v; c.grip.visible = v; c.body.visible = v && c.isController && !c.model; }
+	}
+
+	/** Loads the real controller for a source; it replaces the bars when it arrives (if that source is still there). */
+	loadModel(c, source) {
+		loadControllerModel(source).then((m) => {
+			if (!m || c.source !== source || !c.isController) return;
+			c.model = m;
+			m.opacity = 0; // (it fades in: the bars go at once, the model comes in LOOK.FADE)
+			m.apply();
+			c.grip.add(m.root);
+			c.body.visible = false;
+		});
+	}
+
+	/** Back to the bars (a new source, or none). */
+	dropModel(c) {
+		if (c.model) c.model.root.removeFromParent();
+		c.model = null;
+		c.tipOffset.copy(TIP_OFFSET);
+		c.nubEnd.position.copy(TIP_OFFSET);
+	}
+
+	/**
+	 * Once a frame, after the tools: the real controllers' buttons move, and
+	 * their look follows what they do (next-build asks §6). holder: the entry
+	 * holding a tool (or null); dialOpen: its dial is open (full again);
+	 * buttons: the held tool's buttons, which glow. A controller put down
+	 * (updateResting) fades out, the bare hand drawn instead.
+	 */
+	updateModels(dt, holder = null, dialOpen = false, buttons = []) {
+		for (const c of this.controllers) {
+			const m = c.model;
+			if (!m) continue;
+			if (m.tip === undefined && c.ray.visible && c.grip.visible) {
+				c.ray.updateMatrixWorld(true);
+				const rel = this._m.copy(c.grip.matrixWorld).invert().multiply(c.ray.matrixWorld); // (the rig cancels: real metres)
+				m.measureTip(rel);
+			}
+			if (m.tip !== undefined) {
+				c.tipOffset.copy(m.tip ?? TIP_OFFSET);
+				c.nubEnd.position.copy(c.tipOffset);
+			}
+			c.nubEnd.visible = !c.resting; // (put down: the bare hand is drawn instead)
+			const held = holder === c;
+			m.setLook(c.resting ? 0 : held && !dialOpen ? LOOK.FADED : 1, held ? buttons : []);
+			m.update(dt);
+		}
 	}
 }
 

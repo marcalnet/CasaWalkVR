@@ -23,7 +23,11 @@ const ADDONS = [
 	'libs/meshopt_decoder.module.js',
 	'libs/meshopt_simplifier.module.js', // (MIT; WebAssembly only, no eval: heavy pieces simplified for the Quest, js/simplify.js)
 	'utils/BufferGeometryUtils.js',
+	'libs/motion-controllers.module.js', // (MIT, the WebXR Input Profiles' reader: which controller model, its buttons moving; js/controller-model.js)
 ];
+
+// Copied once by hand, not from a dev dependency: kept when vendor/ is rebuilt (see the end).
+const HAND_COPIED = ['generic-hand', 'controllers'];
 
 function copy(src, dst) {
 	fs.mkdirSync(path.dirname(dst), { recursive: true });
@@ -44,7 +48,9 @@ function copyModule(srcBase, dstBase, rel, seen = new Set()) {
 	}
 }
 
-fs.rmSync(vendor, { recursive: true, force: true });
+for (const f of fs.existsSync(vendor) ? fs.readdirSync(vendor) : []) {
+	if (!HAND_COPIED.includes(f)) fs.rmSync(path.join(vendor, f), { recursive: true, force: true });
+}
 
 // three.js core (three.module.js imports three.core.js)
 copy(path.join(nm, 'three/build/three.module.js'), path.join(vendor, 'three/three.module.js'));
@@ -102,9 +108,15 @@ copy(path.join(nm, 'peerjs/LICENSE'), path.join(vendor, 'peerjs/LICENSE'));
 // vendor/generic-hand/; not a dev dependency, so this script leaves it alone.
 // Never loaded from the CDN path three.js's XRHandMeshModel uses by default.
 const GENERIC_HAND = '1.0.20';
+// The controller models (MIT, © 2019 Amazon): the same package and version,
+// dist/profiles/ oculus-touch-v3, meta-quest-touch-plus and meta-quest-touch-pro
+// (left.glb, right.glb, profile.json each), copied by hand into vendor/controllers/
+// with a profilesList.json naming only those three (vendor/controllers/README.md).
+const CONTROLLERS = '1.0.20';
 
 const versions = Object.fromEntries(['three', 'three-mesh-bvh', 'fflate', '@fontsource/kalam', 'peerjs'].map(
 	(p) => [p, JSON.parse(fs.readFileSync(path.join(nm, p, 'package.json'), 'utf8')).version]));
 versions['@webxr-input-profiles/assets (generic-hand)'] = GENERIC_HAND;
+versions['@webxr-input-profiles/assets (controllers)'] = CONTROLLERS;
 fs.writeFileSync(path.join(vendor, 'VERSIONS.json'), JSON.stringify(versions, null, 2) + '\n');
 console.log('Vendored', versions, `(${seen.size} three.js addon files)`);
