@@ -762,7 +762,7 @@ check('B closes the board', (await state()).menu === null);
 	const w0 = await wingsNow();
 	await pressKey('hand', 'right', 'dollhouse', 'guideKey');
 	const w1 = await wingsNow();
-	check('no Close key, the foot says how to close; "? How to move" pressed with a fingertip closes How to move alone (build 120, M1)', !w0.closeKey && w0.foot === 'Pinch outside to close' && w0.guide && w0.lead && w1.settings && !w1.guide && !w1.lead, JSON.stringify({ w0, w1 }));
+	check('no Close key, the foot says how to close; "? How to move" pressed with a fingertip closes How to move alone (build 120, M1)', !w0.closeKey && w0.foot === 'Pinch outside: close' && w0.guide && w0.lead && w1.settings && !w1.guide && !w1.lead, JSON.stringify({ w0, w1 }));
 	await page.evaluate(() => window.__casawalk.xr.ui.closeAll()); await frames(3);
 
 	// Moving with bare hands (C0.4). The gestures themselves are read from the joints
@@ -1206,7 +1206,7 @@ await page.waitForFunction(() => Object.values(window.__casawalk.xr.ui.wrist.key
 }
 await pressWrist('right');
 s = await state();
-check('Settings opens the inside board', s.menu === 'walk' && await page.evaluate(() => /Inside/.test(window.__casawalk.xr.menu.title)));
+check('Settings opens the inside board', s.menu === 'walk' && await page.evaluate(() => window.__casawalk.xr.menu === window.__casawalk.xr.menus.walk && window.__casawalk.xr.menu.title === 'Settings'));
 await shot('walk-menu');
 check('the Walk tab: Height (Turn and Solid walls left the board: 30° turns; the stick always stops at walls)', s.snap === 30 && await page.evaluate(() => { const p = window.__casawalk.xr.menus.walk; return !p.get('turn') && !p.get('solid') && p.tabs.find((t) => t.id === 'walk').rows.flat().map((c) => c.id).join() === 'height'; }));
 const feet = (await state()).rig[1] - (await state()).lift;
@@ -1545,7 +1545,7 @@ check('example home: two storeys, all shown', lv.count === 2 && lv.multi && lv.h
 		for (const k of Object.values(x.ui.wrist.keys)) texts.push(k.spec?.label ?? '', k.spec?.caption ?? '');
 		return { bad: texts.filter((t) => /dollhouse/i.test(t)), exit: texts.filter((t) => /exit vr/i.test(t)), titles: Object.values(x.menus).map((p) => p.title), tabs: x.menus.dollhouse.tabs.map((t) => t.label) };
 	});
-	check('the words: "scale model", never "dollhouse", no "Exit VR"; boards titled by layer; tabs View, Walk, Tools, General', !words.bad.length && !words.exit.length && words.titles.join() === 'Settings \u00b7 Scale model,Settings \u00b7 Inside' && words.tabs.join() === 'View,Walk,Tools,General', JSON.stringify(words));
+	check('the words: "scale model", never "dollhouse", no "Exit VR"; one title, Settings, at both layers; tabs View, Walk, Tools, General', !words.bad.length && !words.exit.length && words.titles.join() === 'Settings,Settings' && words.tabs.join() === 'View,Walk,Tools,General', JSON.stringify(words));
 	check('the page says "scale model" too', !/dollhouse/i.test(await page.evaluate(() => document.querySelector('meta[name=description]').content + document.body.innerText)));
 	// The plinth stands 60 cm in front of you, and its plate shows the true scale.
 	const pl = await page.evaluate(() => {

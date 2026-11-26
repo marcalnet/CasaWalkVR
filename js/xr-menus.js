@@ -2,8 +2,8 @@
 // "Layers"). ("dollhouse" in the code is the scale model on screen.)
 //
 // The wrist menu (js/wrist-menu.js) has three keys: ← Back, Settings and
-// Walk in →. Settings opens the settings board: one per layer ("Settings ·
-// Scale model", "Settings · Inside"), the same tabs in both (View, Walk,
+// Walk in →. Settings opens the settings board: one per layer, both titled
+// "Settings", the same tabs in both (View, Walk,
 // General), with no Close key (a press at empty space closes it: js/xr-ui.js);
 // pressed by touch, or by a controller's laser. On/off settings are switches,
 // settings with a few values are options with every one visible (one press).
@@ -67,8 +67,8 @@ export const TABS = [
 
 /** The boards, one per layer: the title names the layer. */
 export const MENUS = {
-	dollhouse: { title: 'Settings · Scale model' },
-	walk: { title: 'Settings · Inside' },
+	dollhouse: { title: 'Settings' }, // (one title at both layers: the next-build asks 3.1)
+	walk: { title: 'Settings' },
 };
 
 /** The two wings beside the model (build 111's design): Settings on the right, How to move on the left. */
@@ -109,8 +109,9 @@ export const TIPS = {
 	back: [{ id: 'grab', hands: 'Close your hand on the model to turn it.', controllers: 'Hold grip on the model to turn it.' }],
 };
 
-// The line at each wing's foot, saying how to close it (there is no Close key: build 120, M1; js/xr-ui.js sets it on opening).
-export const CLOSE_HINT = { controllers: 'Pull the trigger outside to close', hands: 'Pinch outside to close' };
+// The close line, in each wing's header (there is no Close key: build 120, M1; js/xr-ui.js sets it on opening): the colon form
+// How to move uses, short enough to draw at 18-22 px beside the title, never shrunk (the Lead, 26 Nov 2026; js/panel.js HINT_PX).
+export const CLOSE_HINT = { controllers: 'Trigger outside: close', hands: 'Pinch outside: close' };
 
 /**
  * Builds the settings boards (one per layer, hidden, in the rig). Returns

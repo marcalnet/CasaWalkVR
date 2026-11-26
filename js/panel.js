@@ -24,6 +24,7 @@ const PX_PER_M = 1024; // canvas pixels per metre of panel
 // (4.5 cm with their gap), option segments exactly 4 cm tall (inset 4 px).
 const L = { PAD: 16, GAP: 6, ROW_H: 66, TITLE_H: 38, TAB_H: 60, TAB_GAP: 8, INSET: 4, titleFont: 28 };
 const TAB = '#tab'; // a click target's id for a tab (its value is the tab's id)
+export const HINT_PX = { max: 22, min: 18 }; // the close line's size (canvas px at the board's px/m): never shrunk below 18 (the legibility floor)
 const SWITCH_W = 96, SWITCH_H = 52;
 const SWITCH_LABEL_MIN = 26; // px: a switch label smaller than this goes onto two lines instead
 
@@ -173,10 +174,10 @@ export class Panel {
 		this.drawTabs(ctx);
 		for (const b of this.boxes) this.drawCell(ctx, b);
 		if (this.hint) {
-			// (The close line in caption size at the header's free end, in the secondary colour.)
+			// (The close line in caption size at the header's free end, in the secondary colour: 18-22 px, never smaller.)
 			ctx.fillStyle = COLOURS.soft;
 			ctx.textAlign = 'right';
-			fitFont(ctx, this.hint, w - 2 * this.L.PAD - titleW - 32, 22, 14, 400);
+			fitFont(ctx, this.hint, w - 2 * this.L.PAD - titleW - 32, HINT_PX.max, HINT_PX.min, 400);
 			ctx.fillText(this.hint, w - this.L.PAD - 8, mid + 1);
 			ctx.textAlign = 'left';
 		}

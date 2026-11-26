@@ -84,14 +84,17 @@ test('the settings boards: the same tabs at both layers, no Close key (the foot 
 		assert.deepEqual(shape(p.tabs[2].rows), ['lens:choice:Camera lens:24 mm:28 mm:35 mm:50 mm']);
 		assert.deepEqual(shape(p.tabs[3].rows), ['mainHand:choice:Main hand:Right:Left', 'sound:choice:Sound:Off:Effects']);
 		assert.equal(p.actions, undefined, 'no action rows on the board: the doors are on the wrist');
-		assert.ok(!p.rects().some((r) => /close/i.test(r.id)) && /outside to close$/.test(p.hint), 'no Close key: the foot says how to close (build 120, M1)');
+		assert.ok(!p.rects().some((r) => /close/i.test(r.id)) && /outside: close$/.test(p.hint), 'no Close key: the close line says how (build 120, M1)');
+		// The close line fits beside the title at 18 px or more, both forms (about 0.55 em a character for the title's 28 px, the line's 18 px).
+		const { CLOSE_HINT } = await import('../js/xr-menus.js'), { HINT_PX } = await import('../js/panel.js');
+		for (const hint of Object.values(CLOSE_HINT)) assert.ok(p.title.length * 28 * 0.55 + 32 + hint.length * HINT_PX.min * 0.55 <= p.size.w - 2 * 16, `${p.title} + "${hint}" fit at ${HINT_PX.min} px`);
 		assert.ok(!p.get('levels'), 'Levels is not on the board: a stack of keys beside the doors');
 		// Touch targets: at least 4 cm (the wing is 40 cm wide).
 		const m = p.mesh.geometry.parameters.width / p.size.w;
 		for (const r of p.rects()) assert.ok(Math.min(r.w, r.h) * m >= 0.04 - 1e-9, `${r.id} ${r.value ?? ''}: ${(Math.min(r.w, r.h) * m * 100).toFixed(1)} cm`);
 	}
-	assert.equal(x.menus.dollhouse.title, 'Settings \u00b7 Scale model');
-	assert.equal(x.menus.walk.title, 'Settings \u00b7 Inside');
+	assert.equal(x.menus.dollhouse.title, 'Settings', 'one title at both layers');
+	assert.equal(x.menus.walk.title, 'Settings');
 	// Scale-model settings are greyed out inside; the boards are the same size whatever the tab.
 	assert.ok(Object.values(x.menus).every((p) => !p.get('figure') && !p.get('photo') && !p.get('recentre') && !p.get('exit')), 'no figure, Photo, Recentre or Exit VR');
 	const h = x.menus.dollhouse.size.h;
