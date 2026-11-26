@@ -106,7 +106,7 @@ While aiming a teleport (hands or controllers), faint rings on the floor mark th
 - **Right stick** left/right turns in steps of 30°.
 - **Right stick forward**, or **hold a trigger**, and aim: a blue ring shows where you'll land (red on a wall). The arc stays low enough to pass through doorways. Let go to teleport there.
 - **B** or **Y**, or **← Back** on the wrist menu, goes back to the scale model.
-- Settings: the same tabs (Walk tab: **Height** (yours, 1.4, 1.7 or 2.0 m)).
+- Settings: the same tabs (Walk tab: **Height** (yours, 1.4, 1.7 or 2.0 m); every Enter VR starts at your own, since the next person may be someone else). **New visitor**, at the foot of How to move, starts the tips and the height over for the next person without leaving VR.
 
 **Photo:** not in the menu for now. The street camera (a later update) brings photos back. Photos you took earlier stay on the page, under the model: **Save all to Downloads** (or one by one) puts them in the Quest's **Files** app, in **Downloads**. (Nothing is ever downloaded during VR: the Quest Browser asks for permission at the first download, and its question would end the VR session.)
 
@@ -231,7 +231,8 @@ js/tip-demo.js    the looping hand of the pause's tips
 js/transient-pointer.js Apple Vision Pro's look-and-pinch (untested on a headset)
 js/hand-model.js  the hand model (the WebXR generic hand, restyled)
 js/hand-poses.js  preset hand poses for the pause's looping hand
-js/settings.js    every remembered setting, its key and meaning
+js/settings.js    every setting, its key, meaning and scope (remembered, or this session only)
+js/session-store.js what belongs to this VR session only (the tips, the first tabs): cleared at Enter VR and by New visitor
 js/tween.js, js/haptics.js, js/sound.js   feedback: motion, vibration, synthesised sounds
 js/panel.js       canvas-texture board (switches, options, buttons, tabs), note cards and labels
 js/walls.js       solid walls while walking and see-through walls and furniture (headset only)

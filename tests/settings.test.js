@@ -58,10 +58,13 @@ test('reading and writing use localStorage, and never throw without it', () => {
 	try {
 		const store = new Map();
 		Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: { getItem: (k) => store.get(k) ?? null, setItem: (k, v) => store.set(k, v) } });
-		assert.equal(readSetting('height'), 0);
+		assert.equal(readSetting('mainHand'), 'right');
+		writeSetting('mainHand', 'left');
+		assert.equal(store.get('casawalk.mainHand'), 'left');
+		assert.equal(readSetting('mainHand'), 'left');
+		// A session setting (Height) is never stored: the next person starts from "Yours".
 		writeSetting('height', 1.4);
-		assert.equal(store.get('casawalk.height'), '1.4');
-		assert.equal(readSetting('height'), 1.4);
+		assert.ok(!store.has('casawalk.height') && readSetting('height') === 0);
 		// Private mode: storage throws; the defaults are used.
 		Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: { getItem() { throw new Error('denied'); }, setItem() { throw new Error('denied'); } } });
 		assert.equal(readSetting('shadows'), false);

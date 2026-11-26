@@ -50,6 +50,7 @@ import { attachTransientPointer } from './transient-pointer.js';
 import { SeeThrough, SEE_THROUGH_MAX } from './walls.js';
 import { Portals } from './portal.js';
 import { Pause } from './pause.js';
+import { SessionStore } from './session-store.js';
 import { takePhoto, photoName, saveFile, INTERFACE_LAYER } from './photo.js';
 import { readSetting } from './settings.js';
 import { buildShowroom, buildStage, fitPlinth, placePlate, buildWalkSky, recolourSphere, PLINTH_HEIGHT } from './xr-scene.js';
@@ -90,7 +91,8 @@ export class XRExperience {
 		this.mode = null; // 'dollhouse' | 'walk': which of this.modes runs
 		this.lift = 0; // the rig's height above the floor the user stands on
 		this.snapAngle = 30; // snap turn, degrees (fixed: the Turn setting left the board, the user's call)
-		this.personHeight = readSetting('height');
+		this.personHeight = readSetting('height'); // (per session: 'Yours' at every Enter VR)
+		this.store = new SessionStore(); // what belongs to this VR session only: the tips, the first tabs (js/session-store.js)
 		// See-through walls and furniture (headset only): 0 = as modelled, 1 = glass house.
 		this.seeThroughAmount = readSetting('seeThrough') > 0 ? SEE_THROUGH_ON : 0; // (a switch: an older stored amount counts as on)
 		this.seeThrough = new SeeThrough();
@@ -282,6 +284,8 @@ export class XRExperience {
 		// anywhere in your play area), so place the plinth in front of the
 		// head as soon as the first head pose arrives.
 		this.pendingRecentre = true;
+		this.store.start(); // (each Enter VR starts fresh: the headset passes from person to person)
+		this.personHeight = readSetting('height');
 		this.pause.enter(); // the pause from the first frame: the dark until the room draws smoothly (js/pause.js)
 	}
 
@@ -371,6 +375,23 @@ export class XRExperience {
 	// -----------------------------------------------------------------------
 	// Layers: page → scale model → inside (SPEC.md C0, "Layers")
 	// -----------------------------------------------------------------------
+
+	/**
+	 * New visitor (How to move's foot; the shared-headset principle): the
+	 * session starts over for the next person while the headset stays on: the
+	 * tips, the tab each board opens on, Height back to "Yours", the
+	 * first-target ring. What you see stays (it is remembered).
+	 */
+	newVisitor() {
+		this.store.start();
+		this.ui.tab = null;
+		this.personHeight = readSetting('height');
+		if (this.mode === 'walk') this.setLift(this.modes.walk.personLift());
+		this.pause.target.visible = false;
+		this.ui.closeAll();
+		if (this.soundLevel !== 'off') this.sound.play('press');
+		this.updateLabels();
+	}
 
 	/** Moves one layer (js/pause.js: the move, and the tips on the way). */
 	goLayer(dir, go, spot = null) { this.pause.go(dir, go, spot); }

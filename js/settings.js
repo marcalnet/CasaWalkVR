@@ -7,6 +7,10 @@
 //   range    a number in (0, 1]; anything else is the default
 // readSetting() and writeSetting() never throw: in a private window, or with
 // storage switched off, the defaults are used and nothing is remembered.
+// Each setting has a scope (the shared-headset principle, SPEC.md "Design
+// principles"): 'remembered' (the default: what you see, the home's light and
+// view, and the main hand) or 'session' (who you are: your height; never
+// stored, every Enter VR and New visitor starts from the default).
 // (Recent files and the last link live in storage.js: they are data, not settings.)
 
 import { TIMES } from './lighting.js';
@@ -21,7 +25,7 @@ export const SETTINGS = {
 	// Headset
 	view: { key: 'casawalk.view', options: ['vr', 'ar'], fallback: 'vr' }, // VR or passthrough, in an AR session
 	// (Turn and its 'casawalk.snapAngle' setting left the board in Nov 2026: snap turns are 30°. A stored value is simply never read.)
-	height: { key: 'casawalk.height', options: [0, 1.4, 1.7, 2.0], fallback: 0 }, // person height, metres (0 = your own)
+	height: { key: 'casawalk.height', options: [0, 1.4, 1.7, 2.0], fallback: 0, scope: 'session' }, // person height, metres (0 = your own); per session: the next person is not the last
 	// (The scale figure and its 'casawalk.figure' switch were removed in Nov 2026:
 	// the landing markers show a person's size. A stored value is simply never read.)
 	// (Solid walls and its 'casawalk.solidWalls' setting went on 26 Nov 2026: the stick walk always stops at walls,
@@ -58,6 +62,7 @@ export function encode(spec, value) {
 /** A remembered setting by name (a key of SETTINGS), or its default. */
 export function readSetting(name) {
 	const spec = SETTINGS[name];
+	if (spec.scope === 'session') return spec.fallback; // (a session's value lives in the app, never in storage)
 	let raw = null;
 	try { raw = globalThis.localStorage?.getItem(spec.key) ?? null; } catch { /* private mode */ }
 	return decode(spec, raw);
@@ -66,5 +71,6 @@ export function readSetting(name) {
 /** Remembers a setting by name. */
 export function writeSetting(name, value) {
 	const spec = SETTINGS[name];
+	if (spec.scope === 'session') return;
 	try { globalThis.localStorage?.setItem(spec.key, encode(spec, value)); } catch { /* private mode */ }
 }

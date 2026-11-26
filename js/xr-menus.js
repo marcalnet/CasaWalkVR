@@ -48,6 +48,7 @@ const CELLS = {
 	depth: sw('depth', 'Depth shading'),
 	seethrough: sw('seethrough', 'Transparent walls'),
 	view: sw('view', 'Passthrough'), // on: the room around you; off: the VR world
+	newVisitor: { type: 'button', id: 'newVisitor', label: 'New visitor' }, // (How to move's foot: the session starts over for the next person)
 	mainHand: { type: 'choice', id: 'mainHand', label: 'Main hand', options: [{ value: 'right', label: 'Right' }, { value: 'left', label: 'Left' }], value: 'right' }, // flips the wrist menu and the tool fan together
 	lens: { type: 'choice', id: 'lens', label: 'Camera lens', options: [24, 28, 35, 50].map((mm) => ({ value: mm, label: `${mm} mm` })), value: 28 },
 	sound: { type: 'choice', id: 'sound', label: 'Sound', options: [{ value: 'off', label: 'Off' }, { value: 'effects', label: 'Effects' }], value: 'effects' },
@@ -132,7 +133,7 @@ export function buildMenus(rig) {
 		rig.add(p.mesh);
 		menus[mode] = p;
 		// The left wing: How to move (moving pictures for the input in hand), the two replay keys, the Meta button's line.
-		const g = new Panel({ tabs: [{ id: 'guide', label: '', rows: cells([['guide']]) }] }, {
+		const g = new Panel({ tabs: [{ id: 'guide', label: '', rows: cells([['guide'], ['newVisitor']]) }] }, {
 			title: 'How to move', width: WING_SIZE.guide, pxPerM: BOARD_PX_PER_M, hint: CLOSE_HINT.controllers, background: paper,
 		});
 		g.mesh.visible = false;
@@ -193,6 +194,9 @@ export function menuAction(xr, target) {
 			break;
 		case 'settings': ui.toggleBoard(); break;
 		case 'guideKey': ui.toggleHelp(); break; // (How to move: the left wing)
+		case 'newVisitor': // the next person, the headset still on: the tips, the first tabs, the height and the first-target ring start over
+			xr.newVisitor();
+			break;
 		case 'mainHand': {
 			const main = SETTINGS.mainHand.options.includes(value) ? value : xr.mainHand === 'left' ? 'right' : 'left';
 			xr.toolFan = main === 'left' ? 'right' : 'left';

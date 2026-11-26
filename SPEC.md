@@ -208,6 +208,8 @@ The user asked that every interface follow Dieter Rams' ten principles of good d
 9. **Environmentally friendly:** light on the device: few draw calls, throttled extra rendering, an idle page at 2 frames a second, no servers, small downloads. On a headset that means battery and heat.
 10. **As little design as possible:** read as the user reads it: no needless complication, and nothing pretending to be what it isn't. One way to do each thing, few options, good defaults. It does **not** mean bare minimalism here.
 
+**Shared headsets** (the user's principle, 26 Nov 2026): several people use one headset, at different times. Aids stay present and quiet rather than disappearing once seen. Teaching is per VR session, short, and ends early on the action. What you see (the home's light and view) is remembered. Who you are (your height) starts fresh each session, except the main hand. In code: `scope` in `js/settings.js` ('remembered' or 'session': Height), the session store (`js/session-store.js`: the tips, the first tabs, the first-target ring), cleared at Enter VR and by **New visitor** at How to move's foot.
+
 **When principles pull apart, fun comes first** (decided with the user): this app needs mood, character and some decoration (the studio room, the ambience, tools with personality, small celebrations like the floating photo print), and that beats minimalism. Two limits stay: usefulness and honesty are never traded for fun, and decoration lives *around* a task, never on top of it (while you measure or draw, nothing distracts).
 
 ## Roadmap: hand-held tools (milestones)

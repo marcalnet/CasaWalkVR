@@ -166,17 +166,19 @@ test('the levels stack beside the doors: one key per level, ground at the bottom
 });
 
 test('the pause, pure: which tip (in order, once a session, per input kind), ready, the practice arc', async () => {
-	const { nextTip, newRecord, tipKey, isReady, practiceArc, PAUSE } = await import('../js/pause.js');
+	const { nextTip, tipKey, isReady, practiceArc, PAUSE } = await import('../js/pause.js');
+	const { SessionStore } = await import('../js/session-store.js');
+	const newRecord = () => new SessionStore();
 	const { loopAt } = await import('../js/tip-demo.js');
 	assert.deepEqual([0, 0.6, 1.5, 2.0, 2.4, 2.9].map((t) => { const m = loopAt(t); return [+m.pinch.toFixed(1), +m.arc.toFixed(1), m.blue]; }),
 		[[0, 0, false], [0.2, 0, false], [1, 0.8, false], [1, 1, true], [0.3, 0.3, false], [0, 0, false]], 'the demonstration\'s loop: pinch, arc grows, ring blue, hand opens');
 	const r = newRecord();
 	assert.equal(nextTip('in', r, 'hands').id, 'teleport', 'Walk in: the teleport first');
-	r.seen.add(tipKey('teleport', 'hands'));
+	r.tips.seen.add(tipKey('teleport', 'hands'));
 	assert.equal(nextTip('in', r, 'hands').id, 'turn', 'each tip at most once a session: then the turn');
-	r.learnt.add(tipKey('turn', 'hands'));
+	r.tips.learnt.add(tipKey('turn', 'hands'));
 	assert.equal(nextTip('in', r, 'hands').id, 'portal', 'a learnt tip is never shown');
-	r.seen.add(tipKey('portal', 'hands'));
+	r.tips.seen.add(tipKey('portal', 'hands'));
 	assert.equal(nextTip('in', r, 'hands'), null, 'none left: a plain fade');
 	assert.equal(nextTip('in', r, 'controllers').id, 'teleport', 'learnt with hands: still shown once for controllers');
 	assert.equal(nextTip('enter', newRecord(), 'hands').id, 'walkin');
@@ -236,10 +238,10 @@ test('the pause: practising the teleport (hold the trigger, an arc onto the floo
 	assert.ok(P.arc.visible, 'the practice arc onto the floor');
 	press('right', 'trigger', false); frame();
 	assert.ok(P.fx?.pause?.ending?.learnt, 'let go: the tip ends at once, learnt');
-	assert.ok(P.record.learnt.has('teleport:controllers'));
+	assert.ok(P.record.tips.learnt.has('teleport:controllers'));
 	for (let i = 0; i < 200 && P.fx; i++) frame();
 	// Enter VR: the dark from the first frame, the walk-in tip; a quick pull before 0.8 s does nothing, after it skips.
-	P.enter();
+	x.store.start(); P.enter(); // (as Enter VR does: a fresh session)
 	assert.ok(P.fx.pause?.tip.id === 'walkin' && x.veil.amount('layer') === 1, 'Enter VR: the pause from the first frame');
 	press('right', 'trigger'); frame(); press('right', 'trigger', false); frame();
 	assert.ok(!P.fx.pause.ending, 'too soon to skip');
@@ -249,6 +251,23 @@ test('the pause: practising the teleport (hold the trigger, an arc onto the floo
 	for (let i = 0; i < 200 && P.fx; i++) frame();
 	assert.ok(!P.fx && x.veil.amount('layer') === 0, 'the room fades in');
 });
+test('shared headsets: Height is per session (never stored, "Yours" at every Enter VR); New visitor starts the session over (tips, first tab, height, the target ring), what you see stays', async () => {
+	const { x, frame } = await setup();
+	const { readSetting, writeSetting, SETTINGS } = await import('../js/settings.js');
+	assert.equal(SETTINGS.height.scope, 'session');
+	assert.ok(Object.entries(SETTINGS).every(([k, v]) => k === 'height' || !v.scope), 'every other setting is remembered');
+	writeSetting('height', 1.7);
+	assert.equal(readSetting('height'), 0, 'never stored: always "Yours" on reading');
+	frame();
+	x.menuAction({ id: 'height', value: 1.7 });
+	x.menuAction({ id: 'light', value: 'sunset' });
+	x.store.tips.seen.add('teleport:controllers'); x.store.target = true; x.ui.tab = 'general';
+	x.menuAction('newVisitor');
+	assert.ok(x.personHeight === 0 && x.store.tips.seen.size === 0 && !x.store.target && x.ui.tab === null, 'the next person: height "Yours", every tip, the first tab, the target ring');
+	assert.equal(x.lighting?.time ?? 'sunset', 'sunset', 'what you see stays');
+	assert.ok(x.guides.walk.get('newVisitor') && x.guides.dollhouse.get('newVisitor'), 'the key at How to move\'s foot');
+});
+
 test('the tab you left a board on is the one the other board opens on', async () => {
 	const { x, go } = await setup();
 	x.ui.openMenu();

@@ -64,20 +64,19 @@ const ZOOM = { close: 0.5, from: 0.2, to: 1.3, x: 1.4, black: 1.25, end: 1.6 }; 
 /** A tip's key in the session's record: its id and the input kind ('hands' | 'controllers'). */
 export const tipKey = (id, kind) => `${id}:${kind}`;
 
-/** A fresh session's record: the tips seen and learnt (keys), the first-target ring shown. */
-export const newRecord = () => ({ seen: new Set(), learnt: new Set(), target: false, cycle: 0 });
-
 /**
  * The tip to show for a transition ('enter' | 'in' | 'back'), or null: the
- * first in TIPS order not yet seen or learnt this session for this input kind.
- * all (?tips): every move shows the next tip of all of them, in turn, never retiring one.
+ * first in TIPS order not yet seen or learnt this session for this input kind
+ * (store: the session's, js/session-store.js). all (?tips): every move shows
+ * the next tip of all of them, in turn, never retiring one.
  */
-export function nextTip(transition, record, kind, { all = false } = {}) {
+export function nextTip(transition, store, kind, { all = false } = {}) {
 	if (all) {
 		const every = Object.values(TIPS).flat();
-		return every[record.cycle++ % every.length];
+		return every[store.cycle++ % every.length];
 	}
-	return (TIPS[transition] ?? []).find((t) => !record.seen.has(tipKey(t.id, kind)) && !record.learnt.has(tipKey(t.id, kind))) ?? null;
+	const { seen, learnt } = store.tips;
+	return (TIPS[transition] ?? []).find((t) => !seen.has(tipKey(t.id, kind)) && !learnt.has(tipKey(t.id, kind))) ?? null;
 }
 
 /** Ready (pure): drawn at least once and the last READY_FRAMES frame times each under READY_SLOW. */
@@ -117,7 +116,6 @@ export class Pause {
 		this.xr = xr;
 		this.fx = null; // the move between places in progress (was XRExperience.layerFx)
 		this.tipsOn = true; // (the tests switch the tips off, but for their own checks)
-		this.record = newRecord();
 		this.colour = 0x000000;
 		// The tip and the room's name over it, world-locked (in the rig).
 		this.group = new THREE.Group();
@@ -153,8 +151,8 @@ export class Pause {
 		this._v = new THREE.Vector3(); this._w = new THREE.Vector3();
 	}
 
-	/** A new session (Enter VR) or a new visitor: every tip again, and the first-target ring. */
-	reset() { this.record = newRecord(); }
+	/** This session's record (js/session-store.js): cleared at Enter VR and by New visitor. */
+	get record() { return this.xr.store; }
 
 	/** The input in use: controllers if any is held, else bare hands. */
 	kind() { return this.xr.input.active().length ? 'controllers' : 'hands'; }
@@ -165,7 +163,7 @@ export class Pause {
 	 * the pause, doing the tip on show ends it at once (the press sound).
 	 */
 	note(event) {
-		this.record.learnt.add(tipKey(event, this.kind()));
+		this.record.tips.learnt.add(tipKey(event, this.kind()));
 		if (event === 'teleport') this.target.visible = false;
 		const p = this.fx?.pause;
 		if (p?.tip?.id === event && p.t >= PAUSE.SKIP_AFTER && !p.ending) this.endTip(true);
@@ -184,7 +182,6 @@ export class Pause {
 	 * scale-model room draws smoothly (at most READY_LIMIT), then a fade in.
 	 */
 	enter() {
-		this.reset();
 		this.colour = 0x000000;
 		this.fx = { dir: 'enter', go: () => {}, t: 0, done: true };
 		this.xr.veil.set('layer', 1, this.colour);
@@ -315,7 +312,7 @@ export class Pause {
 		f.pause = { transition, tip, kind, t: 0, shown: 0, tips: tip ? 1 : 0, frames: [], waited: 0, ending: null, aim: null, away: 0, follow: null };
 		this.cover(1);
 		if (tip) {
-			this.record.seen.add(tipKey(tip.id, kind));
+			this.record.tips.seen.add(tipKey(tip.id, kind));
 			this.placeTip(transition === 'in' ? xr.roomHere() : '');
 			this.showTip(tip, kind);
 		}
@@ -381,7 +378,7 @@ export class Pause {
 		// Still loading: after NEXT, the next tip of this transition cross-fades in (two at most).
 		if (!ready && p.t >= PAUSE.NEXT * p.tips && p.tips < PAUSE.MAX_TIPS) {
 			const next = this.tipsOn ? nextTip(p.transition, this.record, p.kind) : null;
-			if (next) { p.tips++; p.tip = next; this.record.seen.add(tipKey(next.id, p.kind)); this.showTip(next, p.kind); p.shown = 0; }
+			if (next) { p.tips++; p.tip = next; this.record.tips.seen.add(tipKey(next.id, p.kind)); this.showTip(next, p.kind); p.shown = 0; }
 		}
 	}
 
@@ -524,7 +521,7 @@ export class Pause {
 		if (xr.mode !== 'walk') { t.visible = false; return; }
 		if (!this.record.target && !this.fx && this.tipsOn) {
 			this.record.target = true;
-			if (!this.record.learnt.has(tipKey('teleport', 'hands')) && !this.record.learnt.has(tipKey('teleport', 'controllers'))) {
+			if (!this.record.tips.learnt.has(tipKey('teleport', 'hands')) && !this.record.tips.learnt.has(tipKey('teleport', 'controllers'))) {
 				t.position.copy(findTarget(xr));
 				t.visible = true;
 				this.targetT = 0;
