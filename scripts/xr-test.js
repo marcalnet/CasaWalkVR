@@ -487,7 +487,7 @@ const crossSeen = () => page.evaluate(() => {
 		const angle = Math.atan2(fwd.clone().cross(to.clone().normalize()).y, fwd.dot(to.clone().normalize())) * 180 / Math.PI; // + = left
 		return { angle: +angle.toFixed(1), distance: +to.length().toFixed(2), below: +(head.y - menu.y).toFixed(2), wrist: x.ui.wrist.open, title: x.menu.title };
 	});
-	check('Settings opens the right wing beside the model: about 45° to the right (out of the model\'s way), 0.55 m from the eyes, 15° below; the wrist menu closes', s.menu === 'dollhouse' && m.angle < -34 && m.angle > -56 && m.distance > 0.45 && m.distance < 0.56 && m.below > 0.08 && m.below < 0.3 && !m.wrist && /Scale model/.test(m.title), JSON.stringify(m));
+	check('Settings opens the right wing beside the model: about 45° to the right (out of the model\'s way), 0.55 m from the eyes, below eye level (15°, less when a large model lifts it); the wrist menu closes', s.menu === 'dollhouse' && m.angle < -34 && m.angle > -56 && m.distance > 0.45 && m.distance < 0.56 && m.below > 0.04 && m.below < 0.3 && !m.wrist && /Scale model/.test(m.title), JSON.stringify(m));
 	// Nothing covers the model: no open wing overlaps the model's outline seen from the eyes, with the 5° margin.
 	const cover = await page.evaluate(async () => {
 		const THREE = await import('three'), W = await import('/js/wings.js');
@@ -826,11 +826,19 @@ check('B closes the board', (await state()).menu === null);
 	const inside = await state();
 	check('bare hands: opening the pinch on a steady landing steps inside', inside.mode === 'walk' && inside.anchorScale === 1, JSON.stringify({ mode: inside.mode }));
 	// Walking: pinch and hold, the arc; it settles (white, then blue); let go: go.
-	// A floor to aim at: the hotspots 1.2-3.5 m away (room middles, doorways), nearest first.
+	// A floor to aim at: the hotspots 1.2-3.5 m away (room middles, doorways), nearest first; then
+	// any 0.8-6 m away; else the floor 2 m away round you (a home where you land far from its hotspots).
 	const targets = await page.evaluate(() => {
 		const x = window.__casawalk.xr, h = x.headWorld(), V = h.constructor;
-		return x.modes.walk.spots().map((s) => x.centerer.localToWorld(new V(s.x, s.y, s.z))).map((p) => [p, Math.hypot(p.x - h.x, p.z - h.z)])
-			.filter(([, d]) => d > 1.2 && d < 3.5).sort((a, b) => a[1] - b[1]).map(([p]) => p.toArray());
+		const spots = x.modes.walk.spots().map((s) => x.centerer.localToWorld(new V(s.x, s.y, s.z))).map((p) => [p, Math.hypot(p.x - h.x, p.z - h.z)]);
+		const within = (a, b) => spots.filter(([, d]) => d > a && d < b).sort((p, q) => p[1] - q[1]).map(([p]) => p.toArray());
+		let list = within(1.2, 3.5);
+		if (!list.length) list = within(0.8, 6);
+		if (!list.length) for (let k = 0; k < 8; k++) {
+			const a = (k / 8) * Math.PI * 2, f = x.findFloor(new V(h.x + 2 * Math.sin(a), h.y, h.z - 2 * Math.cos(a)), 0.01);
+			if (f) list.push(f.toArray());
+		}
+		return list;
 	});
 	await gesture('right', { type: 'pinch' }); await frames(2);
 	let floorAhead = targets[0];
@@ -844,7 +852,7 @@ check('B closes the board', (await state()).menu === null);
 	await handAimAt(floorAhead); await frames(10);
 	// (The arc must have shown 0.3 s of the app's own time: a slow emulator needs more real time.)
 	await page.waitForFunction(() => (window.__casawalk.xr.modes.walk.tele?.age ?? 0) >= 0.4, null, { timeout: 8000, polling: 'raf' }).catch(() => {});
-	const steady = await page.evaluate(() => { const w = window.__casawalk.xr.modes.walk; return { age: w.tele?.age ?? 0, valid: !!w.tele?.result?.valid, colour: w.arc.dots.material.color.getHexString(), discs: w.discs.count }; });
+	const steady = await page.evaluate(() => { const x = window.__casawalk.xr, w = x.modes.walk; return { held: x.tools.held ? `${x.tools.held.tool.name}@${x.tools.held.c.handedness}` : null, dock: +(x.fan.dock ?? 0).toFixed(2), open: +x.fan.alpha.toFixed(2), age: w.tele?.age ?? 0, valid: !!w.tele?.result?.valid, colour: w.arc.dots.material.color.getHexString(), discs: w.discs.count }; });
 	check('bare hands walking: a pinch held shows the arc from the hand, blue at once on a floor (no white "not yet")', settling.via === 'hand' && settling.dots && settling.colour === '3d8bfd' && steady.valid && steady.colour === '3d8bfd', JSON.stringify({ settling, steady, targets: targets.length }));
 	await shot('hands-teleport-aim');
 	const head0 = await page.evaluate(() => window.__casawalk.xr.headWorld().toArray());
