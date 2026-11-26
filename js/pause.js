@@ -309,7 +309,7 @@ export class Pause {
 		const xr = this.xr, f = this.fx, kind = this.kind();
 		const tip = this.tipsOn ? nextTip(transition, this.record, kind, { all: DEV.tips }) : null;
 		if (!tip && transition !== 'enter') return false;
-		f.pause = { transition, tip, kind, t: 0, shown: 0, tips: tip ? 1 : 0, frames: [], waited: 0, ending: null, aim: null, away: 0, follow: null };
+		f.pause = { transition, tip, kind, t: 0, count: 0, shown: 0, tips: tip ? 1 : 0, frames: [], waited: 0, ending: null, aim: null, away: 0, follow: null };
 		this.cover(1);
 		if (tip) {
 			this.record.tips.seen.add(tipKey(tip.id, kind));
@@ -352,6 +352,7 @@ export class Pause {
 	runPause(dt) {
 		const xr = this.xr, f = this.fx, p = f.pause;
 		p.t += dt;
+		p.count++;
 		p.frames.push(dt);
 		if (p.frames.length > PAUSE.READY_FRAMES) p.frames.shift();
 		const ready = isReady(p.frames) || p.t >= PAUSE.READY_LIMIT;
@@ -400,7 +401,9 @@ export class Pause {
 
 	/** The pause is over: the place fades in. */
 	reveal() {
-		const f = this.fx;
+		const f = this.fx, p = f.pause;
+		// How long the dark lasted (frame time, frames) and whether the room was ready or the cap ended it: read by the emulator test.
+		this.last = { transition: p.transition, t: p.t, frames: p.count, capped: !isReady(p.frames) && p.t >= PAUSE.READY_LIMIT };
 		f.pause = null;
 		f.t = 0;
 		this.group.visible = this.floor.visible = this.arc.visible = false;

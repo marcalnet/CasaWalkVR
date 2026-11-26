@@ -262,7 +262,7 @@ const modelTop = () => page.evaluate(async () => {
 	}
 	return p.toArray();
 });
-const waitXR = () => page.waitForFunction(() => { const x = window.__casawalk.xr; return x.mode && !x.pendingRecentre && x.ui.wrist.orb.holder && !x.layerFx; }, null, { timeout: 15000 }).catch(() => {}); // (Enter VR holds the dark until the room draws smoothly: js/pause.js)
+const waitXR = () => page.waitForFunction(() => { const x = window.__casawalk.xr; return x.mode && !x.pendingRecentre && x.ui.wrist.orb.holder && !x.layerFx; }, null, { timeout: 45000 }).catch(() => {}); // (Enter VR holds the dark until the room draws smoothly, at most 10 s of frame time (each capped at 0.1 s): js/pause.js. Under load that is well over 15 s of real time.)
 /** What a session leaves on the 2D page: should be nothing. Returns the names of what was left. */
 const leftovers = () => page.evaluate(() => {
 	const S = window.__casawalk, x = S.xr, bad = [], want = (n, ok) => ok || bad.push(n);
@@ -406,18 +406,29 @@ await page.evaluate(() => window.__device.position.set(0, 1.6, 0));
 await lookDown();
 await restRight();
 await restLeft();
+const enteredAt = Date.now();
 await enterVR.click();
 // Wait until the session is up: the orb is on the right wrist and the plinth was placed.
 await waitXR();
+{
+	// The dark after Enter VR (js/pause.js): how long it really lasted, in wall time and in frames. It ends when the room draws
+	// smoothly; the pause's own cap (READY_LIMIT, in frame time) ending it means the room never drew smoothly.
+	const last = await page.evaluate(() => window.__casawalk.xr.pause.last ?? null);
+	const wall = (Date.now() - enteredAt) / 1000;
+	console.log(`Enter VR: the dark lasted ${last ? last.t.toFixed(2) : '?'} s of frame time over ${last?.frames ?? '?'} frames (${wall.toFixed(1)} s wall time)${last?.capped ? ', ended by the 10 s cap' : ''}`);
+	// (Here every frame is software-rendered and slow, so "ready" — ten frames under 1.5 x the 72 Hz budget — never comes and the
+	// cap ends it: the log line says so. What can fail here is the dark outlasting its cap. The real time needs a headset.)
+	check('Enter VR: the dark never outlasts the pause\'s 10 s cap (frame time)', !!last && last.transition === 'enter' && last.t <= 10 + 0.1 + 1e-6, JSON.stringify({ ...last, wall }));
+}
 await frames(10);
 let s = await state();
 check('enters the VR dollhouse', s.presenting && s.mode === 'dollhouse' && s.showroom, JSON.stringify({ mode: s.mode, session: s.session }));
 check('dollhouse: eyes where a 2 m person\'s would be (1.89 m)', Math.abs(s.head[1] - 1.89) < 0.005 && Math.abs(s.rig[1] - 0.29) < 0.005, `eyes ${s.head[1].toFixed(3)} m, raised ${s.rig[1].toFixed(3)} m`);
-check('the menu\'s orb is on the right wrist (the tool fan takes the left)', s.orb === 'right' && !s.wrist);
+check('the menu\'s orb is on the right wrist (the tool fan takes the left)', s.orb === 'right' && !s.wrist, JSON.stringify({ orb: s.orb, wrist: s.wrist }));
 {
 	// No two large surfaces at the same height: the model's floor is clear of the plinth top. (The plate standing on the plinth is not its top.)
 	const gap = await page.evaluate(() => { const x = window.__casawalk.xr, V = x.rig.position.constructor; const floor = x.centerer.localToWorld(new V(0, x.model.bounds.min.y, 0)).y;
-		const top = x.pedestal.userData.parts.slab.getWorldPosition(new V()).y + 0.015; return { gap: floor - top, near: x.camera.near, far: x.camera.far }; });
+		const top = x.pedestal.localToWorld(new V(0, x.plinthH, 0)).y /* the slab's top: one plinth since step 1.2 */; return { gap: floor - top, near: x.camera.near, far: x.camera.far }; });
 	check('the model\'s floor is clear of the plinth top (no flicker)', gap.gap > 0.003 && gap.gap < 0.006 && gap.near === 0.05 && gap.far === 300, JSON.stringify(gap));
 }
 check('no scale figure by the scale model (the landing markers show a person\'s size)', await page.evaluate(() => !window.__casawalk.xr.scene.getObjectByName('scale-figure') && !window.__casawalk.xr.menus.dollhouse.get('figure')));
