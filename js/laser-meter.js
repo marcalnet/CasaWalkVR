@@ -38,7 +38,8 @@ export class LaserMeter {
 		this.screenPoint = this.object.getObjectByName('screen');
 		this.m = new Measurements();
 		this.m.units = readSetting('meterUnits') ?? defaultUnits(globalThis.navigator?.languages?.[0] ?? ''); // (remembered; at first from the browser's region)
-		this.controls = ['stickPress']; // the stick press of its hand steps its one option: the units
+		this.controls = ['stickPress']; // the stick press of its hand steps its one option: the units (js/tool-dial.js)
+		this.option = { part: 'hook', stops: [{ value: 'cm', label: 'cm' }, { value: 'ftin', label: 'ft in' }], get: () => this.m.units, set: (u) => this.setUnits(u) };
 		this.held = null;
 		this.hitDistance = null;
 		this.marks = []; // per line: { a, b, text, snap } (model space)
@@ -92,12 +93,8 @@ export class LaserMeter {
 		if (xr.soundLevel !== 'off') xr.sound.play(went ? 'release' : 'deny');
 	}
 
-	/** The stick press of the holding controller: the next units (cm, ft in), remembered; the readings follow. */
-	control(c, name) {
-		if (name !== 'stickPress') return;
-		this.setUnits(this.m.units === 'cm' ? 'ftin' : 'cm');
-		if (this.xr.soundLevel !== 'off') this.xr.sound.play('press');
-	}
+	/** The stick press of the holding controller: the next units (cm, ft in), the dial shown (js/tool-dial.js). */
+	control(c, name) { if (name === 'stickPress') this.xr.dial?.step(this); }
 
 	/** The meter's units ('cm' | 'ftin'): remembered; every line's label and the live reading in them. */
 	setUnits(units) {

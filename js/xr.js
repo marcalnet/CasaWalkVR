@@ -50,6 +50,7 @@ import { attachTransientPointer } from './transient-pointer.js';
 import { SeeThrough, SEE_THROUGH_MAX } from './walls.js';
 import { Portals } from './portal.js';
 import { Pause } from './pause.js';
+import { ToolDial } from './tool-dial.js';
 import { SessionStore } from './session-store.js';
 import { aimOwner } from './hand-owner.js';
 import { scaleCentre, walkCentre, followBody, areaOf, yawTo } from './zones.js';
@@ -147,6 +148,7 @@ export class XRExperience {
 		this.ui = new XRUI(this);
 		this.tools = new ToolSystem(this);
 		this.fan = new ToolFan(this); // the tool fan over the left hand (milestone C)
+		this.dial = new ToolDial(this); // each tool's one option, on its control part (js/tool-dial.js)
 		this.tweens = new Tweens();
 		this.pause = new Pause(this); // every move between places, and the tips on the way (js/pause.js)
 		this.haptics = new Haptics();
@@ -612,7 +614,7 @@ export class XRExperience {
 	aimBlock(c, p) {
 		const s = this.claims ?? this.claimSnapshot();
 		// (What can change within the frame is read now: a tool taken, a wing or the wrist menu opened.)
-		return aimOwner(c, p, { ...s, held: this.heldNow(), board: this.boardOpen, wristOpen: this.ui.wrist.open }, !!this.handViews[c.index]?.near);
+		return aimOwner(c, p, { ...s, held: this.heldNow(), dial: !!this.dial?.open, board: this.boardOpen, wristOpen: this.ui.wrist.open }, !!this.handViews[c.index]?.near);
 	}
 
 	/** The held tool's hand and where it is (world), or null. */
@@ -735,6 +737,7 @@ export class XRExperience {
 		this.updateAreas(dt); // left, centre, right: where each hand is (js/zones.js)
 		this.fan.update(dt); // the tool fan: home or waiting at the edge, touch, take, swap, put back (milestone C)
 		this.tools.update(dt);
+		this.dial.update(dt); // (after the tools: a stick step is already counted)
 		this.tweens.update(dt);
 		this.haptics.update(dt);
 		this.sound.update(dt);

@@ -63,6 +63,8 @@ export class StreetCamera {
 		this.held = null; // the hand holding it
 		this.t = 0;
 		this.prints = [];
+		this.controls = ['stickPress']; // the stick press of its hand steps its one option: the lens (js/tool-dial.js)
+		this.option = { part: 'lens', stops: [24, 28, 35, 50].map((mm) => ({ value: mm, label: `${mm} mm` })), get: () => this.mm, set: (mm) => this.xr.menuAction({ id: 'lens', value: mm }) };
 		this.guide = new FramingGuide(xr); // the red frame where the photo's edges fall (js/framing-guide.js)
 		this._lens = new THREE.Matrix4(); this._turn = new THREE.Matrix4().makeRotationY(Math.PI);
 		this.setLens(xr.cameraLens ?? 28);
@@ -80,7 +82,10 @@ export class StreetCamera {
 		// (Bare hands: no shutter yet; the button on the camera comes with item 11 of the Quest 2 fixes. Until then, say so.)
 		this.hint.set(c?.isHand ? 'Photos: with a controller, for now' : 'Trigger: take a photo');
 	}
-	putBack() { this.held = null; this.guide.reset(); } // (put back: the frame goes at once; only a held tool is updated, so it can't fade out)
+	putBack() { this.held = null; this.guide.reset(); }
+
+	/** The stick press of the holding controller: the next lens, the dial shown (js/tool-dial.js). */
+	control(c, name) { if (name === 'stickPress') this.xr.dial?.step(this); } // (put back: the frame goes at once; only a held tool is updated, so it can't fade out)
 
 	/** The shutter. */
 	trigger(c, phase) {

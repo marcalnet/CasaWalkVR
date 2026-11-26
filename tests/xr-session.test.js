@@ -270,6 +270,39 @@ test('the pause: practising the teleport (hold the trigger, an arc onto the floo
 	for (let i = 0; i < 200 && P.fx; i++) frame();
 	assert.ok(!P.fx && x.veil.amount('layer') === 0, 'the room fades in');
 });
+test('one option per tool, on one dial: the stick steps it (the dial shows 1.5 s), a touch on the control part opens it, a stop chooses; a quiet ring on each control part, pulsing on the first take', async () => {
+	const { x, frame, press, hands } = await setup();
+	const { stopAngles, DIAL } = await import('../js/tool-dial.js');
+	const a = stopAngles(4), gap = DIAL.RADIUS * (a[0] - a[1]);
+	assert.ok(Math.abs(gap - (DIAL.STOP + DIAL.GAP)) < 1e-9 && Math.abs((a[0] + a[3]) / 2 - Math.PI / 2) < 1e-9, '22 mm stops, 12 mm apart, centred on the top');
+	const cam = x.fan.camera, dial = x.dial;
+	hands.right.grip.visible = hands.left.grip.visible = true;
+	frame();
+	x.tools.take(cam, hands.right);
+	frame();
+	const cue = dial.cues.get(cam);
+	assert.ok(cue && cue.pulse > 0, 'the lens carries its quiet ring, pulsing on the first take');
+	const lens0 = x.cameraLens;
+	press('right', 'stick'); frame(); press('right', 'stick', false); frame();
+	assert.ok(x.cameraLens !== lens0 && dial.open?.stepped && dial.label.mesh.visible && dial.label.text === `${x.cameraLens} mm`, 'the stick: the next lens, the dial and its label');
+	for (let i = 0; i < 120; i++) frame();
+	assert.ok(!dial.open, 'stepped: it shows 1.5 s');
+	// The other hand's tip on the lens: the dial opens; a stop chosen closes it.
+	const lensAt = dial.partAt(cam).clone();
+	hands.left.grip.position.copy(x.rig.worldToLocal(lensAt.clone().add(new THREE.Vector3(0, 0.01, 0.045))));
+	frame(); frame();
+	assert.ok(dial.open && !dial.open.stepped, 'touched: the dial opens');
+	assert.equal(x.aimBlock(hands.left, lensAt), 'dial', 'while open it owns the other hand');
+	const stop = dial.pad.keys.get('stop0');
+	dial.choose(cam, cam.option.stops[0].value); dial.close();
+	assert.equal(x.cameraLens, 24, 'a stop chosen: 24 mm');
+	hands.left.grip.position.set(-0.4, 1.0, 0);
+	x.tools.putBack();
+	frame();
+	assert.ok(stop && !dial.open);
+	x.store.start();
+});
+
 test('the framing guide: while the camera is held, a red frame where the photo\'s edges fall (its depth 0.3-8 m), 3:2 for the lens; hidden while the shutter fires; never in photos', async () => {
 	const { x, frame, hands } = await setup();
 	const { frameAt, GUIDE } = await import('../js/framing-guide.js');
@@ -1153,7 +1186,7 @@ test('20 measurements and 20 strokes cost a handful of draw calls', async () => 
 	for (let i = 0; i < 20; i++) { meter.hit = at(0, i * 0.1); meter.trigger(c, 'down'); meter.hit = at(1 + i * 0.05, i * 0.1 + 0.3); meter.trigger(c, 'down'); }
 	x.tools.take(marker, c);
 	for (let k = 0; k < 20; k++) {
-		if (k % 5 === 0) marker.nextInk();
+		if (k % 5 === 0) marker.option.set(marker.option.stops[(marker.ink + 1) % marker.option.stops.length].value);
 		marker.trigger(c, 'down');
 		for (let i = 0; i <= 8; i++) { marker.object.position.set(i * 0.01, k * 0.02, 0); marker.object.updateMatrixWorld(true); marker.update(1 / 72); }
 		marker.trigger(c, 'up');

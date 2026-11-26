@@ -8,6 +8,7 @@
 //   tips     the pause's tips seen and learnt (keys 'id:kind': js/pause.js)
 //   target   the first-target ring was shown inside
 //   cycle    ?tips: the next tip in turn
+//   cued     the tools whose control-part ring pulsed (the first take)
 //   tabs     the tab each place's board last showed (the first opening at
 //            each place shows How to move)
 // Pure: runs in Node tests.
@@ -21,5 +22,6 @@ export class SessionStore {
 		this.target = false;
 		this.cycle = 0;
 		this.tabs = {};
+		this.cued = new Set(); // the tools whose control part's ring has pulsed this session (js/tool-dial.js)
 	}
 }

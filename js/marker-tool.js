@@ -13,6 +13,7 @@
 
 import * as THREE from 'three';
 import { buildMarker, MARKER_INKS } from './tool-models.js';
+import { readSetting, writeSetting } from './settings.js';
 
 export const INKS = ['black', 'blue', 'green', 'red'];
 const RADIUS = 0.004; // metres, to the eye when drawn
@@ -29,8 +30,9 @@ export class MarkerTool {
 		this.xr = xr;
 		this.name = 'marker';
 		this.live = true;
-		this.controls = ['stickPress']; // the stick press of its hand changes colour
-		this.ink = 0;
+		this.controls = ['stickPress']; // the stick press of its hand steps its one option: the colour (js/tool-dial.js)
+		this.ink = Math.max(0, INKS.indexOf(readSetting('markerColour')));
+		this.option = { part: 'cap', stops: INKS.map((k) => ({ value: k, label: k[0].toUpperCase() + k.slice(1) })), get: () => INKS[this.ink], set: (k) => this.setInk(k) };
 		this.object = buildMarker({ ink: INKS[this.ink] });
 		this.tip = this.object.getObjectByName('tip');
 		this.strokes = [];
@@ -62,15 +64,18 @@ export class MarkerTool {
 		if (e.type === 'lost') this.endStroke();
 	}
 
-	/** The stick press of the holding controller: the next colour. */
-	control(c, name) { if (name === 'stickPress') this.nextInk(1); }
+	/** The stick press of the holding controller: the next colour, the dial shown (js/tool-dial.js). */
+	control(c, name) { if (name === 'stickPress') this.xr.dial?.step(this); }
 
-	nextInk(dir = 1) {
-		this.ink = (this.ink + (dir < 0 ? INKS.length - 1 : 1)) % INKS.length;
-		this.object.userData.setInk(INKS[this.ink]);
-		if (this.xr.soundLevel !== 'off') this.xr.sound.play('tick');
-		if (this.held?.isController) this.xr.haptics.play(this.held, 'tick');
+	/** The ink: a colour of INKS, remembered; the cap shows it. */
+	setInk(k) {
+		const i = INKS.indexOf(k);
+		if (i < 0) return;
+		this.ink = i;
+		this.object.userData.setInk(k);
+		writeSetting('markerColour', k);
 	}
+
 
 	/** Model-space radius for a stroke drawn now (8 mm thick to the eye). */
 	radius() { return RADIUS / Math.max(1e-6, this.xr.anchor.scale.x); }

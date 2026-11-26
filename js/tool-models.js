@@ -287,7 +287,7 @@ export function buildMeter({ blade = 0.03 } = {}) {
 
 // ---------------------------------------------------------------------------
 // The marker (milestone F): a thick felt-tip; its ink recolours one material.
-// Axes: the nib points along -Z. Points: grip, tip.
+// Axes: the nib points along -Z. Points: grip, tip, cap.
 // ---------------------------------------------------------------------------
 
 export const MARKER_LENGTH = 0.145;
@@ -315,6 +315,7 @@ export function buildMarker({ ink = 'blue' } = {}) {
 	const g = P.build('marker', { keep: ['ink'] });
 	point(g, 'grip', 0, 0, -0.018);
 	point(g, 'tip', 0, 0, -0.0695, [0, 0, -1]);
+	point(g, 'cap', 0, 0, 0.067); // (the posted cap's middle: the marker's control part, its colour dial)
 	g.userData.fanScale = MARKER_FAN_SCALE;
 	g.userData.setInk = (c) => M.ink.color.set(MARKER_INKS[c] || c);
 	return g;

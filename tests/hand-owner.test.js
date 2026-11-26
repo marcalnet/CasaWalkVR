@@ -9,7 +9,8 @@ const L = { handedness: 'left' }, R = { handedness: 'right' };
 const none = { held: null, board: false, wristOpen: false, orb: null, doors: null, tools: [], model: null };
 
 test('the ladder: a hand holding a tool, an open wing or wrist menu, the orb, a key, the tools, the model, in that order; else nobody', () => {
-	assert.deepEqual(LADDER, ['tool', 'board', 'wrist menu', 'key', 'fan', 'model']);
+	assert.deepEqual(LADDER, ['tool', 'dial', 'board', 'wrist menu', 'key', 'fan', 'model']);
+	assert.equal(aimOwner(R, V(0, 1, 0), { ...none, dial: true }), 'dial', 'a tool\'s dial open: the other hand\'s pinch is its');
 	const p = V(0, 1.2, -0.4);
 	assert.equal(aimOwner(R, p, none), null, 'nothing near: free to aim');
 	assert.equal(aimOwner(R, p, { ...none, held: { c: R, at: V(0, 1, 0) } }), 'tool', 'holding a tool');

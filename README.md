@@ -218,6 +218,7 @@ js/tool-fan.js    the tool fan (take, swap, put back)
 js/tool-models.js the tools' models
 js/street-camera.js the street camera: shutter, viewfinder, lens, the print
 js/framing-guide.js the camera's red frame where the photo's edges fall
+js/tool-dial.js   each tool's one option (lens, colour, units) on one round dial at its control part
 js/laser-meter.js the laser meter: beam, dot, live reading, lines with labels
 js/measure.js     measuring: lines, labels, snapping, undo (no DOM)
 js/marker-tool.js the marker: strokes, colours, undo
