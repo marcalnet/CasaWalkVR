@@ -315,7 +315,16 @@ test('the pause: practising the teleport (hold the trigger, an arc onto the floo
 	for (let i = 0; i < 200 && P.fx; i++) frame();
 	// Enter VR: the dark from the first frame, the walk-in tip; a quick pull before 0.8 s does nothing, after it skips.
 	x.store.start(); P.enter(); // (as Enter VR does: a fresh session)
-	assert.ok(P.fx.pause?.tip.id === 'walkin' && x.veil.amount('layer') === 1, 'Enter VR: the pause from the first frame');
+	assert.ok(P.fx.pause && !P.fx.pause.tip && x.veil.amount('layer') === 1 && !P.group.visible, 'Enter VR: the dark from the first frame, no tip before the head has a pose (the audit\'s B1)');
+	frame(); frame();
+	assert.ok(!P.fx.pause.tip, 'still no pose: still choosing');
+	x.camera.position.set(3, 1.6, 2); x.camera.rotation.set(0, 1, 0); x.camera.updateMatrix(); // (the head somewhere else, turned)
+	x.viewerMatrix = () => x.camera.matrix.clone(); // (the headset's pose now)
+	frame(); frame();
+	assert.ok(P.fx.pause?.tip.id === 'walkin' && P.fx.pause.kind === 'controllers', 'the walk-in tip, in the controllers\' words');
+	const ahead = P.group.position.clone().sub(x.camera.position).setY(0);
+	assert.ok(Math.abs(ahead.length() - 1.4) < 0.15 && ahead.normalize().dot(new THREE.Vector3(-Math.sin(1), 0, -Math.cos(1))) > 0.99, `placed 1.4 m in front of the head (${ahead.length().toFixed(2)} m)`);
+	x.camera.position.set(0, 1.6, 0); x.camera.rotation.set(0, 0, 0); x.camera.updateMatrix();
 	press('right', 'trigger'); frame(); press('right', 'trigger', false); frame();
 	assert.ok(!P.fx.pause.ending, 'too soon to skip');
 	for (let i = 0; i < 72; i++) frame();

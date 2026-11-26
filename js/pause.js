@@ -50,6 +50,7 @@ export const PAUSE = {
 	NEXT: 8, MAX_TIPS: 2, // still loading after this long: the next tip of the transition cross-fades in (two at most)
 	SKIP_AFTER: 0.8, // a press (or the tip's own action) ends it from then on
 	TIP_OUT: 0.3, REVEAL: 0.2, // the tip fades out, then the place fades in
+	CHOOSE_WAIT: 0.3, // Enter VR: the tip is chosen once the head has a pose and a controller is in, or this long after the pose (bare hands)
 	READY_LIMIT: 3, READY_FRAMES: 10, READY_SPREAD: 0.25, READY_SPIKE: 0.1, // ready: drawn once and the last 10 frames steady (each within 25% of their median, none 100 ms or more); never more than 3 s from the first draw
 	GAP: 0.3, // with no tip, the dark gap a plain fade has anyway: only a longer wait shows the void, the rings and the place's name
 	AHEAD: 1.4, BELOW: 10, NAME_ABOVE: 0.8, // the tip: 1.4 m ahead, its centre 10° below eye level; the room's name 0.8° above it
@@ -322,10 +323,21 @@ export class Pause {
 	 * the rings and the place's name). Returns true if a tip shows.
 	 */
 	startPause(transition) {
-		const xr = this.xr, f = this.fx, kind = this.kind();
-		const tip = this.tipsOn ? nextTip(transition, this.record, kind, { all: DEV.tips }) : null;
-		f.pause = { transition, tip, kind, t: 0, count: 0, shown: 0, tips: tip ? 1 : 0, frames: [], waited: 0, ending: null, aim: null, away: 0, follow: null, waiting: false };
+		const f = this.fx;
+		f.pause = { transition, tip: null, kind: this.kind(), t: 0, count: 0, shown: 0, tips: 0, frames: [], waited: 0, ending: null, aim: null, away: 0, follow: null, waiting: false };
 		this.cover(1);
+		this.floor.visible = false;
+		// Enter VR: nothing to place yet. The 2D page's camera is still the camera, and no controller has
+		// connected: the tip is chosen and placed once the head has a pose (choose(), from runPause).
+		if (transition === 'enter') { f.pause.choosing = { poses: 0, since: 0 }; return false; }
+		return this.chooseTip(f.pause);
+	}
+
+	/** Chooses the pause's tip for the input in hand, and shows it in front of the head. Returns true if one shows. */
+	chooseTip(p) {
+		const xr = this.xr, kind = this.kind(), transition = p.transition;
+		const tip = this.tipsOn ? nextTip(transition, this.record, kind, { all: DEV.tips }) : null;
+		Object.assign(p, { tip, kind, tips: tip ? 1 : 0 });
 		if (tip) {
 			this.record.tips.seen.add(tipKey(tip.id, kind));
 			this.placeTip(transition === 'in' ? xr.roomHere() : '');
@@ -333,6 +345,24 @@ export class Pause {
 		}
 		this.floor.visible = !!tip;
 		return !!tip;
+	}
+
+	/**
+	 * Enter VR, each frame until chosen: the head needs a pose that has been
+	 * drawn once (the camera then follows it), and the input a moment to
+	 * connect (a controller, or CHOOSE_WAIT for bare hands). Then the tip.
+	 * Returns true while still waiting.
+	 */
+	choose(p, dt) {
+		const c = p.choosing;
+		if (!this.xr.viewerMatrix()) return true;
+		c.poses++;
+		c.since += dt;
+		if (c.poses < 2 || (!this.xr.input.controllers.some((k) => k.source) && c.since < PAUSE.CHOOSE_WAIT)) return true;
+		p.choosing = null;
+		p.t = 0; // (the tip's own clock: its fade in, its 2.0-3.5 s, the skip after 0.8 s)
+		this.chooseTip(p);
+		return false;
 	}
 
 	/** The place's name, shown while a tip-less wait runs long: the room's at Walk in, the home's otherwise. */
@@ -376,6 +406,7 @@ export class Pause {
 		p.count++;
 		p.frames.push(dt);
 		if (p.frames.length > PAUSE.READY_FRAMES) p.frames.shift();
+		if (p.choosing && this.choose(p, dt)) return; // (Enter VR: the dark until the head has a pose)
 		const ready = isReady(p.frames) || p.t >= PAUSE.READY_LIMIT;
 		this.demo.update(dt);
 		if (!p.tip) { // (no tip: the dark until the place is ready)

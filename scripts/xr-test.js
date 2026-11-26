@@ -263,6 +263,17 @@ const modelTop = () => page.evaluate(async () => {
 	return p.toArray();
 });
 const waitXR = () => page.waitForFunction(() => { const x = window.__casawalk.xr; return x.mode && !x.pendingRecentre && x.ui.wrist.orb.holder && !x.layerFx; }, null, { timeout: 45000 }).catch(() => {}); // (Enter VR holds the dark until the room draws smoothly, at most 10 s of frame time (each capped at 0.1 s): js/pause.js. Under load that is well over 15 s of real time.)
+/** The Enter VR tip, once chosen: its words' kind, and where it stands from the head (the audit's B1). */
+const enterTip = async () => {
+	await page.waitForFunction(() => { const p = window.__casawalk.xr.pause.fx?.pause; return !p || (!p.choosing && p.tip); }, null, { timeout: 15000, polling: 'raf' }).catch(() => {});
+	return page.evaluate(() => {
+		const x = window.__casawalk.xr, P = x.pause, p = P.fx?.pause, V = x.rig.position.constructor;
+		const head = new V().setFromMatrixPosition(x.camera.matrix), at = P.group.position.clone().sub(head);
+		const fwd = new V(0, 0, -1).transformDirection(x.camera.matrix).setY(0).normalize();
+		return { tip: p?.tip?.id ?? null, kind: p?.kind ?? null, words: P.tipLabel.text, shown: P.group.visible, ring: P.floor.visible,
+			dist: +Math.hypot(at.x, at.z).toFixed(2), ahead: +at.clone().setY(0).normalize().dot(fwd).toFixed(3), ringUnder: +Math.hypot(P.floor.position.x - head.x, P.floor.position.z - head.z).toFixed(2) };
+	});
+};
 /** What a session leaves on the 2D page: should be nothing. Returns the names of what was left. */
 const leftovers = () => page.evaluate(() => {
 	const S = window.__casawalk, x = S.xr, bad = [], want = (n, ok) => ok || bad.push(n);
@@ -984,6 +995,14 @@ check('B closes the board', (await state()).menu === null);
 	// The hands are drawn with the hand model (the generic hand), once loaded.
 	const model = await page.evaluate(() => window.__casawalk.xr.handViews.map((v) => ({ side: v.c.handedness, model: !!v.model, capsules: v.colourMesh.visible })));
 	check('bare hands are drawn with the hand model (the capsules are the fallback)', model.every((m) => m.model && !m.capsules), JSON.stringify(model));
+	// The Enter VR pause with bare hands (tips on, a fresh session's record): the hands' words, in front of the head (the audit's B1).
+	await page.evaluate(() => { const x = window.__casawalk.xr; x.store.start(); x.pause.tipsOn = true; x.pause.enter(); });
+	{
+		const et = await enterTip();
+		check('Enter VR with bare hands: the walk-in tip in the hands\' words, 1.4 m in front of the head, the rings under you', et.tip === 'walkin' && et.kind === 'hands' && et.words === 'Pinch a room, then Walk in.' && Math.abs(et.dist - 1.4 * Math.cos(10 * Math.PI / 180)) < 0.1 && et.ahead > 0.98 && et.ring && et.ringUnder < 0.05, JSON.stringify(et));
+		await page.evaluate(() => { window.__casawalk.xr.pause.tipsOn = false; });
+		await settled(); await frames(4);
+	}
 	// Real gestures again for the rest of the run.
 	await page.evaluate(() => { const x = window.__casawalk.xr; for (const c of x.input.controllers) if (c.gesture) delete c.gesture.step; });
 	await page.evaluate(() => { window.__device.primaryInputMode = 'controller'; });
@@ -1508,7 +1527,13 @@ await page.evaluate(() => {
 	const q = [qy[3] * qx[0] + qy[0] * qx[3] + qy[1] * qx[2] - qy[2] * qx[1], qy[3] * qx[1] - qy[0] * qx[2] + qy[1] * qx[3] + qy[2] * qx[0], qy[3] * qx[2] + qy[0] * qx[1] - qy[1] * qx[0] + qy[2] * qx[3], qy[3] * qx[3] - qy[0] * qx[0] - qy[1] * qx[1] - qy[2] * qx[2]];
 	d.quaternion.set(...q);
 });
+await page.evaluate(() => { window.__casawalk.xr.pause.tipsOn = true; }); // (the Enter VR tip, this once: the audit's B1)
 await enterVR.click();
+{
+	const et = await enterTip();
+	check('Enter VR with controllers: the walk-in tip in the controllers\' words, 1.4 m in front of the head (sitting, turned), the rings under you', et.tip === 'walkin' && et.kind === 'controllers' && et.words === 'Point at a room, then Walk in.' && Math.abs(et.dist - 1.4 * Math.cos(10 * Math.PI / 180)) < 0.1 && et.ahead > 0.98 && et.ring && et.ringUnder < 0.05, JSON.stringify(et));
+	await page.evaluate(() => { window.__casawalk.xr.pause.tipsOn = false; });
+}
 await waitXR(); await frames(10);
 s = await state();
 check('re-entering puts the plinth in front of you', Math.abs(s.stage[0] - 1.2) < 0.02 && Math.abs(s.stage[2] - 0.8) < 0.02 && Math.abs(s.stage[3] - 0.9) < 0.02,
