@@ -57,7 +57,7 @@ js/optimise.js    merge-by-material and BVH
 js/xr-input.js    controllers, rays, thumbsticks, teleport arc, per-frame button claims; bare hands told apart (a pinch never clicks); touch state for hands and controllers (poke point, pinch); controller tip nub
 js/touch.js       touch keys: hover, contact, click, release, front-only (pure, Node-testable)
 js/hands.js       bare hands drawn from the WebXR joints (translucent capsules, orange fingertip)
-js/gestures.js    bare-hand gestures from the joints: the pinch-and-hold teleport and wrist flick, the closed hand, the aim ray (pure, Node-testable)
+js/gestures.js    bare-hand gestures from the joints: the pinch-and-hold teleport and wrist flick, the quick pinch (closes the wings), the closed hand, the aim ray (pure, Node-testable)
 js/dev.js         the development switches in the page address (?test, ?hands, ?stats, ?nomerge, ?sw, ?worker), read in one place
 js/device.js      which device: the headset's own browser, a Quest 2 (the one place that reads the browser's name)
 js/hand-readout.js the bare-hand tuning readout over each wrist, only with ?hands on the page URL (development)

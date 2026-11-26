@@ -4,7 +4,8 @@
 // The wrist menu (js/wrist-menu.js) has four keys: Settings, Help, ← Back and
 // Walk in →. Settings opens the settings board: one per layer ("Settings ·
 // Scale model", "Settings · Inside"), the same tabs in both (View, Walk,
-// General), with a Close key; pressed by touch, or by a controller's laser.
+// General), with no Close key (a press at empty space closes it: js/xr-ui.js);
+// pressed by touch, or by a controller's laser.
 // On/off settings are switches, settings with a few values are options with
 // every one visible (one press), Levels is a ‹ › stepper. Help opens a card
 // of what each control does, for controllers or for bare hands.
@@ -37,7 +38,7 @@ const sw = (id, label) => ({ type: 'switch', id, label, value: false });
  * the View tab's five rows, so the board keeps its size.
  */
 const GUIDE_CELL = {
-	type: 'drawn', id: 'guide', h: 330, kind: 'dollhouse-hands', foot: '',
+	type: 'drawn', id: 'guide', h: 390, kind: 'dollhouse-hands', foot: '',
 	draw(ctx, box) { drawGuide(ctx, this.kind, box, this.foot); },
 };
 
@@ -105,17 +106,20 @@ export const LESSONS = {
 export const GUIDES = {
 	'walk-hands': { title: 'How to move', row: 0,
 		frames: ['Pinch your fingers', 'Hold: aim', 'Point at the floor', 'Let go on blue: go'],
-		lines: ['While aiming, flick your wrist: turn', 'Let go on white or red: nothing happens', 'Palm towards you: cancel', 'The Meta button leaves VR at any moment'] },
+		lines: ['While aiming, flick your wrist: turn', 'Let go on white or red: nothing happens', 'Palm towards you: cancel', 'Pinch outside the panels: close them', 'The Meta button leaves VR at any moment'] },
 	'walk-controllers': { title: 'How to move', row: 1,
 		frames: ['Right stick forward', 'or hold a trigger', 'Aim at the floor', 'Let go on blue: go'],
-		lines: ['Right stick left or right: turn', 'Left stick: walk. Grip and pull: slide', 'B or Y: back to the scale model', 'The Meta button leaves VR at any moment'] },
+		lines: ['Right stick left or right: turn', 'Left stick: walk. Grip and pull: slide', 'B or Y: back to the scale model', 'Trigger outside the panels: close them', 'The Meta button leaves VR at any moment'] },
 	'dollhouse-hands': { title: 'The scale model', row: 2,
 		frames: ['Close your hand on it: hold', 'Let go: it floats, then goes home', 'Pinch and hold, point at a room', 'Let go when it holds still: step inside'],
-		lines: ['Lift it and turn it: it stays level', 'Palm towards you: cancel', 'The Meta button leaves VR at any moment'] },
+		lines: ['Lift it and turn it: it stays level', 'Palm towards you: cancel', 'Pinch outside the panels: close them', 'The Meta button leaves VR at any moment'] },
 	'dollhouse-controllers': { title: 'The scale model', row: 3,
 		frames: ['Grip: hold it', 'Sticks: turn and zoom', 'Point at a room', 'Pull the trigger: step inside'],
-		lines: ['Lift it and turn it: it stays level', 'Let go in the air: it goes home by itself', 'The Meta button leaves VR at any moment'] },
+		lines: ['Lift it and turn it: it stays level', 'Let go in the air: it goes home by itself', 'Trigger outside the panels: close them', 'The Meta button leaves VR at any moment'] },
 };
+
+// The line at each wing's foot, saying how to close it (there is no Close key: build 120, M1; js/xr-ui.js sets it on opening).
+export const CLOSE_HINT = { controllers: 'Pull the trigger outside to close', hands: 'Pinch outside to close' };
 
 /**
  * Builds the settings boards (one per layer, hidden, in the rig). Returns
@@ -129,7 +133,7 @@ export function buildMenus(rig) {
 	for (const [mode, { title }] of Object.entries(MENUS)) {
 		// The right wing: Settings (the tabs), with the How to move key at the tabs' left end.
 		const p = new Panel({ tabs: TABS.map((t) => ({ ...t, rows: cells(t.rows) })), actions: [] }, {
-			title, width: WING_SIZE.settings, pxPerM: BOARD_PX_PER_M, close: true, background: paper,
+			title, width: WING_SIZE.settings, pxPerM: BOARD_PX_PER_M, hint: CLOSE_HINT.controllers, background: paper, // (no Close key: build 120, M1)
 			lead: { id: 'guideKey', label: '? How to move', w: 150 },
 		});
 		p.mesh.visible = false;
@@ -139,7 +143,7 @@ export function buildMenus(rig) {
 		menus[mode] = p;
 		// The left wing: How to move (moving pictures for the input in hand), the two replay keys, the Meta button's line.
 		const g = new Panel({ tabs: [{ id: 'guide', label: '', rows: cells([['guide'], ['replayTools', 'replayPinch']]) }], actions: [] }, {
-			title: 'How to move', width: WING_SIZE.guide, pxPerM: BOARD_PX_PER_M, close: true, closeId: 'closeGuide', background: paper,
+			title: 'How to move', width: WING_SIZE.guide, pxPerM: BOARD_PX_PER_M, hint: CLOSE_HINT.controllers, background: paper,
 		});
 		g.mesh.visible = false;
 		g.mesh.name = 'guide-wing';
@@ -207,8 +211,6 @@ export function menuAction(xr, target) {
 		case 'exit': xr.goLayer('out', () => xr.end()); break;
 		case 'settings': ui.toggleBoard(); break;
 		case 'help': case 'guideKey': ui.toggleHelp(); break; // (How to move: the left wing)
-		case 'close': ui.closeMenu(); break;
-		case 'closeGuide': ui.closeGuide(); break;
 		case 'replayTools':
 			ui.closeAll(); // (it must play where it can be seen)
 			if (xr.mode === 'dollhouse' && xr.toolsIntro?.start({ again: true })) { xr.lessons.stop(); xr.introAgain = true; }

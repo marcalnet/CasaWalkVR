@@ -14,6 +14,9 @@
 //   turn     while the pinch is held: a quick sideways flick of the wrist (the
 //            hand turns over FLICK about the vertical within FLICK_TIME; dir +1
 //            is to the right as you see it)
+//   tap      a quick pinch: closed and opened again within TAP, the palm never
+//            towards your eyes (it closes the wings when aimed at nothing:
+//            js/xr-ui.js; the pinch and pinchEnd events come as usual)
 //   fist     a closed hand (three fingertips near their knuckles), and fistEnd
 //   lost     the hand stopped being tracked (cancels everything)
 //
@@ -34,6 +37,8 @@ export const GESTURE = {
 	FIST_OFF: 0.06, // two over this: open again
 	FIST_HOLD: 0.15,
 	PINCH_ON: 0.025, PINCH_OFF: 0.04, PINCH_HOLD: 0.1, // pinched under 2.5 cm, held 0.1 s; open over 4 cm (was 1.5 / 3 cm, 0.25 s: missed too often)
+	TAP: 0.4, // a quick pinch: closed and opened again within this (s); closes the wings when aimed at nothing (build 120, M1)
+	TAP_FRONT: 0.2, TAP_BELOW: 0.8, // the quick pinch's gate: at least this far in front of the eyes, at most this far below them (the waist) (m)
 	TRACKED: 3, // frames a hand must have been tracked before it counts
 	SMOOTH: 0.03, // seconds: joint smoothing (light: a flick is quick)
 };
@@ -85,6 +90,7 @@ export class HandGestures {
 		this._shape ??= undefined;
 		this.fist = false; this.fistTime = 0;
 		this.pinch = false; this.pinchTime = 0; this.pinchHeld = false; this.pinchSpent = false;
+		this.tapStart = 0; this.tapFaced = false; // (the quick pinch: when it closed, and whether the palm faced you meanwhile)
 		this.flick = []; // the hand's heading while the pinch is held: [{ yaw, t }], from a pool
 		this.clock = 0;
 		this.shape = null;
@@ -139,12 +145,15 @@ export class HandGestures {
 		s.toEyes = this.head ? s.normal.dot(_a.subVectors(this.head, s.pinchAt).normalize()) : -1;
 		const facing = s.toEyes > G.TO_EYES;
 		if (!this.pinch) {
-			if (s.pinch < G.PINCH_ON) { this.pinch = true; this.pinchTime = 0; }
+			if (s.pinch < G.PINCH_ON) { this.pinch = true; this.pinchTime = 0; this.tapStart = this.clock; this.tapFaced = facing; }
 		} else if (s.pinch > G.PINCH_OFF) {
 			this.pinch = false; this.pinchSpent = false;
+			// A quick pinch (never with the palm towards you: Meta's menu gesture).
+			if (this.clock - this.tapStart <= G.TAP && !this.tapFaced && !facing) out.push({ type: 'tap' });
 			if (this.pinchHeld) { this.pinchHeld = false; out.push({ type: 'pinchEnd' }); }
 			return;
 		}
+		if (this.pinch && facing) this.tapFaced = true;
 		if (!this.pinch || this.pinchSpent) return;
 		if (!this.pinchHeld) {
 			this.pinchTime += dt;
@@ -168,6 +177,19 @@ export class HandGestures {
 			this.flick.length = 0;
 		}
 	}
+}
+
+/**
+ * Whether a quick pinch at `at` (world) may close the wings (build 120, M1;
+ * the build-101 pinch gate): the hand in front of you, at least TAP_FRONT
+ * ahead of the eyes along `forward` (the view's horizontal forward), and
+ * between the waist (TAP_BELOW under the eyes) and the eyes. The palm rule is
+ * the tap's own (gestures never give a tap with the palm towards you).
+ */
+export function tapAllowed(at, head, forward) {
+	const G = GESTURE;
+	const ahead = (at.x - head.x) * forward.x + (at.z - head.z) * forward.z;
+	return ahead >= G.TAP_FRONT && at.y <= head.y && at.y >= head.y - G.TAP_BELOW;
 }
 
 /**

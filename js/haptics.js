@@ -12,6 +12,7 @@ export const PATTERNS = {
 	tick: [{ at: 0, strength: 0.15, ms: 12 }],
 	click: [{ at: 0, strength: 0.5, ms: 25 }],
 	shutter: [{ at: 0, strength: 0.6, ms: 18 }, { at: 0.06, strength: 0.35, ms: 25 }],
+	close: [{ at: 0, strength: 0.3, ms: 15 }], // the wings closed by a pull at empty space (build 120, M1): softer than a click
 	deny: [{ at: 0, strength: 0.12, ms: 10 }, { at: 0.06, strength: 0.12, ms: 10 }], // a disabled key, an invalid teleport
 };
 

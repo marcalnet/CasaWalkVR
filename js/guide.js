@@ -42,9 +42,15 @@ export function drawGuide(ctx, kind, box, foot = '') {
 	});
 	ctx.textAlign = 'left';
 	ctx.fillStyle = GUIDE.soft;
-	ctx.font = `500 25px ${FONT}`;
-	const top = y + size + 92;
-	g.lines.forEach((line, i) => ctx.fillText(line, x + 8, top + i * 38));
+	// The lines share the room between the words and the foot: 38 px apart at most; each fits the width (24-25 px type, smaller only if it must).
+	const top = y + size + 92, bottom = y + h - (foot ? 30 : 12);
+	const step = g.lines.length > 1 ? Math.min(38, (bottom - top) / (g.lines.length - 1)) : 38;
+	g.lines.forEach((line, i) => {
+		let px = 25;
+		ctx.font = `500 ${px}px ${FONT}`;
+		while (px > 18 && ctx.measureText(line).width > w - 16) ctx.font = `500 ${--px}px ${FONT}`;
+		ctx.fillText(line, x + 8, top + i * step);
+	});
 	if (foot) {
 		ctx.font = `400 19px ${FONT}`;
 		ctx.fillText(foot, x + 8, y + h - 12);

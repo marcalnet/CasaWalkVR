@@ -4,7 +4,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
-import { HandGestures, GESTURE, handShape, handAimRay } from '../js/gestures.js';
+import { HandGestures, GESTURE, handShape, handAimRay, tapAllowed } from '../js/gestures.js';
 
 // A right hand in its own frame, in cm: x towards the thumb, y the back of the
 // hand, z along the fingers. Curled fingers, the thumb on the side of the
@@ -79,7 +79,7 @@ test('the teleport: a pinch held 0.1 s aims, palm down or sideways; opening it g
 	assert.ok(s.pinchAt.distanceTo(palmDown(PINCHED)['thumb-tip']) < 0.01, 'the pinch point between thumb and index');
 	assert.deepEqual(run(g, 0.05, palmDown(PINCHED)), [], 'not yet: held under 0.1 s');
 	assert.deepEqual(run(g, 0.1, palmDown(PINCHED)), ['pinch']);
-	assert.deepEqual(run(g, 0.1, palmDown(OPENED)), ['pinchEnd']);
+	assert.deepEqual(run(g, 0.1, palmDown(OPENED)), ['tap', 'pinchEnd'], '(held 0.15 s: also a quick pinch, which only closes wings)');
 	g.reset();
 	assert.deepEqual(run(g, 0.3, world(hand({ curled: false, thumb: PINCHED }))), ['pinch'], 'sideways (the natural pinch): aims too');
 	g.reset();
@@ -159,4 +159,28 @@ test('the teleport: turning your whole body with the pinch held is not a flick (
 	const ev = [];
 	for (let t = 0; t < 0.15; t += 1 / 72) ev.push(...g2.step(palmDown(PINCHED, deg(40) * Math.min(1, t / 0.15)), 1 / 72, new THREE.Vector3(0, 1.6, 0), 0).map((e) => e.type));
 	assert.ok(ev.includes('turn'), 'the flick alone still turns');
+});
+
+test('a quick pinch (build 120, M1): closed and opened within 0.4 s is a tap; held longer, or with the palm towards you, it is not', () => {
+	const g = new HandGestures('right');
+	run(g, 0.1, palmDown(OPENED));
+	assert.deepEqual(run(g, 0.2, palmDown(PINCHED)), ['pinch'], '(the hold still starts an aim after 0.1 s: a wing open suspends it)');
+	assert.deepEqual(run(g, DT, palmDown(OPENED)), ['tap', 'pinchEnd'], 'opened within 0.4 s: a tap');
+	assert.deepEqual(run(g, 0.05, palmDown(PINCHED)).concat(run(g, DT, palmDown(OPENED))), ['tap'], 'a very quick one: a tap, and no aim');
+	run(g, 0.6, palmDown(PINCHED));
+	assert.ok(!run(g, DT, palmDown(OPENED)).includes('tap'), 'held 0.6 s: no tap');
+	const UP = ([x, y, z]) => new THREE.Vector3(x, -y, -z).multiplyScalar(0.01).add(new THREE.Vector3(0.2, 1.2, -0.3));
+	const up = new HandGestures('right');
+	run(up, 0.1, world(hand({ curled: false, thumb: OPENED }), UP));
+	run(up, 0.1, world(hand({ curled: false, thumb: PINCHED }), UP));
+	assert.ok(!run(up, DT, world(hand({ curled: false, thumb: OPENED }), UP)).includes('tap'), 'palm towards your eyes: never a tap');
+});
+
+test('the quick pinch\'s gate: in front of you (20 cm), between the waist and the eyes', () => {
+	const head = new THREE.Vector3(0, 1.6, 0), forward = new THREE.Vector3(0, 0, -1);
+	assert.ok(tapAllowed(new THREE.Vector3(0.1, 1.3, -0.35), head, forward));
+	assert.ok(!tapAllowed(new THREE.Vector3(0.1, 1.3, -0.1), head, forward), 'too near the chest');
+	assert.ok(!tapAllowed(new THREE.Vector3(0.1, 0.7, -0.4), head, forward), 'below the waist');
+	assert.ok(!tapAllowed(new THREE.Vector3(0.1, 1.7, -0.4), head, forward), 'above the eyes');
+	assert.ok(!tapAllowed(new THREE.Vector3(0.1, 1.3, 0.4), head, forward), 'behind you');
 });

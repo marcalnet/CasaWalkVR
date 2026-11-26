@@ -88,7 +88,7 @@ test('tweens run on the frame clock, are capped short, and end once', () => {
 });
 
 test('vibration patterns are short and gentle, one per meaning', () => {
-	assert.deepEqual(Object.keys(PATTERNS).sort(), ['click', 'deny', 'shutter', 'tick']);
+	assert.deepEqual(Object.keys(PATTERNS).sort(), ['click', 'close', 'deny', 'shutter', 'tick']);
 	for (const [name, pulses] of Object.entries(PATTERNS)) {
 		for (const p of pulses) {
 			assert.ok(p.strength > 0 && p.strength <= 1 && p.ms > 0 && p.ms <= 60 && p.at >= 0 && p.at < 0.3, name);

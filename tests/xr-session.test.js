@@ -72,7 +72,7 @@ test('?nomerge (the model as loaded, for debugging): the headset takes it, shado
 	assert.equal(x.mode, 'dollhouse');
 });
 
-test('the settings boards: the same tabs at both layers, a Close key, every target big enough to touch', async () => {
+test('the settings boards: the same tabs at both layers, no Close key (the foot says how to close), every target big enough to touch', async () => {
 	const { x } = await setup();
 	for (const p of Object.values(x.menus)) {
 		assert.deepEqual(p.tabs.map((t) => t.label), ['View', 'Walk', 'Tools', 'General']);
@@ -83,7 +83,7 @@ test('the settings boards: the same tabs at both layers, a Close key, every targ
 		assert.deepEqual(shape(p.tabs[2].rows), ['lens:choice:Camera lens:24 mm:28 mm:35 mm:50 mm']);
 		assert.deepEqual(shape(p.tabs[3].rows), ['mainHand:choice:Main hand:Right:Left', 'sound:choice:Sound:Off:Effects']);
 		assert.equal(p.actions.length, 0, 'no actions on the board: the doors are on the wrist');
-		assert.ok(p.rects().some((r) => r.id === 'close'), 'a Close key');
+		assert.ok(!p.rects().some((r) => /close/i.test(r.id)) && /outside to close$/.test(p.hint), 'no Close key: the foot says how to close (build 120, M1)');
 		assert.ok(!p.get('levels'), 'Levels is not on the board: a stack of keys beside the doors');
 		// Touch targets: at least 4 cm (the wing is 40 cm wide).
 		const m = p.mesh.geometry.parameters.width / p.size.w;
@@ -266,8 +266,8 @@ test('settings keep the board open; the doors move one layer at a time', async (
 	assert.equal(x.seeThroughAmount, 0.75, 'See-through is one switch: on is 75%');
 	x.menuAction('seethrough');
 	assert.equal(x.seeThroughAmount, 0);
-	x.menuAction('close');
-	assert.equal(x.menu, null, 'the Close key closes the board');
+	x.ui.closeMenu();
+	assert.equal(x.menu, null);
 	// In: the scale model → inside (the board closes).
 	x.ui.openMenu();
 	go('in');
@@ -604,7 +604,7 @@ test('the tunnel zoom (off by default): the room and the model scale x3 about th
 	x.layerFx = null;
 });
 
-test('the wrist key opens both wings and closes both; each Close closes its own; How to move reopens from its key every time; the tab you left is kept', async () => {
+test('the wrist key opens both wings and closes both; the How to move key closes and reopens How to move alone; the tab you left is kept', async () => {
 	const { x } = await setup();
 	x.menuAction('settings');
 	assert.ok(x.menu && x.ui.guide, 'Settings, and help: both wings');
@@ -615,13 +615,11 @@ test('the wrist key opens both wings and closes both; each Close closes its own;
 	assert.ok(x.menu && x.ui.guide, 'and both again (build 120: help closed alone was never found again)');
 	assert.equal(x.menu.tab, 'walk', 'the tab you left');
 	for (let i = 0; i < 3; i++) {
-		x.menuAction('closeGuide');
-		assert.ok(x.menu && !x.ui.guide, 'its Close key closes only that wing');
 		x.menuAction('guideKey');
-		assert.ok(x.ui.guide && x.ui.guide.mesh.visible, 'the How to move key opens it again, every time');
+		assert.ok(x.menu && !x.ui.guide && !x.menu.lead.on, 'the How to move key closes How to move alone (build 120, M1)');
+		x.menuAction('guideKey');
+		assert.ok(x.ui.guide && x.ui.guide.mesh.visible && x.menu.lead.on, 'and opens it again, every time, filled while open');
 	}
-	x.menuAction('close');
-	assert.ok(!x.menu && x.ui.guide, 'Settings\' Close closes only Settings');
 	x.ui.closeAll();
 });
 
@@ -639,7 +637,7 @@ test('the wings: Settings on the main hand\'s side, How to move on the other, bo
 		const s = angle(x.menu), g = angle(x.ui.guide), side = main === 'right' ? -1 : 1;
 		assert.ok(Math.sign(s) === side && Math.abs(s) >= 30 && Math.sign(g) === -side && Math.abs(g) >= 30, `${main}: settings ${s.toFixed(0)}, guide ${g.toFixed(0)}`);
 		// Turn the head 45° towards Settings, then reopen How to move: it keeps the pair's front.
-		x.menuAction('closeGuide');
+		x.ui.closeGuide();
 		x.camera.rotation.y = THREE.MathUtils.degToRad(45 * side); x.camera.updateMatrix();
 		x.menuAction('guideKey');
 		assert.ok(Math.abs(angle(x.ui.guide) - g) < 1, `${main}: How to move back where it was (${angle(x.ui.guide).toFixed(0)}), not in front`);
@@ -1241,4 +1239,36 @@ test('a laser on a wing hovers its cell', async () => {
 	for (let i = 0; i < 5; i++) frame();
 	const c = x.input.controllers[1]; x.input.setRaycaster(c, x.raycaster); const hit = x.raycaster.intersectObject(p.mesh, false)[0];
 	assert.ok(x.menu.hover?.startsWith('ceilings|'), `hover=${x.menu.hover} hit=${hit?.distance} claim=${c.claim.trigger} active=${x.input.active().length} panels=${x.ui.openPanels().length} vis=${p.mesh.visible}`);
+});
+
+test('a press at empty space closes the wings (build 120, M1): a pull at the sky closes both and stays used up until let go; at the model, or with a tool in hand, nothing closes; a quick pinch the same', async () => {
+	const { x, frame, press } = await setup();
+	frame();
+	const c = x.input.controllers[1], orig = x.input.setRaycaster.bind(x.input);
+	let aim = null;
+	x.input.setRaycaster = (cc, rc) => { if (cc === c && aim) { rc.set(aim.from, aim.dir); rc.far = 5; } else orig(cc, rc); };
+	const head = x.headWorld().clone();
+	const pull = () => { press('right', 'trigger'); frame(); };
+	const letGo = () => { press('right', 'trigger', false); frame(); };
+	x.menuAction('settings');
+	aim = { from: head.clone(), dir: x.modes.dollhouse.modelBox().getCenter(new THREE.Vector3()).sub(head).normalize() };
+	pull();
+	assert.ok(x.menu && x.ui.guide, 'at the model: nothing closes');
+	letGo();
+	aim = { from: head.clone(), dir: new THREE.Vector3(0, 1, 0) };
+	pull();
+	assert.ok(!x.menu && !x.ui.guide, 'at the sky: both wings close');
+	frame();
+	assert.equal(c.claim.trigger, 'ui', 'the pull is used up while held (never also an aim)');
+	letGo(); frame();
+	assert.notEqual(c.claim.trigger, 'ui', 'let go: free again');
+	// Bare hands: a quick pinch (gestures' tap) along the hand's aim ray.
+	x.menuAction('settings');
+	const h = x.input.controllers[0], saved = { isHand: h.isHand, gesture: h.gesture, gestures: h.gestures };
+	const tap = (at) => { Object.assign(h, { isHand: true, gesture: { fist: false, shape: { pinchAt: at } }, gestures: [{ type: 'tap' }] }); return x.ui.handTaps(); };
+	assert.equal(tap(head.clone().add(new THREE.Vector3(0.1, -0.9, -0.3))), false, 'below the waist: nothing');
+	assert.ok(x.menu, '(still open)');
+	assert.equal(tap(head.clone().add(new THREE.Vector3(0, -0.05, -0.3))), true, 'in front, aimed over the model at nothing: closes');
+	assert.ok(!x.menu && !x.ui.guide);
+	Object.assign(h, saved);
 });

@@ -505,7 +505,7 @@ const crossSeen = () => page.evaluate(() => {
 	const kinds = await page.evaluate(() => {
 		const x = window.__casawalk.xr, kinds = (p) => Object.fromEntries([...p.cells.values()].map((c) => [c.id, c.type]));
 		const g = (p) => p.mesh.geometry.parameters;
-		return { doll: kinds(x.menus.dollhouse), walk: kinds(x.menus.walk), heights: Object.values(x.menus).map((p) => +g(p).height.toFixed(2)), width: g(x.menus.walk).width };
+		return { doll: kinds(x.menus.dollhouse), walk: kinds(x.menus.walk), heights: Object.values(x.menus).map((p) => +g(p).height.toFixed(3)), width: g(x.menus.walk).width };
 	});
 	const want = { shadows: 'switch', depth: 'switch', ceilings: 'switch', light: 'choice', view: 'switch', seethrough: 'switch', mainHand: 'choice', sound: 'choice', solid: 'switch', height: 'choice' };
 	const ok = Object.entries(want).every(([id, t]) => kinds.doll[id] === t && kinds.walk[id] === t) && !Object.values(kinds.doll).includes('button');
@@ -652,9 +652,12 @@ if (s.session === 'ar') {
 	check('View switch (needs an AR session)', false, `session ${s.session}`);
 }
 await restRight(); await frames(3);
-await click('right', 'trigger');
+await button('right', 'trigger', 1); await frames(3);
 s = await state();
-check('a pull elsewhere does nothing: the board stays open, no step inside', s.menu === 'dollhouse' && s.mode === 'dollhouse');
+const spentPull = await page.evaluate(() => window.__casawalk.xr.input.controllers.find((c) => c.handedness === 'right').claim.trigger);
+await button('right', 'trigger', 0); await frames(3);
+check('a pull at empty space closes the wings (build 120, M1), used up while held; no step inside', s.menu === null && !s.guide && s.mode === 'dollhouse' && spentPull === 'ui', JSON.stringify({ menu: s.menu, mode: s.mode, spentPull }));
+await page.evaluate(() => window.__casawalk.xr.menuAction('settings')); await frames(3);
 await click('right', 'b-button');
 check('B closes the board', (await state()).menu === null);
 
@@ -769,9 +772,12 @@ check('B closes the board', (await state()).menu === null);
 	await pressKey('hand', 'right', 'dollhouse', 'ceilings', { backOnly: true });
 	const c4v = await ceilings(), still = await state();
 	check('a fingertip from behind, and pinches over a key, click nothing', c3v === c0v && c4v === c0v && still.menu === 'dollhouse' && still.mode === 'dollhouse', JSON.stringify({ c3v, c4v, menu: still.menu }));
-	await pressKey('hand', 'right', 'dollhouse', 'close');
-	check('the Settings wing\'s Close key, pressed with a fingertip, closes it (How to move stays: each wing closes on its own)', (await state()).menu === null);
-	await page.evaluate(() => window.__casawalk.xr.ui.closeAll()); await frames(3); // (How to move opened with it: the wrist key opens both)
+	const wingsNow = () => page.evaluate(() => { const ui = window.__casawalk.xr.ui; return { settings: !!ui.menu, guide: !!ui.guide, lead: !!ui.menu?.lead.on, closeKey: !!ui.menu?.rects().some((r) => /close/i.test(r.id)), foot: ui.menu?.hint ?? ui.guide?.hint ?? null }; });
+	const w0 = await wingsNow();
+	await pressKey('hand', 'right', 'dollhouse', 'guideKey');
+	const w1 = await wingsNow();
+	check('no Close key, the foot says how to close; "? How to move" pressed with a fingertip closes How to move alone (build 120, M1)', !w0.closeKey && w0.foot === 'Pinch outside to close' && w0.guide && w0.lead && w1.settings && !w1.guide && !w1.lead, JSON.stringify({ w0, w1 }));
+	await page.evaluate(() => window.__casawalk.xr.ui.closeAll()); await frames(3);
 
 	// Moving with bare hands (C0.4). The gestures themselves are read from the joints
 	// (js/gestures.js, its Node tests); here scripted gesture events drive the app:
@@ -803,6 +809,25 @@ check('B closes the board', (await state()).menu === null);
 		const to = x.rig.worldToLocal(wrist.clone().sub(off));
 		hp.set(to.x, to.y, to.z);
 	}, target);
+	// A quick pinch (tap) at empty space closes the wings; at the model, nothing (build 120, M1).
+	{
+		const roomMid = await page.evaluate(() => window.__casawalk.xr.modes.dollhouse.modelBox().getCenter(new (window.__casawalk.xr.rig.position.constructor)()).toArray());
+		const away = await page.evaluate(() => { const h = window.__casawalk.xr.headWorld(), a = window.__casawalk.xr.viewAxes(); return h.clone().addScaledVector(a.right, 2).addScaledVector(a.forward, 3).setY(h.y + 1.2).toArray(); });
+		const leftWas = await page.evaluate(() => { const p = window.__device.hands.left.position, was = [p.x, p.y, p.z]; p.set(-0.25, 0.7, 0.1); return was; }); await frames(40); // (the left hand at your side: an open fan over it never lets a press close)
+		await page.evaluate(() => window.__casawalk.xr.ui.openGuide()); await frames(3); // (How to move alone: on the left, clear of the right hand)
+		await handAimAt(roomMid); await frames(4); await handAimAt(roomMid); await frames(4);
+		await gesture('right', { type: 'tap' }); await frames(4);
+		const atModel = await wingsNow();
+		await handAimAt(away); await frames(4); await handAimAt(away); await frames(4);
+		await gesture('right', { type: 'tap' }); await frames(4);
+		const atAir = await wingsNow();
+		const why = await page.evaluate(async () => { const x = window.__casawalk.xr, c = x.input.controllers.find((c) => c.handedness === 'right'), s = c.gesture?.shape, a = x.viewAxes(), h = x.headWorld();
+			if (!s) return null;
+			const { handAimRay } = await import('./js/gestures.js'); x.ui.openGuide(); const r = handAimRay(h, a.right, s.pinchAt, c.handedness); x.raycaster.set(r.origin, r.dir); x.raycaster.far = 20;
+			const out = { at: s.pinchAt.toArray().map((v) => +v.toFixed(2)), head: h.toArray().map((v) => +v.toFixed(2)), fist: c.gesture.fist, not: x.ui.notEmpty(c, [c.touch.tracked ? c.touch.tip : null, s.pinchAt]) }; x.ui.closeAll(); return out; });
+		check('bare hands: a quick pinch at the model leaves the wing open; at empty space it closes it', atModel.guide && !atAir.guide, JSON.stringify({ atModel, atAir, why }));
+		await page.evaluate(() => window.__casawalk.xr.ui.closeAll()); await page.evaluate((p) => window.__device.hands.left.position.set(...p), leftWas); await frames(3);
+	}
 	// Stepping inside by pointing: pinch and hold, point at a room, let go.
 	// Aim at a room's middle (a room hotspot), or the box's middle for a model without rooms (not the pond: water is no landing).
 	const roomPt = await page.evaluate(() => {
@@ -1776,7 +1801,11 @@ await click('right', 'a-button');
 const opened = (await state()).wrist;
 await aimW('right', R, await modelTop()); await frames(5); await click('right', 'trigger');
 s = await state();
-check('wrist menu open: a pull on the model only closes it', opened && !s.wrist && s.mode === 'dollhouse', JSON.stringify({ opened, wrist: s.wrist, mode: s.mode }));
+const atModelW = { wrist: s.wrist, mode: s.mode };
+await aim('right', [0.3, 1.45, -0.2], [1.2, 2.4, -1.5]); await frames(3); await click('right', 'trigger'); // (raised, clear of the doors at your waist: a hand within 15 cm of them never closes)
+s = await state();
+const whyW = await page.evaluate(() => { const x = window.__casawalk.xr, c = x.input.controllers.find((c) => c.handedness === 'right'); x.input.setRaycaster(c, x.raycaster); return { not: x.ui.notEmpty(c, [c.touch.tracked ? c.touch.tip : null]), pinned: x.ui.wrist.pinned, wearer: x.ui.wrist.wearer === c, claim: c.claim.trigger }; });
+check('wrist menu open: a pull on the model does nothing (never empty space); a pull at empty space closes it (build 120, M1)', opened && atModelW.wrist && atModelW.mode === 'dollhouse' && !s.wrist && s.mode === 'dollhouse', JSON.stringify({ opened, atModelW, wrist: s.wrist, whyW }));
 await restRight(); await frames(3); await click('right', 'a-button'); await click('right', 'a-button');
 check('A closes the wrist menu it opened', !(await state()).wrist);
 

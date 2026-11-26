@@ -7,9 +7,11 @@
 //            25 cm below the eyes, tilted back 20°; at the scale model 45° to
 //            the left, clear of the model), pressed by touch (js/touch.js) or
 //            by a controller's laser; its handle moves it (a controller's
-//            grip). What it says and does: js/xr-menus.js. It closes with its
-//            Close key, Settings again, B/Y, or by moving between layers,
-//            never on a touch elsewhere.
+//            grip). What it says and does: js/xr-menus.js. Both wings close
+//            with the orb, Settings again, B/Y, moving between layers, or a
+//            press at empty space (build 120's M1: a trigger pull, or a quick
+//            pinch, aimed at nothing you can use: emptyPress()); there is no
+//            Close key, and "? How to move" closes How to move alone.
 //   Help     opens the board on its first tab, How to move (js/guide.js):
 //            how to move here, for controllers or bare hands, and the build
 //            at its foot. (The help cards beside the wrist menu went on 25
@@ -34,6 +36,10 @@ import { WING, placeWing, zoneOf } from './wings.js';
 import { guideSheet } from './guide.js';
 import { WristMenu } from './wrist-menu.js';
 import { FIRST_TIME_CARDS } from './lessons.js';
+import { handAimRay, tapAllowed } from './gestures.js';
+import { CLOSE_HINT } from './xr-menus.js';
+
+const KEEP_CLEAR = 0.15; // a press with the hand this near a key, the orb or a wing is never "empty" (m)
 
 // The note after a photo. Photos are kept in the app and saved from the page
 // after VR (a download in VR would end the session).
@@ -69,6 +75,7 @@ export class XRUI {
 		this.wrist = new WristMenu(xr);
 		guideSheet.onLoad = () => this.guide?.draw(); // (the How to move pictures, once loaded)
 		this.touches = []; // per input entry: its touch on the open board (js/touch.js)
+		this.spent = new Set(); // controllers whose trigger closed the wings: claimed until let go
 		this.buildWelcome();
 		this.buildPhotoFeedback();
 		this.buildHandsNote();
@@ -270,6 +277,7 @@ export class XRUI {
 		this.placeWing(panel, this.wingSide('settings'), headMatrix);
 		panel.setTab(tab ?? this.tab ?? 'view');
 		panel.lead.on = !!this.guide;
+		panel.hint = this.closeHint();
 		panel.draw();
 		panel.setHover(null);
 		panel.mesh.visible = true;
@@ -299,6 +307,7 @@ export class XRUI {
 		if (!panel) return;
 		this.placeWing(panel, this.wingSide('guide'), headMatrix);
 		this.prepareGuide(panel);
+		panel.hint = this.closeHint();
 		panel.draw();
 		panel.setHover(null);
 		panel.mesh.visible = true;
@@ -321,6 +330,84 @@ export class XRUI {
 		cell.kind = `${xr.mode === 'walk' ? 'walk' : 'dollhouse'}-${xr.input.active().length ? 'controllers' : 'hands'}`;
 		// (A newer build live on the site: one calm line, here only; reloading is yours to choose, after VR.)
 		cell.foot = buildLabel(BUILD) + (xr.newerBuild > BUILD.number ? ' · Newer version: reload after VR' : '');
+	}
+
+	/** The wings' foot line: how to close them with the input in hand (CLOSE_HINT). */
+	closeHint() { return this.xr.input.active().length ? CLOSE_HINT.controllers : CLOSE_HINT.hands; }
+
+	/**
+	 * Whether a press (a trigger pull, or a quick pinch) along the raycaster's
+	 * ray lands on nothing you can use, so it closes the wings (build 120, M1).
+	 * Usable: a wing, a key, the orb, the fan, a tool, the doors and levels
+	 * keys, the model's box, the plinth. Never empty with a tool in that hand,
+	 * the fan open, or the hand (points: its fingertip, its pinch) within
+	 * KEEP_CLEAR of a key, the orb or a wing. Gallery walls, the floor, the sky,
+	 * and inside the home its walls and floors are empty.
+	 */
+	emptyPress(c, points = []) { return this.notEmpty(c, points) === null; }
+
+	/** Why a press is not at empty space ('tool', 'fan', 'near', 'wing', 'wrist', 'orb', 'doors', 'plinth', 'model'), or null: it is (emptyPress). */
+	notEmpty(c, points = []) {
+		const xr = this.xr, r = xr.raycaster;
+		if (xr.tools?.held?.c === c) return 'tool';
+		if (xr.fan?.group?.visible) return 'fan';
+		for (const p of points) if (p && this.nearUsable(c, p)) return 'near';
+		for (const panel of this.openPanels()) if (r.intersectObject(panel.mesh, false).length) return 'wing';
+		if (this.wrist.cross.visible && r.intersectObject(this.wrist.cross, true).length) return 'wrist';
+		if (this.wrist.wearer !== c && this.wrist.orb.group.visible && r.intersectObject(this.wrist.orb.group, true).length) return 'orb'; // (its own wrist's orb: the ray starts beside it)
+		if (xr.mode === 'dollhouse' && xr.model) {
+			const doll = xr.modes.dollhouse;
+			if (doll.doorGroup.visible && r.intersectObject(doll.doorGroup, true).length) return 'doors';
+			if (xr.pedestal?.visible && r.intersectObject(xr.pedestal, true).length) return 'plinth';
+			if (r.ray.intersectsBox(doll.modelBox(this._box ??= new THREE.Box3()))) return 'model';
+		}
+		return null;
+	}
+
+	/** True if world point p (of input c) is within KEEP_CLEAR of a wing, the wrist keys or the orb (on the other wrist: they ride the wearer's own) or a door. */
+	nearUsable(c, p) {
+		const xr = this.xr, v = this._near ??= new THREE.Vector3();
+		for (const panel of this.openPanels()) {
+			const g = panel.mesh.geometry.parameters;
+			panel.mesh.updateMatrixWorld(true);
+			const L = panel.mesh.worldToLocal(v.copy(p));
+			if (Math.hypot(Math.max(0, Math.abs(L.x) - g.width / 2), Math.max(0, Math.abs(L.y) - g.height / 2), L.z) < KEEP_CLEAR) return true;
+		}
+		if (this.wrist.wearer !== c) {
+			if (this.wrist.cross.visible && this.wrist.pad.near(p, KEEP_CLEAR)) return true;
+			const orb = this.wrist.orb.group;
+			if (orb.visible && orb.getWorldPosition(v).distanceTo(p) < KEEP_CLEAR) return true;
+		}
+		if (xr.mode === 'dollhouse' && xr.modes.dollhouse?.doors?.near(p, KEEP_CLEAR)) return true;
+		return false;
+	}
+
+	/** A press at empty space: closes what is open, like the orb (sound close; a controller's vibration close). */
+	closeOnEmpty(c) {
+		const wings = !!(this.menu || this.guide);
+		this.closeAll(); // (the wings make their own close sound)
+		this.feel(c, wings ? null : 'close', 'close');
+	}
+
+	/**
+	 * Bare hands: a quick pinch (gestures' tap) in front of you, aimed (the
+	 * hand's aim ray) at nothing you can use, closes what is open. Never a
+	 * closed hand, never a fingertip touch.
+	 */
+	handTaps() {
+		const xr = this.xr, raycaster = xr.raycaster;
+		for (const c of xr.input.controllers) {
+			if (!c.isHand || !c.gesture || c.gesture.fist || !c.gestures.some((e) => e.type === 'tap')) continue;
+			const s = c.gesture.shape;
+			if (!s) continue;
+			const head = xr.headWorld(), axes = xr.viewAxes();
+			if (!tapAllowed(s.pinchAt, head, axes.forward)) continue;
+			const { origin, dir } = handAimRay(head, axes.right, s.pinchAt, c.handedness);
+			raycaster.set(origin, dir);
+			raycaster.far = 20;
+			if (this.emptyPress(c, [c.touch.tracked ? c.touch.tip : null, s.pinchAt])) { this.closeOnEmpty(c); return true; }
+		}
+		return false;
 	}
 
 	/** Counts this session's teleports. */
@@ -369,8 +456,12 @@ export class XRUI {
 		if (this.wrist.open) { this.setWelcome(false); this.xr.lessons?.note('wrist'); } // found it: the welcome card has done its job
 		const active = input.active();
 		if (this.drag && (!this.menu || !this.drag.c.source || !this.drag.c.state.trigger)) this.drag = null; // let go
-		const panels = this.openPanels();
+		let panels = this.openPanels();
+		let closable = panels.length > 0 || (this.wrist.open && this.wrist.pinned);
 		for (const c of active) {
+			// (A pull that closed the wings is used up: never also an aim or a click, until let go.)
+			// (A new pull means it was let go meanwhile, even unseen: frames between layers skip the menus.)
+			if (this.spent.has(c)) { if (c.state.trigger && !c.state.down.trigger) { c.claim.trigger = 'ui'; continue; } this.spent.delete(c); }
 			if (c.claim.trigger) continue;
 			input.setRaycaster(c, raycaster);
 			// The nearest wing the laser hits.
@@ -402,13 +493,19 @@ export class XRUI {
 						this.feel(c, 'press', 'click');
 					} else if (panel.disabledAt(menuHit.uv)) this.feel(c, 'deny', 'deny');
 				}
-			} else if ((panels.length || (this.wrist.open && this.wrist.pinned)) && c.state.down.trigger) {
-				// A pull elsewhere while a wing is open does nothing (the wings never
-				// close on it); a pinned wrist menu closes.
+			} else if (closable && c.state.down.trigger) {
+				// A pull elsewhere while a wing or the pinned wrist menu is open: at
+				// empty space it closes them all (build 120, M1); at the model, the
+				// plinth, a key, it does nothing. Either way it is used up.
 				c.claim.trigger = 'ui';
-				if (!panels.length) this.wrist.close(true);
+				this.spent.add(c);
+				if (this.emptyPress(c, [c.touch.tracked ? c.touch.tip : null])) {
+					this.closeOnEmpty(c);
+					panels = []; closable = false;
+				}
 			}
 		}
+		if (closable && this.handTaps()) panels = [];
 		// Touch keys: fingertips and controller tips press the open board.
 		const touched = this.touchMenu();
 		hover ||= touched.hover;
@@ -513,6 +610,7 @@ export class XRUI {
 	/** Leaving VR: everything closed and put away. */
 	reset() {
 		this.drag = null;
+		this.spent.clear();
 		this.closeMenu();
 		this.closeGuide();
 		this.setWelcome(false);

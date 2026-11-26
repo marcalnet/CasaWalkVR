@@ -50,7 +50,7 @@ export class Panel {
 	 *              actions never move. Clicking a tab is handled here (like a dropdown).
 	 * @param opts  { title, hint (small text at the bottom), width (m), pxPerM (canvas pixels per metre) }
 	 */
-	constructor(rows, { title = '', hint = '', width = 0.62, pxPerM = PX_PER_M, close = false, closeId = 'close', background = null, lead = null } = {}) {
+	constructor(rows, { title = '', hint = '', width = 0.62, pxPerM = PX_PER_M, background = null, lead = null } = {}) {
 		const spec = Array.isArray(rows) ? { tabs: [{ id: '', label: '', rows }], actions: [] } : rows;
 		const cellsOf = (rs) => rs.map((r) => r.map((c) => ({ type: 'button', ...c })));
 		this.tabs = spec.tabs.map((t) => ({ id: t.id, label: t.label, rows: cellsOf(t.rows) }));
@@ -59,8 +59,6 @@ export class Panel {
 		this.cells = new Map([...this.tabs.flatMap((t) => t.rows), ...this.actions].flat().map((c) => [c.id, c]));
 		this.title = title;
 		this.hint = hint;
-		this.close = close; // a Close key (×) in the top-right corner, in the title's row
-		this.closeId = closeId; // the id its press returns
 		this.lead = lead; // { id, label, w (canvas px) }: a key at the left end of the tab row, nearest the body (How to move)
 		this.background = background; // an image drawn under everything (the board's frame and paper), once loaded
 		this.hover = null; // key of the hovered target
@@ -110,11 +108,8 @@ export class Panel {
 
 	/** Cell rectangles in canvas pixels (and the panel height). */
 	layout() {
-		let y = PAD + (this.title || this.close ? TITLE_H : 0);
+		let y = PAD + (this.title ? TITLE_H : 0);
 		const boxes = [];
-		// The Close key: the board's top-right corner, where a window's close is
-		// (the user's bare-hands test: beside the last tab it read as a tab).
-		this.closeBox = this.close ? { x: this.size.w - PAD - TAB_H, y: PAD + (TITLE_H - TAB_H) / 2 - 4, w: TAB_H, h: TAB_H } : null;
 		if (this.tabs.length > 1) {
 			const lead = this.lead ? this.lead.w + 8 : 0;
 			const full = this.size.w - 2 * PAD - lead, w = (full - (this.tabs.length - 1) * 8) / this.tabs.length;
@@ -153,7 +148,6 @@ export class Panel {
 	 */
 	rects() {
 		const out = this.open ? [] : this.tabBoxes.map((t) => ({ id: TAB, value: t.id, x: t.x, y: t.y, w: t.w, h: t.h }));
-		if (!this.open && this.closeBox) out.push({ id: this.closeId, x: this.closeBox.x, y: this.closeBox.y, w: this.closeBox.w, h: this.closeBox.h });
 		if (!this.open && this.leadBox) out.push({ id: this.lead.id, x: this.leadBox.x, y: this.leadBox.y, w: this.leadBox.w, h: this.leadBox.h });
 		if (this.open) {
 			const list = this.list();
@@ -254,22 +248,8 @@ export class Panel {
 		this.texture.needsUpdate = true;
 	}
 
-	/** The Close key (top-right corner), then the row of tabs: the shown one white and raised, the others flat. */
+	/** The How to move key, then the row of tabs: the shown one white and raised, the others flat. */
 	drawTabs(ctx) {
-		if (this.closeBox) {
-			const b = this.closeBox, hot = this.hover === `${this.closeId}|`;
-			roundRect(ctx, b.x, b.y, b.w, b.h, 18);
-			ctx.fillStyle = hot ? COLOURS.hover : COLOURS.cell;
-			ctx.fill();
-			ctx.lineWidth = hot ? 4 : 2; ctx.strokeStyle = hot ? COLOURS.hoverEdge : COLOURS.edge; ctx.stroke();
-			ctx.strokeStyle = COLOURS.text; ctx.lineWidth = 6; ctx.lineCap = 'round';
-			const m = b.w * 0.32;
-			ctx.beginPath();
-			ctx.moveTo(b.x + m, b.y + m); ctx.lineTo(b.x + b.w - m, b.y + b.h - m);
-			ctx.moveTo(b.x + b.w - m, b.y + m); ctx.lineTo(b.x + m, b.y + b.h - m);
-			ctx.stroke();
-			ctx.lineCap = 'butt';
-		}
 		if (this.leadBox) {
 			// The How to move key: a "?" and the words, at the tabs' left end, a raised key (not a tab).
 			const b = this.leadBox, hot = this.hover === `${this.lead.id}|`, on = !!this.lead.on;
