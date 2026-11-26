@@ -10,7 +10,7 @@
 // play alone (no controller model yet). The demo kinds (the tip's `demo`):
 //   pinch  the loop above (the teleport tip)
 //   door   the same, a small orange door lighting at the arc's end instead of
-//          the ring (the Enter VR tip: "then Walk in")
+//          the ring (the Enter VR tip: "walk in")
 //   flick  the pinch held, the wrist flicks aside and back (the turn tip)
 //   touch  the open hand reaches forward; a disc opens where it touches (the
 //          portal tip)

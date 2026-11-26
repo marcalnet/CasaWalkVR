@@ -92,11 +92,11 @@ export const GUIDES = {
 		frames: ['Right stick forward', 'or hold a trigger', 'Aim at the floor', 'Let go on blue: go'],
 		lines: ['Right stick left or right: turn', 'Left stick: walk', 'Hold B or Y: back to the scale model', 'The Meta button leaves VR at any moment'] },
 	'dollhouse-hands': { row: 2,
-		frames: ['Close your hand on it: hold', 'Let go: it floats, then goes home', 'Pinch and hold, point at a room', 'Let go to step inside'],
-		lines: ['Turn it: it stays level', 'Palm towards you: cancel'] },
+		frames: ['Close your hand on it: hold', 'Let go: it floats, then goes home', 'Pinch and hold, point at a room', 'Let go: walk in'],
+		lines: ['Turn it: it stays level', 'Palm towards you: cancel', 'Touch the lens, cap or blade: options', 'Hold \u2190 Back: leave VR'] },
 	'dollhouse-controllers': { row: 3,
-		frames: ['Grip: hold it', 'Stick: turn', 'Point at a room', 'Pull the trigger: step inside'],
-		lines: ['Turn it: it stays level', 'Let go: it floats home'] },
+		frames: ['Grip: hold it', 'Stick: turn', 'Point at a room', 'Pull the trigger: walk in'],
+		lines: ['Turn it: it stays level', 'Let go: it floats home', 'Holding a tool, stick: its options', 'Hold B or Y: leave VR'] },
 };
 
 /**
@@ -105,10 +105,10 @@ export const GUIDES = {
  * this order, per transition, each at most once a session.
  */
 export const TIPS = {
-	enter: [{ id: 'walkin', hands: 'Pinch a room, then Walk in.', controllers: 'Point at a room, then Walk in.', demo: 'door' }],
+	enter: [{ id: 'walkin', hands: 'Pinch a room, let go: walk in.', controllers: 'Point at a room, pull the trigger: walk in.', demo: 'door' }],
 	in: [
 		{ id: 'teleport', hands: 'Pinch, aim, let go to jump.', controllers: 'Hold the trigger, aim, let go.', demo: 'pinch', practise: true },
-		{ id: 'turn', hands: 'Flick your wrist while pinching to turn.', controllers: 'Flick the right stick to turn.', demo: 'flick' },
+		{ id: 'turn', hands: 'Pinch, flick your wrist: turn.', controllers: 'Flick the right stick to turn.', demo: 'flick' },
 		{ id: 'portal', hands: 'Touch a wall to see through it.', controllers: 'Touch a wall to see through it.', demo: 'touch' },
 	],
 	back: [{ id: 'grab', hands: 'Close your hand on the model to turn it.', controllers: 'Hold grip on the model to turn it.', demo: 'grab' }],

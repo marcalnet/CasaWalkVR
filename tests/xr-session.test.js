@@ -811,7 +811,8 @@ test('How to move: the first tab, for the input in hand, here, with the build at
 	const size = Math.min((x.menu.size.w - 2 * 16 - 3 * 12) / 4, cell.h * 0.42);
 	assert.ok(size + LINES.below + (GUIDE_MAX_LINES - 1) * LINES.step + 34 <= cell.h, `four lines: ${size + LINES.below + 3 * LINES.step + 34} px <= ${cell.h}`);
 	assert.ok(LINES.px === 24 && LINES.min === 20, 'lines at 24 px, never under 20');
-	assert.equal(GUIDES['dollhouse-hands'].frames[3], 'Let go to step inside');
+	assert.equal(GUIDES['dollhouse-hands'].frames[3], 'Let go: walk in');
+	assert.ok(!JSON.stringify(GUIDES).includes('step inside') && !JSON.stringify((await import('../js/xr-menus.js')).TIPS).includes('step inside'), 'one verb: walk in (the UX review\'s S2)');
 	x.menuAction('settings');
 	assert.equal(x.menu, null, 'Settings again: closed');
 });

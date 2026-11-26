@@ -999,7 +999,7 @@ check('B closes the board', (await state()).menu === null);
 	await page.evaluate(() => { const x = window.__casawalk.xr; x.store.start(); x.pause.tipsOn = true; x.pause.enter(); });
 	{
 		const et = await enterTip();
-		check('Enter VR with bare hands: the walk-in tip in the hands\' words, 1.4 m in front of the head, the rings under you', et.tip === 'walkin' && et.kind === 'hands' && et.words === 'Pinch a room, then Walk in.' && Math.abs(et.dist - 1.4 * Math.cos(10 * Math.PI / 180)) < 0.1 && et.ahead > 0.98 && et.ring && et.ringUnder < 0.05, JSON.stringify(et));
+		check('Enter VR with bare hands: the walk-in tip in the hands\' words, 1.4 m in front of the head, the rings under you', et.tip === 'walkin' && et.kind === 'hands' && et.words === 'Pinch a room, let go: walk in.' && Math.abs(et.dist - 1.4 * Math.cos(10 * Math.PI / 180)) < 0.1 && et.ahead > 0.98 && et.ring && et.ringUnder < 0.05, JSON.stringify(et));
 		await page.evaluate(() => { window.__casawalk.xr.pause.tipsOn = false; });
 		await settled(); await frames(4);
 	}
@@ -1531,7 +1531,7 @@ await page.evaluate(() => { window.__casawalk.xr.pause.tipsOn = true; }); // (th
 await enterVR.click();
 {
 	const et = await enterTip();
-	check('Enter VR with controllers: the walk-in tip in the controllers\' words, 1.4 m in front of the head (sitting, turned), the rings under you', et.tip === 'walkin' && et.kind === 'controllers' && et.words === 'Point at a room, then Walk in.' && Math.abs(et.dist - 1.4 * Math.cos(10 * Math.PI / 180)) < 0.1 && et.ahead > 0.98 && et.ring && et.ringUnder < 0.05, JSON.stringify(et));
+	check('Enter VR with controllers: the walk-in tip in the controllers\' words, 1.4 m in front of the head (sitting, turned), the rings under you', et.tip === 'walkin' && et.kind === 'controllers' && et.words === 'Point at a room, pull the trigger: walk in.' && Math.abs(et.dist - 1.4 * Math.cos(10 * Math.PI / 180)) < 0.1 && et.ahead > 0.98 && et.ring && et.ringUnder < 0.05, JSON.stringify(et));
 	await page.evaluate(() => { window.__casawalk.xr.pause.tipsOn = false; });
 }
 await waitXR(); await frames(10);
