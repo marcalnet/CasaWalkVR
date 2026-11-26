@@ -77,7 +77,9 @@ const RETURN_AWAY = 0.3, RETURN_WAIT = 4; // a floating model goes home once not
 const GRAB_SMOOTH = 0.06, GRAB_SMOOTH_HAND = 0.1; // seconds: a held model follows a controller / a bare hand smoothed this much
 const HAND_TURN_DEAD = THREE.MathUtils.degToRad(3); // a bare hand's turn: changes under 3° are tremor, ignored
 const MAX_FRAME_TURN = THREE.MathUtils.degToRad(20); // a held model turns at most this much in one frame
-const AIM_STEADY = 0.3; // a bare hand steps inside (opening the pinch) once its landing has held still this long
+// A bare hand steps inside on letting go once the ray has shown SHOWN_FOR, at the landing it showed LOOK_BACK before
+// (against the flick of opening fingers): the same rule as walking inside (B6; the interaction harmony's conflict 5).
+const SHOWN_FOR = 0.3, LOOK_BACK = 0.1;
 const HOVER = { frames: 2, linger: 0.2, away: CLAIM.near, faint: 0.36, solid: 0.9 }; // the hover ray before a pinch: shown after 2 frames in the zone, gone 0.2 s after; not within 15 cm of the model; its opacity, and the aim's
 const WAIST = 0.8; // a pinching hand this far below the eyes is at your side: it never aims, and an aim cancels (m)
 const ZOOM_SPEED = 1.2; // e-folds/s at full stick
@@ -517,7 +519,7 @@ export class Dollhouse {
 		const spots = [];
 		for (const c of input.active()) {
 			input.setLaser(c, c.claim.trigger !== 'tool'); // (a hand holding a tool has no laser)
-			if (c.claim.trigger === null) {
+			if (c.claim.trigger === null && !xr.toolsIntro?.showing) { // (while the tools' show plays, the aims wait)
 				input.setRaycaster(c, xr.raycaster);
 				const modelHit = xr.raycaster.intersectObjects(pointable, false)[0];
 				if (modelHit) {
@@ -861,7 +863,7 @@ export class Dollhouse {
 	handMoves(dt, spots) {
 		const xr = this.xr, ui = xr.ui, input = xr.input;
 		const box = this.modelBox(this._box2 ??= new THREE.Box3()), p = this._p2 ??= new THREE.Vector3();
-		const busy = xr.boardOpen || ui.wrist.open;
+		const busy = xr.boardOpen || ui.wrist.open || !!xr.toolsIntro?.showing; // (while the tools' show plays, the aims wait: the harmony's conflict 7)
 		let jump = null;
 		for (const c of input.gestureHands()) {
 			const palm = this.holdPoint(c, p);
@@ -870,15 +872,16 @@ export class Dollhouse {
 				if (e.type === 'fist' && !this.grab && d < HOLD_REACH && !busy && !c.fistClaimed) { this.cancelHandAim(); this.startGrab(c); } // (a fist on a fan tool takes the tool)
 				else if ((e.type === 'fistEnd' || e.type === 'lost') && this.grab?.c === c) this.release();
 				else if ((e.type === 'open' || e.type === 'lost') && this.handAim?.c === c) { this.cancelHandAim(); xr.sound.play('release'); }
-				// The pinch held aims; opening it on a steady landing steps inside.
+				// The pinch held aims; opening it steps inside (once shown SHOWN_FOR, the landing from LOOK_BACK before).
 				else if (e.type === 'pinch' && !this.handAim && !busy && this.grab?.c !== c && xr.teleportHand(c) && !xr.aimBlock(c, c.gesture.shape?.pinchAt) && c.gesture.shape.pinchAt.y >= xr.headWorld().y - WAIST) { // (a hand at your side never aims)
-					this.handAim = { c, spot: null, steady: 0, at: new THREE.Vector3(), has: false };
+					this.handAim = { c, spot: null, age: 0, past: [] };
 					xr.sound.play('aim');
 				} else if (e.type === 'pinch' && !this.handAim && !busy && this.grab?.c !== c && !xr.teleportHand(c) && !xr.aimBlock(c, c.gesture.shape?.pinchAt) && c.gesture.shape?.pinchAt) {
 					xr.ui.noteWrongHand(c, c.gesture.shape.pinchAt);
 				} else if (e.type === 'pinchEnd' && this.handAim?.c === c) {
-					if (this.handAim.spot && this.handAim.steady >= AIM_STEADY) jump = this.handAim.spot;
-					else { this.cancelHandAim(); xr.sound.play('release'); }
+					const spot = this.spotBefore(this.handAim, LOOK_BACK);
+					if (spot && this.handAim.age >= SHOWN_FOR) jump = spot;
+					else { this.cancelHandAim(); xr.sound.play('release'); } // (a quick pinch-and-open, or let go off the model: a slip never moves you)
 				}
 			}
 		}
@@ -902,11 +905,19 @@ export class Dollhouse {
 		const floor = hit ? xr.findFloor(hit.point, 0.01) : null;
 		a.spot = floor ? this.landing(floor) : null;
 		if (a.spot) spots[a.c.index] = a.spot;
-		// Steady: the landing (in the model) stays put.
-		if (a.spot && a.has && a.spot.model.distanceTo(a.at) < 0.15 / Math.max(1e-3, xr.anchor.scale.x * 10)) a.steady += dt;
-		else a.steady = 0;
-		if (a.spot) { a.at.copy(a.spot.model); a.has = true; } else a.has = false;
+		// The last moments' landings (letting go uses the one LOOK_BACK ago).
+		a.age += dt;
+		a.past.push({ age: a.age, spot: a.spot });
+		while (a.past.length > 2 && a.age - a.past[1].age > LOOK_BACK) a.past.shift();
 		return jump;
+	}
+
+	/** The landing a hand's aim showed `back` seconds ago (or its oldest kept), else now's. */
+	spotBefore(a, back) {
+		const want = a.age - back;
+		let best = null;
+		for (const e of a.past) if (e.age <= want + 1e-6) best = e;
+		return (best ?? a.past[0])?.spot ?? a.spot;
 	}
 
 	/**

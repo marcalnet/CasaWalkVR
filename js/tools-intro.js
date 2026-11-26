@@ -17,6 +17,7 @@ import { buildCamera, buildMeter, buildMarker } from './tool-models.js';
 import { Label } from './panel.js';
 import { readSetting, writeSetting } from './settings.js';
 import { zoneOf, zoneHull } from './wings.js';
+import { handAimRay } from './gestures.js';
 
 const AHEAD = 1.3, DOWN = 15, SPACING = 0.38, BIG = 0.32; // metres (DOWN: degrees below eye level)
 // Above the model as seen (the interaction harmony's conflict 3: on the bare-hands plinth it hung inside the model):
@@ -30,6 +31,7 @@ const FAN_OPEN = 2; // seconds the fan opens by itself as the tools land
 const HOLD = 5; // seconds before they fly, unless reached for
 const REACH = 0.9; // a hand (or a laser's aim) within this of a tool: it starts
 const FLY = 0.6, GAP = 0.25; // each flight's length, and the time between them
+const AT_TOOLS = THREE.MathUtils.degToRad(15); // a trigger or a pinch aimed within this of a tool starts their flight (the interaction harmony's conflict 7)
 
 export class ToolsIntro {
 	/** xr: the XRExperience. */
@@ -58,6 +60,9 @@ export class ToolsIntro {
 
 	/** True while it plays (the lesson waits for it). */
 	get playing() { return !!this.state; }
+
+	/** True while the tools hang in view or fly (not while it waits to be looked at): a teacher is on, so the aims wait. */
+	get showing() { return !!this.state && !this.state.waiting; }
 
 	/** Plays it the first time (or always, for Help). Returns true if it plays. */
 	start({ again = false } = {}) {
@@ -122,6 +127,28 @@ export class ToolsIntro {
 		this.group.visible = false;
 	}
 
+	/**
+	 * A trigger pulled, or a pinch made, aimed within AT_TOOLS of a tool this
+	 * frame: the trigger is used up (claimed) so it never also steps inside.
+	 */
+	aimedAt() {
+		const xr = this.xr, input = xr.input, at = this._at2 ??= new THREE.Vector3(), dir = this._d2 ??= new THREE.Vector3();
+		const towards = (origin, d) => this.items.some((it) => dir.copy(it.holder.getWorldPosition(at)).sub(origin).normalize().angleTo(d) < AT_TOOLS);
+		let hit = false;
+		for (const c of input.active()) {
+			if (!c.state.down.trigger || c.claim.trigger) continue;
+			input.setRaycaster(c, xr.raycaster);
+			if (towards(xr.raycaster.ray.origin, xr.raycaster.ray.direction)) { c.claim.trigger = 'ui'; hit = true; }
+		}
+		for (const c of input.gestureHands?.() ?? []) {
+			const at3 = c.gesture?.shape?.pinchAt;
+			if (!at3 || !c.gestures.some((e) => e.type === 'pinch' || e.type === 'tap')) continue;
+			const { origin, dir: d } = handAimRay(xr.headWorld(), xr.viewAxes().right, at3, c.handedness);
+			if (towards(origin, d)) hit = true;
+		}
+		return hit;
+	}
+
 	/** Once a frame. Calls onDone() when the last tool has landed. */
 	update(dt, onDone) {
 		const s = this.state;
@@ -130,8 +157,10 @@ export class ToolsIntro {
 		s.t += dt;
 		// Waiting: once you have been here a second (Help: at once) and look towards the model, they appear.
 		if (s.waiting) {
-			// (Never while the board or the wrist menu is open: it would play unseen behind it.)
+			// (Never while the board or the wrist menu is open: it would play unseen behind it. One teacher at a time:
+			// the arrival title first, then a second's pause; the interaction harmony's conflict 12.)
 			if (xr.boardOpen || xr.ui.wrist.open) return;
+			if (xr.arrival?.mesh.visible) { s.t = 0; return; }
 			const seen = this.lookingAtModel() && s.t >= (this.again ? 0 : SETTLE) || this.lookingAtModel(LOOK_WIDE) && s.t >= WIDE_AFTER || s.t >= TIMED_AFTER;
 			if (seen) this.begin();
 			return;
@@ -145,6 +174,7 @@ export class ToolsIntro {
 				const p = it.holder.getWorldPosition(this._v);
 				for (const c of xr.input.touches?.() ?? []) if (c.touch.tip.distanceTo(p) < REACH * 0.4) near = true;
 			}
+			if (this.aimedAt()) near = true; // (a trigger or a pinch towards them: the aims wait while they show)
 			if (near) { s.flying = 0; if (xr.soundLevel !== 'off') xr.sound.play('whoosh'); if (xr.fan) xr.fan.force = FLY + 2 * GAP + FAN_OPEN; }
 			return;
 		}

@@ -847,10 +847,10 @@ check('B closes the board', (await state()).menu === null);
 	const cancelled = await page.evaluate(() => { const d = window.__casawalk.xr.modes.dollhouse; return !d.handAim && d.handRays.every((l) => !l.visible); });
 	check('bare hands: turning the palm up cancels the aim', cancelled);
 	await gesture('right', { type: 'pinch' }); await frames(4); await handAimAt(roomPt); await frames(8);
-	await page.waitForFunction(() => (window.__casawalk.xr.modes.dollhouse.handAim?.steady ?? 0) >= 0.3, null, { timeout: 8000, polling: 'raf' }).catch(() => {});
+	await page.waitForFunction(() => (window.__casawalk.xr.modes.dollhouse.handAim?.age ?? 0) >= 0.35, null, { timeout: 8000, polling: 'raf' }).catch(() => {}); // (B6, as inside: the ray shown 0.3 s)
 	await gesture('right', { type: 'pinchEnd' }); await frames(4); await settled(); await frames(4);
 	const inside = await state();
-	check('bare hands: opening the pinch on a steady landing steps inside', inside.mode === 'walk' && inside.anchorScale === 1, JSON.stringify({ mode: inside.mode }));
+	check('bare hands: opening the pinch once the ray has shown 0.3 s steps inside (B6 at the scale model too: harmony, conflict 5)', inside.mode === 'walk' && inside.anchorScale === 1, JSON.stringify({ mode: inside.mode }));
 	// Walking: pinch and hold, the arc; it settles (white, then blue); let go: go.
 	// A floor to aim at: the hotspots 1.2-3.5 m away (room middles, doorways), nearest first; then
 	// any 0.8-6 m away; else the floor 2 m away round you (a home where you land far from its hotspots).
@@ -1532,6 +1532,7 @@ check('back from walking: eyes at 1.89 m again, gallery shown, lasers on', Math.
 	const remembered = await page.evaluate(() => localStorage.getItem('casawalk.welcome.scale.controllers'));
 	check('stepping inside finishes the scale model\'s lesson (remembered) and starts the one inside, with a target ring ahead', remembered === '1' && l4.place === 'walk' && l4.step === 'arc' && l4.shown && l4.target, JSON.stringify({ remembered, ...l4 }));
 	await shot('lesson-walk');
+	await page.waitForFunction(() => window.__casawalk.xr.pinchDemo.playing, null, { timeout: 5000, polling: 'raf' }).catch(() => {}); await frames(3); // (it starts once the room's name has faded: one teacher at a time)
 	const pc = await page.evaluate(() => { const d = window.__casawalk.xr.pinchDemo; return { playing: d.playing, kind: d.kind, label: d.label.text, ring: d.ring.visible && d.group.visible }; });
 	check('the first time inside, with controllers: the loop plays (arc and ring, "Trigger · aim · let go")', pc.playing && pc.kind === 'controllers' && pc.label === 'Trigger · aim · let go' && pc.ring, JSON.stringify(pc));
 	await shot('pinch-demo');

@@ -175,11 +175,18 @@ test('the first time inside: a looping hand with its arc and ring, no card; the 
 	const { x, go, frame } = await setup();
 	const demo = x.pinchDemo;
 	for (const k of ['lessonWalkControllers', 'lessonWalkHands']) writeSetting(k, false);
+	// One teacher at a time (harmony, conflict 12): it waits for the room's name to fade.
+	const arrive = () => { for (let i = 0; i < 200 && !demo.playing; i++) frame(); };
 	go('in');
-	assert.ok(demo.playing && demo.group.visible && !x.lessons.group.visible, 'the loop plays; no lesson card');
+	assert.ok(!demo.playing && x.arrival.mesh.visible, 'the room\'s name first');
+	arrive();
+	assert.ok(demo.playing && demo.group.visible && !x.lessons.group.visible && !x.arrival.mesh.visible, 'then the loop plays; no lesson card');
 	assert.ok(demo.ring.position.distanceTo(x.headWorld()) > 1.4, 'its ring is on the floor ahead');
 	const spot = demo.spot.clone(), head = x.headWorld();
 	assert.ok(Math.abs(spot.y - head.y + 0.42) < 0.02 && spot.distanceTo(head) < 1.05 && spot.distanceTo(head) > 0.95, 'about 1 m ahead, 25° below the eyes');
+	const { angleOf } = await import('../js/wings.js');
+	const az = THREE.MathUtils.radToDeg(angleOf(spot, head, x.viewYaw()).az);
+	assert.ok(Math.abs(az + 15) < 1, `15° to the main hand's side (right), taken from the view as it appears: ${az.toFixed(1)}°`);
 	demo.update(0.5); demo.update(0.5);
 	assert.ok(demo.state.fade === 1, 'faded in');
 	x.lessons.note('teleport');
@@ -188,11 +195,11 @@ test('the first time inside: a looping hand with its arc and ring, no card; the 
 	const { readSetting } = await import('../js/settings.js');
 	assert.equal(readSetting('lessonWalkControllers') || readSetting('lessonWalkHands'), true, 'remembered');
 	// Another visit: not shown again.
-	go('back'); go('in');
+	go('back'); go('in'); arrive();
 	assert.ok(!demo.playing, 'not again');
 	// Not remembered after only a timeout: 15 s, then it goes; 40 s stuck, once more.
 	for (const k of ['lessonWalkControllers', 'lessonWalkHands']) writeSetting(k, false);
-	go('back'); go('in');
+	go('back'); go('in'); arrive();
 	assert.ok(demo.playing);
 	for (let t = 0; t < 15.6; t += 0.1) demo.update(0.1);
 	assert.ok(!demo.playing, '15 s: faded away');
@@ -1328,4 +1335,49 @@ test('harmony, conflict 9: the open fan\'s tools must be 40 cm from the eyes, of
 	assert.deepEqual(f.arcState(mid, head), { may: false, must: true }, 'over the model: never');
 	const door = [...d.doors.keys.values()][0].group.getWorldPosition(new V());
 	assert.equal(f.arcState(door, head).may, false, 'on a live key: never');
+});
+
+test('harmony, conflicts 7, 8 and 12: the two Walk-in keys are one key; the show waits for the arrival title, the aims wait while it plays and a trigger at the tools starts their flight; then the orb calls for 30 s', async () => {
+	const { x, frame, press, hands } = await setup();
+	frame();
+	// Conflict 8: the waist door and the wrist key look, read and do the same.
+	const door = x.modes.dollhouse.doors.keys.get('in').spec, wrist = x.ui.wrist;
+	wrist.redraw();
+	const key = wrist.pad.keys.get('right').spec;
+	for (const k of ['id', 'look', 'icon', 'label', 'caption']) assert.equal(key[k], door[k], `the same ${k}`);
+	// Conflict 12: the show waits while the arrival title shows.
+	const intro = x.toolsIntro;
+	x.showArrival('Scale model 1:10');
+	intro.start({ again: true });
+	x.camera.rotation.x = -0.6; x.camera.updateMatrixWorld(true); // (looking at the model)
+	for (let i = 0; i < 30; i++) frame();
+	assert.ok(intro.state.waiting && x.arrival.mesh.visible, 'the title first');
+	for (let i = 0; i < 300 && intro.state?.waiting; i++) frame();
+	assert.ok(intro.showing && x.teaching, 'then the show (a teacher: the fan stays closed)');
+	// Conflict 7: while it shows, a pull at the model steps nowhere; a pull at the tools starts their flight.
+	const c = hands.right, orig = x.input.setRaycaster.bind(x.input), head = x.headWorld().clone();
+	let aim = x.modes.dollhouse.modelBox().getCenter(new THREE.Vector3());
+	x.input.setRaycaster = (cc, rc) => { if (cc === c) { rc.set(head, aim.clone().sub(head).normalize()); rc.far = 5; } else orig(cc, rc); };
+	press('right', 'trigger'); frame(); press('right', 'trigger', false); frame();
+	assert.ok(x.mode === 'dollhouse' && !x.layerFx && intro.state.flying === null, 'at the model: nothing (the aims wait)');
+	aim = intro.items[1].holder.getWorldPosition(new THREE.Vector3());
+	press('right', 'trigger'); frame(); press('right', 'trigger', false); frame();
+	assert.ok(intro.state?.flying !== null && x.mode === 'dollhouse' && !x.layerFx, 'at the tools: they fly, and nobody steps inside');
+	x.input.setRaycaster = orig;
+	for (let i = 0; i < 300 && intro.playing; i++) frame();
+	assert.ok(!intro.playing, 'landed');
+	// (Help's replay never calls the orb; the first time does.)
+	x.introAgain = false; intro.start({ again: true }); intro.stop(); wrist.attractOrb(2);
+	assert.ok(wrist.attract && wrist.attract.left === 30, 'the orb calls for 30 s after the fan has closed (2 s)');
+	wrist.show({ pinned: true });
+	frame();
+	assert.equal(wrist.attract, null, 'found: it stops');
+});
+
+test('harmony, conflict 5: at the scale model a bare hand steps inside on letting go once the ray has shown 0.3 s, at the landing from 0.1 s before; a quicker pinch-and-open moves nothing', async () => {
+	const { x } = await setup();
+	const d = x.modes.dollhouse, spot = { model: new THREE.Vector3(1, 0, 1) }, other = { model: new THREE.Vector3(5, 0, 5) };
+	const a = { age: 0, past: [], spot: null };
+	for (let t = 0; t < 0.4; t += 1 / 72) { a.age += 1 / 72; a.spot = a.age > 0.38 ? other : spot; a.past.push({ age: a.age, spot: a.spot }); while (a.past.length > 2 && a.age - a.past[1].age > 0.1) a.past.shift(); }
+	assert.equal(d.spotBefore(a, 0.1), spot, 'the landing from 0.1 s before the release (not the flick at the end)');
 });

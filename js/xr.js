@@ -48,6 +48,7 @@ import { HandReadout } from './hand-readout.js';
 import { FrameStats } from './frame-stats.js';
 import { DEV } from './dev.js';
 import { ToolsIntro } from './tools-intro.js';
+import { zoneOf, zoneHull } from './wings.js';
 import { attachTransientPointer } from './transient-pointer.js';
 import { SeeThrough, SEE_THROUGH_MAX } from './walls.js';
 import { Portals } from './portal.js';
@@ -178,6 +179,9 @@ export class XRExperience {
 	get menu() { return this.ui.menu; } // the settings wing (right)
 	/** True while either wing (Settings, How to move) is open: nothing else claims the hands then. */
 	get boardOpen() { return !!(this.ui.menu || this.ui.guide); }
+
+	/** A first-time teacher plays (the tools' show in view, or the pinch demonstration): the fan stays closed (the interaction harmony's conflict 12). */
+	get teaching() { return !!(this.toolsIntro?.showing || this.pinchDemo?.state); }
 
 	/** Objects never drawn in a photo (the interface); hiding one hides what it carries. */
 	/**
@@ -400,7 +404,7 @@ export class XRExperience {
 		this.lessons.stop();
 		if (this.session && !(name === 'dollhouse' && this.toolsIntro?.playing)) this.lessons.start(name === 'walk' ? 'walk' : 'scale'); // (the tools' introduction first)
 		if (name !== 'dollhouse') this.toolsIntro?.stop();
-		if (name === 'walk' && this.session) this.pinchDemo.start(); else this.pinchDemo.stop();
+		if (name === 'walk' && this.session) this.pinchDemo.arm(); else this.pinchDemo.stop(); // (it starts once the room's name has faded)
 		this.ui.setWelcome(this.ui.welcomeOn);
 	}
 
@@ -515,13 +519,22 @@ export class XRExperience {
 		if (this.lessons.place === 'scale') this.lessons.place3d(); // (a lesson card in front of you too)
 	}
 
-	/** The arrival title: the layer's name, 1.5 m in front of you for 1.5 s, then it fades. */
+	/**
+	 * The arrival title: the layer's name, 1.5 m in front of you for 1.5 s,
+	 * then it fades. Just above eye level, and at the scale model above the
+	 * model's silhouette as seen plus 5° (the interaction harmony's conflict 12).
+	 */
 	showArrival(text) {
 		const head = this.camera.matrix;
 		const yaw = yawOfMatrix(head);
 		const p = new THREE.Vector3().setFromMatrixPosition(head);
 		this.arrival.set(text);
-		this.arrival.mesh.position.set(p.x - Math.sin(yaw) * 1.5, p.y + 0.05, p.z - Math.cos(yaw) * 1.5);
+		let up = 0.05;
+		if (this.mode === 'dollhouse' && this.model) {
+			const hull = zoneHull(zoneOf(this.modes.dollhouse.modelBox(), this.headWorld(), this.viewYaw()) ?? []);
+			if (hull.length) up = Math.max(up, 1.5 * Math.tan(Math.max(...hull.map((a) => a.el)) + THREE.MathUtils.degToRad(5) + Math.atan(0.06 / 1.5)));
+		}
+		this.arrival.mesh.position.set(p.x - Math.sin(yaw) * 1.5, p.y + up, p.z - Math.cos(yaw) * 1.5);
 		this.arrival.mesh.rotation.set(0, yaw, 0);
 		this.arrival.mesh.visible = true;
 		this.arrivalT = 1.5;
@@ -791,7 +804,11 @@ export class XRExperience {
 			}
 		}
 		if (!this.layerFx) this.lessons.update(dt); // (its keys before the mode's lasers)
-		this.toolsIntro.update(dt, () => { if (this.mode === 'dollhouse') this.lessons.start('scale', { again: !!this.introAgain }); this.introAgain = false; });
+		this.toolsIntro.update(dt, () => {
+			if (this.mode === 'dollhouse') this.lessons.start('scale', { again: !!this.introAgain });
+			if (!this.introAgain) this.ui.wrist.attractOrb(2); // (the next teacher: once the fan has closed, the orb calls for 30 s)
+			this.introAgain = false;
+		});
 		if (this.layerFx) this.runLayerFx(dt); // moving between layers: the modes wait
 		else this.modes[this.mode]?.update(dt);
 		this.runArrival(dt);

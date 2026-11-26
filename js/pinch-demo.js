@@ -95,7 +95,15 @@ export class PinchDemo {
 	/** The input kind now (as the lessons read it): controllers if any is held, else bare hands. */
 	inputKind() { return this.xr.input.active().length ? 'controllers' : 'hands'; }
 
-	/** Stepping inside: starts the demonstration the first time for this input kind. */
+	/**
+	 * Stepping inside: the demonstration waits for the room's name to fade (and
+	 * for no wing or wrist arc to be open), then starts: one teacher at a time,
+	 * its 15° taken from the view at that moment (the interaction harmony's
+	 * conflict 12; started during the dive, it measured 0°).
+	 */
+	arm() { this.stop(); this.armed = true; }
+
+	/** Starts the demonstration the first time for this input kind. */
 	start() {
 		const kind = this.inputKind();
 		if (!this.xr.session || readSetting(lessonSetting('walk', kind))) { this.stop(); return false; }
@@ -106,6 +114,7 @@ export class PinchDemo {
 
 	/** Leaving the home, or VR: gone at once. */
 	stop() {
+		this.armed = false;
 		this.state = null;
 		this.visit = null;
 		this.group.visible = false;
@@ -174,7 +183,12 @@ export class PinchDemo {
 	/** Once a frame (inside only). */
 	update(dt) {
 		const xr = this.xr;
-		if (xr.mode !== 'walk') { if (this.visit || this.state) this.stop(); return; }
+		if (xr.mode !== 'walk') { if (this.visit || this.state || this.armed) this.stop(); return; }
+		if (this.armed) {
+			if (xr.layerFx || xr.arrival?.mesh.visible || xr.boardOpen || xr.ui.wrist.open) return;
+			this.armed = false;
+			this.start();
+		}
 		const v = this.visit;
 		if (!v) return;
 		v.t += dt;

@@ -187,7 +187,7 @@ export class ToolFan {
 			const arc = this.arcState(anchor, head);
 			this.posShut = this.alpha > 0.5 && (arc.must || this.slideBlocked);
 			const posOk = this.alpha > 0.5 ? !this.posShut : arc.may && !this.slideBlocked;
-			open = raised && look.angleTo(to) < IN_VIEW && (watching || this.alpha > 0.5) && !xr.ui.wrist.open && keysOk && posOk && !aiming && forward.lengthSq() > 0;
+			open = raised && look.angleTo(to) < IN_VIEW && (watching || this.alpha > 0.5) && !xr.ui.wrist.open && !xr.teaching && keysOk && posOk && !aiming && forward.lengthSq() > 0; // (one teacher at a time: closed while one plays)
 			if (this.force > 0) { this.force -= dt; open = true; } // (the tools' show: the one time it opens without a look)
 			// Docked (bare hands): the tools rest on the back of the wrist whenever that hand is in view; not while it holds the model.
 			const holding = xr.modes.dollhouse?.grab?.c === fan;
