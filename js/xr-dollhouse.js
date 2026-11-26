@@ -146,7 +146,7 @@ export class Dollhouse {
 		this.doorGroup = new THREE.Group();
 		this.doorGroup.name = 'plinth-doors';
 		this.doorGroup.add(this.doors.add('in', ...DOOR_IN).group);
-		this.doors.setSpec('in', { id: 'in', look: 'filled', icon: 'in', label: 'Walk in \u2192', caption: 'Inside the home' });
+		this.doors.setSpec('in', { id: 'in', look: 'filled', icon: 'in', label: 'Walk in \u2192' }); // (no caption: it repeated the label; decision A5, the UX review's S6)
 		this.levelCount = 0; // the keys in the stack now (level keys are slots 'level0', 'level1'... of the doors' pad)
 		this.levelTitle = new Label({ height: 0.026 });
 		this.levelTitle.set('Levels');

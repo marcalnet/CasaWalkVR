@@ -48,7 +48,6 @@ import { DEV } from './dev.js';
 export const PAUSE = {
 	TIP_IN: 0.3, // the tip fades in, once the view is black
 	SHOWN: 3.5, // fully visible this long, it ends on its own (if the next place is ready)
-	NEXT: 8, MAX_TIPS: 2, // still loading after this long: the next tip of the transition cross-fades in (two at most)
 	SKIP_AFTER: 0.8, // a press (or the tip's own action) ends it from then on
 	TIP_OUT: 0.3, REVEAL: 0.2, // the tip fades out, then the place fades in
 	CHOOSE_WAIT: 0.3, // Enter VR: the tip is chosen once the head has a pose and a controller is in, or this long after the pose (bare hands)
@@ -334,7 +333,7 @@ export class Pause {
 	 */
 	startPause(transition) {
 		const f = this.fx;
-		f.pause = { transition, tip: null, kind: this.kind(), t: 0, since: null, count: 0, shown: 0, tips: 0, frames: [], waited: 0, ending: null, aim: null, away: 0, follow: null, waiting: false };
+		f.pause = { transition, tip: null, kind: this.kind(), t: 0, since: null, count: 0, shown: 0, frames: [], waited: 0, ending: null, aim: null, away: 0, follow: null, waiting: false };
 		this.cover(1);
 		this.floor.visible = false;
 		// Enter VR: nothing to place yet. The 2D page's camera is still the camera, and no controller has
@@ -347,7 +346,7 @@ export class Pause {
 	chooseTip(p) {
 		const xr = this.xr, kind = this.kind(), transition = p.transition;
 		const tip = this.tipsOn ? nextTip(transition, this.record, kind, { all: DEV.tips }) : null;
-		Object.assign(p, { tip, kind, tips: tip ? 1 : 0 });
+		Object.assign(p, { tip, kind });
 		if (tip) {
 			this.record.tips.seen.add(tipKey(tip.id, kind));
 			this.placeTip(transition === 'in' ? xr.roomHere() : '');
@@ -448,11 +447,6 @@ export class Pause {
 		this.practise(dt);
 		if (p.ending) return;
 		if (p.shown >= PAUSE.SHOWN && ready) { this.endTip(false); return; }
-		// Still loading: after NEXT, the next tip of this transition cross-fades in (two at most).
-		if (!ready && p.t >= PAUSE.NEXT * p.tips && p.tips < PAUSE.MAX_TIPS) {
-			const next = this.tipsOn ? nextTip(p.transition, this.record, p.kind) : null;
-			if (next) { p.tips++; p.tip = next; this.record.tips.seen.add(tipKey(next.id, p.kind)); this.showTip(next, p.kind); p.shown = 0; }
-		}
 	}
 
 	setTipAlpha(a) {
