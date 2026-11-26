@@ -439,6 +439,8 @@ test('one option per tool, on one dial: the stick steps it (the dial shows 1.5 s
 	hands.left.grip.position.copy(x.rig.worldToLocal(lensAt.clone().add(new THREE.Vector3(0, 0.01, 0.045))));
 	frame(); frame();
 	assert.ok(dial.open && !dial.open.stepped, 'touched: the dial opens');
+	frame();
+	assert.equal(dial.cues.get(cam).mesh.material.opacity, 1, 'while its dial is open, the part\'s quiet ring shows full');
 	assert.equal(x.aimBlock(hands.left, lensAt), 'dial', 'while open it owns the other hand');
 	// A controller's trigger too (the audit's S1): claimed before the place reads it, so a pull is never also a walk-in.
 	const left = x.input.controllers[0];
@@ -458,7 +460,7 @@ test('one option per tool, on one dial: the stick steps it (the dial shows 1.5 s
 	x.store.start();
 });
 
-test('the dial, the orb and the holding hand (the audit\'s S8; the Designer, §5.8): stops 10 cm or more from the orb; nothing of the holding controller within 2 cm behind a stop (Quest 2, 3, Pro); a bare holding hand 4 cm or more from every stop; while open, the orb yields and its stops are live keys', async () => {
+test('the dial, the orb and the holding hand (the audit\'s S8; the Designer, §5.8): it floats 3 cm towards the eyes and 10 cm up, never within 0.30 m of them; stops 10 cm or more from the orb; nothing of the holding controller within 2 cm behind a stop (Quest 2, 3, Pro); a bare holding hand 4 cm or more from every stop; while open, the orb yields and its stops are live keys', async () => {
 	const { x, frame, hands } = await setup();
 	const { DIAL } = await import('../js/tool-dial.js');
 	const { sceneOf } = await import('./glb-scene.js');
@@ -478,10 +480,7 @@ test('the dial, the orb and the holding hand (the audit\'s S8; the Designer, §5
 	};
 	const stops = () => [...x.dial.pad.keys.values()].filter((k) => k.group.visible);
 	const R = DIAL.STOP / 2, ray = new THREE.Raycaster(), rows = [];
-	// Open with the Designer (27 Nov), logged here, not yet asserted: the camera in the left hand has its controller 0-0.5 cm
-	// behind a stop; a bare holding hand is 1.2 cm from the stops (overlapping them by 1.1 cm with the marker, and the camera in
-	// the left hand). Everything else is asserted.
-	const OPEN = new Set(['left camera', 'bare hands']);
+	const OPEN = new Set(); // (names a case logged but not asserted; none: every check passes)
 	hands.left.grip.visible = hands.right.grip.visible = true;
 	for (const main of ['right', 'left']) {
 		x.menuAction({ id: 'mainHand', value: main });
@@ -550,7 +549,17 @@ test('the dial, the orb and the holding hand (the audit\'s S8; the Designer, §5
 		Object.assign(c, { isHand: false, isController: true });
 	}
 	console.log(`# the dial: ${rows.join('; ')}`);
+	// Brought to the face: never nearer the eyes than 0.30 m, pushed out along the line from them.
+	const c = hands.right, eye = x.headWorld().clone();
 	x.menuAction({ id: 'mainHand', value: 'right' });
+	c.ray.position.copy(x.rig.worldToLocal(eye.clone().add(new THREE.Vector3(0.02, -0.12, -0.12)))); c.ray.rotation.set(-0.3, 0, 0); c.ray.updateMatrix();
+	x.tools.take(x.fan.meter, c);
+	frame(); frame();
+	x.dial.show(x.fan.meter);
+	x.scene.updateMatrixWorld(true);
+	const near = x.dial.group.getWorldPosition(new THREE.Vector3()).distanceTo(x.headWorld());
+	assert.ok(near >= 0.30 - 1e-6, `never nearer the eyes than 0.30 m (${near.toFixed(3)} m)`);
+	x.dial.close(); x.tools.putBack();
 });
 
 test('the framing guide: while the camera is held, a red frame where the photo\'s edges fall (its depth 0.3-8 m), 3:2 for the lens; hidden while the shutter fires; never in photos', async () => {

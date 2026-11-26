@@ -27,13 +27,15 @@ import * as THREE from 'three';
 import { KeyPad } from './keys.js';
 import { Label } from './panel.js';
 import { CONTROL_CUE } from './theme.js';
+import { keepFromEyes } from './zones.js';
 
 export const DIAL = {
 	RADIUS: 0.06, STOP: 0.022, GAP: 0.012, // the half circle and its stops (m)
 	OPEN_FOR: 3, STEP_SHOW: 1.5, LABEL_FOR: 1, // seconds: untouched it closes; a stick step shows it; the label
 	ZONE: 0.022, // a touch on the control part counts within this of its middle (the 22 mm floor)
-	TOWARDS: 0.03, // the dial floats this far in front of its centre, towards the eyes (m)
-	TURN: Math.PI / 3, // the half circle opens up and this far towards the other hand, away from the holding wrist and its orb (the audit's S8: the camera's and the meter's stops 10 cm or more from the orb)
+	TOWARDS: 0.03, UP: 0.10, // the dial floats this far from its part towards the eyes, and this far straight up (m): clear of the hand
+	// and the controller holding it, and of the orb (the Designer, §5.8: towards the eyes alone ran over your own hand)
+	FOLLOW: 0.08, // seconds: it follows the tool with the framing guide's smoothing
 	PULSE: 0.8, // seconds: the cue's one soft pulse on the first take
 };
 
@@ -91,15 +93,11 @@ export class ToolDial {
 
 	/** Shows the dial round a tool's control part (stepped: by the stick, for STEP_SHOW). */
 	show(tool, { stepped = false } = {}) {
-		const xr = this.xr, at = this.centreAt(tool).clone(), eye = xr.headWorld(), stops = tool.option.stops;
-		// In front of the control part, towards the eyes, facing them; world-locked.
-		const toEye = this._e.copy(eye).sub(at).normalize();
-		this.group.position.copy(at).addScaledVector(toEye, DIAL.TOWARDS);
-		this.group.lookAt(eye);
-		// Its half circle opens up and towards the other hand (as seen), away from the holding wrist and the orb on it.
-		const holder = xr.tools?.held?.tool === tool ? xr.tools.held.c : null;
-		const mid = Math.PI / 2 + (holder?.handedness === 'left' ? -DIAL.TURN : DIAL.TURN);
-		const angles = stopAngles(stops.length, mid);
+		const stops = tool.option.stops;
+		this.open = { tool, t: 0, until: stepped ? DIAL.STEP_SHOW : DIAL.OPEN_FOR, stepped };
+		this.place(0, true);
+		// Its half circle opens upwards as you see it, the same for either hand.
+		const mid = Math.PI / 2, angles = stopAngles(stops.length, mid);
 		const current = tool.option.get();
 		for (let i = 0; i < 4; i++) {
 			const k = this.pad.keys.get(`stop${i}`), s = stops[i];
@@ -109,7 +107,24 @@ export class ToolDial {
 			this.pad.setSpec(`stop${i}`, { id: `stop:${i}`, look: s.value === current ? 'chosen' : 'plain', label: s.label });
 		}
 		this.group.visible = true;
-		this.open = { tool, t: 0, until: stepped ? DIAL.STEP_SHOW : DIAL.OPEN_FOR, stepped };
+	}
+
+	/**
+	 * Where the open dial floats: over its part (or option.at), TOWARDS metres
+	 * towards the eyes and UP metres up, facing the eyes, never nearer them than
+	 * 0.30 m (as the tools: pushed out along the line from the eyes). It follows
+	 * the tool (smoothed over FOLLOW; snap: at once). A dial wrapped round a part
+	 * held in the fist could never clear the fingers (the Designer, §5.8).
+	 */
+	place(dt, snap = false) {
+		const xr = this.xr, at = this.centreAt(this.open.tool, this._c ??= new THREE.Vector3()), eye = xr.headWorld();
+		const want = this._w ??= new THREE.Vector3();
+		want.copy(eye).sub(at).normalize().multiplyScalar(DIAL.TOWARDS).add(at);
+		want.y += DIAL.UP;
+		keepFromEyes(want, eye);
+		if (snap) this.group.position.copy(want);
+		else this.group.position.lerp(want, 1 - Math.exp(-dt / DIAL.FOLLOW));
+		this.group.lookAt(eye);
 	}
 
 	close() {
@@ -168,6 +183,7 @@ export class ToolDial {
 		const other = xr.input.controllers.find((c) => c !== held.c && c.touch?.tracked);
 		if (!o && other && other.touch.tip.distanceTo(this.partAt(held.tool)) < DIAL.ZONE) this.show(held.tool);
 		if (!this.open) return;
+		this.place(dt);
 		const { action, hot } = this.pad.update(dt, { active: true, exclude: held.c, own: 'dial' }); // (the triggers claim() took for it)
 		this.open.t = hot.size ? 0 : this.open.t + dt;
 		if (action?.id?.startsWith('stop:')) {
@@ -208,7 +224,7 @@ export class ToolDial {
 			}
 			cue.pulse = Math.max(0, cue.pulse - dt);
 			const k = cue.pulse > 0 ? Math.sin((1 - cue.pulse / DIAL.PULSE) * Math.PI) : 0;
-			cue.mesh.material.opacity = CONTROL_CUE.opacity + (1 - CONTROL_CUE.opacity) * k;
+			cue.mesh.material.opacity = this.open?.tool === tool ? 1 : CONTROL_CUE.opacity + (1 - CONTROL_CUE.opacity) * k; // (its dial open: full, so you see which part it belongs to)
 			if (cue.faces) cue.mesh.lookAt(this.xr.headWorld());
 		}
 	}
