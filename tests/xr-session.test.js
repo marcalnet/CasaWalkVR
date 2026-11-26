@@ -203,6 +203,11 @@ test('the pause, pure: which tip (in order, once a session, per input kind), rea
 	assert.equal(nextTip('enter', newRecord(), 'hands').id, 'walkin');
 	assert.equal(nextTip('back', newRecord(), 'controllers').id, 'grab');
 	assert.equal(nextTip('out', newRecord(), 'hands'), null, 'leaving VR: never a tip');
+	const { TIPS } = await import('../js/xr-menus.js'), { gestureAt } = await import('../js/tip-demo.js');
+	assert.deepEqual(Object.values(TIPS).flat().map((t) => t.demo), ['door', 'pinch', 'flick', 'touch', 'grab'], 'every tip has its looping demonstration');
+	assert.ok(gestureAt('grab', 1.5).k === 1 && gestureAt('grab', 1.5).turn > 0.5 && gestureAt('grab', 2.95).k === 0, 'grab: the hand closes, turns, opens');
+	assert.ok(gestureAt('touch', 1.8).disc === 1 && gestureAt('touch', 0.2).disc === 0, 'touch: the disc opens where the fingertip arrives');
+	assert.ok(Math.abs(gestureAt('flick', 1.1).turn - 0.6) < 1e-9 && gestureAt('flick', 2).turn === 0, 'flick: aside and back');
 	const all = newRecord(), ids = Array.from({ length: 6 }, () => nextTip('in', all, 'hands', { all: true }).id);
 	assert.deepEqual(ids, ['walkin', 'teleport', 'turn', 'portal', 'grab', 'walkin'], '?tips: every tip in turn, never retired');
 	assert.ok(!isReady([0.01, 0.01]) && isReady(Array(10).fill(1 / 72)) && !isReady([...Array(9).fill(1 / 72), 0.03]), 'ready: 10 smooth frames (under 1.5x the budget)');

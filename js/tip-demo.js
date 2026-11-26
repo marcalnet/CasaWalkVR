@@ -7,8 +7,14 @@
 // finger tips brighten); an arc grows from the pinch to an orange ring on the
 // floor ahead; the ring turns blue; the hand opens and the ring gives a small
 // ripple; a short pause, then again. With controllers the arc and the ring
-// play alone (no controller model yet). `door`: a small orange door lights at
-// the end of the arc instead of the ring (the Enter VR tip: "then Walk in").
+// play alone (no controller model yet). The demo kinds (the tip's `demo`):
+//   pinch  the loop above (the teleport tip)
+//   door   the same, a small orange door lighting at the arc's end instead of
+//          the ring (the Enter VR tip: "then Walk in")
+//   flick  the pinch held, the wrist flicks aside and back (the turn tip)
+//   touch  the open hand reaches forward; a disc opens where it touches (the
+//          portal tip)
+//   grab   the hand closes, turns a quarter, opens again (the grab tip)
 //
 // Where: 0.6 m ahead, 15° to the main hand's side, 20° below eye level, 1.2
 // times life size, world-locked where it appears and turned to you. The pause
@@ -19,7 +25,7 @@
 
 import * as THREE from 'three';
 import { loadHands, dressHand, mirrorPose } from './hand-model.js';
-import { HAND_POSES, pinchJoints } from './hand-poses.js';
+import { HAND_POSES, pinchJoints, fistJoints } from './hand-poses.js';
 import { COLOURS } from './theme.js';
 
 export const DEMO = {
@@ -31,6 +37,15 @@ export const DEMO = {
 
 /** The loop's moments (s): the hand pinches, the arc grows, the ring is steady, the hand opens. */
 export const LOOP = { pinchFrom: 0.5, pinchTo: 0.9, arcTo: 1.7, openFrom: 2.2, openTo: 2.5 };
+
+/** The other loops' moments (s): { k: the gesture 0..1 (closing, flicking, reaching), turn: radians, disc: 0..1 }. */
+export function gestureAt(demo, t) {
+	const ramp = (a, b) => THREE.MathUtils.clamp((t - a) / (b - a), 0, 1), s = (v) => v * v * (3 - 2 * v);
+	if (demo === 'flick') return { k: 1, turn: 0.6 * (s(ramp(0.8, 1.0)) - s(ramp(1.3, 1.6))), disc: 0 };
+	if (demo === 'touch') { const reach = s(ramp(0.4, 1.0)) - s(ramp(2.2, 2.7)); return { k: 0, reach, disc: s(ramp(0.9, 1.4)) * (1 - s(ramp(2.2, 2.6))) }; }
+	if (demo === 'grab') return { k: s(ramp(0.4, 0.8)) * (1 - s(ramp(2.2, 2.6))), turn: (Math.PI / 2) * s(ramp(0.9, 1.9)) * (1 - s(ramp(2.6, 2.9))), disc: 0 };
+	return { k: 0, turn: 0, disc: 0 };
+}
 
 /** The loop's state at time t (s into the loop): pinch 0..1, arc 0..1 (how much is drawn), blue (the ring is steady), ripple 0..1. */
 export function loopAt(t) {
@@ -71,8 +86,10 @@ export class TipDemo {
 		this.arcLine = new THREE.Line(this.arcGeometry, new THREE.LineBasicMaterial({ color: COLOURS.primary, transparent: true, depthTest: false }));
 		this.arcLine.frustumCulled = false;
 		this.arcLine.name = 'tip-demo-arc';
-		this.group.add(this.ring, this.ripple, this.door, this.arcLine);
-		for (const o of [this.ring, this.ripple, this.door, this.arcLine]) { o.raycast = () => {}; o.renderOrder = DEMO.ORDER; }
+		this.disc = new THREE.Mesh(new THREE.CircleGeometry(0.1, 40), new THREE.MeshBasicMaterial({ color: 0xf4efe6, transparent: true, opacity: 0, depthWrite: false, depthTest: false, side: THREE.DoubleSide }));
+		this.disc.name = 'tip-demo-disc';
+		this.group.add(this.ring, this.ripple, this.door, this.arcLine, this.disc);
+		for (const o of [this.ring, this.ripple, this.door, this.arcLine, this.disc]) { o.raycast = () => {}; o.renderOrder = DEMO.ORDER; }
 		xr.scene.add(this.group);
 		xr.hideFromPhotos(this.group);
 		this._a = new THREE.Vector3(); this._b = new THREE.Vector3(); this._c = new THREE.Vector3();
@@ -86,9 +103,11 @@ export class TipDemo {
 	 * kind 'hands' | 'controllers'; target, the floor point its arc lands on
 	 * (world); door: a small door at the end of the arc instead of the ring.
 	 */
-	play(kind, target, { door = false } = {}) {
+	play(kind, target, { demo = 'pinch' } = {}) {
 		const xr = this.xr, head = xr.headWorld(), { forward, right } = xr.viewAxes();
 		this.kind = kind;
+		this.demo = demo;
+		const door = demo === 'door', arcs = demo === 'pinch' || door;
 		this.withDoor = door;
 		const side = xr.toolFan === 'right' ? -1 : 1, a = THREE.MathUtils.degToRad(DEMO.SIDE) * side, below = THREE.MathUtils.degToRad(DEMO.BELOW);
 		const flatDir = this._a.copy(forward).multiplyScalar(Math.cos(a)).addScaledVector(right, Math.sin(a));
@@ -100,8 +119,13 @@ export class TipDemo {
 		this.ripple.position.copy(this.target);
 		this.door.position.copy(this.target).y += 0.04;
 		this.door.lookAt(head);
-		this.ring.visible = !door;
+		this.ring.visible = arcs && !door;
 		this.door.visible = door;
+		this.arcLine.visible = arcs;
+		this.ripple.visible = arcs;
+		this.disc.visible = demo === 'touch';
+		this.disc.position.copy(this.spot).addScaledVector(forward, 0.16); // (where the reaching fingertip arrives)
+		this.disc.lookAt(head);
 		const mine = side > 0 ? 'right' : 'left';
 		this.side = mine;
 		if (this.hands) {
@@ -118,6 +142,8 @@ export class TipDemo {
 			const fingers = this._b.copy(right).multiplyScalar(-Math.cos(0.45)).addScaledVector(UP, Math.sin(0.45)).normalize();
 			const palm = this._c.copy(toYou).addScaledVector(fingers, -toYou.dot(fingers)).normalize();
 			h.quaternion.setFromRotationMatrix(triad(fingers.clone(), palm.clone()).multiply(triad(f, n).invert()));
+			this.baseQuat = h.quaternion.clone();
+			this.forward = forward.clone();
 		}
 		this.state = { t: 0, fade: 0, out: false };
 		this.group.visible = true;
@@ -145,6 +171,7 @@ export class TipDemo {
 
 	/** Poses the hand, the arc, the ring for this moment of the loop. */
 	draw(s) {
+		if (this.demo === 'flick' || this.demo === 'touch' || this.demo === 'grab') { this.drawGesture(s); return; }
 		const m = loopAt(s.t % DEMO.LENGTH), fade = s.fade;
 		const h = this.hands?.[this.side];
 		let from = this._b.copy(this.spot); // (the pinch point: the hand's own, once there is a hand)
@@ -179,6 +206,20 @@ export class TipDemo {
 	}
 }
 
+/** (TipDemo) The flick, touch and grab loops: the hand posed and turned, the disc opening. */
+TipDemo.prototype.drawGesture = function (s) {
+	const g = gestureAt(this.demo, s.t % DEMO.LENGTH), fade = s.fade, h = this.hands?.[this.side];
+	if (h?.visible) {
+		h.userData.pose(this.demo === 'grab' ? fistAt(this.side, g.k) : poseAt(this.side, this.demo === 'flick' ? 1 : 0));
+		h.userData.setTip(this.demo === 'flick' ? 1 : 0);
+		h.userData.setOpacity(fade);
+		h.quaternion.copy(this.baseQuat).premultiply(new THREE.Quaternion().setFromAxisAngle(UP, g.turn ?? 0));
+		h.position.copy(this.spot).addScaledVector(this.forward, 0.12 * (g.reach ?? 0));
+	}
+	this.disc.material.opacity = 0.85 * g.disc * fade;
+	this.disc.scale.setScalar(Math.max(0.01, g.disc));
+};
+
 /** Draws an object over the pause's dark: every mesh in it on top, depth ignored. */
 function onTop(o) {
 	o.traverse((c) => {
@@ -191,6 +232,11 @@ function onTop(o) {
 const ARC_POINTS = 24;
 const poses = {};
 /** The demonstration hand's joints with the pinch closed by k (0..1): the right hand is the left one mirrored. */
+function fistAt(side, k) {
+	const open = (poses[side] ??= { open: side === 'right' ? mirrorPose(HAND_POSES.open) : HAND_POSES.open, fist: side === 'right' ? mirrorPose(HAND_POSES.fist) : HAND_POSES.fist });
+	return fistJoints(open.open, open.fist, k);
+}
+
 function poseAt(side, k) {
 	const open = (poses[side] ??= { open: side === 'right' ? mirrorPose(HAND_POSES.open) : HAND_POSES.open, fist: side === 'right' ? mirrorPose(HAND_POSES.fist) : HAND_POSES.fist });
 	return pinchJoints(open.open, open.fist, k);

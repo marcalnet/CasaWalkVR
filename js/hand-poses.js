@@ -78,3 +78,10 @@ export function pinchJoints(open, fist, k) {
 	}
 	return out;
 }
+
+/** A hand closing into a fist by k (0..1), from the open and fist presets: every joint the same way. Joints in the hand's own space. */
+export function fistJoints(open, fist, k) {
+	const o = presetJoints(open), f = presetJoints(fist), out = {};
+	for (const n of Object.keys(o)) out[n] = { position: o[n].position.clone().lerp(f[n].position, k), quaternion: o[n].quaternion.clone().slerp(f[n].quaternion, k) };
+	return out;
+}

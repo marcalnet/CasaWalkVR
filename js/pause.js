@@ -345,7 +345,7 @@ export class Pause {
 			const yaw = xr.viewYaw(), head = xr.headWorld(); // (in the world: the rig may be turned)
 			const floorY = xr.rig.localToWorld(this._w.set(0, 0, 0)).y;
 			const to = new THREE.Vector3(head.x - Math.sin(yaw) * 2, floorY + 0.01, head.z - Math.cos(yaw) * 2);
-			this.demo.play(kind, to, { door: tip.demo === 'door' });
+			this.demo.play(kind, to, { demo: tip.demo });
 		}
 	}
 

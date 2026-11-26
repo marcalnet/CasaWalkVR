@@ -103,10 +103,10 @@ export const TIPS = {
 	enter: [{ id: 'walkin', hands: 'Pinch a room, then Walk in.', controllers: 'Point at a room, then Walk in.', demo: 'door' }],
 	in: [
 		{ id: 'teleport', hands: 'Pinch, aim, let go to jump.', controllers: 'Hold the trigger, aim, let go.', demo: 'pinch', practise: true },
-		{ id: 'turn', hands: 'Flick your wrist while pinching to turn.', controllers: 'Flick the right stick to turn.' },
-		{ id: 'portal', hands: 'Touch a wall to see through it.', controllers: 'Touch a wall to see through it.' },
+		{ id: 'turn', hands: 'Flick your wrist while pinching to turn.', controllers: 'Flick the right stick to turn.', demo: 'flick' },
+		{ id: 'portal', hands: 'Touch a wall to see through it.', controllers: 'Touch a wall to see through it.', demo: 'touch' },
 	],
-	back: [{ id: 'grab', hands: 'Close your hand on the model to turn it.', controllers: 'Hold grip on the model to turn it.' }],
+	back: [{ id: 'grab', hands: 'Close your hand on the model to turn it.', controllers: 'Hold grip on the model to turn it.', demo: 'grab' }],
 };
 
 // The close line, in each wing's header (there is no Close key: build 120, M1; js/xr-ui.js sets it on opening): the colon form
