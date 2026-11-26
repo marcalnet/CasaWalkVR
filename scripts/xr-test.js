@@ -1085,6 +1085,13 @@ check('at the scale model, a short B press does nothing (held, it would leave VR
 	});
 	check('the door at the scale model: a big Walk in → (no ← Back since 26 Nov 2026), at waist height within reach, under the line to the model, shown without opening a menu',
 		doors.shown && doors.iw > 0.25 && !doors.back && doors.ahead < 0.45 && doors.below > 0.55 && doors.below < 0.75 && doors.topDown > doors.modelDown, JSON.stringify(doors));
+	// The left controller resting in front at the waist (25 cm left, 20 cm ahead, 0.6 m below the eyes): does it hover over a
+	// level key? A report, not a check: the Designer decides on the Quest 2 (the Tester's checklist, line 27d).
+	{
+		await restLeft(); await frames(10);
+		const rest = await page.evaluate(() => { const d = window.__casawalk.xr.modes.dollhouse; return { hot: d.doors.list.filter((k) => k.hot).map((k) => k.slot), doorEyes: d.doorEyes }; });
+		console.log(`RESTING POSE: the left controller at the waist hovers over ${rest.hot.length ? rest.hot.join(', ') : 'no key'} (a report for the Designer)`);
+	}
 	// Seated: the doors stay at waist height (62 cm below the eyes). (The left hand at your side first: resting in front at the
 	// waist, its tip hovers over the level keys, and the doors rightly never move under a fingertip.)
 	await aim('left', [-0.45, 0.75, 0.05], [-0.6, 0.7, -1]); await frames(5);
@@ -1510,10 +1517,10 @@ check('back from walking: eyes at 1.89 m again, gallery shown, lasers on', Math.
 	const wide = widths.filter((w) => !w.fits || w.cm > 60 || w.stop);
 	console.log(`The pause's tips at full size: ${widths.map((w) => `${w.cm} cm "${w.text}"`).join('; ')}`);
 	check('every pause tip fits one line at full size, 60 cm at most, no full stop (the UX review\'s S7)', wide.length === 0, JSON.stringify(wide));
-	// (Pointing up, so no arc lands: a trigger held 0.3 s with the arc on the floor ring is the practice jump, which the slower
-	// emulated Quest 2 can make of a click.)
-	await aim('right', R, [0.3, 3.0, -1.5]); await frames(2);
-	await click('right', 'trigger'); await settled(); await frames(4);
+	// (A pull of one frame: a trigger held 0.3 s with an arc on the floor ring is the practice jump, by design, and the slower
+	// emulated Quest 2 made one of a click (any aim lands within 2 s). Released as soon as the app has seen it pressed.)
+	await button('right', 'trigger', 1); await appSees('right', 'trigger', true); await button('right', 'trigger', 0); await appSees('right', 'trigger', false);
+	await settled(); await frames(4);
 	const after = await page.evaluate(() => { const x = window.__casawalk.xr; return { fx: !!x.layerFx, dark: x.veil.amount('layer'), learnt: x.pause.record.tips.learnt.has('teleport:controllers'), seen: x.pause.record.tips.seen.has('teleport:controllers'), target: x.pause.target.visible }; });
 	check('a pull skips it (seen, not learnt); the room fades in, the first-target ring ahead', !after.fx && after.dark === 0 && !after.learnt && after.seen && after.target, JSON.stringify(after));
 	await page.evaluate(() => { const x = window.__casawalk.xr; x.pause.tipsOn = false; x.menuAction('back'); }); await settled(); await frames(6);
