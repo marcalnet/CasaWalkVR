@@ -14,11 +14,12 @@
 //             session; then the home settles onto the plinth.
 //   leaving   a gentle fade to white, then the page. Never a tip.
 //
-// Ready (the next-build asks §1, revised 26 Nov): the place has drawn behind
-// the veil and its last 10 frames are steady, each within ±25% of their
-// median and none of 100 ms or more (a shader compile or a texture upload
-// restarts the count). Steady, not fast: a home running at an even 36 fps is
-// ready. At most 3 s from its first draw, then it fades in anyway. Every move
+// Ready (the next-build asks §1, revised 27 Nov): the place has drawn behind
+// the veil and each of its last 10 frames took at most 3.5 refresh intervals
+// (about 49 ms at 72 Hz) and under 100 ms (a shader compile or a texture upload
+// restarts the count). Steady, not fast: a home at 36 fps, or one mixing one-
+// and two-refresh frames, is ready. At most 3 real seconds from its first
+// draw, then it fades in anyway. Every move
 // waits for it; with no tip left that is the plain fade's dark gap, and only
 // past 0.3 s does the wait show the void, the rings and the place's name (the
 // home's at Enter VR and ← Back, the room's at Walk in): never plain black.
@@ -51,7 +52,7 @@ export const PAUSE = {
 	SKIP_AFTER: 0.8, // a press (or the tip's own action) ends it from then on
 	TIP_OUT: 0.3, REVEAL: 0.2, // the tip fades out, then the place fades in
 	CHOOSE_WAIT: 0.3, // Enter VR: the tip is chosen once the head has a pose and a controller is in, or this long after the pose (bare hands)
-	READY_LIMIT: 3, READY_FRAMES: 10, READY_SPREAD: 0.25, READY_SPIKE: 0.1, // ready: drawn once and the last 10 frames steady (each within 25% of their median, none 100 ms or more); never more than 3 s from the first draw
+	READY_LIMIT: 3, READY_FRAMES: 10, READY_REFRESHES: 3.5, READY_SPIKE: 0.1, // ready: drawn once and the last 10 frames each at most 3.5 refreshes long, none 100 ms or more; never more than 3 s from the first draw
 	GAP: 0.3, // with no tip, the dark gap a plain fade has anyway: only a longer wait shows the void, the rings and the place's name
 	AHEAD: 1.4, BELOW: 10, NAME_ABOVE: 0.8, // the tip: 1.4 m ahead, its centre 10° below eye level; the room's name 0.8° above it
 	AWAY: 40, AWAY_FOR: 1, FOLLOW: 0.4, // turned more than 40° away for over 1 s: the tip glides back in front of you over 0.4 s
@@ -91,15 +92,18 @@ export function nextTip(transition, store, kind, { all = false } = {}) {
 }
 
 /**
- * Ready (pure): drawn at least once, and the last READY_FRAMES frame times are
- * steady: each within READY_SPREAD of their median, none READY_SPIKE or more
- * (the frame clock caps a frame at 0.1 s, so a longer spike reads 0.1).
+ * Ready (pure): drawn at least once, and each of the last READY_FRAMES frames
+ * took at most READY_REFRESHES refresh intervals (`interval`: the headset's,
+ * 1/72 s if unknown) and less than READY_SPIKE. A frame of one, two or three
+ * refreshes is steady (a home between 36 and 72 fps mixes them); a shader
+ * compile or a texture upload is not, and restarts the count. (The frame clock
+ * caps a frame at 0.1 s, so a longer spike reads 0.1.)
  */
-export function isReady(frameTimes) {
+export function isReady(frameTimes, interval = 1 / 72) {
 	const n = PAUSE.READY_FRAMES;
 	if (frameTimes.length < n) return false;
-	const last = frameTimes.slice(-n), median = [...last].sort((a, b) => a - b)[n >> 1];
-	return last.every((dt) => dt < PAUSE.READY_SPIKE && Math.abs(dt - median) <= PAUSE.READY_SPREAD * median);
+	const most = Math.min(PAUSE.READY_REFRESHES * interval, PAUSE.READY_SPIKE - 1e-9);
+	return frameTimes.slice(-n).every((dt) => dt <= most);
 }
 
 /**
@@ -167,6 +171,9 @@ export class Pause {
 		xr.hideFromPhotos(this.group, this.floor, this.arc, this.arrival.mesh, this.target);
 		this._v = new THREE.Vector3(); this._w = new THREE.Vector3();
 	}
+
+	/** The headset's refresh interval (s): from the session's frame rate, 1/72 s if it doesn't say. */
+	interval() { const r = this.xr.session?.frameRate; return r > 0 ? 1 / r : 1 / 72; }
 
 	/** The clock the 3 s cap is counted on: real seconds (the tests drive it). */
 	clock() { return performance.now() / 1000; }
@@ -412,7 +419,7 @@ export class Pause {
 		p.since ??= this.clock(); // (the place's first draw)
 		p.waited = this.clock() - p.since; // (real seconds: a frame's dt is capped at 0.1 s, so a long stall would count for little: the audit's S7)
 		if (p.choosing && this.choose(p, dt)) return; // (Enter VR: the dark until the head has a pose)
-		const ready = isReady(p.frames) || p.waited >= PAUSE.READY_LIMIT;
+		const ready = isReady(p.frames, this.interval()) || p.waited >= PAUSE.READY_LIMIT;
 		this.demo.update(dt);
 		if (!p.tip) { // (no tip: the dark until the place is ready)
 			if (ready) { this.reveal(); return; }
@@ -468,7 +475,7 @@ export class Pause {
 	reveal() {
 		const f = this.fx, p = f.pause;
 		// How long the dark lasted (real seconds since the first draw, frames) and whether the room was ready or the cap ended it: read by the emulator test.
-		this.last = { transition: p.transition, waited: p.waited, frames: p.count, capped: !isReady(p.frames) && p.waited >= PAUSE.READY_LIMIT };
+		this.last = { transition: p.transition, waited: p.waited, frames: p.count, capped: !isReady(p.frames, this.interval()) && p.waited >= PAUSE.READY_LIMIT };
 		f.pause = null;
 		f.t = 0;
 		this.group.visible = this.floor.visible = this.arc.visible = false;

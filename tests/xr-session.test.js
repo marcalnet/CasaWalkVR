@@ -88,18 +88,18 @@ test('the pause with no tip left (§1, revised): a steady place is the plain fad
 	while (x.pause.fx?.pause && n++ < 400) { frame(1 / 36); shown ||= x.pause.group.visible; }
 	assert.ok(!shown && n <= 11 && x.mode === 'walk', `steady: lifted after ${n} frames, nothing shown`);
 	while (x.layerFx) frame();
-	// Unsteady (every other frame twice as long): the void and the rings with the room's name, then in at the cap.
+	// Unsteady (every other frame over 3.5 refreshes): the void and the rings with the room's name, then in at the cap.
 	x.menuAction('back');
 	n = 0;
 	while (x.layerFx && !x.pause.fx.pause && n++ < 400) frame();
 	let t = 0, at = null;
 	while (x.pause.fx?.pause && t < 10) {
-		const dt = (n++ % 2) ? 1 / 36 : 1 / 72;
+		const dt = (n++ % 2) ? 1 / 16 : 1 / 72; // (every other frame over 3.5 refreshes: never ready)
 		frame(dt); t += dt;
 		if (at === null && x.pause.group.visible) at = { t, floor: x.pause.floor.visible };
 	}
 	assert.ok(at && at.t > PAUSE.GAP && at.t < PAUSE.GAP + 0.05 && at.floor, `past the 0.3 s gap: the void and the rings (${JSON.stringify(at)})`);
-	assert.ok(Math.abs(t - PAUSE.READY_LIMIT) < 0.05, `the cap: in at 3 s (${t.toFixed(2)} s)`);
+	assert.ok(Math.abs(t - PAUSE.READY_LIMIT) < 1 / 16 + 1e-6, `the cap: in at 3 s, within a frame (${t.toFixed(2)} s)`);
 	assert.equal(x.pause.last.capped, true);
 	while (x.layerFx) frame();
 	// The cap is real seconds (the audit's S7): a stall of 1.4 s (one frame, its dt capped at 0.1 s) counts as 1.4 s.
@@ -109,7 +109,7 @@ test('the pause with no tip left (§1, revised): a steady place is the plain fad
 	frame(1 / 72); frame(1 / 36);
 	clock += 1.4; step(0.1); // (the stall)
 	t = 0;
-	while (x.pause.fx?.pause && t < 3) { const dt = (n++ % 2) ? 1 / 36 : 1 / 72; frame(dt); t += dt; }
+	while (x.pause.fx?.pause && t < 3) { const dt = (n++ % 2) ? 1 / 16 : 1 / 72; frame(dt); t += dt; }
 	assert.ok(t < 3 - 1.4 + 0.1, `in by 3 s of real time, the stall counted in full (${(t + 1.4 + 0.1).toFixed(2)} s)`);
 	while (x.layerFx) frame();
 	x.menuAction('back');
@@ -121,7 +121,7 @@ test('the pause with no tip left (§1, revised): a steady place is the plain fad
 	n = 0;
 	while (x.layerFx && !x.pause.fx.pause && n++ < 400) frame();
 	t = 0;
-	while (x.pause.fx?.pause && t < 1) { const dt = (n++ % 2) ? 1 / 36 : 1 / 72; frame(dt); t += dt; }
+	while (x.pause.fx?.pause && t < 1) { const dt = (n++ % 2) ? 1 / 16 : 1 / 72; frame(dt); t += dt; }
 	assert.ok(x.roomHere() && x.pause.tipLabel.text === x.roomHere() && x.pause.tipLabel.mesh.visible, `Walk in: the room's name where the tip would be ("${x.pause.tipLabel.text}")`);
 	while (x.layerFx) frame();
 });
@@ -289,7 +289,7 @@ test('the pause, pure: which tip (in order, once a session, per input kind), rea
 	assert.ok(Math.abs(gestureAt('flick', 1.1).turn - 0.6) < 1e-9 && gestureAt('flick', 2).turn === 0, 'flick: aside and back');
 	const all = newRecord(), ids = Array.from({ length: 6 }, () => nextTip('in', all, 'hands', { all: true }).id);
 	assert.deepEqual(ids, ['walkin', 'teleport', 'turn', 'portal', 'grab', 'walkin'], '?tips: every tip in turn, never retired');
-	// Ready (§1, revised 26 Nov): steady, not fast. Ten frames each within 25% of their median, none 100 ms or more.
+	// Ready (§1, revised 27 Nov): steady, not fast. Ten frames each at most 3.5 refreshes (49 ms at 72 Hz), none 100 ms or more.
 	assert.ok(!isReady([0.01, 0.01]) && isReady(Array(10).fill(1 / 72)), 'ten even frames at 72 Hz: ready');
 	const fps36 = Array(10).fill(1 / 36);
 	assert.ok(isReady(fps36), 'an even 36 fps counts as ready after 10 frames (slow but steady)');
@@ -297,8 +297,10 @@ test('the pause, pure: which tip (in order, once a session, per input kind), rea
 	assert.ok(!isReady(spiked), 'a 150 ms spike: not ready');
 	const after = [...spiked];
 	for (let i = 1; i <= 10; i++) { after.push(1 / 36); assert.equal(isReady(after), i >= 10, `the spike restarts the count: ${i} steady frames after it`); }
-	assert.ok(!isReady([...Array(9).fill(1 / 72), 0.03]), 'one frame twice the others: not steady');
-	assert.ok(!isReady(Array(10).fill(0.1)), 'none 100 ms or more (an even 10 fps is a stall, not steady)');
+	assert.ok(isReady([1, 2, 1, 1, 2, 1, 2, 1, 1, 2].map((k) => k / 72)), 'one- and two-refresh frames mixed (a home between 36 and 72 fps): ready (the audit\'s S6)');
+	assert.ok(isReady(Array(10).fill(3 / 72)) && !isReady(Array(10).fill(4 / 72)), 'three refreshes are steady, four are not');
+	assert.ok(isReady(Array(10).fill(2 / 90), 1 / 90) && !isReady(Array(10).fill(4 / 90), 1 / 90), 'at 90 Hz, its own interval');
+	assert.ok(!isReady(Array(10).fill(0.2)), 'an even 5 fps is never ready: the cap ends it');
 	assert.equal(PAUSE.READY_LIMIT, 3, 'never stuck: 3 s from the first draw at most');
 	const { land } = practiceArc(new THREE.Vector3(0, 1.4, 0), new THREE.Vector3(0, -0.3, -1), 0);
 	assert.ok(land && Math.abs(land.y) < 1e-9 && land.z < -1, `the practice arc lands ahead on the floor (${land?.z.toFixed(2)} m)`);
