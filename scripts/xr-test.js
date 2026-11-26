@@ -1167,7 +1167,7 @@ s = await state();
 const walked = Math.hypot(s.head[0] - h0[0], s.head[2] - h0[2]);
 check('left stick walks (about 0.75 m/s)', walked > 0.2 && walked < 1.0, `${walked.toFixed(2)} m`);
 
-// Hold a grip and pull the hand back: you move forward.
+// Hold a grip and pull the hand back: nothing moves (the slide went on 26 Nov 2026; the grip only takes tools).
 h0 = s.head;
 await aim('right', [0.2, 1.1, -0.5], [0.2, 1.1, -1.5]); await frames(3);
 await button('right', 'squeeze', 1); await frames(3);
@@ -1175,7 +1175,7 @@ for (let i = 1; i <= 5; i++) { await aim('right', [0.2, 1.1, -0.5 + i * 0.06], [
 await button('right', 'squeeze', 0); await frames(3);
 s = await state();
 const pulled = Math.hypot(s.head[0] - h0[0], s.head[2] - h0[2]);
-check('grip pull moves you', pulled > 0.2 && pulled < 0.4, `${pulled.toFixed(2)} m`);
+check('grip and pull inside: no slide', pulled < 0.01, `${pulled.toFixed(2)} m`);
 await restRight();
 
 // Right stick right: one snap turn.
@@ -1842,19 +1842,6 @@ check('wrist menu open: a pull on the floor only closes it', !s.wrist && !s.arc 
 	const two = THREE_deg(y1 - s.rigYaw);
 	for (let i = 0; i < 2; i++) { await stick('right', -1, 0); await frames(8); await stick('right', 0, 0); await frames(5); }
 	check('no snap turn while the stick aims; snap re-arms when the stick centres', Math.abs(mid - y0) < 1e-6 && Math.abs(y1 - y0) < 1e-6 && Math.abs(two - 2 * s.snap) < 0.5, `aiming ${THREE_deg(mid - y0).toFixed(1)}°, two snaps ${two.toFixed(1)}°`);
-}
-{
-	const pull = async (dr, dl) => {
-		await aim('right', [0.2, 1.1, -0.5], [0.2, 1.1, -1.5]); await aim('left', [-0.2, 1.1, -0.5], [-0.2, 1.1, -1.5]); await frames(3);
-		const a = (await state()).head;
-		await button('right', 'squeeze', 1); await button('left', 'squeeze', 1); await frames(3);
-		for (let i = 1; i <= 5; i++) { await aim('right', [0.2, 1.1, -0.5 + i * dr / 5], [0.2, 1.1, -1.5]); await aim('left', [-0.2, 1.1, -0.5 + i * dl / 5], [-0.2, 1.1, -1.5]); await frames(2); }
-		await button('right', 'squeeze', 0); await button('left', 'squeeze', 0); await frames(3);
-		const b = (await state()).head;
-		return Math.hypot(b[0] - a[0], b[2] - a[2]);
-	};
-	const one = await pull(0.3, 0), both = await pull(0.3, 0.3);
-	check('grip pull: two hands average', Math.abs(one - 0.15) < 0.04 && Math.abs(both - 0.3) < 0.05, `one hand ${one.toFixed(2)} m, both ${both.toFixed(2)} m`);
 }
 {
 	await restLeft(); await aim('right', R, [0.25, 0, -1.0]); await frames(3);

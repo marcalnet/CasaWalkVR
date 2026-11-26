@@ -1,8 +1,8 @@
 // Walk mode (SPEC.md, "XR 1:1 walk mode"): the home at real scale. The rig
 // (camera and controllers) moves: the left stick walks where you look, the
 // right stick snap-turns; pushing the right stick forward or holding a
-// trigger aims a teleport arc (release to go, with a short fade); a held grip
-// grabs the space so you can pull yourself along. In a one-level home you
+// trigger aims a teleport arc (release to go, with a short fade). The grip only
+// takes and holds tools (the grip-and-pull slide went on 26 Nov 2026). In a one-level home you
 // stay on the floor and walk through furniture; with more levels you can
 // stand on anything, so stairs work (js/xr-targets.js). With Solid walls on,
 // walls stop you (furniture never does: js/walls.js). B or Y goes back.
@@ -106,7 +106,7 @@ export class Walk {
 		const xr = this.xr;
 		this.tele = null;
 		this.hideAim();
-		for (const c of xr.input.controllers) { xr.input.showHit(c, null); xr.input.setLaser(c, false); c.pull = null; }
+		for (const c of xr.input.controllers) { xr.input.showHit(c, null); xr.input.setLaser(c, false); }
 		xr.applyView();
 		xr.applyStoreys();
 		this.setWalkTransform();
@@ -119,7 +119,7 @@ export class Walk {
 
 	/**
 	 * Leaving walk mode (back to the dollhouse, or the session ended): stop
-	 * aiming, pulling and any teleport in progress. (A teleport fading out
+	 * aiming and any teleport in progress. (A teleport fading out
 	 * when you went back used to leave the view half dark over the dollhouse
 	 * and jump you on the next walk.)
 	 */
@@ -128,14 +128,12 @@ export class Walk {
 		this.hideAim();
 		this.fade = null;
 		this.xr.veil.set('teleport', 0);
-		for (const c of this.xr.input.controllers) c.pull = null;
 	}
 
-	/** Meta's menu covered the app: an aim or a pull in progress is dropped (nothing happens on return). */
+	/** Meta's menu covered the app: an aim in progress is dropped (nothing happens on return). */
 	drop() {
 		this.tele = null;
 		this.hideAim();
-		for (const c of this.xr.input.controllers) c.pull = null;
 	}
 
 	/** Hides the arc, the hotspot discs and the hotspot's name. */
@@ -423,24 +421,6 @@ export class Walk {
 			} else if (Math.abs(x) < 0.3) {
 				this.snapReady = true;
 			}
-		}
-
-		// Grips: grab the space and pull yourself along (horizontally; the
-		// floor following keeps you on the floor).
-		const pull = new THREE.Vector3();
-		let pulling = 0;
-		for (const c of input.active()) {
-			if (c.state.down.grip && c.claim.grip === null && !xr.boardOpen) c.pull = c.grip.position.clone();
-			if (!c.state.grip) c.pull = null;
-			if (c.pull) {
-				pull.add(c.pull.clone().sub(c.grip.position));
-				c.pull.copy(c.grip.position);
-				pulling++;
-			}
-		}
-		if (pulling && !this.fade) {
-			pull.divideScalar(pulling).setY(0).applyAxisAngle(UP, rig.rotation.y);
-			rig.position.add(pull);
 		}
 
 		// Left stick: smooth locomotion relative to where the head looks.

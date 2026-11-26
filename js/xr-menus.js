@@ -88,7 +88,7 @@ export const GUIDES = {
 		lines: ['While aiming, flick your wrist: turn', 'Let go on white or red: nothing happens', 'Palm towards you: cancel', 'Pinch outside the panels: close them', 'The Meta button leaves VR at any moment'] },
 	'walk-controllers': { title: 'How to move', row: 1,
 		frames: ['Right stick forward', 'or hold a trigger', 'Aim at the floor', 'Let go on blue: go'],
-		lines: ['Right stick left or right: turn', 'Left stick: walk. Grip and pull: slide', 'B or Y: back to the scale model', 'Trigger outside the panels: close them', 'The Meta button leaves VR at any moment'] },
+		lines: ['Right stick left or right: turn', 'Left stick: walk', 'B or Y: back to the scale model', 'Trigger outside the panels: close them', 'The Meta button leaves VR at any moment'] },
 	'dollhouse-hands': { title: 'The scale model', row: 2,
 		frames: ['Close your hand on it: hold', 'Let go: it floats, then goes home', 'Pinch and hold, point at a room', 'Let go when it holds still: step inside'],
 		lines: ['Lift it and turn it: it stays level', 'Palm towards you: cancel', 'Pinch outside the panels: close them', 'The Meta button leaves VR at any moment'] },
