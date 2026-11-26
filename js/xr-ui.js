@@ -251,7 +251,7 @@ export class XRUI {
 		let zone = null;
 		if (xr.mode === 'dollhouse' && xr.model) {
 			// The model's box in the rig's space (where the wings live), seen from the eyes.
-			const box = xr.modes.dollhouse.modelBox(), pts = [], rigBox = new THREE.Box3();
+			const box = xr.modes.dollhouse.houseBox(), pts = [], rigBox = new THREE.Box3(); // (the house, not its lawn: conflict 13)
 			xr.rig.updateMatrixWorld(true);
 			for (const x of [box.min.x, box.max.x]) for (const y of [box.min.y, box.max.y]) for (const z of [box.min.z, box.max.z]) pts.push(xr.rig.worldToLocal(new THREE.Vector3(x, y, z)));
 			rigBox.setFromPoints(pts);
@@ -352,7 +352,7 @@ export class XRUI {
 	notEmpty(c, points = []) {
 		const xr = this.xr, r = xr.raycaster;
 		if (xr.tools?.held?.c === c) return 'tool';
-		if (xr.fan?.group?.visible) return 'fan';
+		if (xr.fan?.alpha > 0.5) return 'fan'; // (the fan open: the bare-hand docked row is never live, the Tester's finding)
 		for (const p of points) if (p && this.nearUsable(c, p)) return 'near';
 		for (const panel of this.openPanels()) if (r.intersectObject(panel.mesh, false).length) return 'wing';
 		if (this.wrist.cross.visible && r.intersectObject(this.wrist.cross, true).length) return 'wrist';

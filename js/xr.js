@@ -531,7 +531,7 @@ export class XRExperience {
 		this.arrival.set(text);
 		let up = 0.05;
 		if (this.mode === 'dollhouse' && this.model) {
-			const hull = zoneHull(zoneOf(this.modes.dollhouse.modelBox(), this.headWorld(), this.viewYaw()) ?? []);
+			const hull = zoneHull(zoneOf(this.modes.dollhouse.houseBox(), this.headWorld(), this.viewYaw()) ?? []);
 			if (hull.length) up = Math.max(up, 1.5 * Math.tan(Math.max(...hull.map((a) => a.el)) + THREE.MathUtils.degToRad(5) + Math.atan(0.06 / 1.5)));
 		}
 		this.arrival.mesh.position.set(p.x - Math.sin(yaw) * 1.5, p.y + up, p.z - Math.cos(yaw) * 1.5);

@@ -182,12 +182,12 @@ export class ToolFan {
 			const keysOk = this.alpha > 0.5 ? !this.keyShut : !nearClear || this.fanBusy;
 			// Where its tools would be: far enough from the eyes, off the model, clear of live keys (conflict 9);
 			// and a slide with nowhere clear to go fades it (conflict 10).
-			this._hull = xr.mode === 'dollhouse' && xr.model ? zoneHull(zoneOf(xr.modes.dollhouse.modelBox(this._box ??= new THREE.Box3()), head, this._yaw = xr.viewYaw()) ?? []) : null;
+			this._hull = xr.mode === 'dollhouse' && xr.model ? zoneHull(zoneOf(xr.modes.dollhouse.houseBox(this._box ??= new THREE.Box3()), head, this._yaw = xr.viewYaw()) ?? []) : null;
 			if (this.slideBlocked && orb.distanceTo(anchor) > HOLD_FIELD) this.slideBlocked = false; // (faded for a blocked slide: until the orb has gone)
 			const arc = this.arcState(anchor, head);
 			this.posShut = this.alpha > 0.5 && (arc.must || this.slideBlocked);
 			const posOk = this.alpha > 0.5 ? !this.posShut : arc.may && !this.slideBlocked;
-			open = raised && look.angleTo(to) < IN_VIEW && (watching || this.alpha > 0.5) && !xr.ui.wrist.open && !xr.teaching && keysOk && posOk && !aiming && forward.lengthSq() > 0; // (one teacher at a time: closed while one plays)
+			open = raised && look.angleTo(to) < IN_VIEW && (watching || this.alpha > 0.5) && !xr.ui.wrist.open && !xr.boardOpen && !xr.teaching && keysOk && posOk && !aiming && forward.lengthSq() > 0; // (one teacher at a time: closed while one plays)
 			if (this.force > 0) { this.force -= dt; open = true; } // (the tools' show: the one time it opens without a look)
 			// Docked (bare hands): the tools rest on the back of the wrist whenever that hand is in view; not while it holds the model.
 			const holding = xr.modes.dollhouse?.grab?.c === fan;

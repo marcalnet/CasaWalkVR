@@ -104,7 +104,7 @@ export class ToolsIntro {
 	where(head) {
 		const xr = this.xr, D = THREE.MathUtils.degToRad;
 		let el = -D(DOWN), dist = AHEAD;
-		const box = xr.mode === 'dollhouse' && xr.model ? xr.modes.dollhouse.modelBox() : null;
+		const box = xr.mode === 'dollhouse' && xr.model ? xr.modes.dollhouse.houseBox() : null; // (the house, not its lawn)
 		const hull = box ? zoneHull(zoneOf(box, head, xr.viewYaw()) ?? []) : [];
 		if (!hull.length) return { el, dist };
 		const top = Math.max(...hull.map((p) => p.el));

@@ -494,7 +494,7 @@ const crossSeen = () => page.evaluate(() => {
 		const THREE = await import('three'), W = await import('/js/wings.js');
 		const x = window.__casawalk.xr, head = x.camera.getWorldPosition(new THREE.Vector3());
 		const fwd = new THREE.Vector3(0, 0, -1).transformDirection(x.camera.matrixWorld), yaw = Math.atan2(-fwd.x, -fwd.z);
-		const zone = W.zoneOf(x.modes.dollhouse.modelBox(), head, yaw);
+		const zone = W.zoneOf(x.modes.dollhouse.houseBox(), head, yaw); // (the house, not its lawn: conflict 13)
 		return x.ui.openPanels().map((p) => {
 			const g = p.mesh.geometry.parameters, c = p.mesh.getWorldPosition(new THREE.Vector3()), a = W.angleOf(c, head, yaw);
 			return { w: +g.width.toFixed(2), az: +(a.az * 180 / Math.PI).toFixed(0), el: +(a.el * 180 / Math.PI).toFixed(0), over: W.overlaps(W.wingRect(a.az, a.el, g.width, g.height, c.distanceTo(head)), zone, 0) };
@@ -652,12 +652,13 @@ if (s.session === 'ar') {
 } else {
 	check('View switch (needs an AR session)', false, `session ${s.session}`);
 }
-await restRight(); await frames(3);
+await aim('right', [0.0, 1.45, -0.1], [0.3, 2.6, -1.5]); await frames(3); // (raised in the middle, pointing up: clear of the wings and the doors, whose 15 cm a hand never presses through)
+const whyPull = await page.evaluate(() => { const x = window.__casawalk.xr, c = x.input.controllers.find((c) => c.handedness === 'right'); x.input.setRaycaster(c, x.raycaster); return x.ui.notEmpty(c, [c.touch.tracked ? c.touch.tip : null]); });
 await button('right', 'trigger', 1); await frames(3);
 s = await state();
 const spentPull = await page.evaluate(() => window.__casawalk.xr.input.controllers.find((c) => c.handedness === 'right').claim.trigger);
 await button('right', 'trigger', 0); await frames(3);
-check('a pull at empty space closes the wings (build 120, M1), used up while held; no step inside', s.menu === null && !s.guide && s.mode === 'dollhouse' && spentPull === 'ui', JSON.stringify({ menu: s.menu, mode: s.mode, spentPull }));
+check('a pull at empty space closes the wings (build 120, M1), used up while held; no step inside', s.menu === null && !s.guide && s.mode === 'dollhouse' && spentPull === 'ui', JSON.stringify({ menu: s.menu, mode: s.mode, spentPull, whyPull }));
 await page.evaluate(() => window.__casawalk.xr.menuAction('settings')); await frames(3);
 await click('right', 'b-button');
 check('B closes the board', (await state()).menu === null);
@@ -1491,7 +1492,7 @@ check('back from walking: eyes at 1.89 m again, gallery shown, lasers on', Math.
 	await page.waitForFunction(() => !window.__casawalk.xr.toolsIntro.state?.waiting, null, { timeout: 15000, polling: 'raf' }).catch(() => {});
 	await frames(10);
 	const i0 = await page.evaluate(async () => { const x = window.__casawalk.xr, t = x.toolsIntro, V = x.rig.position.constructor, h = x.headWorld(), p = t.group.getWorldPosition(new V()), d = p.distanceTo(h);
-		const W = await import('/js/wings.js'), top = Math.max(...W.zoneHull(W.zoneOf(x.modes.dollhouse.modelBox(), h, x.viewYaw())).map((a) => a.el)) * 180 / Math.PI;
+		const W = await import('/js/wings.js'), top = Math.max(...W.zoneHull(W.zoneOf(x.modes.dollhouse.houseBox(), h, x.viewYaw())).map((a) => a.el)) * 180 / Math.PI;
 		const below = Math.asin((h.y - p.y) / d) * 180 / Math.PI, lower = -below - Math.atan(0.345 / d) * 180 / Math.PI;
 		return { playing: t.playing, shown: t.group.visible, away: +d.toFixed(2), below: +below.toFixed(1), lowerEdge: +lower.toFixed(1), modelTop: +top.toFixed(1), names: t.items.map((i) => i.name) }; });
 	check('the tools\' show: the three tools 1.3 m away (1.6 if they must), 5-15° below your eyes and clear of the model\'s top as seen (harmony, conflict 3), named, once you look at the model', i0.playing && i0.shown && (Math.abs(i0.away - 1.3) < 0.1 || Math.abs(i0.away - 1.6) < 0.1) && i0.below >= 4.9 && i0.below <= 15.1 && (i0.lowerEdge >= i0.modelTop + 2.9 || i0.below <= 5.1) && i0.names.join() === 'Street camera,Meter,Marker', JSON.stringify(i0));

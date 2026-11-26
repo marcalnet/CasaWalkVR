@@ -66,6 +66,7 @@ test('Pond House: 2 levels, 30 rooms (15 named; the pond is water, not a room; t
 	assert.equal(built.plan.rooms.length, 30);
 	assert.equal(named.length, 15, `named rooms: ${named.map((r) => r.name).join(', ')}`);
 	assert.ok(unnamed.length > 0, 'pieces that only carry a floor or ceiling stay unnamed (one label per space)');
+	assert.equal(new Set(named.map((r) => r.name)).size, named.length, 'every named room a name of its own (Bedroom 2, Bedroom 3)');
 	assert.ok(built.lamps.length >= 4); // (hall, pendant, two bedside lamps)
 	// The pond is water: merged on its own, never stood on (furniture can be: several levels).
 	const { layers } = optimiseModel(built.root);

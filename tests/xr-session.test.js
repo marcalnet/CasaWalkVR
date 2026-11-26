@@ -230,7 +230,7 @@ test('the tools show waits for you to look at the model, plays above it (5-15° 
 		x.modes.dollhouse.setPlinthNow(h); x.modes.dollhouse.apply?.(); x.scene.updateMatrixWorld(true);
 		intro.begin();
 		const q = intro.group.getWorldPosition(new THREE.Vector3()), d = q.distanceTo(head), el = Math.asin((q.y - head.y) / d);
-		const top = Math.max(...W.zoneHull(W.zoneOf(x.modes.dollhouse.modelBox(), head, x.viewYaw())).map((a) => a.el));
+		const top = Math.max(...W.zoneHull(W.zoneOf(x.modes.dollhouse.houseBox(), head, x.viewYaw())).map((a) => a.el));
 		assert.ok(deg(el) >= -15.01 && deg(el) <= -4.99, `plinth ${h}: its middle 5-15° below eye level (${deg(el).toFixed(1)}°)`);
 		assert.ok(deg(el - Math.atan(0.345 / d)) >= deg(top) + 3 - 0.01 || deg(el) > -5.01, `plinth ${h}: its lower edge ${deg(el - Math.atan(0.345 / d)).toFixed(1)}° vs the model's top ${deg(top).toFixed(1)}°`);
 	}
@@ -1327,7 +1327,7 @@ test('harmony, conflict 9: the open fan\'s tools must be 40 cm from the eyes, of
 	frame();
 	const f = x.fan, d = x.modes.dollhouse, head = x.headWorld().clone(), V = THREE.Vector3;
 	f._outward = new V(-1, 0, 0); f.slide = 0; f._yaw = x.viewYaw();
-	f._hull = W.zoneHull(W.zoneOf(d.modelBox(), head, f._yaw));
+	f._hull = W.zoneHull(W.zoneOf(d.houseBox(), head, f._yaw));
 	const at = (v) => f.arcState(head.clone().add(v), head);
 	assert.deepEqual(at(new V(-0.5, -0.25, -0.35)), { may: true, must: false }, 'to the left, 65 cm away: may open');
 	assert.deepEqual(at(new V(0, -0.1, -0.25)), { may: false, must: true }, 'a hand\'s length from the eyes: never');
@@ -1380,4 +1380,49 @@ test('harmony, conflict 5: at the scale model a bare hand steps inside on lettin
 	const a = { age: 0, past: [], spot: null };
 	for (let t = 0; t < 0.4; t += 1 / 72) { a.age += 1 / 72; a.spot = a.age > 0.38 ? other : spot; a.past.push({ age: a.age, spot: a.spot }); while (a.past.length > 2 && a.age - a.past[1].age > 0.1) a.past.shift(); }
 	assert.equal(d.spotBefore(a, 0.1), spot, 'the landing from 0.1 s before the release (not the flick at the end)');
+});
+
+test('harmony, conflict 13: no wing corner within 5° of the house as seen (its covered rooms and what stands on them, not the lawn), for Pond House and the Apartment, on both plinths, with either main hand', async () => {
+	const W = await import('../js/wings.js');
+	const { PLINTH_HEIGHT, PLINTH_HEIGHT_HANDS } = await import('../js/xr-scene.js');
+	for (const name of ['pond-house', 'apartment']) {
+		const { x, frame } = await setup({ file: path.resolve(import.meta.dirname, `../examples/${name}.sh3d`) });
+		frame();
+		for (const h of [PLINTH_HEIGHT, PLINTH_HEIGHT_HANDS]) {
+			x.modes.dollhouse.setPlinthNow(h);
+			x.modes.dollhouse.apply?.();
+			for (const main of ['right', 'left']) {
+				x.menuAction({ id: 'mainHand', value: main });
+				x.ui.closeAll();
+				x.menuAction('settings');
+				x.scene.updateMatrixWorld(true);
+				const head = x.headWorld(), yaw = x.ui.wingYaw, hull = W.zoneHull(W.zoneOf(x.modes.dollhouse.houseBox(), head, yaw));
+				for (const panel of x.ui.openPanels()) {
+					const g = panel.mesh.geometry.parameters;
+					for (const [sx, sy] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
+						const p = panel.mesh.localToWorld(new THREE.Vector3(sx * g.width / 2, sy * g.height / 2, 0));
+						const a = W.angleOf(p, head, yaw);
+						assert.ok(!W.inZone(a, hull, W.WING.margin), `${name}, plinth ${h} m, ${main} hand, ${panel.title}: a corner at az ${(a.az * 180 / Math.PI).toFixed(1)}°, el ${(a.el * 180 / Math.PI).toFixed(1)}°; placed ${JSON.stringify(panel.placed)}`);
+					}
+				}
+			}
+		}
+		x.menuAction({ id: 'mainHand', value: 'right' });
+	}
+});
+
+test('harmony, conflict 14 and the docked row: only the open fan guards the empty-space close; the house box leaves the lawn out', async () => {
+	const { x, frame } = await setup();
+	frame();
+	x.menuAction('settings');
+	const c = x.input.controllers[1], head = x.headWorld().clone();
+	x.raycaster.set(head, new THREE.Vector3(0, 1, 0)); x.raycaster.far = 5;
+	x.fan.group.visible = true; x.fan.alpha = 0; // (the bare-hand docked row on show)
+	assert.equal(x.ui.notEmpty(c, []), null, 'the docked row is never live: the close goes through');
+	x.fan.alpha = 1;
+	assert.equal(x.ui.notEmpty(c, []), 'fan', 'the open fan guards');
+	x.fan.alpha = 0; x.fan.group.visible = false;
+	// The house box (example home: no lawn) is within the whole box.
+	const d = x.modes.dollhouse, house = d.houseBox(), all = d.modelBox();
+	assert.ok(all.containsBox(house.expandByScalar(-1e-6)), 'the house is inside the model');
 });

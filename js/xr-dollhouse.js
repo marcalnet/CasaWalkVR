@@ -213,6 +213,7 @@ export class Dollhouse {
 	setModel() {
 		this.xr.centerer.add(...this.markers);
 		this.buildLevels();
+		this.houseBounds = houseBounds(this.xr.model);
 	}
 
 	/** One key per level (a home with two or more), ground at the bottom; keys left over from a taller home stay hidden. */
@@ -591,6 +592,17 @@ export class Dollhouse {
 	/** True while the model stands level (its up within 1° of vertical): always, since it only turns about the vertical (a check for the tests). */
 	level() { return (this._up ??= new THREE.Vector3()).copy(UP).applyQuaternion(this.xr.anchor.quaternion).y > Math.cos(THREE.MathUtils.degToRad(1)); }
 
+	/**
+	 * The house's box in the world, as placed now (houseBounds): what the
+	 * wings, the open fan, the tools' show and the arrival title keep clear of
+	 * (the interaction harmony's conflict 13: the home, not its lawn).
+	 */
+	houseBox(out = new THREE.Box3()) {
+		const xr = this.xr;
+		xr.centerer.updateMatrixWorld(true);
+		return out.copy(this.houseBounds ?? xr.model.bounds).applyMatrix4(xr.centerer.matrixWorld);
+	}
+
 	/** The model's box in the world (its bounds, as placed now). */
 	modelBox(out = new THREE.Box3()) {
 		const xr = this.xr;
@@ -938,4 +950,31 @@ export class Dollhouse {
 			done: () => { this.settling = null; xr.haptics.play(c, 'tick'); xr.sound.play('tick'); },
 		});
 	}
+}
+
+/**
+ * The house in a model (model space; the interaction harmony's conflict 13):
+ * the footprint of its covered rooms (the ceilings layer: the deck, the drive
+ * and the garden have none), from the bottom of the model up to the highest
+ * wall, floor, ceiling or piece (a roof) standing on that footprint. Trees,
+ * paving and lawn outside it don't count. A model without ceilings (OBJ, GLB,
+ * or a plan with no covered room): its whole box.
+ */
+export function houseBounds(model) {
+	const all = model?.bounds;
+	const ceilings = model?.layers?.ceilings;
+	if (!all || !model.plan || !ceilings?.children.length) return all?.clone() ?? null;
+	const foot = new THREE.Box3();
+	for (const m of ceilings.children) { m.geometry.computeBoundingBox(); foot.union(m.geometry.boundingBox); }
+	if (foot.isEmpty()) return all.clone();
+	const E = 0.01, out = new THREE.Box3(new THREE.Vector3(foot.min.x, all.min.y, foot.min.z), new THREE.Vector3(foot.max.x, foot.max.y, foot.max.z));
+	for (const name of ['walls', 'floors', 'main']) for (const m of model.layers[name]?.children ?? []) {
+		const pos = m.geometry?.attributes?.position;
+		if (!pos) continue;
+		for (let i = 0; i < pos.count; i++) {
+			const x = pos.getX(i), z = pos.getZ(i);
+			if (x >= foot.min.x - E && x <= foot.max.x + E && z >= foot.min.z - E && z <= foot.max.z + E) out.max.y = Math.max(out.max.y, pos.getY(i));
+		}
+	}
+	return out;
 }

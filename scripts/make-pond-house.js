@@ -484,8 +484,8 @@ room('Gallery', P, OAK, [[600, 580], [1030, 580], [1030, 500], [1150, 500], [115
 room('Hall', P, OAK, [[950, 211], [1200, 211], [1200, 100], [1400, 100], [1400, 500], [950, 500]]);
 room('Shower room', P, SLATE, rect(1150, 500, 1400, 700));
 room('Office', P, OAK, rect(1400, 100, 1800, 400));
-room('Bedroom', P, OAK, rect(1400, 400, 1800, 700)); // (the snug until v7)
-room('Bedroom', P, OAK, rect(784, -170, 1400, 100));
+room('Bedroom 3', P, OAK, rect(1400, 400, 1800, 700)); // (the snug until v7; numbered as architects do, beside the Main bedroom)
+room('Bedroom 2', P, OAK, rect(784, -170, 1400, 100)); // (north, over the deck)
 room('Terrace', P, PAVING, [[-130, 700], [700, 700], [700, 1050], [0, 1050], [0, 810], [-130, 810]], open);
 
 const home = [
