@@ -32,7 +32,7 @@ import { TOUCH, touchState, stepTouch, reset as resetTouch, ringSize } from './t
 import { KEY } from './theme.js';
 import { WING, placeWing, zoneOf } from './wings.js';
 import { guideSheet } from './guide.js';
-import { WristMenu } from './wrist-menu.js';
+import { WristMenu, BACK_HOLD } from './wrist-menu.js';
 import { handAimRay, pinchGate } from './gestures.js';
 import { CLAIM } from './xr-targets.js';
 import { CLOSE_HINT } from './xr-menus.js';
@@ -479,12 +479,29 @@ export class XRUI {
 	 * used. (Inside, B / Y with nothing open is Back: js/xr-walk.js.)
 	 */
 	buttons() {
-		const wearer = this.wrist.wearer;
-		for (const c of this.xr.input.active()) {
+		const xr = this.xr, wearer = this.wrist.wearer, dt = xr.frameDt ?? 1 / 72;
+		for (const c of xr.input.active()) {
 			if (c.state.down.a && !c.claim.a && c === wearer && (this.menu || this.guide)) { this.closeAll(); this.feel(c, 'close'); return true; } // (with a wing open, like the orb: closes everything)
 			if (c.state.down.a && !c.claim.a && c === wearer) { this.wrist.toggle({ pinned: true }); return true; }
 			if (c.state.down.b && !c.claim.b && this.anyOpen) { this.closeMenu(); this.closeGuide(); this.wrist.close(true); return true; }
+			// B / Y with nothing open: held BACK_HOLD it is ← Back (the same rule as the key, the next-build asks 3.2): the ring fills round the orb; a short press does nothing.
+			if (c.state.down.b && !c.claim.b) this.backHold = { c, t: 0 };
 		}
+		const h = this.backHold;
+		if (h && (!h.c.state.b || !h.c.source)) this.backHold = null; // (let go early: it drains back)
+		else if (h) {
+			h.c.claim.b = 'ui';
+			h.t += dt;
+			if (h.t >= BACK_HOLD) {
+				this.backHold = null;
+				this.wrist.backRing?.flash();
+				this.wrist.setBackProgress(0);
+				this.feel(h.c, 'press', 'click');
+				xr.menuAction('back');
+				return true;
+			}
+		}
+		this.wrist.setBackProgress(this.backHold ? this.backHold.t / BACK_HOLD : 0, dt);
 		return false;
 	}
 

@@ -366,10 +366,7 @@ export class Walk {
 	update(dt) {
 		const xr = this.xr, ui = xr.ui, input = xr.input, rig = xr.rig;
 		this.runFade(dt);
-		for (const c of input.active()) {
-			// B / Y with nothing open: ← Back, one layer up (to the scale model).
-			if (c.state.down.b && c.claim.b === null && !ui.anyOpen) { xr.goLayer('back', () => xr.setMode('dollhouse')); return; }
-		}
+		// (B / Y held 0.6 s with nothing open: ← Back, one layer up: js/xr-ui.js buttons().)
 		if (ui.buttons()) { this.tele = null; this.hideAim(); }
 		const { action } = ui.point();
 		if (action) {

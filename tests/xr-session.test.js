@@ -98,16 +98,31 @@ test('the settings boards: the same tabs at both layers, no Close key (the foot 
 	x.menus.dollhouse.setTab('view');
 });
 
-test('the wrist menu: ← Back on the left, Settings (and help) in the middle, Walk in → on the right; inside, the flat plate takes the right-hand place', async () => {
-	const { keysFor } = await import('../js/wrist-menu.js');
-	const doll = keysFor('dollhouse'), inside = keysFor('walk', 'Living room');
-	assert.deepEqual(Object.fromEntries(Object.entries(doll).map(([k, v]) => [k, [v.id, v.look, v.label, v.caption ?? '']])), {
-		up: ['settings', 'plain', 'Settings', 'and help'], right: ['in', 'filled', 'Walk in \u2192', 'Inside the home'],
-		left: ['back', 'outline', '\u2190 Back', 'Leave VR'],
+test('the wrist menu: two keys, the same at both layers: ← Back on the left (round, held 0.6 s), Settings on the right; Walk in → is on the plinth only', async () => {
+	const { keysFor, BACK_HOLD } = await import('../js/wrist-menu.js');
+	const doll = keysFor('dollhouse'), inside = keysFor('walk');
+	assert.deepEqual(Object.fromEntries(Object.entries(doll).map(([k, v]) => [k, [v.id, v.look, v.label, v.caption ?? '', v.hold ?? 0]])), {
+		left: ['back', 'outline', '\u2190 Back', 'Leave VR', BACK_HOLD], right: ['settings', 'plain', 'Settings', 'and help', 0],
 	});
-	assert.deepEqual([inside.right.id, inside.right.look, inside.right.label, inside.right.caption], [null, 'flat', 'Inside', 'Living room'], 'inside: the flat plate stays in the right-hand place');
-	assert.equal(inside.down, undefined, 'Help is in Settings, not on the wrist');
-	assert.deepEqual([inside.left.id, inside.left.caption], ['back', 'Scale model']);
+	assert.equal(BACK_HOLD, 0.6);
+	assert.deepEqual([inside.left.id, inside.left.caption, inside.right.id], ['back', 'Scale model', 'settings'], 'inside: the same two keys');
+	const { x } = await setup();
+	assert.ok(x.ui.wrist.keys.left.round && !x.ui.wrist.keys.right.round, '← Back is round: the shape itself says "hold"');
+});
+test('B / Y with nothing open: held 0.6 s it is ← Back (the ring fills round the orb); a short press does nothing; let go early, the ring drains', async () => {
+	const { x, press, frame, settle, go, ended } = await setup();
+	go('in');
+	press('right', 'b'); for (let i = 0; i < 10; i++) frame(); press('right', 'b', false); frame();
+	assert.ok(x.mode === 'walk' && !x.layerFx, 'a short press: nothing');
+	press('right', 'b'); for (let i = 0; i < 25; i++) frame();
+	assert.ok(x.ui.wrist.backRing.group.visible && x.ui.wrist.backRing.shown > 0.4, 'the ring fills round the orb');
+	press('right', 'b', false); frame();
+	for (let i = 0; i < 20; i++) frame();
+	assert.ok(x.mode === 'walk' && x.ui.wrist.backRing.shown === 0, 'let go early: it drains back, nothing happens');
+	press('right', 'b'); for (let i = 0; i < 50; i++) frame(); press('right', 'b', false); frame(); settle();
+	assert.equal(x.mode, 'dollhouse', 'held 0.6 s: back to the scale model');
+	press('right', 'b'); for (let i = 0; i < 50; i++) frame(); press('right', 'b', false); frame(); settle();
+	assert.equal(ended(), 1, 'at the scale model, held: it leaves VR (one key, one behaviour)');
 });
 
 test('the wrist menu: an arc over the upper outer side of the orb, frozen once open, closed after 12 s with no finger or laser near a key', async () => {
@@ -119,14 +134,14 @@ test('the wrist menu: an arc over the upper outer side of the orb, frozen once o
 	w.show({ pinned: true });
 	for (let i = 0; i < 20; i++) frame();
 	assert.ok(w.open && Object.values(w.keys).every((k) => k.out), 'open, every key out');
-	// Along the arc, as seen: ← Back, Settings, Walk in →; 50° apart on a 14 cm radius, 7 cm keys (Settings 11 cm long).
+	// Along the arc, as seen: ← Back, then Settings; 50° apart on a 14 cm radius, 7 cm keys (Settings 11 cm long).
 	const at = (slot) => w.keys[slot].group.position;
 	const ang = (slot) => Math.round(THREE.MathUtils.radToDeg(Math.atan2(at(slot).y, at(slot).x)));
-	assert.deepEqual(['left', 'up', 'right'].map(ang), [100, 50, 0]);
-	for (const slot of ['left', 'up', 'right']) assert.ok(Math.abs(at(slot).length() - 0.14) < 0.003, slot);
+	assert.deepEqual(['left', 'right'].map(ang), [100, 50]);
+	for (const slot of ['left', 'right']) assert.ok(Math.abs(at(slot).length() - 0.14) < 0.003, slot);
 	assert.equal(WRIST.key, 0.07);
-	assert.ok(['left', 'up', 'right'].every((s) => at(s).y > -0.03), 'the orb\'s underside stays clear');
-	assert.ok(['left', 'up', 'right'].every((s) => at(s).distanceTo(new THREE.Vector3()) > 0.1), 'no key over the orb');
+	assert.ok(['left', 'right'].every((s) => at(s).y > -0.03), 'the orb\'s underside stays clear');
+	assert.ok(['left', 'right'].every((s) => at(s).distanceTo(new THREE.Vector3()) > 0.1), 'no key over the orb');
 	// Frozen: the cross stays where it opened while the wrist moves.
 	const before = w.cross.position.clone();
 	x.input.controllers.forEach((c) => c.grip.position.x += 0.2);
@@ -390,7 +405,7 @@ test('going back to the dollhouse while a teleport fades drops the teleport', as
 	x.modes.walk.fade = { t: 0, action: () => { jumped = true; } };
 	frame();
 	assert.ok(x.veil.amount('teleport') > 0 && x.veil.mesh.visible, 'fading out');
-	press('right', 'b'); frame(); press('right', 'b', false); frame();
+	x.menuAction('back'); // (← Back while the fade is under way: B is held 0.6 s now, longer than the fade)
 	settle();
 	assert.equal(x.mode, 'dollhouse');
 	assert.ok(!x.veil.mesh.visible && x.modes.walk.fade === null, 'the view is not left half dark');
@@ -1336,14 +1351,6 @@ test('harmony, live keys only (rule 4; conflicts 2 and 11): the wrist arc fades 
 });
 
 
-test('harmony, conflict 8: the two Walk-in keys are one key (the waist door and the wrist key look, read and do the same)', async () => {
-	const { x, frame } = await setup();
-	frame();
-	const door = x.modes.dollhouse.doors.keys.get('in').spec, wrist = x.ui.wrist;
-	wrist.redraw();
-	const key = wrist.pad.keys.get('right').spec;
-	for (const k of ['id', 'look', 'icon', 'label', 'caption']) assert.equal(key[k], door[k], `the same ${k}`);
-});
 test('harmony, conflict 5: at the scale model a bare hand steps inside on letting go once the ray has shown 0.3 s, at the landing from 0.1 s before; a quicker pinch-and-open moves nothing', async () => {
 	const { x } = await setup();
 	const d = x.modes.dollhouse, spot = { model: new THREE.Vector3(1, 0, 1) }, other = { model: new THREE.Vector3(5, 0, 5) };

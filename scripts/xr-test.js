@@ -91,6 +91,8 @@ const STATE_KEY = { trigger: 'trigger', squeeze: 'grip', 'a-button': 'a', 'x-but
 /** Waits (up to 1 s) until the app has read a button as pressed or released, so no click falls between two frames. */
 const appSees = (hand, id, v) => page.waitForFunction(({ hand, key, v }) => { const c = window.__casawalk.xr.input.hands[hand]; return !c || !window.__casawalk.xr.session || c.state[key] === v; },
 	{ hand, key: STATE_KEY[id], v }, { timeout: 1000, polling: 5 }).catch(() => {});
+/** Holds B or Y 0.6 s of the app's time (it is ← Back since the next build's step 5: a short press does nothing), then lets go. */
+const holdBack = async (hand, id) => { await button(hand, id, 1); await page.waitForFunction(() => !!window.__casawalk.xr.layerFx, null, { timeout: 10000, polling: 'raf' }).catch(() => {}); await button(hand, id, 0); await frames(3); };
 const click = async (hand, id) => { await button(hand, id, 1); await frames(4); await appSees(hand, id, true); await button(hand, id, 0); await frames(4); await appSees(hand, id, false); };
 /**
  * Moves an emulated hand ('hand') or controller so its touch tip (the index
@@ -183,7 +185,7 @@ const orbPoint = () => page.evaluate(async () => {
 	const THREE = await import('three');
 	return window.__casawalk.xr.ui.wrist.orb.group.getWorldPosition(new THREE.Vector3()).toArray();
 });
-/** World position of a wrist-menu key's face ('up', 'right', 'down', 'left'), once the cross is open and its keys are out. */
+/** World position of a wrist-menu key's face ('left': ← Back, 'right': Settings), once the cross is open and its keys are out. */
 const keyPoint = async (slot) => {
 	await page.waitForFunction((slot) => window.__casawalk.xr.ui.wrist.keys[slot].out, slot, { timeout: 2000 }).catch(() => {});
 	return page.evaluate(async (slot) => {
@@ -210,12 +212,16 @@ const pressWrist = async (slot) => {
 	if (!(await state()).wrist) { await click('right', 'a-button'); await frames(3); }
 	const at = await keyPoint(slot), from = await toLocal(await keyFront(slot));
 	await aim('left', from, await toLocal(at)); await frames(5);
-	await click('left', 'trigger');
+	if (slot === 'left') { // (← Back is held 0.6 s: the trigger stays down until the move begins)
+		await button('left', 'trigger', 1);
+		await page.waitForFunction(() => !!window.__casawalk.xr.layerFx, null, { timeout: 10000, polling: 'raf' }).catch(() => {});
+		await button('left', 'trigger', 0); await frames(3);
+	} else await click('left', 'trigger');
 	await restLeft(); await frames(3);
 	await settled();
 };
 /** Opens the settings board: A, then the Settings key. */
-const openBoard = () => pressWrist('up');
+const openBoard = () => pressWrist('right');
 /** Converts a world point to tracking space (where IWER poses live). */
 const toLocal = (p) => page.evaluate((p) => { const x = window.__casawalk.xr; x.rig.updateMatrixWorld(true); return x.rig.worldToLocal(new (x.rig.position.constructor)(...p)).toArray(); }, p);
 /** Aims from a tracking-space point at a world point. */
@@ -420,7 +426,7 @@ const crossSeen = () => page.evaluate(() => {
 	const x = window.__casawalk.xr, w = x.ui.wrist, V = x.rig.position.constructor;
 	x.camera.updateMatrixWorld(true);
 	const seen = (slot) => w.keys[slot].face.getWorldPosition(new V()).applyMatrix4(x.camera.matrixWorldInverse);
-	const slots = ['left', 'up', 'right'].filter((k) => w.keys[k].group.visible); // (all three at both layers) // along the arc, as seen: ← Back, Settings, Walk in → (inside: the first two)
+	const slots = ['left', 'right'].filter((k) => w.keys[k].group.visible); // along the arc, as seen: ← Back, Settings (the same two at both layers)
 	const p = slots.map(seen);
 	const orb = w.orb.group.getWorldPosition(new V()).applyMatrix4(x.camera.matrixWorldInverse);
 	const centre = w.cross.getWorldPosition(new V());
@@ -444,8 +450,8 @@ const crossSeen = () => page.evaluate(() => {
 	await aim('left', [-0.35, 1.0, -0.2], [-0.6, 1.0, -1.5]); await frames(3); // (away from the orb, so the cross doesn't hold still)
 	await page.waitForFunction(() => Object.values(window.__casawalk.xr.ui.wrist.keys).every((k) => k.out), null, { timeout: 2000 }).catch(() => {});
 	const cs = await crossSeen();
-	check('the wrist menu: an arc over the orb as you see it: ← Back, Settings, Walk in →, the orb\'s underside clear, frozen', cs.open && cs.leftToRight && cs.clearBelow && cs.frozen && cs.step > 0.10 && cs.step < 0.14 && cs.facing < 3
-		&& JSON.stringify(cs.ids) === JSON.stringify(['back', 'settings', 'in']), JSON.stringify(cs));
+	check('the wrist menu: an arc over the orb as you see it: ← Back, Settings, the orb\'s underside clear, frozen', cs.open && cs.leftToRight && cs.clearBelow && cs.frozen && cs.step > 0.10 && cs.step < 0.14 && cs.facing < 3
+		&& JSON.stringify(cs.ids) === JSON.stringify(['back', 'settings']), JSON.stringify(cs));
 	await shot('wrist-menu');
 	await click('right', 'b-button');
 	check('B closes the wrist menu', !(await state()).wrist);
@@ -551,7 +557,7 @@ s = await state();
 check('the left laser on the orb opens the wrist menu, pinned', s.wrist && await page.evaluate(() => window.__casawalk.xr.ui.wrist.pinned));
 await shot('wrist-menu-laser');
 // Settings by laser; then the board's own settings.
-await pressWrist('up');
+await pressWrist('right');
 s = await state();
 check('Settings by laser opens the board', s.menu === 'dollhouse' && !s.wrist);
 await restRight(); await frames(3);
@@ -721,7 +727,7 @@ check('B closes the board', (await state()).menu === null);
 	check('the left index touching the orb opens the wrist menu over the right wrist, laid out as seen', hs.open && hs.leftToRight && hs.clearBelow && !(await page.evaluate(() => window.__casawalk.xr.ui.wrist.pinned)), JSON.stringify(hs));
 	await shot('hands-wrist-menu');
 	// Settings, pressed with the left index: the board opens within reach.
-	await pressWristKey('hand', 'left', 'up');
+	await pressWristKey('hand', 'left', 'right');
 	const nm = await page.evaluate(() => {
 		const x = window.__casawalk.xr, p = x.menu?.mesh, V = x.rig.position.constructor;
 		if (!p) return { open: false, wrist: x.ui.wrist.open };
@@ -1015,13 +1021,13 @@ await lookAhead();
 await restRight();
 await frames(10);
 await shot('walk-trigger');
-await click('left', 'y-button');
+await holdBack('left', 'y-button');
 await settled();
 s = await state();
-check('Y: ← Back to the scale model (one layer up)', s.mode === 'dollhouse');
+check('Y held 0.6 s: ← Back to the scale model (one layer up)', s.mode === 'dollhouse');
 check('arriving back: no title at the scale model (it said only "Scale model")', await page.evaluate(() => !window.__casawalk.xr.arrival.mesh.visible));
 await click('right', 'b-button');
-check('at the scale model, B never leaves VR', (await state()).presenting && (await state()).mode === 'dollhouse');
+check('at the scale model, a short B press does nothing (held, it would leave VR)', (await state()).presenting && (await state()).mode === 'dollhouse');
 
 // The doors on the plinth: always there; the laser on Walk in → goes inside (where the wrist menu's Walk in lands).
 {
@@ -1055,11 +1061,11 @@ check('at the scale model, B never leaves VR', (await state()).presenting && (aw
 	await click('right', 'trigger'); await settled();
 	s = await state();
 	check('Walk in → on the plinth goes inside', s.mode === 'walk' && s.anchorScale === 1, JSON.stringify({ mode: s.mode }));
-	await click('left', 'y-button'); await settled(); await restRight(); await frames(3);
+	await holdBack('left', 'y-button'); await settled(); await restRight(); await frames(3);
 }
-// Walk in → (the observer camera) from the wrist menu.
+// Walk in → (the observer camera): from the plinth's door (it left the wrist in the next build).
 await lookDown();
-await pressWrist('right');
+await page.evaluate(() => window.__casawalk.xr.menuAction('in')); await settled(); await frames(3);
 s = await state();
 check('Walk in enters 1:1', s.mode === 'walk' && s.anchorScale === 1 && s.walkSky, JSON.stringify({ rig: s.rig.map((v) => +v.toFixed(2)) }));
 {
@@ -1189,14 +1195,14 @@ await click('right', 'a-button');
 await page.waitForFunction(() => Object.values(window.__casawalk.xr.ui.wrist.keys).every((k) => k.out), null, { timeout: 2000 }).catch(() => {});
 {
 	const cs = await crossSeen();
-	const plate = await page.evaluate(() => { const k = window.__casawalk.xr.ui.wrist.keys; return { right: k.right.group.visible ? [k.right.spec?.look, k.right.spec?.label] : null, back: k.left.spec.caption }; });
-	check('inside, the wrist menu: ← Back (to the scale model) and Settings where they were, a flat "Inside" plate on the right, no Exit VR', cs.leftToRight && JSON.stringify(cs.ids) === JSON.stringify(['back', 'settings', null])
-		&& plate.right?.[0] === 'flat' && plate.right[1] === 'Inside' && plate.back === 'Scale model', JSON.stringify({ ids: cs.ids, plate }));
+	const plate = await page.evaluate(() => { const k = window.__casawalk.xr.ui.wrist.keys; return { back: k.left.spec.caption, round: k.left.round, hold: k.left.spec.hold }; });
+	check('inside, the wrist menu: the same two keys, ← Back (round, held: to the scale model) and Settings; no Exit VR', cs.leftToRight && JSON.stringify(cs.ids) === JSON.stringify(['back', 'settings'])
+		&& plate.back === 'Scale model' && plate.round && plate.hold === 0.6, JSON.stringify({ ids: cs.ids, plate }));
 	await lookDown(); await aim('right', [0.12, 1.2, -0.4], [-0.1, 0.9, -1.2]); await frames(5);
 	await shot('walk-wrist-menu');
 	await lookAhead(); await restRight(); await frames(3);
 }
-await pressWrist('up');
+await pressWrist('right');
 s = await state();
 check('Settings opens the inside board', s.menu === 'walk' && await page.evaluate(() => /Inside/.test(window.__casawalk.xr.menu.title)));
 await shot('walk-menu');
@@ -1461,7 +1467,7 @@ await lookDown();
 await pressWrist('left');
 await frames(10);
 s = await state();
-check('← Back at the scale model leaves VR (the wrist menu\'s: one press)', !s.presenting);
+check('← Back at the scale model leaves VR (the wrist menu\'s, held 0.6 s)', !s.presenting);
 bad = await leftovers();
 check('leaving the dollhouse leaves nothing behind', !bad.length, bad.join(', '));
 await fingerprint('2d-after-exit');
@@ -1568,7 +1574,7 @@ check('example home: two storeys, all shown', lv.count === 2 && lv.multi && lv.h
 	check('stepping inside: you stand there, facing the way the marker showed', s.mode === 'walk' && landed.d < 0.02 && Math.abs(dYaw) < 0.05, JSON.stringify({ ...landed, markerYaw: mk.yaw }));
 	await lookAhead(); await restRight(); await frames(5);
 	await shot('example-landed');
-	await lookDown(); await click('right', 'b-button'); await settled(); await frames(5);
+	await lookDown(); await holdBack('right', 'b-button'); await settled(); await frames(5);
 	// Back at the scale model: the visit's one round scale, on the plate too.
 	const zs = await page.evaluate(() => { const x = window.__casawalk.xr; return { ratio: 1 / (x.baseScale * x.modes.dollhouse.doll.zoom), plate: x.plate.text }; });
 	check('back at the scale model: the same round scale, on the plate too', Number.isInteger(Math.round(zs.ratio)) && Math.abs(zs.ratio - Math.round(zs.ratio)) < 1e-6 && zs.plate === `1:${Math.round(zs.ratio)}`, JSON.stringify(zs));
@@ -1628,7 +1634,7 @@ let dp = await depth();
 check('Depth shading is prepared and shown in the headset', dp.on && dp.state === 'ready' && dp.uniform === 1 && dp.switched === true && dp.label === 'Depth shading', JSON.stringify(dp));
 await page.evaluate(() => window.__casawalk.xr.menuAction({ id: 'levels', value: 0 })); // ground floor only, then walk in: every storey comes back
 await click('right', 'b-button'); await frames(3);
-await pressWrist('right');
+await page.evaluate(() => window.__casawalk.xr.menuAction('in')); await settled();
 await frames(15);
 lv = await storeys();
 s = await state();
@@ -1701,7 +1707,7 @@ const lv0 = await page.evaluate(() => window.__casawalk.xr.maxStorey); // (the l
 // Walking in and back: the lasers are on again at the scale model.
 await aimW('right', R, await modelTop()); await frames(6); await click('right', 'trigger'); await settled();
 const wkMode = (await state()).mode;
-await restRight(); await click('right', 'b-button'); await settled(); await frames(3);
+await restRight(); await holdBack('right', 'b-button'); await settled(); await frames(3);
 s = await state();
 const backLasers = await lasers();
 check('walking in and back: lasers on at the scale model', wkMode === 'walk' && s.mode === 'dollhouse' && backLasers === 'left:on right:on' && Math.abs(s.head[1] - 1.89) < 0.005, JSON.stringify({ wkMode, backLasers }));

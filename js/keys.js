@@ -42,10 +42,10 @@ export class KeyPad {
 		this.hover = []; // per controller: { k, t }: the key its laser rests on, and for how long
 	}
 
-	/** Adds a key of w x h metres; returns it (place its group yourself). */
-	add(slot, w = WRIST.key, h = WRIST.key) {
-		const k = makeKey(`${this.name}-${slot}`, w, h);
-		k.slot = slot; k.w = w; k.h = h;
+	/** Adds a key of w x h metres; returns it (place its group yourself). round: a round key (w across: the held ← Back). */
+	add(slot, w = WRIST.key, h = WRIST.key, { round = false } = {}) {
+		const k = makeKey(`${this.name}-${slot}`, w, round ? w : h, round);
+		k.slot = slot; k.w = w; k.h = round ? w : h;
 		this.keys.set(slot, k);
 		this.list = [...this.keys.values()];
 		return k;
@@ -202,30 +202,26 @@ export class KeyPad {
 			k.hot = hot.has(k) || laserHot === k;
 			k.flash = Math.max(0, k.flash - dt);
 			this.redrawKey(k);
-			if (k.spec?.hold) this.showProgress(k);
+			if (k.spec?.hold) this.showProgress(k, dt);
 		}
 		return { action, near: near || !!laserHot, hot };
 	}
 
-	/** A held key's ring, filling while it is held (k.progress 0..1). */
-	showProgress(k) {
+	/** A held key's ring round its edge (HoldRing): its track while touched or aimed at, filling while held (k.progress 0..1). */
+	showProgress(k, dt) {
 		if (!k.ring) {
-			const r = Math.min(k.w, k.h) * 0.42;
-			k.ring = new THREE.Mesh(new THREE.RingGeometry(r * 0.86, r, 48, 1, Math.PI / 2, -Math.PI * 2),
-				new THREE.MeshBasicMaterial({ color: COLOURS.accent, transparent: true, depthTest: false }));
-			k.ring.renderOrder = 13;
-			k.ring.position.z = WRIST.raise + 0.003;
-			k.group.add(k.ring);
+			k.ring = new HoldRing(Math.min(k.w, k.h) / 2 + 0.001);
+			k.ring.group.position.z = WRIST.raise + 0.002;
+			k.group.add(k.ring.group);
 		}
-		const p = Math.min(1, k.progress);
-		k.ring.visible = p > 0;
-		k.ring.geometry.setDrawRange(0, Math.floor(48 * p) * 6);
+		k.ring.update(dt, Math.min(1, k.progress), k.hot || k.progress > 0);
 	}
 
 	/** A key pressed (by touch or laser): its action, with feedback. */
 	press(k, c) {
 		if (!k.spec?.id) { this.feel('deny', c, 'deny'); return null; }
 		k.flash = 0.15;
+		k.ring?.flash();
 		this.feel('press', c, 'click');
 		return { id: k.spec.id };
 	}
@@ -246,11 +242,45 @@ function sharedAtlas() {
 	return atlas;
 }
 
-/** A key: a thin base and a raised face, w x h metres. */
-function makeKey(name, w, h) {
+/**
+ * The ring of a held key (the next-build asks 3.2): just outside its edge, a 4 mm
+ * line in the theme's text colour; its track (25%) shows as soon as a fingertip
+ * or laser is on the key, the fill (90%) grows clockwise from the top while it
+ * is held, drains back in 0.2 s if let go early, and flashes once (0.1 s) when
+ * full. The same ring circles the orb while B or Y is held (js/wrist-menu.js).
+ */
+export class HoldRing {
+	/** r: the inner radius (m), just outside what it circles. */
+	constructor(r) {
+		const mat = (opacity) => new THREE.MeshBasicMaterial({ color: COLOURS.text, transparent: true, opacity, depthTest: false, depthWrite: false });
+		this.group = new THREE.Group();
+		this.group.name = 'hold-ring';
+		this.track = new THREE.Mesh(new THREE.RingGeometry(r, r + 0.004, 64), mat(0.25));
+		this.fill = new THREE.Mesh(new THREE.RingGeometry(r, r + 0.004, 64, 1, Math.PI / 2, -Math.PI * 2), mat(0.9));
+		for (const m of [this.track, this.fill]) { m.renderOrder = 43; m.raycast = () => {}; this.group.add(m); }
+		this.group.visible = false;
+		this.shown = 0; // the fill drawn (it drains back after an early let-go)
+		this.flashT = 0;
+	}
+
+	/** Once a frame: progress (0..1) held so far; on (a fingertip or laser on it, or held). */
+	update(dt = 1 / 72, progress = 0, on = false) {
+		this.shown = progress > 0 ? progress : Math.max(0, this.shown - dt / 0.2);
+		this.flashT = Math.max(0, this.flashT - dt);
+		this.group.visible = on || this.shown > 0 || this.flashT > 0;
+		this.fill.geometry.setDrawRange(0, Math.floor(64 * Math.min(1, this.flashT > 0 ? 1 : this.shown)) * 6);
+		this.fill.material.opacity = this.flashT > 0 ? (Math.sin(this.flashT / 0.1 * Math.PI) > 0 ? 1 : 0.5) : 0.9;
+	}
+
+	/** Full: one flash (0.1 s). */
+	flash() { this.flashT = 0.1; }
+}
+
+/** A key: a thin base and a raised face, w x h metres (round: a disc w across). */
+function makeKey(name, w, h, round = false) {
 	const group = new THREE.Group();
 	group.name = name;
-	const base = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.004), new THREE.MeshLambertMaterial({ color: WRIST.edge }));
+	const base = new THREE.Mesh(round ? new THREE.CylinderGeometry(w / 2, w / 2, 0.004, 40).rotateX(Math.PI / 2) : new THREE.BoxGeometry(w, h, 0.004), new THREE.MeshLambertMaterial({ color: WRIST.edge }));
 	base.position.z = 0.002;
 	const pxW = Math.round(PX_H * w / h);
 	const { canvas, texture } = canvasTexture(pxW, PX_H);
@@ -258,7 +288,7 @@ function makeKey(name, w, h) {
 	face.position.z = WRIST.raise;
 	face.renderOrder = 40;
 	group.add(base, face);
-	const k = { group, base, face, canvas, texture, w, h, spec: null, sig: '', hot: false, flash: 0, out: true };
+	const k = { group, base, face, canvas, texture, w, h, round, spec: null, sig: '', hot: false, flash: 0, out: true };
 	face.userData.key = k;
 	return k;
 }
@@ -269,7 +299,7 @@ function makeKey(name, w, h) {
  */
 function drawKey(k, s, atlas) {
 	if (!k.canvas) return;
-	const ctx = k.canvas.getContext('2d'), w = k.canvas.width, h = k.canvas.height, r = 44;
+	const ctx = k.canvas.getContext('2d'), w = k.canvas.width, h = k.canvas.height, r = k.round ? h / 2 - 6 : 44; // (round: a disc, so the shape itself says "hold")
 	ctx.clearRect(0, 0, w, h);
 	const flash = k.flash > 0;
 	const fill = s.look === 'chosen' ? COLOURS.accent : s.look === 'filled' ? (k.hot ? '#3f70e0' : DOOR.fill) : s.look === 'flat' ? WRIST.flat : flash || k.hot ? COLOURS.hover : WRIST.face;

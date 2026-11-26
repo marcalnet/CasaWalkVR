@@ -29,7 +29,7 @@ import * as THREE from 'three';
 import { WRIST_ORB } from './xr-input.js';
 import { WRIST } from './theme.js';
 import { ease } from './tween.js';
-import { KeyPad } from './keys.js';
+import { KeyPad, HoldRing } from './keys.js';
 import { CLAIM } from './xr-targets.js';
 import { SIGHT, orbCovers, lookingAt } from './zones.js';
 
@@ -41,16 +41,20 @@ const TOWARDS_EYES = 0.07; // the cross floats this far from the wrist towards t
 const IDLE = 12, IDLE_NEAR = 0.15; // seconds with no finger within this of the nearest key (m), and no laser on a key, before it closes: a menu you forgot doesn't hang there
 const OUT_OF_VIEW = 0.4; // seconds with the wrist out of view before it closes
 const VIEW_ANGLE = THREE.MathUtils.degToRad(50); // "in view": within this of where the head looks
-const ORDER = ['left', 'up', 'right']; // along the arc, ← Back first: the keys spring out in that order
+const ORDER = ['left', 'right']; // along the arc, ← Back first: the keys spring out in that order
+export const BACK_HOLD = 0.6; // ← Back, round, is held this long (s), a ring filling; B and Y too (the next-build asks 3.2)
 
-/** What each slot holds at each layer (the same three places at both layers). Help is in Settings, "How to move". */
-export function keysFor(mode, roomName = '') {
+/**
+ * What each slot holds at each layer: two keys, the same at both (the
+ * next-build asks 3.1-3.2): ← Back on the left, round and held 0.6 s (one key,
+ * one behaviour: at the scale model it leaves VR, inside it goes back to the
+ * scale model), and Settings on the right. Walk in → is on the plinth only;
+ * help is in Settings, "How to move".
+ */
+export function keysFor(mode) {
 	return {
-		up: { id: 'settings', look: 'plain', icon: 'settings', label: 'Settings', caption: 'and help' },
-		right: mode === 'walk'
-			? { id: null, look: 'flat', label: 'Inside', caption: roomName } // as deep as it goes: you are here (the keys stay where the hand learned them)
-			: { id: 'in', look: 'filled', icon: 'in', label: 'Walk in →', caption: 'Inside the home' },
-		left: { id: 'back', look: 'outline', icon: 'back', label: '← Back', caption: mode === 'walk' ? 'Scale model' : 'Leave VR' },
+		left: { id: 'back', look: 'outline', icon: 'back', label: '← Back', caption: mode === 'walk' ? 'Scale model' : 'Leave VR', hold: BACK_HOLD },
+		right: { id: 'settings', look: 'plain', icon: 'settings', label: 'Settings', caption: 'and help' },
 	};
 }
 
@@ -71,12 +75,14 @@ export class WristMenu {
 		this.cross.visible = false;
 		this.pad = new KeyPad(xr, 'wrist-key');
 		this.keys = {};
-		for (const slot of ORDER) { this.keys[slot] = this.pad.add(slot, slot === 'up' ? WRIST.settingsW : WRIST.key); this.cross.add(this.keys[slot].group); }
+		for (const slot of ORDER) { this.keys[slot] = this.pad.add(slot, slot === 'right' ? WRIST.settingsW : WRIST.key, WRIST.key, { round: slot === 'left' }); this.cross.add(this.keys[slot].group); }
 		this.keysHot = false; this.laserNear = false; // a fingertip is over a key: the orb ignores touches (it sits between the keys)
 		this.fanYield = false; // the orb's own hand reaching into the fan (js/tool-fan.js sets it)
 		this.keyYield = false; // a fingertip near a live key (the doors, the levels, a wing): the orb makes room and ignores touches
 		this.sightYield = false; // the orb between the eyes and a live key: it makes room (only its look: touches still count)
 		this.sightClear = 0; // seconds clear of every live key (it grows back after SIGHT.CLEAR_FOR)
+		this.backRing = new HoldRing(SIGHT.ORB_R + 0.003); // B or Y held: the ring fills round the orb (js/xr-ui.js buttons())
+		this.orb.group.add(this.backRing.group);
 		xr.scene.add(this.cross);
 		xr.hideFromPhotos(this.cross);
 		this._p = new THREE.Vector3(); this._q = new THREE.Vector3(); this._m = new THREE.Matrix4(); this._quat = new THREE.Quaternion();
@@ -123,9 +129,15 @@ export class WristMenu {
 	/** The input entry wearing the menu (a controller, or a tracked bare hand), or null. */
 	get wearer() { return this.orb.holder; }
 
+	/** B or Y held: the ring round the orb shows how far (0..1), facing the eyes. */
+	setBackProgress(p, dt = 1 / 72) {
+		this.backRing.update(dt, p, p > 0);
+		if (this.backRing.group.visible) this.backRing.group.lookAt(this.xr.camera.getWorldPosition(this._eye));
+	}
+
 	/** The keys' content for this layer. */
 	redraw() {
-		const spec = keysFor(this.xr.mode, this.roomName ?? '');
+		const spec = keysFor(this.xr.mode);
 		for (const slot of ORDER) {
 			this.pad.setSpec(slot, spec[slot]);
 			this.keys[slot].group.visible = !!spec[slot];
@@ -144,7 +156,6 @@ export class WristMenu {
 		this.idleT = 0;
 		this.frozen = false;
 		this.snap = true;
-		this.roomName = this.xr.roomHere?.() ?? '';
 		this.redraw();
 		this.cross.visible = true;
 		this.pad.feel('open');
