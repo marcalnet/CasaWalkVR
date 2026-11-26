@@ -16,7 +16,8 @@
 import * as THREE from 'three';
 import { canvasTexture } from './canvas-card.js';
 import { buildMeter } from './tool-models.js';
-import { Measurements, liveReading } from './measure.js';
+import { Measurements, liveReading, formatLength, defaultUnits } from './measure.js';
+import { readSetting, writeSetting } from './settings.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { COLOURS, FONT } from './theme.js';
 
@@ -36,6 +37,8 @@ export class LaserMeter {
 		this.tip = this.object.getObjectByName('tip');
 		this.screenPoint = this.object.getObjectByName('screen');
 		this.m = new Measurements();
+		this.m.units = readSetting('meterUnits') ?? defaultUnits(globalThis.navigator?.languages?.[0] ?? ''); // (remembered; at first from the browser's region)
+		this.controls = ['stickPress']; // the stick press of its hand steps its one option: the units
 		this.held = null;
 		this.hitDistance = null;
 		this.marks = []; // per line: { a, b, text, snap } (model space)
@@ -87,6 +90,21 @@ export class LaserMeter {
 		if (went === 'line') this.removeLast();
 		if (went === 'point') this.pendingMark.visible = false;
 		if (xr.soundLevel !== 'off') xr.sound.play(went ? 'release' : 'deny');
+	}
+
+	/** The stick press of the holding controller: the next units (cm, ft in), remembered; the readings follow. */
+	control(c, name) {
+		if (name !== 'stickPress') return;
+		this.setUnits(this.m.units === 'cm' ? 'ftin' : 'cm');
+		if (this.xr.soundLevel !== 'off') this.xr.sound.play('press');
+	}
+
+	/** The meter's units ('cm' | 'ftin'): remembered; every line's label and the live reading in them. */
+	setUnits(units) {
+		this.m.units = units;
+		writeSetting('meterUnits', units);
+		this.m.lines.forEach((line, i) => { line.label = formatLength(line.length, units); if (this.marks[i]) this.marks[i].text = line.label; });
+		this.redraw();
 	}
 
 	showPending(p) {
@@ -169,7 +187,7 @@ export class LaserMeter {
 		this.beam.scale.set(1, 1, hit ? hit.distance : REACH);
 		this.dot.visible = !!hit;
 		if (hit) this.dot.position.copy(hit.point);
-		this.screen.set(liveReading(dist), this.m.pending ? 'Trigger: second point' : 'Trigger: first point');
+		this.screen.set(liveReading(dist, this.m.units), this.m.pending ? 'Trigger: second point' : 'Trigger: first point');
 	}
 }
 

@@ -40,3 +40,28 @@ test('two triggers make a line with its real length; undo takes back the waiting
 	assert.ok(m.clear());
 	assert.deepEqual([m.lines.length, m.pending], [0, null]);
 });
+
+test('feet and inches: quarters under a foot; feet and quarters to 33 ft; whole inches beyond; 12" carries; the regions that start in ft in', async () => {
+	const { formatLength, defaultUnits } = await import('../js/measure.js');
+	const ft = (m) => formatLength(m, 'ftin');
+	assert.equal(ft(7.25 * 0.0254), '7¼"');
+	assert.equal(ft(11.75 * 0.0254), '11¾"');
+	assert.equal(ft(0.5 * 0.0254), '½"');
+	assert.equal(ft((5 * 12 + 3) * 0.0254), `5' 3"`);
+	assert.equal(ft((12 * 12 + 4.5) * 0.0254), `12' 4½"`);
+	assert.equal(ft(12 * 12 * 0.0254), `12' 0"`, 'zero inches');
+	assert.equal(ft((12 * 12 + 11.9) * 0.0254), `13' 0"`, '12" carries to the next foot');
+	assert.equal(ft((48 * 12 + 3.2) * 0.0254), `48' 3"`, 'from 33 ft: whole inches');
+	assert.equal(formatLength(1.6, 'cm'), '1.60 m', 'metric unchanged');
+	assert.deepEqual(['en-US', 'en-GB', 'es', 'es-ES', 'my-MM', 'en-LR', 'fr-CA'].map(defaultUnits), ['ftin', 'cm', 'cm', 'cm', 'ftin', 'ftin', 'cm']);
+});
+
+test('the meter\'s units: its stick press steps cm and ft in, remembered; the lines relabel', async () => {
+	const { Measurements, formatLength } = await import('../js/measure.js');
+	const m = new Measurements();
+	m.units = 'ftin';
+	m.point({ x: 0, y: 0, z: 0 });
+	const { line } = m.point({ x: (5 * 12 + 3) * 0.0254, y: 0, z: 0 });
+	assert.equal(line.label, `5' 3"`);
+	assert.equal(formatLength(line.length, 'cm'), '1.60 m');
+});

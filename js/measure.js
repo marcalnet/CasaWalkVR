@@ -29,17 +29,53 @@ export function snapLine(a, b) {
 	return { point: { ...b }, snap: null };
 }
 
-/** A length in metres, as the label reads: "8 cm" under 10 cm, "85 cm" under 1 m, "1.60 m", "12.4 m". */
-export function formatLength(m) {
+/**
+ * A length in metres, as the label reads, in units 'cm' (metric: "8 cm" under
+ * 10 cm, "85 cm" under 1 m, "1.60 m", "12.4 m") or 'ftin' (the next-build asks
+ * 3.4.1: under a foot, inches to the nearest quarter, 7¼"; to 33 ft, feet and
+ * inches to the nearest quarter, 5' 3", 12' 4½", 12' 0", 12" carrying to the
+ * next foot; from 33 ft, feet and whole inches, 48' 3").
+ */
+export function formatLength(m, units = 'cm') {
 	if (!Number.isFinite(m) || m < 0) return '';
+	if (units === 'ftin') return formatImperial(m);
 	if (m < 1) return `${Math.round(m * 100)} cm`;
 	if (m < 10) return `${m.toFixed(2)} m`;
 	return `${m.toFixed(1)} m`;
 }
 
+const QUARTERS = ['', '¼', '½', '¾'];
+const INCH = 0.0254;
+
+function formatImperial(m) {
+	const inches = m / INCH;
+	if (inches < 12) {
+		const q = Math.round(inches * 4);
+		if (q < 48) return `${Math.floor(q / 4) || (q % 4 ? '' : 0)}${QUARTERS[q % 4]}"`;
+		return `1' 0"`; // (rounds up to a foot)
+	}
+	if (inches < 33 * 12) {
+		const q = Math.round(inches * 4), feet = Math.floor(q / 48), rest = q - feet * 48;
+		const whole = Math.floor(rest / 4), part = QUARTERS[rest % 4];
+		return `${feet}' ${whole || (part ? '' : 0)}${part}"`;
+	}
+	const whole = Math.round(inches), feet = Math.floor(whole / 12);
+	return `${feet}' ${whole - feet * 12}"`;
+}
+
+/**
+ * The meter's starting units from the browser's language and region
+ * (navigator.languages[0]): regions US, LR and MM start in feet and inches;
+ * every other region, and a language with no region, in centimetres.
+ */
+export function defaultUnits(language = '') {
+	const region = /^[a-z]{2,3}[-_]([A-Za-z]{2})\b/i.exec(language)?.[1]?.toUpperCase();
+	return ['US', 'LR', 'MM'].includes(region) ? 'ftin' : 'cm';
+}
+
 /** The distance from the meter to where its dot is (the live reading on its screen), or '' when it hits nothing. */
-export function liveReading(m) {
-	return m == null ? '' : formatLength(m);
+export function liveReading(m, units = 'cm') {
+	return m == null ? '' : formatLength(m, units);
 }
 
 /**
@@ -48,6 +84,7 @@ export function liveReading(m) {
  */
 export class Measurements {
 	constructor() {
+		this.units = 'cm'; // 'cm' | 'ftin' (the meter's dial)
 		this.lines = [];
 		this.pending = null; // the first point, waiting for its pair
 	}
@@ -57,7 +94,7 @@ export class Measurements {
 		if (!this.pending) { this.pending = { ...p }; return { kind: 'start' }; }
 		const a = this.pending, { point: b, snap } = snapLine(a, p);
 		const length = len(sub(b, a));
-		const line = { a, b, length, label: formatLength(length), snap };
+		const line = { a, b, length, label: formatLength(length, this.units), snap };
 		this.lines.push(line);
 		this.pending = null;
 		return { kind: 'line', line };

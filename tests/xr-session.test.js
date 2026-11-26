@@ -39,6 +39,7 @@ async function setup({ nomerge = false, file = FILE } = {}) {
 	x.session = { end: () => x.handleEnd() };
 	x.sessionMode = 'ar';
 	x.pause.tipsOn = false; // (no tips but in the pause's own tests: they would hold every move)
+	x.fan.meter.m.units = 'cm'; // (whatever this machine's region: the meter's checks read metres)
 	const pads = {};
 	for (const [i, hand] of [[0, 'left'], [1, 'right']]) {
 		const c = x.input.controllers[i];
