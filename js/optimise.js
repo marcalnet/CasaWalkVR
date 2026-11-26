@@ -9,6 +9,13 @@
 // 1b. Share identical vertices (same position, normal and uv) through an
 //    index: typically 25-60% fewer vertices for the GPU to transform and
 //    less memory, for a fraction of a second at load time.
+// 1c. Plain colours share one draw call (the code audit's cheapest large win,
+//    stage B3): an opaque, untextured Lambert material with no emission is
+//    folded into one material per layer, storey and side, its colour stored
+//    in each vertex. Catalogue furniture is mostly plain colours, so a home
+//    of 150 draw calls comes down to a few dozen. Textured, see-through,
+//    emissive and ceiling materials keep their own (the ceilings' light lift
+//    reads their colour: js/lighting.js). ?nofold skips it (js/dev.js).
 // 2. Build a three-mesh-bvh bounds tree on each merged mesh, so every
 //    raycast (laser pointer, floor marker, teleport, floor following) is fast.
 //
@@ -108,11 +115,24 @@ function materialKey(m) {
 		m.shininess ?? '', m.specular ? m.specular.getHexString() : ''].join('|');
 }
 
+/** True for a material that can fold into the shared vertex-colour one (1c): opaque, untextured, plain Lambert. */
+export function isPlainColour(m) {
+	return !!m?.isMeshLambertMaterial && !m.map && !m.emissiveMap && !m.alphaMap && !m.lightMap && !m.aoMap && !m.vertexColors
+		&& !m.transparent && m.opacity >= 1 && !m.alphaTest && (!m.emissive || (m.emissive.r === 0 && m.emissive.g === 0 && m.emissive.b === 0));
+}
+
+/** The shared vertex-colour material for folded plain colours, one per side. */
+function foldedMaterial(side, cache) {
+	if (!cache.has(side)) cache.set(side, new THREE.MeshLambertMaterial({ vertexColors: true, side, name: 'plain colours' }));
+	return cache.get(side);
+}
+
 /**
  * A copy of one draw range of a non-indexed geometry, with position, normal,
- * uv (and color if wanted) only. `base` must be non-indexed.
+ * uv (and color if wanted) only. `base` must be non-indexed. `fill`: a colour
+ * (THREE.Color, working space) to write into every vertex's color.
  */
-function extract(base, start, count, wantColor) {
+function extract(base, start, count, wantColor, fill = null) {
 	const total = base.attributes.position.count;
 	const from = Math.max(0, start), to = Math.min(total, start + count);
 	const g = new THREE.BufferGeometry();
@@ -129,7 +149,11 @@ function extract(base, start, count, wantColor) {
 	if (!g.attributes.normal) g.computeVertexNormals();
 	const n = g.attributes.position.count;
 	if (!g.attributes.uv) g.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(n * 2), 2));
-	if (wantColor && !g.attributes.color) g.setAttribute('color', new THREE.BufferAttribute(new Float32Array(n * 3).fill(1), 3));
+	if (fill) {
+		const c = new Float32Array(n * 3);
+		for (let i = 0; i < n; i++) { c[3 * i] = fill.r; c[3 * i + 1] = fill.g; c[3 * i + 2] = fill.b; }
+		g.setAttribute('color', new THREE.BufferAttribute(c, 3));
+	} else if (wantColor && !g.attributes.color) g.setAttribute('color', new THREE.BufferAttribute(new Float32Array(n * 3).fill(1), 3));
 	return g;
 }
 
@@ -178,11 +202,13 @@ export function modelStats(root) {
 /**
  * Merges the loaded scene. `root` is the object returned by the loaders
  * (in metres). Returns { group, layers: { main (furniture, or a whole OBJ/GLB), walls, floors, ceilings, ground },
- * stats: { drawCalls, triangles, materials, sourceMeshes } }.
+ * stats: { drawCalls, triangles, materials, sourceMeshes } }. fold: plain
+ * colours share one vertex-colour material (1c; ?nofold: false).
  */
-export function optimiseModel(root) {
+export function optimiseModel(root, { fold = true } = {}) {
 	root.updateMatrixWorld(true);
 	const buckets = new Map(); // `${layer}#${materialKey}` -> { layer, material, geoms: [] }
+	const folded = new Map(); // side -> the shared vertex-colour material (1c)
 	let sourceMeshes = 0;
 
 	root.traverseVisible((o) => {
@@ -206,13 +232,14 @@ export function optimiseModel(root) {
 			// Group ranges index the original (possibly indexed) geometry; after
 			// toNonIndexed() vertex i corresponds to index position i, so the
 			// same start/count still applies.
-			const g = extract(base, part.start, part.count, !!part.material.vertexColors);
+			const glass = glassPiece || (layer === 'main' && !opening && !water && isGlassMaterial(part.material));
+			const plain = fold && layer !== 'ceilings' && isPlainColour(part.material);
+			const g = extract(base, part.start, part.count, !!part.material.vertexColors, plain ? part.material.color : null);
 			g.applyMatrix4(m);
 			if (mirrored) flipWinding(g);
-			const glass = glassPiece || (layer === 'main' && !opening && !water && isGlassMaterial(part.material));
-			const key = `${layer}#${storey}#${opening ? 'opening' : water ? 'water' : glass ? 'glass' : ''}#${materialKey(part.material)}`;
+			const key = `${layer}#${storey}#${opening ? 'opening' : water ? 'water' : glass ? 'glass' : ''}#${plain ? `plain#${part.material.side}` : materialKey(part.material)}`;
 			let b = buckets.get(key);
-			if (!b) { b = { layer, storey, opening, water, glass, material: part.material, geoms: [] }; buckets.set(key, b); }
+			if (!b) { b = { layer, storey, opening, water, glass, material: plain ? foldedMaterial(part.material.side, folded) : part.material, geoms: [] }; buckets.set(key, b); }
 			b.geoms.push(g);
 		}
 	});

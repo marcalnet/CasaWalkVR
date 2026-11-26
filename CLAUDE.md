@@ -53,12 +53,12 @@ js/simplify.js    heavy models simplified for the Quest (meshoptimizer): sizes, 
 js/obj-core.js    OBJ reading shared by the page and the OBJ worker: prepare, parse, simplify, plain data, rebuilt with materials (no DOM)
 js/obj-worker.js  the OBJ worker, and js/obj-worker-client.js its page side (only with ?worker until measured on a Quest 2)
 js/obj-defaults.js Sweet Home 3D's built-in OBJ materials and see-through window panes (pure, Node-testable)
-js/optimise.js    merge-by-material and BVH
+js/optimise.js    merge-by-material (plain colours folded into vertex colours) and BVH
 js/xr-input.js    controllers, rays, thumbsticks, teleport arc, per-frame button claims; bare hands told apart (a pinch never clicks); touch state for hands and controllers (poke point, pinch); controller tip nub
 js/touch.js       touch keys: hover, contact, click, release, front-only (pure, Node-testable)
 js/hands.js       bare hands drawn from the WebXR joints (translucent capsules, orange fingertip)
 js/gestures.js    bare-hand gestures from the joints: the pinch-and-hold teleport and wrist flick, the quick pinch (closes the wings), the closed hand, the aim ray (pure, Node-testable)
-js/dev.js         the development switches in the page address (?test, ?hands, ?stats, ?nomerge, ?sw, ?worker), read in one place
+js/dev.js         the development switches in the page address (?test, ?hands, ?stats, ?nomerge, ?nofold, ?sw, ?worker), read in one place
 js/device.js      which device: the headset's own browser, a Quest 2 (the one place that reads the browser's name)
 js/hand-readout.js the bare-hand tuning readout over each wrist, only with ?hands on the page URL (development)
 js/frame-stats.js the headset's fps and draw-call counter, only with ?stats on the page URL (measuring)

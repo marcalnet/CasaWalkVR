@@ -264,7 +264,7 @@ async function load(files, label, source = { type: 'file' }) {
 		await new Promise((r) => setTimeout(r, 0)); // let the status paint
 		if (superseded(result)) return;
 		// ?nomerge (debugging only): show the scene exactly as loaded.
-		const merged = DEV.nomerge ? unmergedModel(result.root) : optimiseModel(result.root);
+		const merged = DEV.nomerge ? unmergedModel(result.root) : optimiseModel(result.root, { fold: !DEV.nofold });
 		disposeCurrent();
 		current = { ...result, label, source, root: merged.group, layers: merged.layers, merged: merged.stats };
 		// On a computer, keep the opened files: Send to my Quest can pass them on.

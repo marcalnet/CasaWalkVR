@@ -75,16 +75,15 @@ test('the heavy test home: three storeys, about a million triangles, six texture
 	t.diagnostic(line(s));
 	assert.equal(s.storeys, 3);
 	assert.equal(s.textures.count, 6);
-	// (No regression while the budget is a todo below: today's count, lowered as stage B3 lands.)
-	assert.ok(s.drawCalls <= 200, `${s.drawCalls} draw calls: more than today's 200`);
+	// (Stage B3, plain colours folded into vertex colours, took it from 193 draw calls to 34.)
+	assert.ok(s.drawCalls <= 40, `${s.drawCalls} draw calls: more than B3's 40`);
 	assert.equal(s.missing, 0);
 	assert.ok(s.triangles > 900_000 && s.triangles <= CONFIG.budget.triangles, `${s.triangles} triangles`);
 });
 
-test('the heavy test home fits the Quest 2 budget', { todo: 'over budget until stage B3 (plain colours folded into vertex colours)' }, async (t) => {
+test('the heavy test home fits the Quest 2 budget (since stage B3: plain colours folded into vertex colours)', async (t) => {
 	const s = await measureHeavy();
 	t.diagnostic(line(s));
-	assert.ok(s.triangles <= CONFIG.budget.triangles, 'its triangles fit already: only its draw calls are over');
 	assert.ok(fits(s), line(s));
 });
 
@@ -97,9 +96,9 @@ test('the ?stats counter: only with ?stats; fps, draw calls and triangles in one
 test('one place for the development switches and the device (code audit, A4)', async () => {
 	const { devFlags } = await import('../js/dev.js');
 	const { isHeadsetBrowser, isQuest2 } = await import('../js/device.js');
-	assert.deepEqual(devFlags('?test&model=examples/heavy-home.sh3d&stats'), { test: true, hands: false, stats: true, nomerge: false, sw: false, worker: false });
+	assert.deepEqual(devFlags('?test&model=examples/heavy-home.sh3d&stats'), { test: true, hands: false, stats: true, nomerge: false, nofold: false, sw: false, worker: false });
 	assert.equal(devFlags('?worker').worker, true, '?worker: OBJ models read in a worker');
-	assert.deepEqual(devFlags(''), { test: false, hands: false, stats: false, nomerge: false, sw: false, worker: false });
+	assert.deepEqual(devFlags(''), { test: false, hands: false, stats: false, nomerge: false, nofold: false, sw: false, worker: false });
 	const q2 = 'Mozilla/5.0 (X11; Linux x86_64; Quest 2) AppleWebKit/537.36 (KHTML, like Gecko) OculusBrowser/38.0 Chrome/132 VR Safari/537.36';
 	const q3 = 'Mozilla/5.0 (X11; Linux x86_64; Quest 3) AppleWebKit/537.36 (KHTML, like Gecko) OculusBrowser/38.0 Chrome/132 VR Safari/537.36';
 	const mac = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132 Safari/537.36';
