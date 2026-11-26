@@ -70,3 +70,14 @@ test('reading and writing use localStorage, and never throw without it', () => {
 		else delete globalThis.localStorage;
 	}
 });
+
+test('Recent keeps the newest five within 150 MB, and never a model over 50 MB (heavy homes, step 4)', async () => {
+	const { recentsPlan, RECENT_MAX_FILE, RECENT_MAX_TOTAL } = await import('../js/storage.js');
+	const MB = 1048576, r = (id, size, date) => ({ id, size: size * MB, date });
+	assert.deepEqual(recentsPlan(r('big', 51, 9), []), { keep: false, drop: [] }, 'over 50 MB: not kept');
+	const others = [r('a', 40, 5), r('b', 40, 4), r('c', 40, 3), r('d', 1, 2), r('e', 1, 1), r('f', 1, 0)];
+	const plan = recentsPlan(r('new', 40, 9), others);
+	assert.ok(plan.keep);
+	assert.deepEqual(plan.drop.sort(), ['c', 'f'], 'the 150 MB total drops c; five at most drops f');
+	assert.ok(RECENT_MAX_FILE < RECENT_MAX_TOTAL);
+});

@@ -248,6 +248,10 @@ async function load(files, label, source = { type: 'file' }) {
 	setStatus(`Opening ${label}…`);
 	loading++;
 	updateXRButtons(); // no Enter VR while a model is being swapped in
+	// In the headset, the old home goes first (heavy homes, step 4): the memory's peak is then the
+	// new home alone, not both. Not inside VR, where it is on view; not on a computer, where a
+	// failed open should leave the home you had.
+	if (current && DEVICE.headset && !xr.session) { disposeCurrent(); currentFiles = null; showStats(); invalidate(); }
 	try {
 		const result = await openFiles(files, { units: $('units').value, triangleLimit: DEVICE.headset ? CONFIG.triangleLimit : Infinity, simplifyAbove: DEVICE.headset ? SIMPLIFY.above : Infinity, onProgress: (t) => { if (seq === loadSeq) setStatus(t); } });
 		if (superseded(result)) return;
@@ -298,7 +302,10 @@ async function load(files, label, source = { type: 'file' }) {
 		});
 		document.title = `${label} · CasaWalk VR`;
 		// Remember it for one-tap reopening (only once it opened successfully).
-		if (source.type !== 'recent') addRecent({ name: label, files, source }).then(renderRecents);
+		if (source.type !== 'recent') addRecent({ name: label, files, source }).then((id) => {
+			renderRecents();
+			if (id === 'too large' && current?.label === label) setStatus(`${$('status').textContent} It is too large to keep under Recent.`);
+		});
 	} catch (e) {
 		console.error(e);
 		if (seq === loadSeq) setStatus(e instanceof UserError ? e.message : `Could not open ${label}: ${e.message}`, true);

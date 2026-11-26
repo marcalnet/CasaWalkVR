@@ -14,6 +14,10 @@ const DB_NAME = 'casawalk';
 const STORE = 'recent';
 const PHOTOS = 'photos';
 const MAX_RECENTS = 5;
+// What Recent may hold (heavy homes, step 4): a model over RECENT_MAX_FILE is
+// not kept (it would be read back whole each time the list is shown, and fill the headset's
+// storage), and the oldest go once all together pass RECENT_MAX_TOTAL.
+export const RECENT_MAX_FILE = 50 * 1048576, RECENT_MAX_TOTAL = 150 * 1048576;
 export const MAX_PHOTOS = 50; // the oldest photo makes room for a new one
 const LAST_LINK_KEY = 'casawalk.lastLink';
 
@@ -73,20 +77,45 @@ export async function getRecent(id) {
 }
 
 /**
+ * Which recents to drop when `record` ({ id, size }) joins `others` ([{ id,
+ * size, date }]): beyond the newest MAX_RECENTS, or once all together pass
+ * RECENT_MAX_TOTAL (oldest first). Pure. Returns { keep: boolean (false: the
+ * record itself is too large to keep), drop: [ids] }.
+ */
+export function recentsPlan(record, others, { max = MAX_RECENTS, maxFile = RECENT_MAX_FILE, maxTotal = RECENT_MAX_TOTAL } = {}) {
+	if (record.size > maxFile) return { keep: false, drop: [] };
+	const older = others.filter((r) => r.id !== record.id).sort((a, b) => b.date - a.date);
+	const drop = [];
+	let total = record.size, n = 1;
+	for (const r of older) {
+		if (n < max && total + (r.size ?? 0) <= maxTotal) { total += r.size ?? 0; n++; } else drop.push(r.id);
+	}
+	return { keep: true, drop };
+}
+
+/**
  * Saves a model as the newest recent. An entry with the same link (or, for
- * picked files, the same name) is replaced. Keeps the newest MAX_RECENTS.
+ * picked files, the same name) is replaced. Keeps the newest MAX_RECENTS,
+ * within RECENT_MAX_TOTAL; a model over RECENT_MAX_FILE is not kept
+ * (returns 'too large').
  */
 export async function addRecent({ name, files, source }) {
 	try {
 		const size = files.reduce((n, f) => n + f.bytes.byteLength, 0);
-		const all = await tx('readonly', (s) => req2promise(s.getAll()));
+		if (size > RECENT_MAX_FILE) return 'too large';
+		// (Only the keys and sizes are read: not every kept model's bytes.)
+		const all = await tx('readonly', (s) => new Promise((ok, fail) => {
+			const out = [], req = s.openCursor();
+			req.onsuccess = () => { const c = req.result; if (!c) { ok(out); return; } const { id, name: n, date, size: z, source: src } = c.value; out.push({ id, name: n, date, size: z, source: src }); c.continue(); };
+			req.onerror = () => fail(req.error);
+		}));
 		const same = all.find((r) => (source.url && r.source.url === source.url) || (!source.url && !r.source.url && r.name === name));
 		const id = same ? same.id : `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 		const record = { id, name, date: Date.now(), size, source, files };
-		const keep = [record, ...all.filter((r) => r.id !== id).sort((a, b) => b.date - a.date)];
+		const { drop } = recentsPlan(record, all);
 		await tx('readwrite', (s) => {
+			for (const old of drop) s.delete(old);
 			s.put(record);
-			for (const old of keep.slice(MAX_RECENTS)) s.delete(old.id);
 		});
 		return id;
 	} catch (e) {
