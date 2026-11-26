@@ -331,6 +331,11 @@ test('the pause, pure: which tip (in order, once a session, per input kind), rea
 	assert.ok(isReady(Array(10).fill(2 / 90), 1 / 90) && !isReady(Array(10).fill(4 / 90), 1 / 90), 'at 90 Hz, its own interval');
 	assert.ok(!isReady(Array(10).fill(0.2)), 'an even 5 fps is never ready: the cap ends it');
 	assert.equal(PAUSE.READY_LIMIT, 3, 'never stuck: 3 s from the first draw at most');
+	// The tip at its size (the UX review's S7): capitals 1.2° at 1.4 m, 60 cm wide at most; the looping hand 8° or more under its lower edge.
+	const { DEMO } = await import('../js/tip-demo.js');
+	const deg = (r) => r * 180 / Math.PI, edge = PAUSE.BELOW + deg(Math.atan(PAUSE.TIP_H / 2 / PAUSE.AHEAD));
+	assert.ok(DEMO.BELOW - edge >= 8, `the hand ${(DEMO.BELOW - edge).toFixed(1)}° under the tip's lower edge`);
+	assert.ok(Math.abs(PAUSE.TIP_H * 768 / 112 - 0.6) < 0.001, 'the label can widen to 60 cm, no further');
 	const { land } = practiceArc(new THREE.Vector3(0, 1.4, 0), new THREE.Vector3(0, -0.3, -1), 0);
 	assert.ok(land && Math.abs(land.y) < 1e-9 && land.z < -1, `the practice arc lands ahead on the floor (${land?.z.toFixed(2)} m)`);
 });

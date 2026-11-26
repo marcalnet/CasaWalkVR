@@ -54,6 +54,9 @@ export const PAUSE = {
 	READY_LIMIT: 3, READY_FRAMES: 10, READY_REFRESHES: 3.5, READY_SPIKE: 0.1, // ready: drawn once and the last 10 frames each at most 3.5 refreshes long, none 100 ms or more; never more than 3 s from the first draw
 	GAP: 0.3, // with no tip, the dark gap a plain fade has anyway: only a longer wait shows the void, the rings and the place's name
 	AHEAD: 1.4, BELOW: 10, NAME_ABOVE: 0.8, // the tip: 1.4 m ahead, its centre 10° below eye level; the room's name 0.8° above it
+	// The tip's size (the UX review's S7): capitals 1.2° tall (29 mm at 1.4 m), never shrunk; the pill widens up to
+	// 60 cm (the label's whole canvas: 768 px over 0.60 m), one line. The room's name above it: capitals 1.5°.
+	TIP_H: 0.0875, TIP_PX: 53, NAME_H: 0.101,
 	AWAY: 40, AWAY_FOR: 1, FOLLOW: 0.4, // turned more than 40° away for over 1 s: the tip glides back in front of you over 0.4 s
 	RINGS: [[0.75, 0.25], [2, 0.1]], // the floor rings: radius (m), opacity
 	PRACTICE_SHOWN: 0.3, // the practice arc shown this long before letting go jumps (as inside)
@@ -141,9 +144,9 @@ export class Pause {
 		this.group = new THREE.Group();
 		this.group.name = 'pause';
 		this.group.visible = false;
-		this.tipLabel = new Label({ height: 0.07 });
-		this.nameLabel = new Label({ height: 0.05 });
-		for (const l of [this.tipLabel, this.nameLabel]) { l.mesh.renderOrder = 1003; l.mesh.material.depthTest = false; this.group.add(l.mesh); }
+		this.tipLabel = new Label({ height: PAUSE.TIP_H, px: PAUSE.TIP_PX });
+		this.nameLabel = new Label({ height: PAUSE.NAME_H });
+		for (const l of [this.tipLabel, this.nameLabel]) { l.mesh.renderOrder = 1004; l.mesh.material.depthTest = false; this.group.add(l.mesh); } // (over the practice arc and the looping hand: 1003)
 		// The floor rings: lines, one draw call (opacity per vertex).
 		this.floor = buildRings();
 		xr.rig.add(this.group, this.floor);
@@ -388,7 +391,7 @@ export class Pause {
 		this.group.rotation.set(0, yaw, 0);
 		this.nameLabel.set(name || '');
 		this.nameLabel.mesh.visible = !!name;
-		this.nameLabel.mesh.position.set(0, PAUSE.AHEAD * Math.tan(THREE.MathUtils.degToRad(PAUSE.NAME_ABOVE)) + 0.06, 0);
+		this.nameLabel.mesh.position.set(0, PAUSE.TIP_H / 2 + PAUSE.AHEAD * Math.tan(THREE.MathUtils.degToRad(PAUSE.NAME_ABOVE)) + PAUSE.NAME_H / 2, 0); // (0.8° above the tip's top edge)
 		// The floor rings: at your real floor, centred under you.
 		this.floor.position.set(p.x, 0.002, p.z);
 	}

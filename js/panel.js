@@ -423,9 +423,16 @@ export class NoteCard {
 const LABEL_W = 768, LABEL_H = 112; // canvas pixels
 
 export class Label {
-	/** height: metres, of the whole label (the pill around the text). */
-	constructor({ height = 0.05 } = {}) {
+	/**
+	 * height: metres, of the whole label (the pill around the text). px: a fixed
+	 * type size (canvas px, never shrunk: the pause's tips); without it the text
+	 * fits the label, 58 px down to 30.
+	 */
+	constructor({ height = 0.05, px = null } = {}) {
 		this.text = '';
+		this.px = px;
+		this.width = 0; // the pill's width now (m)
+		this.fits = true; // false if the text is wider than the label can show (a fixed size never shrinks)
 		({ canvas: this.canvas, texture: this.texture } = canvasTexture(LABEL_W, LABEL_H));
 		this.mesh = new THREE.Mesh(new THREE.PlaneGeometry(height * LABEL_W / LABEL_H, height),
 			new THREE.MeshBasicMaterial({ map: this.texture, transparent: true, toneMapped: false, depthTest: false }));
@@ -446,8 +453,11 @@ export class Label {
 		const ctx = this.canvas.getContext('2d');
 		ctx.clearRect(0, 0, LABEL_W, LABEL_H);
 		if (!this.text) return;
-		fitFont(ctx, this.text, LABEL_W - 80, 58, 30, LABEL.weight); // (sets ctx.font)
-		const w = Math.min(LABEL_W - 8, ctx.measureText(this.text).width + 64);
+		if (this.px) ctx.font = `${LABEL.weight} ${this.px}px ${FONT}`;
+		else fitFont(ctx, this.text, LABEL_W - 80, 58, 30, LABEL.weight); // (sets ctx.font)
+		const need = ctx.measureText(this.text).width + 64, w = Math.min(LABEL_W - 8, need);
+		this.fits = need <= LABEL_W - 8;
+		this.width = w / LABEL_W * this.mesh.geometry.parameters.width;
 		roundRect(ctx, (LABEL_W - w) / 2, 6, w, LABEL_H - 12, (LABEL_H - 12) / 2);
 		ctx.fillStyle = LABEL.fill;
 		ctx.fill();

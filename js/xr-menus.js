@@ -100,18 +100,19 @@ export const GUIDES = {
 };
 
 /**
- * The pause's tips (js/pause.js; the next-build asks, "Tip screens"): one line
- * each, eight words or fewer, for bare hands and for controllers. Shown in
- * this order, per transition, each at most once a session.
+ * The pause's tips (js/pause.js; the next-build asks, "Tip screens" and 3.6):
+ * one line each, labels with no full stop, at most 60 cm wide at their full
+ * size (the emulator measures them), for bare hands and for controllers.
+ * Shown in this order, per transition, each at most once a session.
  */
 export const TIPS = {
-	enter: [{ id: 'walkin', hands: 'Pinch a room, let go: walk in.', controllers: 'Point at a room, pull the trigger: walk in.', demo: 'door' }],
+	enter: [{ id: 'walkin', hands: 'Pinch a room, let go: walk in', controllers: 'Trigger on a room: walk in', demo: 'door' }],
 	in: [
-		{ id: 'teleport', hands: 'Pinch, aim, let go to jump.', controllers: 'Hold the trigger, aim, let go.', demo: 'pinch', practise: true },
-		{ id: 'turn', hands: 'Pinch, flick your wrist: turn.', controllers: 'Flick the right stick to turn.', demo: 'flick' },
-		{ id: 'portal', hands: 'Touch a wall to see through it.', controllers: 'Touch a wall to see through it.', demo: 'touch' },
+		{ id: 'teleport', hands: 'Pinch, aim, let go to jump', controllers: 'Hold the trigger, aim, let go', demo: 'pinch', practise: true },
+		{ id: 'turn', hands: 'Pinch, flick your wrist: turn', controllers: 'Flick the right stick to turn', demo: 'flick' },
+		{ id: 'portal', hands: 'Touch a wall: see through', controllers: 'Touch a wall: see through', demo: 'touch' },
 	],
-	back: [{ id: 'grab', hands: 'Close your hand on the model to turn it.', controllers: 'Hold grip on the model to turn it.', demo: 'grab' }],
+	back: [{ id: 'grab', hands: 'Grab the model to turn it', controllers: 'Grip the model to turn it', demo: 'grab' }],
 };
 
 // The close line, in the wing's header (there is no Close key: build 120, M1; js/xr-ui.js sets it on opening): the colon form
