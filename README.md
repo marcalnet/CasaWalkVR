@@ -106,7 +106,7 @@ While aiming a teleport (hands or controllers), faint rings on the floor mark th
 - **Right stick** left/right turns in steps of 30°.
 - **Right stick forward**, or **hold a trigger**, and aim: a blue ring shows where you'll land (red on a wall). The arc stays low enough to pass through doorways. Let go to teleport there.
 - **B** or **Y**, or **← Back** on the wrist menu, goes back to the scale model.
-- Settings: the same tabs (General: **Height** (yours, 1.4, 1.7 or 2.0 m); every Enter VR starts at your own, since the next person may be someone else). **New visitor**, General's last row, starts the tips and the height over for the next person without leaving VR.
+- Settings: the same tabs (General: **Height** (yours, 1.4, 1.7 or 2.0 m); every Enter VR starts at your own, since the next person may be someone else).
 
 **Photo:** not in the menu for now. The street camera (a later update) brings photos back. Photos you took earlier stay on the page, under the model: **Save all to Downloads** (or one by one) puts them in the Quest's **Files** app, in **Downloads**. (Nothing is ever downloaded during VR: the Quest Browser asks for permission at the first download, and its question would end the VR session.)
 
@@ -237,7 +237,7 @@ js/settings.js    every setting, its key, meaning and scope (remembered, or this
 js/hand-owner.js  who owns a hand: the ladder (a held tool, a wing, the wrist menu, a key, the tools, the model), on one snapshot a frame
 js/landing.js     where the teleport lands when you aim at something you can't stand on (beside it, on your side)
 js/zones.js       the areas round you (left: the tools; centre: the model; right: the orb and Settings) and where each hand is
-js/session-store.js what belongs to this VR session only (the tips, the first tabs): cleared at Enter VR and by New visitor
+js/session-store.js what belongs to this VR session only (the tips, the first tabs): cleared at Enter VR
 js/tween.js, js/haptics.js, js/sound.js   feedback: motion, vibration, synthesised sounds
 js/panel.js       canvas-texture board (switches, options, buttons, tabs), note cards and labels
 js/walls.js       solid walls while walking and see-through walls and furniture (headset only)

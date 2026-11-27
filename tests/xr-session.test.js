@@ -159,7 +159,7 @@ test('the settings wing: the same three tabs at both layers (How to move, View, 
 		assert.deepEqual(shape(p.tabs[1].rows), ['light:choice:Time of day:Morning:Noon:Sunset:Night', 'shadows:switch:Shadows',
 			'depth:switch:Depth shading', 'view:switch:Passthrough', 'seethrough:switch:Transparent walls']);
 		assert.deepEqual(shape(p.tabs[2].rows), ['height:choice:Height:Yours:1.4 m:1.7 m:2.0 m', 'mainHand:choice:Main hand:Right:Left',
-			'sound:switch:Sound', 'newVisitor:button:New visitor'], 'General: Height, Main hand, Sound, New visitor (last)');
+			'sound:switch:Sound'], 'General: Height, Main hand, Sound (New visitor went: build 215, B4)');
 		assert.ok(!p.get('lens'), 'the camera\'s lens is on its dial, not on the wing');
 		assert.ok(p.size.h / p.size.w * p.mesh.geometry.parameters.width <= 0.34 + 1e-6, `34 cm tall at most (harmony conflict 13): ${(p.size.h / p.size.w * p.mesh.geometry.parameters.width * 100).toFixed(1)} cm`);
 		assert.equal(p.actions, undefined, 'no action rows on the board: the doors are on the wrist');
@@ -611,7 +611,7 @@ test('Shadows switched on says it works ("Shadows …") before the pause, then s
 	x.lighting = null;
 });
 
-test('shared headsets: Height is per session (never stored, "Yours" at every Enter VR); New visitor starts the session over (tips, first tab, height, the target ring), what you see stays', async () => {
+test('shared headsets: Height is per session (never stored, "Yours" at every Enter VR); no New visitor (build 215, B4: leaving VR and entering again starts over)', async () => {
 	const { x, frame } = await setup();
 	const { readSetting, writeSetting, SETTINGS } = await import('../js/settings.js');
 	assert.equal(SETTINGS.height.scope, 'session');
@@ -619,20 +619,8 @@ test('shared headsets: Height is per session (never stored, "Yours" at every Ent
 	writeSetting('height', 1.7);
 	assert.equal(readSetting('height'), 0, 'never stored: always "Yours" on reading');
 	frame();
-	x.menuAction({ id: 'height', value: 1.7 });
-	x.menuAction({ id: 'light', value: 'sunset' });
-	x.store.tips.seen.add('teleport:controllers'); x.store.target = true;
-	x.ui.openMenu(); x.menu.setTab('general'); // (pressed with the wing open on General: the next person still starts on How to move)
-	x.menuAction('newVisitor');
-	assert.ok(x.personHeight === 0 && x.store.tips.seen.size === 0 && !x.store.target && Object.keys(x.store.tabs).length === 0 && !x.menu, 'the next person: height "Yours", every tip, the first tabs, the target ring; the wing closes');
-	assert.equal(x.lighting?.time ?? 'sunset', 'sunset', 'what you see stays');
-	const done = x.ui.doneLabel;
-	assert.ok(done?.mesh.visible && done.text === 'Ready for the next visitor', 'a done line in the wing\'s place (the UX review\'s C4)');
-	for (let i = 0; i < 115; i++) frame();
-	assert.ok(!done.mesh.visible, 'gone after 1.5 s');
-	x.ui.openMenu();
-	assert.equal(x.menu.tab, 'move', 'the next opening: How to move');
-	assert.ok(x.menus.walk.get('newVisitor') && x.menus.dollhouse.get('newVisitor') && x.menus.dollhouse.tabOf('newVisitor') === 'general', 'New visitor: General\'s last row');
+	assert.ok(!x.menus.walk.get('newVisitor') && !x.menus.dollhouse.get('newVisitor') && !x.newVisitor, 'New visitor is gone (the user\'s decision)');
+	assert.equal(x.ui.doneLabel, undefined, 'and its done line');
 });
 
 test('which tab the wing opens on (the next-build asks 3.3): How to move the first time at each place in a session, then the last other tab used there (View at first)', async () => {

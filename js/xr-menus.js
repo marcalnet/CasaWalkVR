@@ -49,7 +49,6 @@ const CELLS = {
 	depth: sw('depth', 'Depth shading'),
 	seethrough: sw('seethrough', 'Transparent walls'),
 	view: sw('view', 'Passthrough'), // on: the room around you; off: the VR world
-	newVisitor: { type: 'button', id: 'newVisitor', label: 'New visitor' }, // (General's last row: the session starts over for the next person)
 	mainHand: { type: 'choice', id: 'mainHand', label: 'Main hand', options: [{ value: 'right', label: 'Right' }, { value: 'left', label: 'Left' }], value: 'right' }, // flips the wrist menu and the tool fan together
 	sound: sw('sound', 'Sound'), // on: the sound effects (a choice again when ambience comes, milestone H)
 	guide: GUIDE_CELL,
@@ -65,7 +64,7 @@ const CELLS = {
 export const TABS = [
 	{ id: 'move', label: 'How to move', rows: [['guide']] },
 	{ id: 'view', label: 'View', rows: [['light'], ['shadows'], ['depth'], ['view'], ['seethrough']] }, // (the long words on full rows: half a row clipped "Depth shading" and "Passthrough", build 120)
-	{ id: 'general', label: 'General', rows: [['height'], ['mainHand'], ['sound'], ['newVisitor']] }, // (New visitor last: it resets Height and starts the tips over)
+	{ id: 'general', label: 'General', rows: [['height'], ['mainHand'], ['sound']] }, // (New visitor went in build 215's B4, the user's decision: leaving VR and entering again starts the session over)
 ];
 
 /** The boards, one per layer: the title names the layer. */
@@ -186,9 +185,6 @@ export function menuAction(xr, target) {
 			else xr.goLayer('out', () => xr.end()); // from the scale model, Back leaves VR (the wrist menu's, opened on purpose: one press)
 			break;
 		case 'settings': ui.toggleBoard(); break;
-		case 'newVisitor': // the next person, the headset still on: the tips, the first tabs, the height and the first-target ring start over
-			xr.newVisitor();
-			break;
 		case 'mainHand': {
 			const main = SETTINGS.mainHand.options.includes(value) ? value : xr.mainHand === 'left' ? 'right' : 'left';
 			xr.toolFan = main === 'left' ? 'right' : 'left';

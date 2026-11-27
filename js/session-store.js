@@ -1,7 +1,8 @@
 // What belongs to this VR session only (the shared-headset principle, SPEC.md
 // "Design principles"; the next-build asks, section 4): several people use one
 // headset, and the app can't tell them apart, so teaching and who you are
-// start fresh with every Enter VR, and with "New visitor" (General's last row).
+// start fresh with every Enter VR. (General's "New visitor" did it too, with the
+// headset on, until build 215's B4: the user took it out.)
 // Nothing here is stored. (What you see, the home's light and view, is
 // remembered: js/settings.js, scope 'remembered'.)
 //
@@ -16,7 +17,7 @@
 export class SessionStore {
 	constructor() { this.start(); }
 
-	/** A fresh session: Enter VR, or New visitor. */
+	/** A fresh session: Enter VR. */
 	start() {
 		this.tips = { seen: new Set(), learnt: new Set() };
 		this.target = false;

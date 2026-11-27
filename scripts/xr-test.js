@@ -524,9 +524,9 @@ const crossSeen = () => page.evaluate(() => {
 		const g = (p) => p.mesh.geometry.parameters;
 		return { doll: kinds(x.menus.dollhouse), walk: kinds(x.menus.walk), heights: Object.values(x.menus).map((p) => +g(p).height.toFixed(3)), width: g(x.menus.walk).width };
 	});
-	const want = { guide: 'drawn', shadows: 'switch', depth: 'switch', light: 'choice', view: 'switch', seethrough: 'switch', mainHand: 'choice', sound: 'switch', height: 'choice', newVisitor: 'button' };
-	const ok = Object.entries(want).every(([id, t]) => kinds.doll[id] === t && kinds.walk[id] === t) && Object.entries(kinds.doll).filter(([, t]) => t === 'button').map(([id]) => id).join() === 'newVisitor';
-	check('the settings wing: switches and options (New visitor the one button), 40 cm wide, 34 cm tall at most', ok && Math.abs(kinds.width - 0.4) < 1e-6 && Math.max(...kinds.heights) <= 0.34 + 1e-3, JSON.stringify({ heights: kinds.heights, width: kinds.width, doll: kinds.doll }));
+	const want = { guide: 'drawn', shadows: 'switch', depth: 'switch', light: 'choice', view: 'switch', seethrough: 'switch', mainHand: 'choice', sound: 'switch', height: 'choice' };
+	const ok = Object.entries(want).every(([id, t]) => kinds.doll[id] === t && kinds.walk[id] === t) && Object.entries(kinds.doll).filter(([, t]) => t === 'button').length === 0; // (New visitor, the one button, went: build 215's B4)
+	check('the settings wing: switches and options, no buttons, 40 cm wide, 34 cm tall at most', ok && Math.abs(kinds.width - 0.4) < 1e-6 && Math.max(...kinds.heights) <= 0.34 + 1e-3, JSON.stringify({ heights: kinds.heights, width: kinds.width, doll: kinds.doll }));
 }
 await shot('dollhouse-board');
 await click('right', 'b-button');
@@ -1316,7 +1316,7 @@ await pressWrist('right');
 s = await state();
 check('Settings opens the inside board', s.menu === 'walk' && await page.evaluate(() => window.__casawalk.xr.menu === window.__casawalk.xr.menus.walk && window.__casawalk.xr.menu.title === 'Settings'));
 await shot('walk-menu');
-check('General: Height, Main hand, Sound, New visitor (Turn and Solid walls left the wing: 30° turns; the stick always stops at walls)', s.snap === 30 && await page.evaluate(() => { const p = window.__casawalk.xr.menus.walk; return !p.get('turn') && !p.get('solid') && p.tabs.find((t) => t.id === 'general').rows.flat().map((c) => c.id).join() === 'height,mainHand,sound,newVisitor'; }));
+check('General: Height, Main hand, Sound (New visitor went: build 215, B4; Turn and Solid walls left the wing: 30° turns; the stick always stops at walls)', s.snap === 30 && await page.evaluate(() => { const p = window.__casawalk.xr.menus.walk; return !p.get('turn') && !p.get('solid') && p.tabs.find((t) => t.id === 'general').rows.flat().map((c) => c.id).join() === 'height,mainHand,sound'; }));
 const feet = (await state()).rig[1] - (await state()).lift;
 await clickMenu('height', 1.4);
 s = await state();

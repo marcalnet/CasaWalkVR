@@ -180,7 +180,7 @@ export class Pause {
 	/** The clock the 3 s cap is counted on: real seconds (the tests drive it). */
 	clock() { return performance.now() / 1000; }
 
-	/** This session's record (js/session-store.js): cleared at Enter VR and by New visitor. */
+	/** This session's record (js/session-store.js): cleared at Enter VR. */
 	get record() { return this.xr.store; }
 
 	/** The input in use: controllers if any is held, else bare hands. */

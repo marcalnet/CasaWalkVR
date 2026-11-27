@@ -10,7 +10,7 @@
 // Each setting has a scope (the shared-headset principle, SPEC.md "Design
 // principles"): 'remembered' (the default: what you see, the home's light and
 // view, and the main hand) or 'session' (who you are: your height; never
-// stored, every Enter VR and New visitor starts from the default).
+// stored, every Enter VR starts from the default).
 // (Recent files and the last link live in storage.js: they are data, not settings.)
 
 import { TIMES } from './lighting.js';
