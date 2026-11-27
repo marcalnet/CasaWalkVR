@@ -2062,6 +2062,39 @@ test('sticky tools, bare hands (build 215, C1 and C2): the pinch is the trigger 
 	Object.assign(c, { isHand: false, isController: true });
 });
 
+test('the meter (build 215, C4): its screen almost covers the top (3.2 x 6.0 cm); after the first point a dashed line runs to the dot, gone with the second; labels 20 cm, 10 cm over their line', async () => {
+	const { x, frame, hands } = await setup();
+	const meter = x.fan.meter, c = hands.right;
+	c.ray.position.set(0.2, 1.3, -0.35); c.grip.position.copy(c.ray.position);
+	frame();
+	x.tools.take(meter, c); frame(); frame();
+	const g = meter.screen.mesh.geometry.parameters;
+	assert.ok(Math.abs(g.width - 0.032) < 1e-9 && Math.abs(g.height - 0.060) < 1e-9, 'the screen: 3.2 x 6.0 cm');
+	const { buildMeter } = await import('../js/tool-models.js');
+	const top = new THREE.Box3().setFromObject(buildMeter());
+	assert.ok(top.max.x - top.min.x > 0.032 && top.max.z - top.min.z > 0.06, 'within the meter\'s top');
+	// A first point, then the dot elsewhere: the dashed line between them; the second point: gone, a line with its label.
+	meter.hit = x.centerer.localToWorld(new THREE.Vector3(0.5, 1, 0.5)); meter.trigger(c, 'down');
+	assert.ok(meter.m.pending, 'the first point waits');
+	meter.drawDashes(x.centerer.localToWorld(new THREE.Vector3(1.5, 1, 0.5)));
+	const first = x.centerer.localToWorld(new THREE.Vector3(0.5, 1, 0.5)), dot = x.centerer.localToWorld(new THREE.Vector3(1.5, 1, 0.5));
+	const n = Math.ceil(first.distanceTo(dot) / 0.03);
+	assert.ok(meter.dashes.visible && meter.dashes.count === Math.min(400, n), `dashed: ${meter.dashes.count} dashes of 2 cm every 3 cm`);
+	assert.ok(meter.dashes.material.opacity === 0.5, 'at half strength');
+	meter.hit = dot.clone(); meter.trigger(c, 'down');
+	meter.drawDashes(dot);
+	assert.ok(!meter.dashes.visible && meter.m.lines.length === 1 && meter.labels.items.length === 1, 'the second point: solid, labelled; no dashes');
+	// The label: 20 cm tall to the eye at 1:1, its lower edge 10 cm over the line's middle.
+	x.anchor.scale.setScalar(1); x.anchor.updateMatrixWorld(true);
+	meter.labels.face(x, 1);
+	const pos = meter.labels.mesh.geometry.attributes.position.array, mid = meter.labels.items[0].at;
+	const ys = [1, 4, 7, 10].map((k) => pos[k]), bottom = Math.min(...ys), height = Math.max(...ys) - bottom;
+	assert.ok(Math.abs(height - 0.2) < 0.02 && bottom - mid.y > 0.08 && bottom - mid.y < 0.12, `20 cm tall (${height.toFixed(3)}), 10 cm over the middle (${(bottom - mid.y).toFixed(3)})`);
+	x.tools.putBack();
+	assert.ok(!meter.dashes.visible, 'put back: no dashes');
+	meter.clear();
+});
+
 test('bringing a tool home with the fan hand\'s tip close by: no options row, the magnet takes it (the Tester\'s finding on C3)', async () => {
 	const { x, frame, hands } = await setup();
 	const fan = x.fan, meter = fan.meter, c = hands.right, dial = x.dial;

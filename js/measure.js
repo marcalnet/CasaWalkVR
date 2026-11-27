@@ -73,9 +73,16 @@ export function defaultUnits(language = '') {
 	return ['US', 'LR', 'MM'].includes(region) ? 'ftin' : 'cm';
 }
 
-/** The distance from the meter to where its dot is (the live reading on its screen), or '' when it hits nothing. */
-export function liveReading(m, units = 'cm') {
-	return m == null ? '' : formatLength(m, units);
+/**
+ * The meter's screen (build 215's C4): the value and its unit, on two lines.
+ * Metric: "87" cm under 1 m, "2.45" m to 10 m, "12.3" m beyond; imperial:
+ * "12' 4½"" with "ft in". Nothing hit: "—" and no unit.
+ */
+export function readingParts(m, units = 'cm') {
+	if (m == null || !Number.isFinite(m) || m < 0) return { value: '\u2014', unit: '' };
+	if (units === 'ftin') return { value: formatImperial(m), unit: 'ft in' };
+	if (m < 1) return { value: String(Math.round(m * 100)), unit: 'cm' };
+	return { value: m < 10 ? m.toFixed(2) : m.toFixed(1), unit: 'm' };
 }
 
 /**

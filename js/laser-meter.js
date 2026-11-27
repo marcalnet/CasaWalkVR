@@ -2,12 +2,18 @@
 // looks like a roll tape (the designer's model) and measures by laser. While
 // held, a red beam runs from its laser window to a dot where it hits (the
 // model's BVH raycasts), and its screen reads the distance to the dot.
-// Trigger on one point, then on another: a line between them with a label of
-// its real length, turned towards you; lines within 3° of vertical or level
-// snap straight (js/measure.js), with a small mark at the end. Several at
-// once. Second button (A, or Y mirrored): undo the last; hold it a second:
-// clear all. Bare hands: not yet (its own measure and undo buttons, pressed by
-// the other index, come with item 11 of the Quest 2 fixes).
+// Trigger (or a bare hand's pinch, in use mode: js/hold.js) on one point, then
+// on another: a line between them with a label of its real length, turned
+// towards you; lines within 3° of vertical or level snap straight
+// (js/measure.js), with a small mark at the end. Several at once. Between the
+// two, a dashed line runs from the first point to the dot. Undo: the second
+// button (A, or Y mirrored), or the options row's Undo; hold the button a
+// second: clear all.
+//
+// Build 215's C4 (the user's decisions): the labels about 5x bigger (20 cm at
+// 1:1), each 10 cm over its line's middle; the screen almost covers the top,
+// the value on one line and its unit on the next (no hint line: the dashed
+// line shows the next step).
 //
 // Lines and labels live in the tools' annotations, in model space: they move
 // with the scale model and stay put while walking; their thickness and the
@@ -17,14 +23,16 @@ import * as THREE from 'three';
 import { HOLD } from './hold.js';
 import { canvasTexture } from './canvas-card.js';
 import { buildMeter } from './tool-models.js';
-import { Measurements, liveReading, formatLength, defaultUnits } from './measure.js';
+import { Measurements, readingParts, formatLength, defaultUnits } from './measure.js';
 import { readSetting, writeSetting } from './settings.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { COLOURS, FONT } from './theme.js';
 
 const REACH = 20; // metres: the laser's reach (in the world)
 const LINE_R = 0.002; // metres, to the eye: a measuring line's radius
-const LABEL_H = 0.04; // metres, to the eye, at 1:1 (a label's height)
+const LABEL_H = 0.20; // metres, to the eye, at 1:1 (a label's height: 5x, build 215's C4)
+const LABEL_LIFT = 0.10; // metres, to the eye: a label's lower edge over its line's middle, never on it
+const DASH = { on: 0.02, off: 0.01, opacity: 0.5, MAX: 400 }; // the dashed line to the dot (to the eye): 2 cm on, 1 cm off, half strength
 const BEAM = 0xe5484d, LINE = 0xe07a1f; // red laser; the measured lines in the orange accent
 const LABEL_SLOTS = 32, SLOT = [256, 80], ATLAS = [1024, 640]; // the labels' shared picture: 4 x 8 slots
 
@@ -60,9 +68,19 @@ export class LaserMeter {
 		this.pendingMark.visible = false;
 		// The screen on its top: the live reading and what the trigger does next.
 		this.screen = makeScreen();
-		this.screen.mesh.position.copy(this.screenPoint.position).y += 0.0006;
+		// (Centred on the flat top, covering it with a 2 mm border.)
+		const top = new THREE.Box3().setFromObject(this.object);
+		this.screen.mesh.position.set((top.min.x + top.max.x) / 2, this.screenPoint.position.y + 0.0006, (top.min.z + top.max.z) / 2);
 		this.screen.mesh.rotation.x = -Math.PI / 2;
 		this.object.add(this.screen.mesh);
+		// The dashed line from the first point to the dot (world space, never in photos: a step in progress).
+		this.dashes = new THREE.InstancedMesh(new THREE.CylinderGeometry(LINE_R, LINE_R, 1, 6, 1, true).rotateX(Math.PI / 2), new THREE.MeshBasicMaterial({ color: LINE, transparent: true, opacity: DASH.opacity, depthWrite: false }), DASH.MAX);
+		this.dashes.name = 'meter-dashes';
+		this.dashes.count = 0;
+		this.dashes.frustumCulled = false;
+		this.dashes.visible = false;
+		xr.scene.add(this.dashes);
+		xr.hideFromPhotos(this.dashes);
 		this.ray = new THREE.Raycaster();
 		this.ray.firstHitOnly = true;
 		this.ray.layers.enableAll(); // (it names what it may hit)
@@ -70,7 +88,7 @@ export class LaserMeter {
 	}
 
 	take(c) { this.held = c; }
-	putBack() { this.held = null; this.beam.visible = this.dot.visible = false; }
+	putBack() { this.held = null; this.beam.visible = this.dot.visible = this.dashes.visible = false; }
 
 	/**
 	 * Trigger: a point where the dot is. A bare hand's pinch: where the dot was
@@ -206,11 +224,33 @@ export class LaserMeter {
 		this.beam.scale.set(1, 1, hit ? hit.distance : REACH);
 		this.dot.visible = !!hit;
 		if (hit) this.dot.position.copy(hit.point);
-		this.screen.set(liveReading(dist, this.m.units), this.m.pending ? 'Trigger: second point' : 'Trigger: first point');
+		this.screen.set(readingParts(dist, this.m.units));
+		this.drawDashes(hit ? hit.point : null);
 	}
 }
 
 const Z = new THREE.Vector3(0, 0, 1);
+
+/**
+ * (LaserMeter) The dashed line while a measurement is half made: from the
+ * first point to the dot, DASH.on drawn and DASH.off empty to the eye, the
+ * measured lines' width at half strength; none without a first point or a dot.
+ */
+LaserMeter.prototype.drawDashes = function (dot) {
+	const xr = this.xr, p = this.m.pending;
+	if (!p || !dot) { this.dashes.visible = false; return; }
+	const a = xr.centerer.localToWorld((this._da ??= new THREE.Vector3()).set(p.x, p.y, p.z)); // (the first point, model space to world)
+	const len = a.distanceTo(dot), dir = (this._dd ??= new THREE.Vector3()).subVectors(dot, a).normalize(), step = DASH.on + DASH.off;
+	const n = Math.min(DASH.MAX, Math.ceil(len / step)), q = (this._dq ??= new THREE.Quaternion()).setFromUnitVectors(Z, dir), m = this._dm ??= new THREE.Matrix4(), c = this._dc ??= new THREE.Vector3(), sc = this._ds ??= new THREE.Vector3();
+	for (let i = 0; i < n; i++) {
+		const from = i * step, to = Math.min(len, from + DASH.on);
+		c.copy(a).addScaledVector(dir, (from + to) / 2);
+		this.dashes.setMatrixAt(i, m.compose(c, q, sc.set(1, 1, Math.max(1e-4, to - from))));
+	}
+	this.dashes.count = n;
+	this.dashes.instanceMatrix.needsUpdate = true;
+	this.dashes.visible = n > 0;
+};
 
 /**
  * All the labels in one mesh: their words drawn into one shared picture (an
@@ -245,7 +285,7 @@ class LabelLayer {
 		this.items.forEach((it, i) => {
 			const x = (i % cols) * sw, y = Math.floor(i / cols) * sh;
 			if (ctx) {
-				ctx.fillStyle = 'rgba(255,255,255,0.94)';
+				ctx.fillStyle = '#ffffff'; // (opaque: build 215's C4)
 				ctx.beginPath(); ctx.roundRect(x + 4, y + 4, sw - 8, sh - 8, 24); ctx.fill();
 				ctx.strokeStyle = COLOURS.primary; ctx.lineWidth = 4; ctx.stroke();
 				ctx.fillStyle = COLOURS.text; ctx.font = `700 40px ${FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
@@ -273,7 +313,7 @@ class LabelLayer {
 		this.items.forEach((it, i) => {
 			const c = it.at;
 			for (const [j, sx, sy] of [[0, -1, -1], [1, 1, -1], [2, 1, 1], [3, -1, 1]]) {
-				e.copy(c).addScaledVector(r, sx * w / 2).addScaledVector(u, sy * h / 2 + h * 0.8);
+				e.copy(c).addScaledVector(r, sx * w / 2).addScaledVector(u, sy * h / 2 + h / 2 + LABEL_LIFT * k); // (its lower edge LABEL_LIFT over the line's middle)
 				pos.set([e.x, e.y, e.z], (i * 4 + j) * 3);
 			}
 		});
@@ -281,24 +321,33 @@ class LabelLayer {
 	}
 }
 
-/** The meter's little screen: the reading, big, and the trigger's next job, small. */
+/**
+ * The meter's screen (build 215's C4): 3.2 x 6.0 cm, almost the whole top,
+ * read along the meter's length: the value on one line, as large as fits 3 cm
+ * wide, and its unit on the next at 60%, in the screen's soft colour.
+ * 256 x 480 px, mipmapped.
+ */
 function makeScreen() {
-	const { canvas, texture } = canvasTexture(256, 170, { anisotropy: 1 });
-	const mesh = new THREE.Mesh(new THREE.PlaneGeometry(0.023, 0.0153), new THREE.MeshBasicMaterial({ map: texture, color: texture ? 0xffffff : 0x5d6873, toneMapped: false }));
+	const W = 256, H = 480;
+	const { canvas, texture } = canvasTexture(W, H);
+	const mesh = new THREE.Mesh(new THREE.PlaneGeometry(0.032, 0.060), new THREE.MeshBasicMaterial({ map: texture, color: texture ? 0xffffff : 0x5d6873, toneMapped: false }));
 	mesh.name = 'meter-screen';
 	let last = '';
 	return {
 		mesh,
-		set(reading, hint) {
-			const key = reading + '|' + hint;
+		set({ value, unit }) {
+			const key = value + '|' + unit;
 			if (!canvas || key === last) return;
 			last = key;
 			const ctx = canvas.getContext('2d');
-			ctx.fillStyle = '#20262c'; ctx.fillRect(0, 0, 256, 170);
-			ctx.fillStyle = '#e8f4e8'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-			ctx.font = `700 64px ${FONT}`; ctx.fillText(reading || '—', 128, 70);
-			ctx.fillStyle = COLOURS.primary; ctx.font = `600 22px ${FONT}`; ctx.fillText(hint, 128, 138);
+			ctx.fillStyle = '#20262c'; ctx.fillRect(0, 0, W, H);
+			ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+			let px = 150;
+			do ctx.font = `700 ${px}px ${FONT}`; while (ctx.measureText(value).width > W * 30 / 32 && --px > 40);
+			ctx.fillStyle = '#e8f4e8'; ctx.fillText(value, W / 2, H * 0.42);
+			ctx.fillStyle = '#9fb3a5'; ctx.font = `600 ${Math.round(px * 0.6)}px ${FONT}`; ctx.fillText(unit, W / 2, H * 0.42 + px * 0.95);
 			texture.needsUpdate = true;
+			this.px = px; // (the value's size: the tests read it)
 		},
 	};
 }

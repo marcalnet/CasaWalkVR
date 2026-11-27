@@ -1510,7 +1510,11 @@ check('back from walking: eyes at 1.89 m again, gallery shown, lasers on', Math.
 		const m0 = await page.evaluate(() => { const m = window.__casawalk.xr.fan.meter; return { beam: m.beam.visible, dot: m.dot.visible, hit: !!m.hit }; });
 		await click('right', 'trigger'); await frames(4);
 		await aimMeter(mid(0.7, 0.5)); await frames(8);
+		const dashed = await page.evaluate(() => { const m = window.__casawalk.xr.fan.meter; return { dashes: m.dashes.visible && m.dashes.count, screen: m.screen.px }; });
+		await shot('meter-dashed');
 		await click('right', 'trigger'); await frames(6);
+		const solid = await page.evaluate(() => !window.__casawalk.xr.fan.meter.dashes.visible);
+		check('the meter: after the first point a dashed line runs to the dot; the second point makes it a line (build 215, C4)', dashed.dashes > 0 && solid, JSON.stringify({ dashed, solid }));
 		const m1 = await page.evaluate(() => { const m = window.__casawalk.xr.fan.meter; return { lines: m.m.lines.length, label: m.m.lines[0]?.label ?? null, marks: m.marks.length }; });
 		check('the laser meter: a beam and dot on the model; two triggers measure a line with its label', m0.beam && m0.dot && m0.hit && m1.lines === 1 && m1.marks === 1 && /\d/.test(m1.label ?? ''), JSON.stringify({ m0, m1 }));
 		await shot('meter-line');
