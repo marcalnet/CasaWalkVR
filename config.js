@@ -47,7 +47,8 @@ export const CONFIG = {
 	// the only outside servers sending a file contacts (the browser's WebRTC
 	// connections are not limited by connect-src, so this list is the whole of
 	// it). They are PeerJS's own defaults, named here so nothing is implicit;
-	// the TURN login is PeerJS's public one.
+	// the TURN login is PeerJS's public one. PeerJS replaces its whole default
+	// `config` with this one, so its `sdpSemantics` is kept here too.
 	pairing: {
 		host: '0.peerjs.com', port: 443, path: '/', secure: true, key: 'peerjs',
 		config: {
@@ -55,6 +56,7 @@ export const CONFIG = {
 				{ urls: 'stun:stun.l.google.com:19302' },
 				{ urls: ['turn:eu-0.turn.peerjs.com:3478', 'turn:us-0.turn.peerjs.com:3478'], username: 'peerjs', credential: 'peerjsp' },
 			],
+			sdpSemantics: 'unified-plan',
 		},
 	},
 

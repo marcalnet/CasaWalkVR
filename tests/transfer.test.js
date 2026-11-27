@@ -103,6 +103,7 @@ test('the security policy allows the pairing server in config.js, and nothing el
 	const ice = CONFIG.pairing.config?.iceServers ?? [];
 	const hosts = ice.flatMap((s) => [].concat(s.urls)).map((u) => u.replace(/^(stun|turn)s?:/, '').replace(/:\d+.*$/, ''));
 	assert.deepEqual(hosts, ['stun.l.google.com', 'eu-0.turn.peerjs.com', 'us-0.turn.peerjs.com']);
+	assert.equal(CONFIG.pairing.config.sdpSemantics, 'unified-plan', 'the rest of PeerJS\'s default config kept (it is replaced whole)');
 	const readme = fs.readFileSync(path.join(ROOT, 'README.md'), 'utf8');
 	for (const h of hosts) assert.ok(readme.includes(h), `README names ${h}`);
 	// The pairing library is vendored with its licence and loaded from this site.
