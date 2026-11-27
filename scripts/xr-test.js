@@ -1581,8 +1581,11 @@ check('back from walking: eyes at 1.89 m again, gallery shown, lasers on', Math.
 	check('every pause tip fits one line at full size, 60 cm at most, no full stop (the UX review\'s S7)', wide.length === 0, JSON.stringify(wide));
 	// (A pull of one frame: a trigger held 0.3 s with an arc on the floor ring is the practice jump, by design, and the slower
 	// emulated Quest 2 made one of a click (any aim lands within 2 s). Released as soon as the app has seen it pressed.)
+	// (Pointed up at nothing, so the pull can only be a skip however long the emulator takes to see it let go: under load a
+	// one-frame pull was sometimes seen held 0.3 s, the practice jump. Build 215's runs.)
+	await aim('right', [0.25, 1.1, -0.25], [0.3, 3, -0.6]); await frames(2);
 	await button('right', 'trigger', 1); await appSees('right', 'trigger', true); await button('right', 'trigger', 0); await appSees('right', 'trigger', false);
-	await settled(); await frames(4);
+	await restRight(); await settled(); await frames(4);
 	const after = await page.evaluate(() => { const x = window.__casawalk.xr; return { fx: !!x.layerFx, dark: x.veil.amount('layer'), learnt: x.pause.record.tips.learnt.has('teleport:controllers'), seen: x.pause.record.tips.seen.has('teleport:controllers'), target: x.pause.target.visible }; });
 	check('a pull skips it (seen, not learnt); the room fades in, the first-target ring ahead', !after.fx && after.dark === 0 && !after.learnt && after.seen && after.target, JSON.stringify(after));
 	await page.evaluate(() => { const x = window.__casawalk.xr; x.pause.tipsOn = false; x.menuAction('back'); }); await settled(); await frames(6);
