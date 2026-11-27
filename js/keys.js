@@ -11,6 +11,8 @@
 //   filled    filled blue door: one layer in (Walk in →)
 //   outline   blue-outlined door: one layer back (← Back)
 //   chosen    the board's accent colour, white words: the level chosen in the stack beside the doors
+//   current   filled orange (primary), white words: a tool's current option (js/tool-dial.js)
+//   (spec.fill: a key filled with that colour and no word: the marker's inks)
 //   flat      not a key: flat, greyed (the "Inside" plate); touching it says no
 
 import * as THREE from 'three';
@@ -74,7 +76,7 @@ export class KeyPad {
 
 	redrawKey(k, force = false) {
 		if (!k.spec) return;
-		const sig = `${k.spec.id}|${k.spec.look}|${k.spec.label}|${k.spec.caption ?? ''}|${k.hot}|${k.flash > 0}`;
+		const sig = `${k.spec.id}|${k.spec.look}|${k.spec.label}|${k.spec.caption ?? ''}|${k.spec.fill ?? ''}|${k.hot}|${k.flash > 0}`;
 		if (!force && sig === k.sig) return;
 		k.sig = sig;
 		drawKey(k, k.spec, this.atlas);
@@ -319,14 +321,14 @@ function drawKey(k, s, atlas) {
 	const ctx = k.canvas.getContext('2d'), w = k.canvas.width, h = k.canvas.height, r = k.round ? h / 2 - 6 : 44; // (round: a disc, so the shape itself says "hold")
 	ctx.clearRect(0, 0, w, h);
 	const flash = k.flash > 0;
-	const fill = s.look === 'chosen' ? COLOURS.accent : s.look === 'filled' ? (k.hot ? '#3f70e0' : DOOR.fill) : s.look === 'flat' ? WRIST.flat : flash || k.hot ? COLOURS.hover : WRIST.face;
-	const ink = s.look === 'chosen' ? COLOURS.accentText : s.look === 'filled' ? DOOR.text : s.look === 'outline' ? DOOR.outline : s.look === 'flat' ? WRIST.flatText : WRIST.text;
+	const fill = s.fill ?? (s.look === 'current' ? COLOURS.primary : s.look === 'chosen' ? COLOURS.accent : s.look === 'filled' ? (k.hot ? '#3f70e0' : DOOR.fill) : s.look === 'flat' ? WRIST.flat : flash || k.hot ? COLOURS.hover : WRIST.face);
+	const ink = s.look === 'current' ? '#ffffff' : s.look === 'chosen' ? COLOURS.accentText : s.look === 'filled' ? DOOR.text : s.look === 'outline' ? DOOR.outline : s.look === 'flat' ? WRIST.flatText : WRIST.text;
 	roundRect(ctx, 6, 6, w - 12, h - 12, r);
 	ctx.fillStyle = flash && s.look === 'filled' ? COLOURS.accent : fill;
 	ctx.fill();
-	ctx.lineWidth = s.look === 'outline' ? 12 : 4;
-	ctx.strokeStyle = s.look === 'outline' ? DOOR.outline : k.hot && s.look !== 'flat' ? COLOURS.hoverEdge : WRIST.edge;
-	if (s.look !== 'filled' && s.look !== 'chosen') ctx.stroke();
+	ctx.lineWidth = s.look === 'outline' ? 12 : s.fill && s.look === 'current' ? 16 : 4;
+	ctx.strokeStyle = s.look === 'outline' ? DOOR.outline : s.fill && s.look === 'current' ? COLOURS.primary : k.hot && s.look !== 'flat' ? COLOURS.hoverEdge : WRIST.edge; // (an ink key, current: an orange rim round its ink)
+	if (s.look !== 'filled' && s.look !== 'chosen' && (s.look !== 'current' || s.fill)) ctx.stroke();
 	// The icon, from the atlas: dark, white (on blue) or blue (on the outline door).
 	const row = s.look === 'filled' ? 1 : s.look === 'outline' ? 2 : 0;
 	const col = WRIST.iconOrder.indexOf(s.icon);

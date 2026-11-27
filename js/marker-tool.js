@@ -33,7 +33,7 @@ export class MarkerTool {
 		this.live = true;
 		this.controls = ['stickPress']; // the stick press of its hand steps its one option: the colour (js/tool-dial.js)
 		this.ink = Math.max(0, INKS.indexOf(readSetting('markerColour')));
-		this.option = { part: 'cap', at: 'dial', stops: INKS.map((k) => ({ value: k, label: k[0].toUpperCase() + k.slice(1) })), get: () => INKS[this.ink], set: (k) => this.setInk(k) };
+		this.option = { part: 'cap', stops: INKS.map((k) => ({ value: k, label: k[0].toUpperCase() + k.slice(1), fill: MARKER_INKS[k] })), get: () => INKS[this.ink], set: (k) => this.setInk(k) }; // (its keys filled with the ink: js/tool-dial.js)
 		this.object = buildMarker({ ink: INKS[this.ink] });
 		this.tip = this.object.getObjectByName('tip');
 		this.strokes = [];
@@ -52,6 +52,9 @@ export class MarkerTool {
 		if (phase === 'down') this.startStroke();
 		else this.endStroke();
 	}
+
+	/** The options row's Undo (js/tool-dial.js): as a short press of A. */
+	undo() { this.secondary(this.held, 'press'); }
 
 	/** A: undo the last stroke; hold A: clear all. */
 	secondary(c, phase) {

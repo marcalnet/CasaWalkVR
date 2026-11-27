@@ -34,7 +34,7 @@ const FILM_H = 24; // 35 mm film height (mm): vertical field of view from the fo
 
 /** Vertical field of view (degrees) of a focal length on 35 mm film (36 x 24). */
 /** The three lenses: their focal length (mm) and name (the dial's stops and its label; the viewfinder shows the mm). */
-export const LENSES = [{ mm: 24, name: 'Wide angle' }, { mm: 50, name: 'Medium lens' }, { mm: 75, name: 'Zoom lens' }];
+export const LENSES = [{ mm: 24, name: 'Wide angle', key: 'Wide' }, { mm: 50, name: 'Medium lens', key: 'Medium' }, { mm: 75, name: 'Zoom lens', key: 'Zoom' }]; // (key: the word on its key in the options row, js/tool-dial.js)
 
 export const lensFov = (mm) => THREE.MathUtils.radToDeg(2 * Math.atan(FILM_H / 2 / mm));
 
@@ -68,7 +68,7 @@ export class StreetCamera {
 		this.t = 0;
 		this.prints = [];
 		this.controls = ['stickPress']; // the stick press of its hand steps its one option: the lens (js/tool-dial.js)
-		this.option = { part: 'control', stops: LENSES.map((l) => ({ value: l.mm, label: l.name })), get: () => this.mm, set: (mm) => this.xr.menuAction({ id: 'lens', value: mm }) };
+		this.option = { part: 'control', stops: LENSES.map((l) => ({ value: l.mm, label: l.name, key: l.key })), get: () => this.mm, set: (mm) => this.xr.menuAction({ id: 'lens', value: mm }) };
 		this.guide = new FramingGuide(xr); // the red frame where the photo's edges fall (js/framing-guide.js)
 		this._lens = new THREE.Matrix4(); this._turn = new THREE.Matrix4().makeRotationY(Math.PI);
 		this.setLens(xr.cameraLens ?? LENSES[0].mm);

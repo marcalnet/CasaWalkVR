@@ -208,7 +208,8 @@ export class ToolFan {
 			if (i >= 0) {
 				const m = magnetStep(held.magnet ??= { armed: false }, held.mode, held.tool.object.getWorldPosition(at).distanceTo(this.restWorld(i, this._at2 ??= new THREE.Vector3())));
 				this.slots[i].outline.visible = m.outline;
-				if (m.fire) { xr.tools.putBack(); if (xr.soundLevel !== 'off') xr.sound.play('tick', 0.6); }
+				// (Never while its options row shows: the other hand is pressing it, the Tester's guard.)
+				if (m.fire && xr.dial?.open?.tool !== held.tool) { xr.tools.putBack(); if (xr.soundLevel !== 'off') xr.sound.play('tick', 0.6); }
 			}
 		}
 		this.meter.fit(); // (the measured lines keep their size to the eye whatever the zoom)

@@ -98,6 +98,9 @@ export class LaserMeter {
 		return (best ?? h[h.length - 1])?.hit ?? this.hit;
 	}
 
+	/** The options row's Undo (js/tool-dial.js): as a short press of the second button. */
+	undo() { this.secondary(this.held, 'press'); }
+
 	/** Second button: press = undo, hold = clear all. */
 	secondary(c, phase) {
 		const xr = this.xr;

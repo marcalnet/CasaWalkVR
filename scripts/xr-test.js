@@ -1564,7 +1564,19 @@ check('back from walking: eyes at 1.89 m again, gallery shown, lasers on', Math.
 		const m1 = await page.evaluate(() => { const m = window.__casawalk.xr.fan.meter; return { lines: m.m.lines.length, label: m.m.lines[0]?.label ?? null, marks: m.marks.length }; });
 		check('the laser meter: a beam and dot on the model; two triggers measure a line with its label', m0.beam && m0.dot && m0.hit && m1.lines === 1 && m1.marks === 1 && /\d/.test(m1.label ?? ''), JSON.stringify({ m0, m1 }));
 		await shot('meter-line');
+		// Build 215's C3: the left controller's tip brought near the held meter shows its options row (cm · ft in · Undo), over it.
+		await page.evaluate(() => { const x = window.__casawalk.xr, d = window.__device.controllers.left, V = x.rig.position.constructor;
+			const at = x.fan.meter.object.getWorldPosition(new V()).add(new V(-0.09, 0.02, 0.02)), have = x.rig.localToWorld(new V(d.position.x, d.position.y, d.position.z));
+			const off = x.input.hands.left.touch.tip.clone().sub(have), to = x.rig.worldToLocal(at.sub(off)); d.position.set(to.x, to.y, to.z); });
+		await frames(8);
+		const row = await page.evaluate(() => { const x = window.__casawalk.xr, dl = x.dial, V = x.rig.position.constructor;
+			return { open: !!dl.open && !dl.open.stepped, keys: dl.pad.list.filter((k) => k.group.visible).map((k) => k.spec.label), up: dl.open ? +(dl.group.getWorldPosition(new V()).y - dl.partAt(x.fan.meter).y).toFixed(2) : null }; });
+		await shot('options-row');
+		check('reaching near the held meter shows its options row: cm, ft in, Undo, over it (build 215, C3)', row.open && row.keys.join() === 'cm,ft in,Undo' && row.up > 0.05, JSON.stringify(row));
+		await restLeft(); await frames(6);
 		await page.evaluate(() => window.__casawalk.xr.fan.meter.clear());
+		// (Put back with a squeeze away from the fan: in use mode a tool is not swapped for another, build 215's C1.)
+		await click('right', 'squeeze'); await frames(6);
 	}
 	// The marker (milestone F): take it, hold the trigger and move: a stroke; the stick press: the next colour.
 	{
