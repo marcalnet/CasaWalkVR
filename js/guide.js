@@ -11,7 +11,7 @@ import { GUIDE, FONT } from './theme.js';
 import { GUIDES } from './xr-menus.js';
 
 /** The lines under the frames (canvas px): their distance below the frames, apart, their type and its floor. */
-export const LINES = { below: 84, step: 34, px: 24, min: 20 };
+export const LINES = { below: 84, step: 34, px: 24, min: 20, foot: 19 }; // (foot: the build line under How to move, px)
 
 /** The pictures' sheet, loaded once; onLoad (set by the caller) redraws what shows it. */
 export const guideSheet = { image: null, onLoad: null };
@@ -56,7 +56,7 @@ export function drawGuide(ctx, kind, box, foot = '') {
 		ctx.fillText(line, x + 8, top + i * step);
 	});
 	if (foot) {
-		ctx.font = `400 19px ${FONT}`;
+		ctx.font = `400 ${LINES.foot}px ${FONT}`;
 		ctx.fillText(foot, x + 8, y + h - 12);
 	}
 }

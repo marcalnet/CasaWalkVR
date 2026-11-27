@@ -49,7 +49,7 @@ export const PLATE = {
 	image: 'assets/ui/scale-plate.png',
 	size: [512, 192], // pixels (the artwork's size)
 	metres: [0.2, 0.075], // how big it is on the plinth
-	caption: { text: 'Scale', x: 256, y: 52, px: 30, weight: 600, colour: 'rgba(40,30,15,0.75)' },
+	caption: { text: 'Scale', x: 256, y: 52, px: 38, weight: 600, colour: 'rgba(40,30,15,0.75)' },
 	ratio: { x: 256, y: 122, px: 74, weight: 700, colour: '#2a1e0c' },
 	fallback: '#d8c9a3', // plain plate if the artwork can't be loaded
 };

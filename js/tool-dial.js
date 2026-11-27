@@ -43,6 +43,7 @@ export const DIAL = {
 	OPEN_FOR: 3, STEP_SHOW: 1.5, LABEL_FOR: 1, // seconds: untouched it goes; a stick step shows it; the chosen label
 	CHOSEN_HOLD: 1, FADE: 0.2, // seconds: after a choice the row stays, then fades
 	TOWARDS: 0.03, UP: 0.10, // the row's middle: this far from the control part towards the eyes, and this far up (m; the Designer's §5.8)
+	TYPE: { readAt: 0.45, label: [1.4, 1.8], fit: 0.8 }, // the keys' words: Kalam, 1.4° at least, up to 1.8° where the word fits 80% of the key (build 215's C5: 11-14 mm capitals at 0.45 m)
 	INWARD: 0.14, // ... and this far towards the body's middle, away from the holding hand (m): above the hand, a bare hand's thumb came within 1 cm of the keys; 14 cm in keeps every key 6.5 cm or more from it (measured: tests/xr-session.test.js)
 	RISE: 0.06, RISE_STEP: 0.01, // where it overlaps the main hand's keys as seen, it rises until it doesn't, by at most RISE (m; build 215's C8)
 	FOLLOW: 0.08, // seconds: it follows the tool with the framing guide's smoothing
@@ -68,7 +69,7 @@ export class ToolDial {
 		this.group = new THREE.Group();
 		this.group.name = 'tool-dial';
 		this.group.visible = false;
-		this.pad = new KeyPad(xr, 'dial');
+		this.pad = new KeyPad(xr, 'dial', DIAL.TYPE);
 		for (let i = 0; i < 6; i++) this.group.add(this.pad.add(`stop${i}`, DIAL.KEY, DIAL.KEY, { round: true }).group);
 		this.label = new Label({ height: 0.03 });
 		this.label.mesh.visible = false;

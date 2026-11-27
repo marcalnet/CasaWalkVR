@@ -30,7 +30,8 @@ import { MarkerTool } from './marker-tool.js';
 import { LaserMeter } from './laser-meter.js';
 import { StreetCamera } from './street-camera.js';
 import { ease } from './tween.js';
-import { Label } from './panel.js';
+import { Label, LABEL_H } from './panel.js';
+import { RAMP, pxFor } from './type-ramp.js';
 import { TOOLS, edgeSpot, keepFromEyes, dampTowards } from './zones.js';
 import { HOLD, magnetStep, toolPose } from './hold.js';
 import { CONTROL_CUE } from './theme.js';
@@ -42,7 +43,9 @@ const SPACING = 0.115; // between tools in the arc (the marker and the meter lie
 // The marker turns its cap end 40° towards you, so the ring on its back shows (build 215's B2: lying flat across the
 // fan, the ring was seen edge-on).
 const VIEW = { camera: Math.PI, meter: Math.PI / 2, marker: Math.PI / 2 - THREE.MathUtils.degToRad(40) };
-const TAG = { height: 0.03, below: -0.05 }; // each tool's name tag
+// Each tool's name tag: 3 cm tall, 5 cm under it; its word hand-lettered, 1.4° from about 0.5 m (12 mm capitals: build 215's C5, js/type-ramp.js).
+export const TAG = { height: 0.03, below: -0.05, readAt: 0.5 };
+TAG.px = pxFor(RAMP.kalam, 'kalam', TAG.height / LABEL_H, TAG.readAt);
 const NAMES = { camera: 'Camera', meter: 'Meter', marker: 'Marker' };
 const REACH = 0.05; // a controller's tip this close to a tool touches it
 const REACH_HAND = 0.07; // a bare fingertip: tracking is looser, and the tools are small (the marker is 9 cm)
@@ -77,7 +80,7 @@ export class ToolFan {
 			slot.pose.rotation.y = VIEW[name] ?? 0; // (the pose is the group's, so the tool's own rotation stays free for the wobble)
 			slot.pose.add(object);
 			slot.home.add(slot.pose);
-			slot.label = new Label({ height: TAG.height });
+			slot.label = new Label({ height: TAG.height, px: TAG.px, font: 'kalam' });
 			slot.label.set(NAMES[name] ?? name);
 			slot.label.mesh.position.y = TAG.below;
 			slot.home.add(slot.label.mesh);

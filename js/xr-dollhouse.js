@@ -31,7 +31,8 @@ import * as THREE from 'three';
 import { UP, DOWN, CLAIM } from './xr-targets.js';
 import { yawOf } from './xr-input.js';
 import { EYE_BELOW_TOP, buildMarkers } from './xr-scene.js';
-import { KeyPad } from './keys.js';
+import { KeyPad, PX_H } from './keys.js';
+import { RAMP, pxFor, kalamEm } from './type-ramp.js';
 import { DELIBERATE } from './touch.js';
 import { roomAt, roomLanding, alongAxis, clearOfWalls, headingOf } from './rooms.js';
 import { Label } from './panel.js';
@@ -93,7 +94,7 @@ const WAIST = 0.8; // a pinching hand this far below the eyes is at your side: i
 // below it). Within the handbook's limits (26 Nov 2026, the Designer): Walk in
 // about 60° below the eye line, the levels about 40° to the left and 53° down,
 // all about 0.72 m from the eyes (never more than 60° down or 45° of neck turn).
-const DOOR_IN = [0.32, 0.09];
+export const DOOR_IN = [0.32, 0.09];
 const DOOR_IN_X = 0.065; // Walk in →'s middle, right of where you stand (where it was beside ← Back)
 const LEVELS_X = -0.30; // the levels stack's middle, left of where you stand (about 16 cm from Walk in)
 const DOOR_BELOW_EYES = 0.62; // waist height (the user's word), standing or seated (the lift keeps the eyes at the same height)
@@ -102,7 +103,26 @@ const DOOR_AHEAD = 0.36; // in front of where you stand
 // a hand lowered onto it from above is far off its normal and never presses it.
 const DOOR_TILT = 70;
 // The levels: a stack of keys to the left of the doors, ground at the bottom like the building's section (the UX design of 25 Nov).
-const LEVEL_KEY = [0.08, 0.04], LEVEL_KEY_MANY = 0.03, LEVEL_GAP = 0.012; // key size (m); with more than six levels they are 3 cm tall
+// The level keys (build 215's C5, the Designer's): 5 cm tall, 4 cm with more than six levels, big enough for 18 mm capitals.
+// Every key in the stack takes one width: enough for its longest name at 1.4°, between 11 and 14 cm (levelKeyWidth). Its left
+// edge stays where an 11 cm stack's is (levelsX): where the left area starts never depends on what a file names its levels;
+// a wider stack grows towards Walk in, 12-15 cm from it (ten times the handbook's 12 mm between targets).
+export const LEVEL_KEY = [0.11, 0.05], LEVEL_KEY_MANY = 0.04, LEVEL_GAP = 0.012, LEVEL_W = [0.11, 0.14]; // (m)
+// The words on the doors and levels (js/type-ramp.js): Kalam, read from about 0.72 m, up to 1.5°; a name too long for a
+// 14 cm key shrinks, never under 1.2°, and past that ends in "…".
+export const DOOR_TYPE = { readAt: 0.72, label: [1.2, 1.5], fit: 0.8 };
+const LEVEL_PAD = 70; // a wide key's word has 40 px before it and 30 after (canvas px: js/keys.js)
+
+/** The stack's one key width (m) for these names on keys h tall: the longest at 1.4°, between 11 and 14 cm. */
+export function levelKeyWidth(names, h) {
+	const mPerPx = h / PX_H, px = Math.min(Math.floor(PX_H * 0.63), pxFor(RAMP.kalam, 'kalam', mPerPx, DOOR_TYPE.readAt));
+	const em = Math.max(0, ...names.map(kalamEm));
+	return Math.min(LEVEL_W[1], Math.max(LEVEL_W[0], (em * px + LEVEL_PAD) * mPerPx));
+}
+
+/** The stack's middle (x, m) for keys w wide: its left edge fixed where 11 cm keys round LEVELS_X put it. */
+export const levelsX = (w) => LEVELS_X - LEVEL_W[0] / 2 + w / 2;
+
 const DOORS_FADE = 0.15; // seconds: the doors fade out while the board is open (they showed through it), and back
 const DOOR_FOLLOW = 0.08; // the doors move to a new head height once it differs by this much
 const MARKER_HEIGHT = 1.7; // metres at the model's scale (the "stand here" figure)
@@ -145,7 +165,7 @@ export class Dollhouse {
 		// without opening the orb. A big Walk in → in front of you at waist
 		// height, tilted up towards you, the levels on its left. Pressed by
 		// touch, a controller's tip or its laser.
-		this.doors = new KeyPad(xr, 'plinth-door');
+		this.doors = new KeyPad(xr, 'plinth-door', DOOR_TYPE);
 		this.doorGroup = new THREE.Group();
 		this.doorGroup.name = 'plinth-doors';
 		this.doorGroup.add(this.doors.add('in', ...DOOR_IN).group);
@@ -195,7 +215,7 @@ export class Dollhouse {
 	placeDoors(eyeY = DOLLHOUSE_PERSON - EYE_BELOW_TOP) {
 		this.doors.keys.get('in').group.position.set(DOOR_IN_X, 0, 0);
 		// The levels: at the doors' height, their stack's middle at LEVELS_X.
-		const n = this.levelCount, h = n > 6 ? LEVEL_KEY_MANY : LEVEL_KEY[1], x = LEVELS_X;
+		const n = this.levelCount, h = n > 6 ? LEVEL_KEY_MANY : LEVEL_KEY[1], x = levelsX(this.levelW ?? LEVEL_W[0]);
 		for (let i = 0; i < n; i++) this.doors.keys.get(`level${i}`).group.position.set(x, (i - (n - 1) / 2) * (h + LEVEL_GAP), 0);
 		this.levelTitle.mesh.position.set(x, ((n - 1) / 2) * (h + LEVEL_GAP) + h / 2 + 0.02, 0.002);
 		this.doorGroup.position.set(0, eyeY - DOOR_BELOW_EYES, -DOOR_AHEAD);
@@ -220,10 +240,11 @@ export class Dollhouse {
 	/** One key per level (a home with two or more), ground at the bottom; keys left over from a taller home stay hidden. */
 	buildLevels() {
 		const n = (this.xr.model?.storeys ?? 1) >= 2 ? this.xr.model.storeys : 0;
-		const h = n > 6 ? LEVEL_KEY_MANY : LEVEL_KEY[1];
+		const h = n > 6 ? LEVEL_KEY_MANY : LEVEL_KEY[1], w = this.levelW = levelKeyWidth(this.levelNames(n), h);
 		for (let i = 0; i < n; i++) {
-			if (!this.doors.keys.has(`level${i}`)) this.doorGroup.add(this.doors.add(`level${i}`, LEVEL_KEY[0], h).group);
-			else { const k = this.doors.keys.get(`level${i}`); k.h = h; }
+			const k = this.doors.keys.get(`level${i}`);
+			if (k && (Math.abs(k.w - w) > 1e-6 || Math.abs(k.h - h) > 1e-6)) this.doors.remove(`level${i}`); // (another home's size: made again)
+			if (!this.doors.keys.has(`level${i}`)) this.doorGroup.add(this.doors.add(`level${i}`, w, h).group);
 		}
 		this.levelCount = n;
 		this.showDoors(); // (the faded materials are collected again)
@@ -231,14 +252,20 @@ export class Dollhouse {
 		this.placeDoors(this.doorEyes);
 	}
 
+	/** The level keys' words, ground first: each level's name (12 characters at most), or "Level i". */
+	levelNames(n = this.levelCount) {
+		const names = this.xr.model?.storeyNames ?? [];
+		return Array.from({ length: n }, (_, i) => String(names[i] || `Level ${i}`).slice(0, 12));
+	}
+
 	/** What each level key shows: its name, the chosen one filled; hidden when the home has no such level. */
 	refreshLevels() {
-		const xr = this.xr, n = this.levelCount, names = xr.model?.storeyNames ?? [], chosen = xr.maxStorey ?? n - 1;
+		const xr = this.xr, n = this.levelCount, names = this.levelNames(), chosen = xr.maxStorey ?? n - 1;
 		for (const [slot, k] of this.doors.keys) {
 			if (!slot.startsWith('level')) continue;
 			const i = Number(slot.slice(5)), on = i < n;
 			k.group.visible = k.out = on;
-			if (on) this.doors.setSpec(slot, { id: `level:${i}`, look: i === chosen ? 'chosen' : 'plain', label: String(names[i] || `Level ${i}`).slice(0, 12) });
+			if (on) this.doors.setSpec(slot, { id: `level:${i}`, look: i === chosen ? 'chosen' : 'plain', label: names[i] });
 		}
 		this.levelTitle.mesh.visible = n >= 2;
 	}

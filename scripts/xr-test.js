@@ -1527,6 +1527,12 @@ check('back from walking: eyes at 1.89 m again, gallery shown, lasers on', Math.
 			return { open: !!dl.open && !dl.open.stepped, keys: dl.pad.list.filter((k) => k.group.visible).map((k) => k.spec.label), up: dl.open ? +(dl.group.getWorldPosition(new V()).y - dl.partAt(x.fan.meter).y).toFixed(2) : null }; });
 		await shot('options-row');
 		check('reaching near the held meter shows its options row: cm, ft in, Undo, over it (build 215, C3)', row.open && row.keys.join() === 'cm,ft in,Undo' && row.up > 0.05, JSON.stringify(row));
+		// Build 215's C5: the words as drawn on real canvases (Kalam loaded): each key's at least its pad's smallest size, the long level names aside.
+		const type = await page.evaluate(async () => { const x = window.__casawalk.xr, { labelRange } = await import('./js/keys.js');
+			const of = (pad) => pad.list.filter((k) => k.group.visible && k.spec?.label).map((k) => ({ word: k.spec.label, px: k.labelPx, min: labelRange(k).min, max: labelRange(k).max }));
+			return { fonts: document.fonts.check('700 40px Kalam'), row: of(x.dial.pad), hand: of(x.ui.wrist.pad), doors: of(x.modes.dollhouse.doors), tags: x.fan.slots.map((s) => s.label.px) }; });
+		const keysOk = [...type.row, ...type.hand, ...type.doors].every((k) => k.px >= k.min && k.px <= k.max);
+		check('the keys\' words, drawn: Kalam, each between its smallest and largest size (1.4-1.8° on the hand\'s keys and the options row; the doors and levels up to 1.5°, a name past a 14 cm key never under 1.2°) (build 215, C5)', type.fonts && keysOk && type.row.length === 3 && type.hand.length === 2, JSON.stringify(type));
 		await restLeft(); await frames(6);
 		await page.evaluate(() => window.__casawalk.xr.fan.meter.clear());
 		// Brought home with the left controller held up beside it (its tip within reach of the meter): no options row, the

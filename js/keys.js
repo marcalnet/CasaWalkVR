@@ -19,17 +19,26 @@ import * as THREE from 'three';
 import { canvasTexture } from './canvas-card.js';
 import { TOUCH, touchState, stepTouch, reset as resetTouch, ringSize } from './touch.js';
 import { WRIST, DOOR, COLOURS, KEY, FONT } from './theme.js';
+import { pxFor } from './type-ramp.js';
 
-const PX_H = 256; // canvas height of a key face; the width follows its proportions
+export const PX_H = 256; // canvas height of a key face; the width follows its proportions
 const RING_GEO = new THREE.RingGeometry(0.4, 0.5, 32); // the hover ring: 1 m across, scaled to ringSize()
 
 const LASER_REST = 0.15; // seconds a laser rests on a key before its trigger can arm it (laserOnRelease keys)
 
 export class KeyPad {
-	/** xr: the XRExperience; name: for the scene graph. */
-	constructor(xr, name = 'keys') {
+	/**
+	 * xr: the XRExperience; name: for the scene graph; type: how big its words
+	 * are (build 215's C5, js/type-ramp.js): { readAt (m: the distance the keys
+	 * are read from), label: [min, max] (degrees of the word's cap height: as
+	 * large as max where it fits, never under min), fit (a square or round key:
+	 * the share of its width the word may fill) }. Without one, the sizes of
+	 * before (canvas px).
+	 */
+	constructor(xr, name = 'keys', type = null) {
 		this.xr = xr;
 		this.name = name;
+		this.type = type;
 		this.keys = new Map(); // slot -> key
 		this.touches = []; // per input entry: { slot: touch state }
 		this.rings = []; // per input entry: the ring under its fingertip
@@ -47,10 +56,21 @@ export class KeyPad {
 	/** Adds a key of w x h metres; returns it (place its group yourself). round: a round key (w across: the held ← Back). */
 	add(slot, w = WRIST.key, h = WRIST.key, { round = false } = {}) {
 		const k = makeKey(`${this.name}-${slot}`, w, round ? w : h, round);
-		k.slot = slot; k.w = w; k.h = round ? w : h;
+		k.slot = slot; k.w = w; k.h = round ? w : h; k.type = this.type;
 		this.keys.set(slot, k);
 		this.list = [...this.keys.values()];
 		return k;
+	}
+
+	/** Removes a key (its group from the scene, its geometry, materials and picture freed): a key changing size is removed and added again. */
+	remove(slot) {
+		const k = this.keys.get(slot);
+		if (!k) return;
+		k.group.removeFromParent();
+		k.group.traverse((o) => { o.geometry?.dispose(); o.material?.dispose(); });
+		k.texture?.dispose();
+		this.keys.delete(slot);
+		this.list = [...this.keys.values()];
 	}
 
 	/** True if world point p is within margin (metres) of a shown key's face (the nearest point of its rectangle). */
@@ -333,7 +353,8 @@ function drawKey(k, s, atlas) {
 	const row = s.look === 'filled' ? 1 : s.look === 'outline' ? 2 : 0;
 	const col = WRIST.iconOrder.indexOf(s.icon);
 	const icon = s.icon && atlas?.complete && atlas.naturalWidth && col >= 0;
-	const n = WRIST.iconSize, hasText = !!s.caption, wide = w > h * 1.3;
+	const n = WRIST.iconSize, hasText = !!s.caption, wide = w > h * 1.3, range = labelRange(k);
+	const font = `700 %px ${WRIST.labelFont}`;
 	ctx.fillStyle = ink;
 	ctx.textBaseline = 'middle';
 	if (wide) {
@@ -341,8 +362,9 @@ function drawKey(k, s, atlas) {
 		const size = 120, x0 = icon ? 40 + size + 24 : 40;
 		if (icon) ctx.drawImage(atlas, col * n, row * n, n, n, 40, (h - size) / 2, size, size);
 		ctx.textAlign = 'left';
-		fitText(ctx, s.label, w - x0 - 30, 70, `700 %px ${WRIST.labelFont}`);
-		ctx.fillText(s.label, x0, hasText ? h * 0.42 : h / 2);
+		const word = fitText(ctx, s.label, w - x0 - 30, range ? range.max : 70, font, range?.min, !!range);
+		k.labelPx = word.px; k.labelText = word.text;
+		ctx.fillText(word.text, x0, hasText ? h * 0.42 : h / 2);
 		if (hasText) {
 			ctx.globalAlpha = 0.9;
 			fitText(ctx, s.caption, w - x0 - 30, 34, `500 %px ${FONT}`);
@@ -350,25 +372,65 @@ function drawKey(k, s, atlas) {
 			ctx.globalAlpha = 1;
 		}
 	} else {
-		const iconY = hasText ? 30 : 44, size = hasText ? 92 : 104;
-		if (icon) ctx.drawImage(atlas, col * n, row * n, n, n, (w - size) / 2, iconY, size, size);
 		ctx.textAlign = 'center';
-		const labelY = s.look === 'flat' ? (hasText ? 110 : 128) : hasText ? 156 : 186;
-		fitText(ctx, s.label, w - 30, s.look === 'flat' ? 50 : 44, `700 %px ${WRIST.labelFont}`);
-		ctx.fillText(s.label, w / 2, labelY);
+		const flat = s.look === 'flat';
+		const word = fitText(ctx, s.label, range ? w * k.type.fit : w - 30, range ? range.max : flat ? 50 : 44, font, range?.min, !!range);
+		k.labelPx = word.px; k.labelText = word.text;
+		let iconY, size, labelY, captionY;
+		if (range) {
+			// Sized in degrees: icon, word and caption stacked, the stack centred.
+			const px = k.labelPx, cap = hasText ? CAPTION_PX : 0, gap = 8;
+			size = s.icon ? (hasText ? 76 : 88) : 0;
+			let y = (h - (size ? size + gap : 0) - px - (hasText ? gap + cap : 0)) / 2;
+			iconY = y; y += size ? size + gap : 0;
+			labelY = y + px / 2; y += px + gap;
+			captionY = y + cap / 2;
+		} else {
+			iconY = hasText ? 30 : 44; size = hasText ? 92 : 104;
+			labelY = flat ? (hasText ? 110 : 128) : hasText ? 156 : 186;
+			captionY = flat ? 168 : 206;
+		}
+		if (icon) ctx.drawImage(atlas, col * n, row * n, n, n, (w - size) / 2, iconY, size, size);
+		ctx.font = font.replace('%', k.labelPx);
+		ctx.fillText(word.text, w / 2, labelY);
 		if (hasText) {
 			ctx.globalAlpha = s.look === 'filled' ? 0.92 : 0.85;
-			fitText(ctx, s.caption, w - 30, 26, `500 %px ${FONT}`);
-			ctx.fillText(s.caption, w / 2, s.look === 'flat' ? 168 : 206);
+			fitText(ctx, s.caption, w - 30, CAPTION_PX, `500 %px ${FONT}`);
+			ctx.fillText(s.caption, w / 2, captionY);
 			ctx.globalAlpha = 1;
 		}
 	}
 	k.texture.needsUpdate = true;
 }
 
-function fitText(ctx, text, maxW, px, font) {
+/**
+ * Sets ctx.font at px, smaller in steps of 2 while text is wider than maxW,
+ * never under min; returns { px, text }. ellipsis: still too wide at min, the
+ * word is cut and ends in "…" (a key's word never runs off it: build 215's C5).
+ */
+function fitText(ctx, text, maxW, px, font, min = 12, ellipsis = false) {
 	let size = px;
-	do { ctx.font = font.replace('%', size); size -= 2; } while (ctx.measureText(text).width > maxW && size > 12);
+	ctx.font = font.replace('%', size);
+	while (size > min && ctx.measureText(text).width > maxW) { size = Math.max(min, size - 2); ctx.font = font.replace('%', size); }
+	if (ellipsis && ctx.measureText(text).width > maxW) {
+		let cut = [...text];
+		while (cut.length > 1 && ctx.measureText(cut.join('').trimEnd() + '\u2026').width > maxW) cut.pop();
+		text = cut.join('').trimEnd() + '\u2026';
+	}
+	return { px: size, text };
+}
+
+const CAPTION_PX = 26; // a square or round key's caption (canvas px): 0.65° on a 7 cm key at 0.45 m (tests/type-ramp.test.js)
+
+/**
+ * A key's word, smallest and largest (canvas px), from its pad's type (build
+ * 215's C5): its cap height min and max degrees at readAt. Null: no type.
+ */
+export function labelRange(k) {
+	const t = k.type;
+	if (!t) return null;
+	const mPerPx = k.h / PX_H, most = Math.floor(PX_H * 0.63); // (never taller than the key: a 3 cm level key, with more than six levels, gets 1.1°)
+	return { min: Math.min(most, pxFor(t.label[0], 'kalam', mPerPx, t.readAt)), max: Math.min(most, pxFor(t.label[1], 'kalam', mPerPx, t.readAt)) };
 }
 
 function roundRect(ctx, x, y, w, h, r) {

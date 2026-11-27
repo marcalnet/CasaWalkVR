@@ -209,6 +209,9 @@ export class StreetCamera {
 }
 
 /** The camera's instruction: one short hand-lettered line in the orange of the thing to press. */
+// The words on the camera's back (canvas px over their height in metres): under the type ramp, open for the Designer (build 215's C5: tests/type-ramp.test.js lists them).
+export const CAMERA_TYPE = { hint: { px: 46, canvas: [512, 64], h: 0.00625 }, lens: { px: 28, canvas: [128, 48], h: 0.006 } };
+
 function makeHint() {
 	const { canvas, texture } = canvasTexture(512, 64);
 	const mesh = new THREE.Mesh(new THREE.PlaneGeometry(0.05, 0.00625), new THREE.MeshBasicMaterial({ map: texture, transparent: true, toneMapped: false }));
@@ -219,7 +222,7 @@ function makeHint() {
 			if (!canvas) return;
 			const ctx = canvas.getContext('2d');
 			ctx.clearRect(0, 0, 512, 64);
-			ctx.fillStyle = COLOURS.primary; ctx.font = `700 46px ${GUIDE.font}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+			ctx.fillStyle = COLOURS.primary; ctx.font = `700 ${CAMERA_TYPE.hint.px}px ${GUIDE.font}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
 			ctx.fillText(text, 256, 34);
 			texture.needsUpdate = true;
 		},
@@ -239,7 +242,7 @@ function makeLabel() {
 			ctx.clearRect(0, 0, 128, 48);
 			ctx.fillStyle = 'rgba(29,35,41,0.7)';
 			ctx.beginPath(); ctx.roundRect(0, 0, 128, 48, 12); ctx.fill();
-			ctx.fillStyle = COLOURS.cell; ctx.font = `600 28px ${FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+			ctx.fillStyle = COLOURS.cell; ctx.font = `600 ${CAMERA_TYPE.lens.px}px ${FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
 			ctx.fillText(text, 64, 25);
 			texture.needsUpdate = true;
 		},

@@ -302,8 +302,17 @@ test('the levels stack beside the doors: one key per level, ground at the bottom
 	assert.deepEqual([0, 1].map((i) => [key(i).spec.id, key(i).spec.look, key(i).spec.label, key(i).group.visible]), [['level:0', 'plain', 'Ground floor', true], ['level:1', 'chosen', 'First floor', true]], 'the top key means all levels');
 	assert.ok(key(0).group.position.y < key(1).group.position.y, 'ground at the bottom');
 	assert.ok(key(0).group.position.x < inn.group.position.x - inn.w / 2 - 0.1 && Math.abs(key(0).group.position.x - key(1).group.position.x) < 1e-9, 'a stack to the left of Walk in, where it was');
-	assert.ok(Math.abs(key(0).group.position.x + 0.30) < 1e-9 && Math.abs(inn.group.position.x - 0.065) < 1e-9, 'the stack 30 cm left (within 45° of neck turn: the Designer, 26 Nov), Walk in where it was');
-	assert.deepEqual([key(0).w, key(0).h], [0.08, 0.04]);
+	const gap = (inn.group.position.x - inn.w / 2) - (key(0).group.position.x + key(0).w / 2);
+	assert.ok(Math.abs(key(0).group.position.x - key(0).w / 2 + 0.355) < 1e-9 && gap >= 0.12 - 1e-9 && Math.abs(inn.group.position.x - 0.065) < 1e-9, `the stack's left edge 35.5 cm left, where 11 cm keys round 30 cm put it (within 45° of neck turn), its widest keys growing towards Walk in, 12 cm or more from it (${(gap * 100).toFixed(1)} cm; build 215, C5), Walk in where it was`);
+	assert.deepEqual([+key(0).w.toFixed(3), key(0).h, +key(1).w.toFixed(3)], [0.14, 0.05, 0.14], 'level keys 5 cm tall, one width for the stack: "Ground floor" at 1.4° needs 14 cm (build 215, C5)');
+	// Another home, more than six levels with short names: the keys made again, 11 x 4 cm.
+	const names = x.model.storeyNames, storeys = x.model.storeys;
+	x.model.storeys = 7; x.model.storeyNames = Array.from({ length: 7 }, (_, i) => `Level ${i}`); d.buildLevels();
+	assert.ok([...Array(7).keys()].every((i) => Math.abs(key(i).w - 0.11) < 1e-9 && key(i).h === 0.04 && key(i).group.visible && key(i).face.geometry.parameters.height === 0.04), 'seven levels: 11 x 4 cm keys, made again');
+	assert.ok(key(0).group.position.y < key(6).group.position.y);
+	assert.ok(Math.abs(key(0).group.position.x - key(0).w / 2 + 0.355) < 1e-9, 'the same left edge with 11 cm keys');
+	x.model.storeys = storeys; x.model.storeyNames = names; d.buildLevels();
+	assert.ok(Math.abs(key(0).w - 0.14) < 1e-6 && !key(2).group.visible, 'back to two: 14 cm again, the others hidden');
 	assert.ok(d.levelTitle.mesh.visible && d.levelTitle.text === 'Levels');
 	x.menuAction({ id: 'levels', value: 0 });
 	assert.equal(x.maxStorey, 0);
@@ -1895,7 +1904,7 @@ test('harmony, conflict 13: no wing corner within 5° of the house as seen (its 
 	console.log(`The controllers' wing at the scale model: ${caps.join('; ')}`);
 });
 
-test('the plinth keys (step 1.2; the Designer\'s fix, 26 Nov): within laser reach, at most 60° below the eye line and 45° of neck turn, and at least 2° under the line to the model\'s near edge, in all three homes', async () => {
+test('the plinth keys (step 1.2; the Designer\'s fix, 26 Nov): within laser reach, at most 60° below the eye line and 45° of neck turn, and every key\'s top edge at least 2° under the line to the model\'s near edge, in all three homes', async () => {
 	for (const name of ['example-home', 'pond-house', 'apartment']) {
 		const { x, frame } = await setup({ file: path.resolve(import.meta.dirname, `../examples/${name}.sh3d`) });
 		for (let i = 0; i < 4; i++) frame();
@@ -1906,7 +1915,8 @@ test('the plinth keys (step 1.2; the Designer\'s fix, 26 Nov): within laser reac
 		const rows = [];
 		for (const [slot, k] of keys) {
 			const p = k.group.getWorldPosition(new THREE.Vector3()), to = p.clone().sub(eye);
-			const below = THREE.MathUtils.radToDeg(Math.atan2(-to.y, Math.hypot(to.x, to.z))), side = THREE.MathUtils.radToDeg(Math.atan2(to.x, -to.z));
+			const top = k.group.localToWorld(new THREE.Vector3(0, k.h / 2, 0)).sub(eye); // (its top edge: the whole key stays under the line, build 215's C5 with its 11 x 5 cm level keys)
+			const below = THREE.MathUtils.radToDeg(Math.atan2(-to.y, Math.hypot(to.x, to.z))), topBelow = THREE.MathUtils.radToDeg(Math.atan2(-top.y, Math.hypot(top.x, top.z))), side = THREE.MathUtils.radToDeg(Math.atan2(to.x, -to.z));
 			rows.push(`${slot} ${to.length().toFixed(2)} m, ${below.toFixed(0)}° down, ${side.toFixed(0)}° across`);
 			assert.ok(to.length() < 1.5, `${name} ${slot}: ${to.length().toFixed(2)} m from the eyes, well inside the 5 m laser`);
 			assert.ok(below <= 60.5 && Math.abs(side) <= 45, `${name} ${slot}: within the handbook's limits (${rows.at(-1)})`);
@@ -1915,8 +1925,8 @@ test('the plinth keys (step 1.2; the Designer\'s fix, 26 Nov): within laser reac
 			const ray = new THREE.Ray(new THREE.Vector3(eye.x, box.min.y + 1e-4, eye.z), dir), hit = ray.intersectBox(box, new THREE.Vector3());
 			if (hit) {
 				const edge = THREE.MathUtils.radToDeg(Math.atan2(eye.y - box.min.y, Math.hypot(hit.x - eye.x, hit.z - eye.z)));
-				rows[rows.length - 1] += ` (the model's near edge ${edge.toFixed(1)}° down)`;
-				assert.ok(below >= edge + 2, `${name} ${slot}: under the line to the model's near edge (${rows.at(-1)})`);
+				rows[rows.length - 1] += ` (its top ${topBelow.toFixed(1)}° down, the model's near edge ${edge.toFixed(1)}° down)`;
+				assert.ok(topBelow >= edge + 2, `${name} ${slot}: under the line to the model's near edge (${rows.at(-1)})`);
 			}
 		}
 		console.log(`# ${name}: ${rows.join('; ')}`);

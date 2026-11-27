@@ -40,7 +40,8 @@ export const KEYS = {
 	REST: 0.6, // their strength at rest; full while a tip is within reach
 	YIELD: { scale: 0.5, opacity: 0.3 }, // making room
 	LOST_HOLD: 1, LOST_FADE: 0.2, // tracking lost: they stay, then fade (s)
-	TAKE: { hand: 0.07, controller: 0.05 }, // a tip this near a tool in the fan is on it (the fan's take distance)
+	TAKE: { hand: 0.07, controller: 0.05 },
+	TYPE: { readAt: 0.45, label: [1.4, 1.8], fit: 0.8 }, // the words, as the options row's (build 215's C5; js/tool-dial.js DIAL.TYPE) // a tip this near a tool in the fan is on it (the fan's take distance)
 };
 
 /**
@@ -62,7 +63,7 @@ export class WristMenu {
 		this.group = new THREE.Group();
 		this.group.name = 'hand-keys';
 		this.group.visible = false;
-		this.pad = new KeyPad(xr, 'hand-key');
+		this.pad = new KeyPad(xr, 'hand-key', KEYS.TYPE);
 		this.keys = { back: this.pad.add('back', WRIST.key, WRIST.key, { round: true }), settings: this.pad.add('settings', WRIST.key, WRIST.key, { round: true }) };
 		for (const k of Object.values(this.keys)) this.group.add(k.group);
 		this.holder = null; // the input entry they float over, while tracked

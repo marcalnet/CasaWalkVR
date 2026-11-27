@@ -16,18 +16,20 @@
 
 import * as THREE from 'three';
 import { canvasTexture } from './canvas-card.js';
-import { FONT, COLOURS, BADGE, LABEL, PLATE } from './theme.js';
+import { FONT, COLOURS, BADGE, LABEL, PLATE, WRIST } from './theme.js';
 
 const PX_PER_M = 1024; // canvas pixels per metre of panel
 // The spacing a board is laid out with (canvas px): a wing no taller than 34 cm, its top within 10° of eye level
 // (the interaction harmony's conflict 13): the title and the close line share one header row, rows of 66 px
 // (4.5 cm with their gap), option segments exactly 4 cm tall (inset 4 px).
-const L = { PAD: 16, GAP: 6, ROW_H: 66, TITLE_H: 38, TAB_H: 60, TAB_GAP: 8, INSET: 4, titleFont: 28 };
+const L = { PAD: 16, GAP: 6, ROW_H: 66, TITLE_H: 38, TAB_H: 60, TAB_GAP: 8, INSET: 4, titleFont: 30 }; // (titleFont: 1.1° at 0.75 m, the controllers' wing: build 215's C5)
 const TAB = '#tab'; // a click target's id for a tab (its value is the tab's id)
 export const HINT_PX = { max: 22, min: 18 }; // the close line's size (canvas px at the board's px/m): never shrunk below 18 (the legibility floor)
 const SWITCH_W = 96, SWITCH_H = 52;
 const LABEL_PX = 32; // a row's label (canvas px), at most: fitted down when it would not fit
 const SWITCH_LABEL_MIN = 26; // px: a switch label smaller than this goes onto two lines instead
+// Every size a board's words are drawn at (canvas px, at most and at least: fitted between), for tests/type-ramp.test.js.
+export const PANEL_TYPE = { title: L.titleFont, hint: HINT_PX, row: { max: LABEL_PX, min: 20 }, switchRow: { min: 16 }, tab: { max: 32, min: 18 }, button: { max: 36, min: 22 }, note: { max: 28, min: 18 } };
 
 export class Panel {
 	/**
@@ -193,7 +195,7 @@ export class Panel {
 			if (on || hot) { ctx.lineWidth = hot ? 4 : 2; ctx.strokeStyle = hot ? COLOURS.hoverEdge : COLOURS.edge; ctx.stroke(); }
 			ctx.fillStyle = on ? COLOURS.tabActiveText : COLOURS.tabText;
 			ctx.textAlign = 'center';
-			fitFont(ctx, t.label, t.w - 24, 32, 18, on ? 700 : 500);
+			fitFont(ctx, t.label, t.w - 24, PANEL_TYPE.tab.max, PANEL_TYPE.tab.min, on ? 700 : 500);
 			ctx.fillText(t.label, t.x + t.w / 2, t.y + t.h / 2 + 2);
 			ctx.textAlign = 'left';
 		}
@@ -210,7 +212,7 @@ export class Panel {
 			if (!c.disabled) { ctx.lineWidth = hot ? 5 : 2; ctx.strokeStyle = hot ? COLOURS.hoverEdge : COLOURS.edge; ctx.stroke(); }
 			ctx.fillStyle = c.disabled ? COLOURS.offText : COLOURS.text;
 			ctx.textAlign = 'center';
-			fitFont(ctx, c.label, b.w - 32, 36, 22, 500);
+			fitFont(ctx, c.label, b.w - 32, PANEL_TYPE.button.max, PANEL_TYPE.button.min, 500);
 			ctx.fillText(c.label, b.x + b.w / 2, b.y + b.h / 2 + 2);
 			ctx.textAlign = 'left';
 			return;
@@ -226,7 +228,7 @@ export class Panel {
 		ctx.fillStyle = c.disabled ? COLOURS.offText : COLOURS.text;
 		if (c.type === 'switch') this.drawSwitchLabel(ctx, b, c.label);
 		else {
-			fitFont(ctx, c.label, this.labelWidth(b) - 36, this.labelPx, 20, 500);
+			fitFont(ctx, c.label, this.labelWidth(b) - 36, this.labelPx, PANEL_TYPE.row.min, 500);
 			this.labelSizes.set(c.label, { px: parseInt(ctx.font.split(' ')[1], 10), lines: 1 });
 			ctx.fillText(c.label, b.x + 24, b.y + b.h / 2 + 2);
 		}
@@ -236,7 +238,7 @@ export class Panel {
 				const room = b.w - Math.min(this.labelWidth(b) - 36, ctx.measureText(c.label).width) - 72;
 				ctx.fillStyle = COLOURS.offText;
 				ctx.textAlign = 'right';
-				fitFont(ctx, c.note, room, 28, 18, 500);
+				fitFont(ctx, c.note, room, PANEL_TYPE.note.max, PANEL_TYPE.note.min, 500);
 				ctx.fillText(c.note, b.x + b.w - 24, b.y + b.h / 2 + 2);
 				ctx.textAlign = 'left';
 			}
@@ -258,7 +260,7 @@ export class Panel {
 		fitFont(ctx, label, room, this.labelPx, SWITCH_LABEL_MIN - 1, 500);
 		const words = label.split(' ');
 		if (ctx.measureText(label).width <= room || words.length < 2) {
-			if (ctx.measureText(label).width > room) fitFont(ctx, label, room, this.labelPx, 16, 500);
+			if (ctx.measureText(label).width > room) fitFont(ctx, label, room, this.labelPx, PANEL_TYPE.switchRow.min, 500);
 			this.labelSizes.set(label, { px: parseInt(ctx.font.split(' ')[1], 10), lines: 1 });
 			ctx.fillText(label, x, cy);
 			return;
@@ -374,13 +376,21 @@ function roundRect(ctx, x, y, w, h, r) {
 // Lines are { text, small? }.
 // ---------------------------------------------------------------------------
 
-const NOTE_W = 1300;
+export const NOTE_W = 1300;
 
 export class NoteCard {
-	constructor(title, lines, { width = 0.62 } = {}) {
+	/**
+	 * width: metres. The sizes (canvas px, NOTE_W across the width): titlePx
+	 * and titleFont ('ui', or 'kalam': hand-lettered, bold), smallPx (a small
+	 * line) and linePx (a plain line), each fitted down to the card's width,
+	 * never under minPx. The rows grow with their type (build 215's C5: the
+	 * photo note's are sized in degrees, js/xr-ui.js).
+	 */
+	constructor(title, lines, { width = 0.62, titlePx = 64, titleFont = 'ui', smallPx = 34, linePx = 46, minPx = 20 } = {}) {
 		this.title = title;
 		this.lines = lines;
-		const h = 150 + lines.reduce((n, l) => n + (l.small ? 64 : 92), 0) + 40;
+		this.type = { titlePx, titleFont, smallPx, linePx, minPx };
+		const h = Math.round(150 * titlePx / 64 + lines.reduce((n, l) => n + this.rowH(l), 0) + 40);
 		this.size = { w: NOTE_W, h };
 		({ canvas: this.canvas, texture: this.texture } = canvasTexture(NOTE_W, h));
 		// Drawn over everything, so the model never hides it.
@@ -388,13 +398,17 @@ export class NoteCard {
 			new THREE.MeshBasicMaterial({ map: this.texture, transparent: true, toneMapped: false, depthTest: false }));
 		this.mesh.name = 'note-card';
 		this.mesh.renderOrder = 11;
+		this.drawn = []; // each line's size as last drawn (canvas px; the tests read it)
 		this.draw();
 	}
+
+	/** A line's row height (canvas px): as before at the old sizes, growing with the type. */
+	rowH(l) { return l.small ? Math.round(64 * this.type.smallPx / 34) : Math.round(92 * this.type.linePx / 46); }
 
 	draw() {
 		if (!this.canvas) return;
 		const ctx = this.canvas.getContext('2d');
-		const { w, h } = this.size;
+		const { w, h } = this.size, t = this.type, k = t.titlePx / 64;
 		ctx.clearRect(0, 0, w, h);
 		roundRect(ctx, 0, 0, w, h, 48);
 		ctx.fillStyle = 'rgba(255,255,255,0.96)';
@@ -404,17 +418,19 @@ export class NoteCard {
 		ctx.stroke();
 		ctx.textBaseline = 'middle';
 		ctx.fillStyle = '#1d2329';
-		ctx.font = `700 64px ${FONT}`;
-		ctx.fillText(this.title, 60, 92);
-		let y = 150;
+		ctx.font = t.titleFont === 'kalam' ? `700 ${t.titlePx}px ${WRIST.labelFont}` : `700 ${t.titlePx}px ${FONT}`;
+		ctx.fillText(this.title, 60, Math.round(92 * k));
+		let y = Math.round(150 * k);
+		this.drawn = [];
 		for (const l of this.lines) {
-			const rowH = l.small ? 64 : 92;
+			const rowH = this.rowH(l);
 			const x = 60;
 			ctx.fillStyle = l.small ? '#5d6873' : '#1d2329';
-			let px = l.small ? 34 : 46;
+			let px = l.small ? t.smallPx : t.linePx;
 			do ctx.font = `${l.small ? 400 : 500} ${px}px ${FONT}`;
-			while (ctx.measureText(l.text).width > w - x - 60 && --px > 20);
+			while (ctx.measureText(l.text).width > w - x - 60 && --px > t.minPx);
 			ctx.fillText(l.text, x, y + rowH / 2 + 2);
+			this.drawn.push(px);
 			y += rowH;
 		}
 		this.texture.needsUpdate = true;
@@ -427,17 +443,19 @@ export class NoteCard {
 // over everything; redrawn only when its text changes.
 // ---------------------------------------------------------------------------
 
-const LABEL_W = 768, LABEL_H = 112; // canvas pixels
+export const LABEL_W = 768, LABEL_H = 112; // canvas pixels
 
 export class Label {
 	/**
 	 * height: metres, of the whole label (the pill around the text). px: a fixed
 	 * type size (canvas px, never shrunk: the pause's tips); without it the text
-	 * fits the label, 58 px down to 30.
+	 * fits the label, 58 px down to 30. font: 'ui' (the interface font) or
+	 * 'kalam' (hand-lettered, bold: the tools' name tags, build 215's C5).
 	 */
-	constructor({ height = 0.05, px = null } = {}) {
+	constructor({ height = 0.05, px = null, font = 'ui' } = {}) {
 		this.text = '';
 		this.px = px;
+		this.font = font;
 		this.width = 0; // the pill's width now (m)
 		this.fits = true; // false if the text is wider than the label can show (a fixed size never shrinks)
 		({ canvas: this.canvas, texture: this.texture } = canvasTexture(LABEL_W, LABEL_H));
@@ -460,7 +478,7 @@ export class Label {
 		const ctx = this.canvas.getContext('2d');
 		ctx.clearRect(0, 0, LABEL_W, LABEL_H);
 		if (!this.text) return;
-		if (this.px) ctx.font = `${LABEL.weight} ${this.px}px ${FONT}`;
+		if (this.px) ctx.font = this.font === 'kalam' ? `700 ${this.px}px ${WRIST.labelFont}` : `${LABEL.weight} ${this.px}px ${FONT}`;
 		else fitFont(ctx, this.text, LABEL_W - 80, 58, 30, LABEL.weight); // (sets ctx.font)
 		const need = ctx.measureText(this.text).width + 64, w = Math.min(LABEL_W - 8, need);
 		this.fits = need <= LABEL_W - 8;

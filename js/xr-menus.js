@@ -21,7 +21,7 @@ import { SETTINGS, writeSetting } from './settings.js';
 import { BOARD } from './theme.js';
 import { drawGuide } from './guide.js';
 
-const BOARD_PX_PER_M = 1450; // canvas pixels per metre: a row of 80 px is 5.5 cm
+export const BOARD_PX_PER_M = 1450; // canvas pixels per metre: a row of 80 px is 5.5 cm
 const TIME_LABELS = { morning: 'Morning', noon: 'Noon', sunset: 'Sunset', night: 'Night' };
 const HEIGHTS = SETTINGS.height.options; // person height, metres (0 = your own)
 // Transparent walls (called See-through until the user's bare-hands test: too

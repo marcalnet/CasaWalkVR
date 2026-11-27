@@ -27,14 +27,18 @@ import { Measurements, readingParts, formatLength, defaultUnits } from './measur
 import { readSetting, writeSetting } from './settings.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { COLOURS, FONT } from './theme.js';
+import { RAMP, pxFor } from './type-ramp.js';
 
 const REACH = 20; // metres: the laser's reach (in the world)
 const LINE_R = 0.002; // metres, to the eye: a measuring line's radius
-const LABEL_H = 0.20; // metres, to the eye, at 1:1 (a label's height: 5x, build 215's C4)
+// The screen (build 215's C4): 256 x 480 px over 3.2 x 6.0 cm, read from about 0.45 m; its unit never under the label's 0.6° (C5).
+export const SCREEN = { W: 256, H: 480, size: [0.032, 0.060], readAt: 0.45 };
+SCREEN.unitMin = pxFor(RAMP.label, 'ui', SCREEN.size[1] / SCREEN.H, SCREEN.readAt);
+export const LABEL_H = 0.20; // metres, to the eye, at 1:1 (a label's height: 5x, build 215's C4)
 const LABEL_LIFT = 0.10; // metres, to the eye: a label's lower edge over its line's middle, never on it
 const DASH = { on: 0.02, off: 0.01, opacity: 0.5, MAX: 400 }; // the dashed line to the dot (to the eye): 2 cm on, 1 cm off, half strength
 const BEAM = 0xe5484d, LINE = 0xe07a1f; // red laser; the measured lines in the orange accent
-const LABEL_SLOTS = 32, SLOT = [256, 80], ATLAS = [1024, 640]; // the labels' shared picture: 4 x 8 slots
+export const LABEL_SLOTS = 32, SLOT = [256, 80], ATLAS = [1024, 640]; // the labels' shared picture: 4 x 8 slots
 
 export class LaserMeter {
 	/** xr: the XRExperience. */
@@ -328,9 +332,9 @@ class LabelLayer {
  * 256 x 480 px, mipmapped.
  */
 function makeScreen() {
-	const W = 256, H = 480;
+	const { W, H } = SCREEN;
 	const { canvas, texture } = canvasTexture(W, H);
-	const mesh = new THREE.Mesh(new THREE.PlaneGeometry(0.032, 0.060), new THREE.MeshBasicMaterial({ map: texture, color: texture ? 0xffffff : 0x5d6873, toneMapped: false }));
+	const mesh = new THREE.Mesh(new THREE.PlaneGeometry(...SCREEN.size), new THREE.MeshBasicMaterial({ map: texture, color: texture ? 0xffffff : 0x5d6873, toneMapped: false }));
 	mesh.name = 'meter-screen';
 	let last = '';
 	return {
@@ -345,9 +349,10 @@ function makeScreen() {
 			let px = 150;
 			do ctx.font = `700 ${px}px ${FONT}`; while (ctx.measureText(value).width > W * 30 / 32 && --px > 40);
 			ctx.fillStyle = '#e8f4e8'; ctx.fillText(value, W / 2, H * 0.42);
-			ctx.fillStyle = '#9fb3a5'; ctx.font = `600 ${Math.round(px * 0.6)}px ${FONT}`; ctx.fillText(unit, W / 2, H * 0.42 + px * 0.95);
+			const unitPx = Math.max(Math.round(px * 0.6), SCREEN.unitMin); // (60% of the value, never under the label's 0.6°: a long "12' 4½\"" made "ft in" 0.47°, build 215's C5)
+			ctx.fillStyle = '#9fb3a5'; ctx.font = `600 ${unitPx}px ${FONT}`; ctx.fillText(unit, W / 2, H * 0.42 + px * 0.95);
 			texture.needsUpdate = true;
-			this.px = px; // (the value's size: the tests read it)
+			this.px = px; this.unitPx = unitPx; // (the sizes drawn: the tests read them)
 		},
 	};
 }

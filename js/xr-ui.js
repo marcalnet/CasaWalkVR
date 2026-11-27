@@ -23,7 +23,8 @@
 // 'ui'), so the mode leaves those alone.
 
 import * as THREE from 'three';
-import { NoteCard, Label } from './panel.js';
+import { NoteCard, Label, NOTE_W } from './panel.js';
+import { RAMP, pxFor } from './type-ramp.js';
 import { BUILD } from './version.js';
 import { buildLabel } from './build-label.js';
 import { headHeading } from './xr-dollhouse.js';
@@ -40,19 +41,32 @@ const KEEP_CLEAR = CLAIM.near; // a press with the hand this near a live key, th
 
 // The note after a photo. Photos are kept in the app and saved from the page
 // after VR (a download in VR would end the session).
-const PHOTO_TEXT = {
-	kept: { title: 'Nice shot!', line: 'It waits on the page for when you leave VR.' },
-	full: { title: 'Nice shot!', line: 'Only the last 50 are kept: the oldest made room.' },
+export const PHOTO_TEXT = {
+	kept: { title: 'Nice shot!', line: 'It\'s on the page when you leave VR' }, // (one short line each: build 215's C5)
+	full: { title: 'Nice shot!', line: 'Only the last 50 are kept' },
 	failed: { title: 'The photo didn\'t work', line: 'Try again, or use the Quest\'s own screenshot.' },
 };
 
+/**
+ * Where the photo note shows (in front of the eyes) and its type, in degrees
+ * at that distance (build 215's C5, js/type-ramp.js): the title hand-lettered
+ * at 1.4°, its line at 0.9°, a longer one (the failed photo) fitted down to
+ * no less than the body's 0.7°.
+ */
+export const NOTES = { hands: { width: 0.6, at: [0, -0.08, -0.85] }, error: { width: 0.6, at: [0, -0.05, -0.8] } }; // the other notes: width (m), where in front of the eyes
+export const PHOTO_NOTE = { width: 0.34, at: [0, -0.16, -0.7], title: RAMP.kalam, line: 0.9 };
+export function photoNoteType() {
+	const m = PHOTO_NOTE.width / NOTE_W, d = Math.hypot(...PHOTO_NOTE.at), line = pxFor(PHOTO_NOTE.line, 'ui', m, d);
+	return { width: PHOTO_NOTE.width, titleFont: 'kalam', titlePx: pxFor(PHOTO_NOTE.title, 'kalam', m, d), smallPx: line, minPx: pxFor(RAMP.body, 'ui', m, d) };
+}
+
 // The note while the Quest reports bare hands (milestone C0.1): their pinches
 // do nothing until hands are supported (C0), so it says what will work.
-const HANDS_TEXT = { title: 'Pick up your controllers', line: 'This headset gives no hand tracking to CasaWalk.' };
+export const HANDS_TEXT = { title: 'Pick up your controllers', line: 'This headset gives no hand tracking to CasaWalk.' };
 
 // The safety net's card (js/safety.js): calm, honest, and always a way out.
-const LABEL_PX_LASER = Math.round(32 * 1.15); // the controllers' wing: row labels 15% larger (it may sit up to 0.75 m away)
-const ERROR_TEXT = {
+export const LABEL_PX_LASER = Math.round(32 * 1.15); // the controllers' wing: row labels 15% larger (it may sit up to 0.75 m away)
+export const ERROR_TEXT = {
 	title: 'Something went wrong',
 	line: '\u2190 Back returns to the page. The Meta button always leaves VR.',
 	ending: 'Returning to the page\u2026',
@@ -83,18 +97,18 @@ export class XRUI {
 
 	/** The "Pick up your controllers" note, a little below eye level, in front of you. */
 	buildHandsNote() {
-		this.handsNote = new NoteCard(HANDS_TEXT.title, [{ small: true, text: HANDS_TEXT.line }], { width: 0.6 });
+		this.handsNote = new NoteCard(HANDS_TEXT.title, [{ small: true, text: HANDS_TEXT.line }], { width: NOTES.hands.width });
 		this.handsNote.mesh.name = 'hands-note';
-		this.handsNote.mesh.position.set(0, -0.08, -0.85);
+		this.handsNote.mesh.position.fromArray(NOTES.hands.at);
 		this.handsNote.mesh.visible = false;
 		this.xr.camera.add(this.handsNote.mesh);
 	}
 
 	/** The safety net's card, in front of you at eye level, over everything (it must show even when the world is broken). */
 	buildErrorNote() {
-		this.errorNote = new NoteCard(ERROR_TEXT.title, [{ small: true, text: ERROR_TEXT.line }], { width: 0.6 });
+		this.errorNote = new NoteCard(ERROR_TEXT.title, [{ small: true, text: ERROR_TEXT.line }], { width: NOTES.error.width });
 		this.errorNote.mesh.name = 'error-note';
-		this.errorNote.mesh.position.set(0, -0.05, -0.8);
+		this.errorNote.mesh.position.fromArray(NOTES.error.at);
 		this.errorNote.mesh.renderOrder = 1004; // (over the veil round the eyes, 1002, and the ?stats line, 1003)
 		this.errorNote.mesh.visible = false;
 		this.xr.camera.add(this.errorNote.mesh);
@@ -117,8 +131,8 @@ export class XRUI {
 	/** Photo feedback: a short white flash (the veil, js/veil.js), and a note in front of you for a few seconds. */
 	buildPhotoFeedback() {
 		const camera = this.xr.camera;
-		this.photoNote = new NoteCard(PHOTO_TEXT.kept.title, [{ small: true, text: PHOTO_TEXT.kept.line }], { width: 0.34 });
-		this.photoNote.mesh.position.set(0, -0.16, -0.7);
+		this.photoNote = new NoteCard(PHOTO_TEXT.kept.title, [{ small: true, text: PHOTO_TEXT.kept.line }], photoNoteType());
+		this.photoNote.mesh.position.fromArray(PHOTO_NOTE.at);
 		this.photoNote.mesh.visible = false;
 		camera.add(this.photoNote.mesh);
 		this.photoFx = null; // { t, error }
