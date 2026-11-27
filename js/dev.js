@@ -10,12 +10,13 @@
 //   ?sw       the service worker on plain http (local testing; https always has it)
 //   ?worker   OBJ models read in a worker (js/obj-worker.js): off until measured on a Quest 2
 //   ?tips     a pause on every move between places, cycling through every tip, never retiring one (js/pause.js)
+//   ?tipwait  a tip waits for a press ("Pinch to go on"), with a Skip tips key: the draft the user tries (build 215's C9, js/pause.js)
 // Pure: devFlags() reads any address, so it runs in Node tests.
 
 /** The switches in a page address's search part ('?hands&stats', ...). */
 export function devFlags(search = '') {
 	const p = new URLSearchParams(search);
-	return { test: p.has('test'), hands: p.has('hands'), stats: p.has('stats'), nomerge: p.has('nomerge'), nofold: p.has('nofold'), sw: p.has('sw'), worker: p.has('worker'), tips: p.has('tips') };
+	return { test: p.has('test'), hands: p.has('hands'), stats: p.has('stats'), nomerge: p.has('nomerge'), nofold: p.has('nofold'), sw: p.has('sw'), worker: p.has('worker'), tips: p.has('tips'), tipwait: p.has('tipwait') };
 }
 
 /** The switches of this page (all off outside a browser). */

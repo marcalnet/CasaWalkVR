@@ -7,6 +7,7 @@
 // remembered: js/settings.js, scope 'remembered'.)
 //
 //   tips     the pause's tips seen and learnt (keys 'id:kind': js/pause.js)
+//   tipsOff  ?tipwait's Skip tips was pressed: no more tips this session
 //   target   the first-target ring was shown inside
 //   cycle    ?tips: the next tip in turn
 //   cued     the tools whose control-part ring pulsed (the first take)
@@ -20,6 +21,7 @@ export class SessionStore {
 	/** A fresh session: Enter VR. */
 	start() {
 		this.tips = { seen: new Set(), learnt: new Set() };
+		this.tipsOff = false;
 		this.target = false;
 		this.cycle = 0;
 		this.tabs = {};

@@ -372,9 +372,9 @@ test('the pause, pure: which tip (in order, once a session, per input kind), rea
 	assert.ok(land && Math.abs(land.y) < 1e-9 && land.z < -1, `the practice arc lands ahead on the floor (${land?.z.toFixed(2)} m)`);
 });
 
-test('the pause: Walk in with a tip (the dark, the floor ring, the room\'s name, the tip, the hand); 3.5 s shown; ← Back: the grab tip; none left: a plain fade', async () => {
+test('the pause: Walk in with a tip (the dark, the floor ring, the room\'s name, the tip, the hand); shown for its words (build 215, C9); ← Back: the grab tip; none left: a plain fade', async () => {
 	const { x, frame } = await setup();
-	const P = x.pause, { PAUSE } = await import('../js/pause.js');
+	const P = x.pause, { PAUSE, tipTime } = await import('../js/pause.js');
 	P.tipsOn = true;
 	frame();
 	x.menuAction('in');
@@ -387,8 +387,9 @@ test('the pause: Walk in with a tip (the dark, the floor ring, the room\'s name,
 	assert.ok(P.demo.playing || !P.demo.hands, 'the looping demonstration');
 	const t0 = n;
 	for (; n < 1400 && P.fx?.pause && !P.fx.pause.ending; n++) frame();
-	const shown = (n - t0) / 72;
-	assert.ok(shown >= PAUSE.TIP_IN + PAUSE.SHOWN - 0.05 && shown < PAUSE.TIP_IN + PAUSE.SHOWN + 0.2, `shown ${shown.toFixed(2)} s (fade in, then 3.5 s)`);
+	const shown = (n - t0) / 72, want = tipTime(p.tip.controllers, x.roomHere());
+	assert.ok(Math.abs(p.shownFor - want) < 1e-9 && want >= PAUSE.SHOWN_MIN, `its time from its words and the room's name: ${want.toFixed(1)} s`);
+	assert.ok(shown >= PAUSE.TIP_IN + want - 0.05 && shown < PAUSE.TIP_IN + want + 0.2, `shown ${shown.toFixed(2)} s (fade in, then ${want.toFixed(1)} s)`);
 	for (let i = 0; i < 200 && P.fx; i++) frame();
 	assert.ok(!P.fx && x.veil.amount('layer') === 0 && !P.group.visible && !P.floor.visible, 'then the room fades in');
 	assert.ok(P.target.visible, 'the first time inside: the first-target ring ahead');
@@ -402,7 +403,7 @@ test('the pause: Walk in with a tip (the dark, the floor ring, the room\'s name,
 	assert.equal(P.fx?.pause?.tip.id, 'turn', 'the next Walk in: the next tip');
 });
 
-test('the pause: practising the teleport (hold the trigger, an arc onto the floor ring, let go) ends it at once and learns it; a quick pull after 0.8 s only skips', async () => {
+test('the pause: practising the teleport (hold the trigger, an arc onto the floor ring, let go) ends it at once and learns it; a quick pull only skips, from 2.0 s (build 215, C9)', async () => {
 	const { x, frame, press } = await setup();
 	const P = x.pause;
 	P.tipsOn = true;
@@ -420,7 +421,7 @@ test('the pause: practising the teleport (hold the trigger, an arc onto the floo
 	assert.ok(P.fx?.pause?.ending?.learnt, 'let go: the tip ends at once, learnt');
 	assert.ok(P.record.tips.learnt.has('teleport:controllers'));
 	for (let i = 0; i < 200 && P.fx; i++) frame();
-	// Enter VR: the dark from the first frame, the walk-in tip; a quick pull before 0.8 s does nothing, after it skips.
+	// Enter VR: the dark from the first frame, the walk-in tip; a quick pull before 2.0 s does nothing, after it skips.
 	x.store.start(); P.enter(); // (as Enter VR does: a fresh session)
 	assert.ok(P.fx.pause && !P.fx.pause.tip && x.veil.amount('layer') === 1 && !P.group.visible, 'Enter VR: the dark from the first frame, no tip before the head has a pose (the audit\'s B1)');
 	frame(); frame();
@@ -436,7 +437,10 @@ test('the pause: practising the teleport (hold the trigger, an arc onto the floo
 	assert.ok(!P.fx.pause.ending, 'too soon to skip');
 	for (let i = 0; i < 72; i++) frame();
 	press('right', 'trigger'); frame(); press('right', 'trigger', false); frame();
-	assert.ok(P.fx.pause.ending && !P.fx.pause.ending.learnt, 'after 0.8 s: skipped, seen, not learnt');
+	assert.ok(!P.fx.pause.ending, 'at 1 s: still too soon (a hand already moving can\'t skip it unseen)');
+	for (let i = 0; i < 72; i++) frame();
+	press('right', 'trigger'); frame(); press('right', 'trigger', false); frame();
+	assert.ok(P.fx.pause.ending && !P.fx.pause.ending.learnt, 'after 2.0 s: skipped, seen, not learnt');
 	for (let i = 0; i < 200 && P.fx; i++) frame();
 	assert.ok(!P.fx && x.veil.amount('layer') === 0, 'the room fades in');
 });
@@ -2229,3 +2233,46 @@ test('the main hand\'s keys never freeze on the way (the Tester\'s C8 finding): 
 	assert.ok(keys.yieldK < 0.05 && keys.keys.back.group.scale.x > 0.98, `the tip gone: full size again (${JSON.stringify({ k: keys.yieldK, to: keys.yieldTo, reach: keys.reach, s: keys.keys.back.group.scale.x, row: keys.rowYield, sight: keys.sightYield })})`);
 });
 
+test('a tip\'s time from its words (build 215, C9): 1.5 s + 0.4 s a word, the room\'s name counted in, never under 4.5 s; with ?tipwait it waits for a press from 1.0 s, and Skip tips turns the tips off for the session', async () => {
+	const { tipTime, PAUSE } = await import('../js/pause.js');
+	assert.equal(PAUSE.SHOWN_MIN, 4.5, 'one demonstration loop (3 s) + 1.5 s');
+	assert.ok(Math.abs(tipTime('Pinch, aim, let go to jump', 'Living room') - 4.7) < 1e-9, 'Walk in, 8 words: 4.7 s');
+	assert.equal(tipTime('Touch a wall: see through', 'Kitchen'), 4.5, '6 words: 3.9 s, raised to 4.5 s');
+	assert.equal(tipTime('Pinch a room, let go: walk in'), 4.5, 'Enter VR, 7 words: 4.3 s, raised to 4.5 s');
+	assert.ok(Math.abs(tipTime('one two three four five six seven eight nine ten') - 5.5) < 1e-9, '10 words: 5.5 s');
+	// ?tipwait: the tip never ends by itself; a press before 1.0 s does nothing, after it goes on.
+	const { x, frame, press } = await setup();
+	const P = x.pause;
+	P.tipsOn = true; P.tipWait = true;
+	frame();
+	x.menuAction('in');
+	for (let n = 0; n < 400 && !P.fx?.pause; n++) frame();
+	assert.ok(P.goOn.text === 'Trigger to go on' && P.skipKey.group.visible, 'the line under the tip, in the controllers\' words; the Skip tips key');
+	const g = P.goOn.mesh.geometry.parameters, cap = 0.72 * P.goOn.px * g.height / 112, deg = THREE.MathUtils.radToDeg(Math.atan(cap / PAUSE.AHEAD));
+	assert.ok(deg >= 1.0 && deg < 1.1, `"go on" at 1.0° (${deg.toFixed(2)}°)`);
+	const head = x.headWorld(), key = P.skipKey.group.getWorldPosition(new THREE.Vector3()), to = key.clone().sub(head);
+	const below = THREE.MathUtils.radToDeg(Math.atan2(-to.y, Math.hypot(to.x, to.z)));
+	assert.ok(Math.abs(to.length() - 0.55) < 0.01 && Math.abs(below - 35) < 1 && to.x > 0, `the key 0.55 m away, 35° down, on the right (${to.length().toFixed(2)} m, ${below.toFixed(0)}°)`);
+	press('right', 'trigger'); frame(); press('right', 'trigger', false); frame();
+	assert.ok(!P.fx.pause.ending, 'a press before 1.0 s: nothing');
+	for (let i = 0; i < 72 * 8; i++) frame();
+	assert.ok(P.fx?.pause && !P.fx.pause.ending, 'eight seconds on: still waiting');
+	press('right', 'trigger'); frame(); press('right', 'trigger', false); frame();
+	assert.ok(P.fx.pause.ending && !P.fx.pause.ending.learnt && !P.skipKey.group.visible, 'the press: it goes on');
+	for (let i = 0; i < 200 && P.fx; i++) frame();
+	// Back to the scale model: the grab tip waits; the Skip tips key ends it and no tip shows again this session.
+	x.menuAction('back');
+	for (let i = 0; i < 100 && !P.fx?.pause; i++) frame();
+	assert.equal(P.fx?.pause?.tip?.id, 'grab');
+	for (let i = 0; i < 20; i++) frame();
+	P.skipPad.update = () => ({ action: { id: 'skipTips' }, hot: new Set() }); // (as a fingertip pressing it: js/keys.js has its own tests)
+	frame();
+	delete P.skipPad.update;
+	assert.ok(P.fx.pause.ending && x.store.tipsOff, 'Skip tips: this pause ends, and the tips are off for the session');
+	for (let i = 0; i < 200 && P.fx; i++) frame();
+	x.menuAction('in');
+	for (let i = 0; i < 400 && x.mode !== 'walk'; i++) frame();
+	assert.ok(!P.fx?.pause?.tip, 'the next move: no tip');
+	x.store.start();
+	assert.equal(x.store.tipsOff, false, 'a new session: tips again');
+});

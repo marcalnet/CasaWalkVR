@@ -24,6 +24,17 @@
 // past 0.3 s does the wait show the void, the rings and the place's name (the
 // home's at Enter VR and ← Back, the room's at Walk in): never plain black.
 //
+// How long a tip shows (build 215's C9, the user's decision: Walk in was too
+// fast to read the tip): from its words, 1.5 s to find it and focus plus 0.4
+// s a word (about 150 a minute: careful reading, for a newcomer in VR), the
+// room's name counted in, and never less than one demonstration loop plus 1.5
+// s (4.5 s): tipTime(). Counted from the moment it is fully shown; it then ends
+// once the place is also ready. Doing the tip's move ends it from 0.8 s (it is
+// learnt); any other press only from 2.0 s, so a hand already moving can't
+// skip it unseen. With ?tipwait (js/dev.js), the draft to try: the tip waits
+// for a press ("Pinch to go on", taken from 1.0 s), and a Skip tips key, low
+// on your right, ends it and turns the tips off for the session.
+//
 // A tip is learnt once you have done its action (anywhere: note()); each
 // shows at most once a session, learnt or not; each Enter VR starts fresh
 // (nothing about tips is stored: the headset passes from person to person).
@@ -40,15 +51,22 @@ import { ease } from './tween.js';
 import { Label } from './panel.js';
 import { VOID } from './theme.js';
 import { TIPS } from './xr-menus.js';
-import { TipDemo } from './tip-demo.js';
+import { TipDemo, DEMO as TIP_DEMO } from './tip-demo.js';
+import { KeyPad } from './keys.js';
+import { RAMP, pxFor } from './type-ramp.js';
+import { LABEL_H } from './panel.js';
 import { handAimRay } from './gestures.js';
 import { DEV } from './dev.js';
 
 /** The pause's timings (seconds) and places (metres, degrees). */
 export const PAUSE = {
 	TIP_IN: 0.3, // the tip fades in, once the view is black
-	SHOWN: 3.5, // fully visible this long, it ends on its own (if the next place is ready)
-	SKIP_AFTER: 0.8, // a press (or the tip's own action) ends it from then on
+	SHOWN_BASE: 1.5, PER_WORD: 0.4, SHOWN_MIN: TIP_DEMO.LENGTH + 1.5, // a tip's time fully shown: 1.5 s + 0.4 s a word, at least a loop + 1.5 s (tipTime)
+	LEARN_AFTER: 0.8, // doing the tip's move ends it from then on (learnt)
+	SKIP_AFTER: 2.0, // any other press ends it from then on (build 215's C9: 0.8 s let a moving hand skip it unseen)
+	// ?tipwait (the draft): a press goes on from WAIT_AFTER; the line under the tip at 1.0°; the Skip tips key, 7 cm round,
+	// 0.55 m from the eyes, 35° below them, 25° to the right (beside the floor ring).
+	WAIT_AFTER: 1.0, GO_ON_DEG: 1.0, SKIP_KEY: { size: 0.07, dist: 0.55, below: 35, right: 25 },
 	TIP_OUT: 0.3, REVEAL: 0.2, // the tip fades out, then the place fades in
 	CHOOSE_WAIT: 0.3, // Enter VR: the tip is chosen once the head has a pose and a controller is in, or this long after the pose (bare hands)
 	READY_LIMIT: 3, READY_FRAMES: 10, READY_REFRESHES: 3.5, READY_SPIKE: 0.1, // ready: drawn once and the last 10 frames each at most 3.5 refreshes long, none 100 ms or more; never more than 3 s from the first draw
@@ -74,6 +92,12 @@ export const WALK_IN_ZOOM = true;
 /** Stepping inside without the tunnel: how long the model grows towards you (s), eased in and out, before the fade. */
 export const WALK_IN_GROW = 1.3;
 const ZOOM = { close: 0.5, from: 0.2, to: 1.3, x: 1.4, black: 1.25, end: 1.6 }; // (seconds, and the scale at the end)
+
+/** How long a tip shows, fully visible (s), from its words and the room's name over it (build 215's C9). */
+export function tipTime(words, name = '') {
+	const n = `${name} ${words}`.split(/\s+/).filter((w) => /[\p{L}\p{N}]/u.test(w)).length;
+	return Math.max(PAUSE.SHOWN_MIN, PAUSE.SHOWN_BASE + PAUSE.PER_WORD * n);
+}
 
 /** A tip's key in the session's record: its id and the input kind ('hands' | 'controllers'). */
 export const tipKey = (id, kind) => `${id}:${kind}`;
@@ -139,6 +163,7 @@ export class Pause {
 		this.xr = xr;
 		this.fx = null; // the move between places in progress (was XRExperience.layerFx)
 		this.tipsOn = true; // (the tests switch the tips off, but for their own checks)
+		this.tipWait = false; // (the tests' ?tipwait)
 		this.colour = 0x000000;
 		// The tip and the room's name over it, world-locked (in the rig).
 		this.group = new THREE.Group();
@@ -146,7 +171,17 @@ export class Pause {
 		this.group.visible = false;
 		this.tipLabel = new Label({ height: PAUSE.TIP_H, px: PAUSE.TIP_PX });
 		this.nameLabel = new Label({ height: PAUSE.NAME_H });
-		for (const l of [this.tipLabel, this.nameLabel]) { l.mesh.renderOrder = 1004; l.mesh.material.depthTest = false; this.group.add(l.mesh); } // (over the practice arc and the looping hand: 1003)
+		// ?tipwait: the line under the tip ("Pinch to go on", 1.0°).
+		this.goOn = new Label({ height: PAUSE.TIP_H, px: pxFor(PAUSE.GO_ON_DEG, 'ui', PAUSE.TIP_H / LABEL_H, PAUSE.AHEAD) });
+		this.goOn.mesh.position.y = -PAUSE.TIP_H * 1.15;
+		for (const l of [this.tipLabel, this.nameLabel, this.goOn]) { l.mesh.renderOrder = 1004; l.mesh.material.depthTest = false; this.group.add(l.mesh); } // (over the practice arc and the looping hand: 1003)
+		// ?tipwait: the Skip tips key, over the dark (touched; its ring shows over the dark too).
+		this.skipPad = new KeyPad(xr, 'pause-skip', { readAt: PAUSE.SKIP_KEY.dist, label: [RAMP.kalam, 1.8], fit: 0.8 });
+		this.skipKey = this.skipPad.add('skip', PAUSE.SKIP_KEY.size, PAUSE.SKIP_KEY.size, { round: true });
+		this.skipPad.setSpec('skip', { id: 'skipTips', look: 'plain', label: 'Skip tips' });
+		for (const m of [this.skipKey.face, this.skipKey.base]) { m.renderOrder = 1004; m.material.depthTest = false; m.material.transparent = true; }
+		this.skipKey.group.visible = false;
+		xr.rig.add(this.skipKey.group);
 		// The floor rings: lines, one draw call (opacity per vertex).
 		this.floor = buildRings();
 		xr.rig.add(this.group, this.floor);
@@ -170,7 +205,7 @@ export class Pause {
 		this.target.raycast = () => {};
 		xr.scene.add(this.target);
 		this.demo = new TipDemo(xr);
-		xr.hideFromPhotos(this.group, this.floor, this.arc, this.arrival.mesh, this.target);
+		xr.hideFromPhotos(this.group, this.floor, this.arc, this.arrival.mesh, this.target, this.skipKey.group);
 		this._v = new THREE.Vector3(); this._w = new THREE.Vector3();
 	}
 
@@ -195,7 +230,7 @@ export class Pause {
 		this.record.tips.learnt.add(tipKey(event, this.kind()));
 		if (event === 'teleport') this.target.visible = false;
 		const p = this.fx?.pause;
-		if (p?.tip?.id === event && p.t >= PAUSE.SKIP_AFTER && !p.ending) this.endTip(true);
+		if (p?.tip?.id === event && p.t >= PAUSE.LEARN_AFTER && !p.ending) this.endTip(true);
 	}
 
 	/** Leaving VR: everything put away. */
@@ -203,7 +238,19 @@ export class Pause {
 		this.fx = null;
 		this.group.visible = this.floor.visible = this.arc.visible = this.target.visible = false;
 		this.arrival.mesh.visible = false;
+		this.showSkip(false);
 		this.demo.stop();
+	}
+
+	/** ?tipwait's Skip tips key: shown (placed low on your right, facing you) or put away. */
+	showSkip(on) {
+		const k = this.skipKey;
+		if (!on) { k.group.visible = false; this.skipPad.update(0, { active: false }); return; }
+		const head = this.xr.camera.matrix, yaw = yawOf(head) - THREE.MathUtils.degToRad(PAUSE.SKIP_KEY.right), below = THREE.MathUtils.degToRad(PAUSE.SKIP_KEY.below);
+		const p = this._v.setFromMatrixPosition(head), d = PAUSE.SKIP_KEY.dist;
+		k.group.position.set(p.x - Math.sin(yaw) * Math.cos(below) * d, p.y - Math.sin(below) * d, p.z - Math.cos(yaw) * Math.cos(below) * d);
+		k.group.lookAt(this._w.copy(p).applyMatrix4(this.xr.rig.matrixWorld));
+		k.group.visible = true;
 	}
 
 	/**
@@ -348,12 +395,16 @@ export class Pause {
 	/** Chooses the pause's tip for the input in hand, and shows it in front of the head. Returns true if one shows. */
 	chooseTip(p) {
 		const xr = this.xr, kind = this.kind(), transition = p.transition;
-		const tip = this.tipsOn ? nextTip(transition, this.record, kind, { all: DEV.tips }) : null;
+		const tip = this.tipsOn && !this.record.tipsOff ? nextTip(transition, this.record, kind, { all: DEV.tips }) : null;
 		Object.assign(p, { tip, kind });
 		if (tip) {
 			this.record.tips.seen.add(tipKey(tip.id, kind));
-			this.placeTip(transition === 'in' ? xr.roomHere() : '');
+			const name = transition === 'in' ? xr.roomHere() : '';
+			this.placeTip(name);
 			this.showTip(tip, kind);
+			p.shownFor = tipTime(tip[kind] ?? tip.hands, name); // (its words, the room's name counted in: build 215's C9)
+			this.goOn.set(this.wait ? (kind === 'controllers' ? 'Trigger to go on' : 'Pinch to go on') : '');
+			if (this.wait) this.showSkip(true);
 		}
 		this.floor.visible = !!tip;
 		return !!tip;
@@ -449,12 +500,26 @@ export class Pause {
 		this.follow(dt);
 		this.practise(dt);
 		if (p.ending) return;
-		if (p.shown >= PAUSE.SHOWN && ready) { this.endTip(false); return; }
+		if (this.wait) { this.runSkip(dt); return; } // (?tipwait: only a press ends it)
+		if (p.shown >= p.shownFor && ready) { this.endTip(false); return; }
+	}
+
+	/** ?tipwait: the tip waits for a press (the draft to try: build 215's C9). */
+	get wait() { return DEV.tipwait || this.tipWait === true; }
+
+	/** ?tipwait's Skip tips key, once a frame: touched, it ends the pause and turns the tips off for this session. */
+	runSkip(dt) {
+		const { action } = this.skipPad.update(dt, { active: true });
+		for (const r of this.skipPad.rings) if (r) r.renderOrder = 1005; // (its ring over the dark)
+		const k = this.skipKey;
+		k.face.material.opacity = k.base.material.opacity = this.tipLabel.mesh.material.opacity;
+		if (action?.id === 'skipTips') { this.record.tipsOff = true; this.endTip(false); }
 	}
 
 	setTipAlpha(a) {
 		this.tipLabel.mesh.material.opacity = a;
 		this.nameLabel.mesh.material.opacity = a;
+		this.goOn.mesh.material.opacity = a;
 		this.floor.material.opacity = a;
 	}
 
@@ -464,6 +529,7 @@ export class Pause {
 		if (!p || p.ending) return;
 		if (learnt && xr.soundLevel !== 'off') xr.sound.play('press');
 		p.ending = { t: 0, learnt };
+		this.showSkip(false);
 		this.demo.fadeOut();
 		this.arc.visible = false;
 	}
@@ -476,6 +542,7 @@ export class Pause {
 		f.pause = null;
 		f.t = 0;
 		this.group.visible = this.floor.visible = this.arc.visible = false;
+		this.showSkip(false);
 		this.demo.stop();
 		if (f.dir === 'enter') f.dir = 'in'; // (the same fade in as stepping inside)
 		else if (p.transition === 'in' && !p.tip) this.showArrival(this.xr.roomHere() || 'Inside'); // (no tip left: the room's name, 1.5 s)
@@ -516,7 +583,7 @@ export class Pause {
 	 */
 	practise(dt) {
 		const xr = this.xr, p = this.fx.pause, input = xr.input;
-		const canSkip = p.t >= PAUSE.SKIP_AFTER;
+		const canSkip = p.t >= (this.wait ? PAUSE.WAIT_AFTER : PAUSE.SKIP_AFTER);
 		for (const c of input.active()) {
 			c.claim.trigger = 'ui'; // (nothing else acts during the pause)
 			if (c.state.down.trigger) p.aim = { c, age: 0 };
@@ -592,7 +659,7 @@ export class Pause {
 	runTarget(dt) {
 		const xr = this.xr, t = this.target;
 		if (xr.mode !== 'walk') { t.visible = false; return; }
-		if (!this.record.target && !this.fx && this.tipsOn) {
+		if (!this.record.target && !this.fx && this.tipsOn && !this.record.tipsOff) {
 			this.record.target = true;
 			if (!this.record.tips.learnt.has(tipKey('teleport', 'hands')) && !this.record.tips.learnt.has(tipKey('teleport', 'controllers'))) {
 				t.position.copy(findTarget(xr));
