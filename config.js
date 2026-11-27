@@ -34,8 +34,9 @@ export const CONFIG = {
 
 	// Send to my Quest, for a model opened from a file on this computer: the
 	// service that introduces the computer and the headset to each other
-	// (js/pairing.js). Only connection details pass through it; the model goes
-	// between the two devices, encrypted. The default is PeerJS's free public
+	// (js/pairing.js). Only connection details pass through it, and it is
+	// trusted to introduce the right two devices; the model goes between them,
+	// encrypted between the two browsers. The default is PeerJS's free public
 	// server (https://peerjs.com/server/cloud). To use your own PeerServer,
 	// change it here and in connect-src in index.html.
 	//
