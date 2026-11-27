@@ -532,6 +532,17 @@ const crossSeen = () => page.evaluate(() => {
 	const want = { guide: 'drawn', shadows: 'switch', depth: 'switch', light: 'choice', view: 'switch', seethrough: 'switch', mainHand: 'choice', sound: 'switch', height: 'choice' };
 	const ok = Object.entries(want).every(([id, t]) => kinds.doll[id] === t && kinds.walk[id] === t) && Object.entries(kinds.doll).filter(([, t]) => t === 'button').length === 0; // (New visitor, the one button, went: build 215's B4)
 	check('the settings wing: switches and options, no buttons, 40 cm wide, 34 cm tall at most', ok && Math.abs(kinds.width - 0.4) < 1e-6 && Math.max(...kinds.heights) <= 0.34 + 1e-3, JSON.stringify({ heights: kinds.heights, width: kinds.width, doll: kinds.doll }));
+	// Build 215's B5: the controllers' wing (it may sit up to 0.75 m away) draws its row labels 15% larger: none on two lines
+	// that was on one, none smaller than on the hands' wing (a label already fitted to its room, beside a row's options,
+	// keeps its size: "Time of day" and "Main hand").
+	const sized = await page.evaluate(() => { const x = window.__casawalk.xr, at = {};
+		for (const px of [32, Math.round(32 * 1.15)]) for (const p of [x.menus.dollhouse, x.menus.walk]) { const was = [p.labelPx, p.tab]; p.labelPx = px;
+			for (const t of p.tabs) { p.setTab(t.id); p.draw(); for (const [k, v] of p.labelSizes) (at[k] ??= {})[px] = v; }
+			p.labelPx = was[0]; p.setTab(was[1]); p.draw(); }
+		return at; });
+	const worse = Object.entries(sized).filter(([, v]) => v[37].px < v[32].px || v[37].lines > v[32].lines);
+	console.log(`The wing's row labels, hands / controllers (px): ${Object.entries(sized).map(([k, v]) => `${k} ${v[32].px}/${v[37].px}${v[37].lines > 1 ? ' (2 lines)' : ''}`).join(', ')}`);
+	check('the controllers\' wing: every row label 15% larger where it has the room, none smaller, none wrapped (build 215, B5)', worse.length === 0 && Object.values(sized).some((v) => v[37].px === 37), JSON.stringify(worse));
 }
 await shot('dollhouse-board');
 await click('right', 'b-button');

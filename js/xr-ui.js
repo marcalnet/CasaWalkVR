@@ -51,6 +51,7 @@ const PHOTO_TEXT = {
 const HANDS_TEXT = { title: 'Pick up your controllers', line: 'This headset gives no hand tracking to CasaWalk.' };
 
 // The safety net's card (js/safety.js): calm, honest, and always a way out.
+const LABEL_PX_LASER = Math.round(32 * 1.15); // the controllers' wing: row labels 15% larger (it may sit up to 0.75 m away)
 const ERROR_TEXT = {
 	title: 'Something went wrong',
 	line: '\u2190 Back returns to the page. The Meta button always leaves VR.',
@@ -193,6 +194,7 @@ export class XRUI {
 		const tabs = xr.store.tabs, place = xr.mode, first = !(place in tabs);
 		if (first) tabs[place] = 'view';
 		this.placeWing(panel, this.wingSide(), headMatrix);
+		panel.labelPx = xr.input.active().length ? LABEL_PX_LASER : 32; // (the controllers' wing sits further away: its row labels 15% larger, build 215's B5)
 		panel.setTab(tab ?? (first ? 'move' : tabs[place]));
 		this.prepareGuide(panel);
 		panel.hint = this.closeHint();

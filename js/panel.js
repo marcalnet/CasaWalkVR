@@ -26,6 +26,7 @@ const L = { PAD: 16, GAP: 6, ROW_H: 66, TITLE_H: 38, TAB_H: 60, TAB_GAP: 8, INSE
 const TAB = '#tab'; // a click target's id for a tab (its value is the tab's id)
 export const HINT_PX = { max: 22, min: 18 }; // the close line's size (canvas px at the board's px/m): never shrunk below 18 (the legibility floor)
 const SWITCH_W = 96, SWITCH_H = 52;
+const LABEL_PX = 32; // a row's label (canvas px), at most: fitted down when it would not fit
 const SWITCH_LABEL_MIN = 26; // px: a switch label smaller than this goes onto two lines instead
 
 export class Panel {
@@ -52,6 +53,8 @@ export class Panel {
 		this.hint = hint;
 		this.background = background; // an image drawn under everything (the board's frame and paper), once loaded
 		this.hover = null; // key of the hovered target
+		this.labelPx = LABEL_PX; // the row labels' size (canvas px): 15% larger on the controllers' wing (build 215's B5, js/xr-ui.js)
+		this.labelSizes = new Map(); // each row label as last drawn: { px, lines } (the tests read it)
 		const wPx = Math.round(width * pxPerM);
 		this.size = { w: wPx, h: 0 };
 		this.boxes = this.layout();
@@ -150,6 +153,7 @@ export class Panel {
 		if (!this.canvas) return;
 		const ctx = this.canvas.getContext('2d');
 		const { w, h } = this.size;
+		this.labelSizes.clear();
 		ctx.clearRect(0, 0, w, h);
 		if (this.background?.complete && this.background.naturalWidth) ctx.drawImage(this.background, 0, 0, w, h);
 		else {
@@ -222,7 +226,8 @@ export class Panel {
 		ctx.fillStyle = c.disabled ? COLOURS.offText : COLOURS.text;
 		if (c.type === 'switch') this.drawSwitchLabel(ctx, b, c.label);
 		else {
-			fitFont(ctx, c.label, this.labelWidth(b) - 36, 32, 20, 500);
+			fitFont(ctx, c.label, this.labelWidth(b) - 36, this.labelPx, 20, 500);
+			this.labelSizes.set(c.label, { px: parseInt(ctx.font.split(' ')[1], 10), lines: 1 });
 			ctx.fillText(c.label, b.x + 24, b.y + b.h / 2 + 2);
 		}
 		if (c.disabled) {
@@ -250,10 +255,11 @@ export class Panel {
 	drawSwitchLabel(ctx, b, label) {
 		const room = b.w - SWITCH_W - 20 - 24 - 14; // (from the label's start to 14 px before the switch)
 		const x = b.x + 24, cy = b.y + b.h / 2 + 2;
-		fitFont(ctx, label, room, 32, SWITCH_LABEL_MIN - 1, 500);
+		fitFont(ctx, label, room, this.labelPx, SWITCH_LABEL_MIN - 1, 500);
 		const words = label.split(' ');
 		if (ctx.measureText(label).width <= room || words.length < 2) {
-			if (ctx.measureText(label).width > room) fitFont(ctx, label, room, 32, 16, 500);
+			if (ctx.measureText(label).width > room) fitFont(ctx, label, room, this.labelPx, 16, 500);
+			this.labelSizes.set(label, { px: parseInt(ctx.font.split(' ')[1], 10), lines: 1 });
 			ctx.fillText(label, x, cy);
 			return;
 		}
@@ -266,6 +272,7 @@ export class Panel {
 		}
 		const longer = best.lines.reduce((a, l) => (ctx.measureText(l).width > ctx.measureText(a).width ? l : a));
 		fitFont(ctx, longer, room, 30, 16, 500);
+		this.labelSizes.set(label, { px: parseInt(ctx.font.split(' ')[1], 10), lines: 2 });
 		const px = parseInt(ctx.font.split(' ')[1], 10), lead = Math.min(px * 1.05, (b.h - 12) / 2);
 		ctx.fillText(best.lines[0], x, cy - lead / 2);
 		ctx.fillText(best.lines[1], x, cy + lead / 2);

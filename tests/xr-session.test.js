@@ -1769,10 +1769,11 @@ test('harmony, conflict 5: at the scale model a bare hand steps inside on lettin
 	assert.equal(d.spotBefore(a, 0.1), spot, 'the landing from 0.1 s before the release (not the flick at the end)');
 });
 
-test('harmony, conflict 13: no wing corner within 5° of the house as seen (its covered rooms and what stands on them, not the lawn; 2° at the very least, once every other limit is spent) nor above +10°, every wing within 0.62 m with bare hands; with controllers never above 15° below the eyes (build 215, B5), within 0.9 m; for Pond House and the Apartment, on the one plinth, with either main hand', async () => {
+test('harmony, conflict 13: no wing corner within 5° of the house as seen (its covered rooms and what stands on them, not the lawn; 2° at the very least, once every other limit is spent) nor above +10°, every wing within 0.62 m with bare hands; with controllers 15° below the eyes, within 0.75 m, rising only past it, its row text 0.7° or more (build 215, B5); for the three homes, on the one plinth, with either main hand', async () => {
 	const W = await import('../js/wings.js');
 	const { PLINTH_HEIGHT } = await import('../js/xr-scene.js');
-	for (const name of ['pond-house', 'apartment']) for (const input of ['controllers', 'hands']) {
+	const caps = [];
+	for (const name of ['example-home', 'pond-house', 'apartment']) for (const input of ['controllers', 'hands']) {
 		const { x, frame } = await setup({ file: path.resolve(import.meta.dirname, `../examples/${name}.sh3d`) });
 		if (input === 'hands') x.input.controllers.forEach((c) => { c.source = null; }); // (no controller in use: the wing within a fingertip's reach)
 		frame();
@@ -1786,7 +1787,15 @@ test('harmony, conflict 13: no wing corner within 5° of the house as seen (its 
 				for (const panel of x.ui.openPanels()) {
 					const g = panel.mesh.geometry.parameters, far = panel.mesh.position.distanceTo(x.rig.worldToLocal(head.clone()));
 					if (input === 'hands') assert.ok(far <= 0.62 + 1e-6, `${name}, plinth ${h} m, ${panel.title}: within a fingertip's reach (${JSON.stringify(panel.placed)})`);
-					else assert.ok(far <= W.WING.laserDist + 1e-6 && panel.placed.el <= -W.WING.drop + 1e-9, `${name}, ${panel.title}, controllers: never pushed up, within ${W.WING.laserDist} m (${JSON.stringify(panel.placed)})`);
+					else {
+						// Controllers (build 215's B5): 15° below the eyes, cleared by distance up to 0.75 m; only past that cap does it rise.
+						const rose = panel.placed.el > -W.WING.drop + 1e-9;
+						assert.ok(far <= W.WING.laserDist + 1e-6 && (!rose || panel.placed.dist >= W.WING.laserDist - 1e-6), `${name}, ${panel.title}, controllers: within ${W.WING.laserDist} m, rising only past it (${JSON.stringify(panel.placed)})`);
+						// Its row labels 15% larger, so their text keeps at least 0.7° (the handbook's body size; 32 px read 0.88° at 0.55 m, the Designer's figure).
+						const deg = 0.88 * (panel.labelPx / 32) * (0.55 / far);
+						assert.ok(panel.labelPx === Math.round(32 * 1.15) && deg >= 0.7, `${name}, controllers: row text ${deg.toFixed(2)}° at ${far.toFixed(2)} m`);
+						caps.push(`${name}${main === 'left' ? ' (left main hand)' : ''}: ${far.toFixed(2)} m, ${(panel.placed.el * 180 / Math.PI).toFixed(0)}° from the eyes${rose ? ', rose' : ''}`);
+					}
 					for (const [sx, sy] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
 						const p = panel.mesh.localToWorld(new THREE.Vector3(sx * g.width / 2, sy * g.height / 2, 0));
 						const a = W.angleOf(p, head, yaw);
@@ -1801,6 +1810,7 @@ test('harmony, conflict 13: no wing corner within 5° of the house as seen (its 
 		}
 		x.menuAction({ id: 'mainHand', value: 'right' });
 	}
+	console.log(`The controllers' wing at the scale model: ${caps.join('; ')}`);
 });
 
 test('the plinth keys (step 1.2; the Designer\'s fix, 26 Nov): within laser reach, at most 60° below the eye line and 45° of neck turn, and at least 2° under the line to the model\'s near edge, in all three homes', async () => {

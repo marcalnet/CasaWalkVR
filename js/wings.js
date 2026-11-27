@@ -23,10 +23,11 @@ export const WING = {
 	ceiling: D(10), // no corner of a wing above this (the handbook's ceiling: keys up there cost the neck and the arm)
 	maxUp: D(-5), // the centre never higher than this
 	// With controllers (build 215's B5, the user's decision: it opened at neck or head height, pushed up clear of the
-	// model): never up. Clearing the model it goes outward, then further away (a laser reaches it; past a controller
-	// tip's reach, maxDist, only for controllers), then lower.
-	laserDist: 0.9, // metres: as far as it goes
-	laserDrop: D(30), // its centre at most this far below eye level
+	// model): it stays low. Clearing the model it goes outward, then further away (a laser reaches it; past a controller
+	// tip's reach, maxDist, only for controllers) up to laserDist, its row labels 15% larger (js/xr-ui.js) so their
+	// text keeps about 0.74° there; only a home that needs more rises, just enough, its top within the ceiling (the
+	// Designer, 27 Nov 2026).
+	laserDist: 0.75, // metres: as far as it goes
 };
 
 /** { az (+ = left of where the head's yaw looks), el } of world point p from head. */
@@ -149,9 +150,9 @@ export function placeWing(side, w, h, zone, { laser = false } = {}) {
 		return false;
 	};
 	while (hits() && Math.abs(az) < WING.maxSide) az += side * D(1); // outward first
-	if (laser) { // (controllers: never up; further away, then lower: see WING.laserDist)
+	if (laser) { // (controllers: further away, then up just enough: see WING.laserDist)
 		while (hits() && dist + 0.01 <= WING.laserDist + 1e-9) dist += 0.01;
-		while (hits() && el - D(1) >= -WING.laserDrop - 1e-9) el -= D(1);
+		while (hits() && wingRect(az, el + D(1), w, h, dist).el1 <= WING.ceiling + 1e-9) el += D(1);
 		while (hits() && margin - D(0.5) >= WING.minMargin - 1e-9) margin -= D(0.5);
 		if (Math.abs(az) < WING.minSide) az = side * WING.minSide;
 		return { az, el, dist, margin, clear: !hits() };
