@@ -29,7 +29,7 @@ import { Label, LABEL_H } from './panel.js';
 import { RAMP, pxFor } from './type-ramp.js';
 import { TOOLS, edgeSpot, keepFromEyes, dampTowards } from './zones.js';
 import { HOLD, magnetStep, toolPose } from './hold.js';
-import { CONTROL_CUE } from './theme.js';
+import { TOOL_OUTLINE } from './theme.js';
 
 export const ABOVE = 0.15; // the fan's middle, above the fan hand (metres)
 const SPACING = 0.115; // between tools in the arc (the marker and the meter lie across it, 9 and 11 cm long)
@@ -49,7 +49,7 @@ const MEMORY = 0.6; // seconds a touched tool stays the one a closing hand takes
 const OUT = 0; // the fan's middle (the meter) sits straight over the fan hand (build 215's B1: the camera on its outer side, the marker on its inner side; before, 8 cm outward put the marker over the hand, out of the other hand's easy reach)
 const KEYS_CLEAR = 0.1; // no tool nearer the main hand's keys than this (m): the fan moves outward (build 215's B1: never over the orb, now its keys, C8)
 const FRONT = 0.005; // a tool held by a controller: its back this far in front of the laser's start (the controller's front face)
-const OUTLINE_W = 0.0025; // the empty place's outline: 2.5 mm (CONTROL_CUE, 40%)
+const OUTLINE_W = 0.0025; // the empty place's outline: 2.5 mm (TOOL_OUTLINE, 40%)
 const FADE = 0.2; // seconds: the fan appears and goes (tracking found or lost)
 // A touched tool (build 215's A7: the tick and the lift repeated like an alarm, faster or slower with the distance:
 // the lift carried the tool out of reach, it dropped back, and was touched again): touched within the reach of where
@@ -390,7 +390,7 @@ function backOf(o) {
 /**
  * The outline of a tool's place in the fan (C1, the magnet): a thin frame
  * round the tool as it sits in the fan (its box at fan scale, facing you),
- * CONTROL_CUE's colour at 40%, 2.5 mm wide. Hidden until its armed tool is near.
+ * TOOL_OUTLINE's colour at 40%, 2.5 mm wide. Hidden until its armed tool is near.
  */
 function outlineOf(object) {
 	const box = new THREE.Box3();
@@ -399,7 +399,7 @@ function outlineOf(object) {
 	object.traverse((c) => { if (c.isMesh && c.geometry) { c.geometry.computeBoundingBox(); box.union(c.geometry.boundingBox.clone().applyMatrix4(new THREE.Matrix4().multiplyMatrices(inv, c.matrixWorld))); } });
 	const k = object.userData.fanScale ?? 1, size = box.isEmpty() ? new THREE.Vector3(0.05, 0.05, 0.05) : box.getSize(new THREE.Vector3());
 	const w = Math.max(size.x, size.z) * k + 0.01, h = size.y * k + 0.01, t = OUTLINE_W;
-	const mat = new THREE.MeshBasicMaterial({ color: CONTROL_CUE.color, transparent: true, opacity: CONTROL_CUE.opacity, depthWrite: false });
+	const mat = new THREE.MeshBasicMaterial({ color: TOOL_OUTLINE.color, transparent: true, opacity: TOOL_OUTLINE.opacity, depthWrite: false });
 	const g = new THREE.Group();
 	for (const [x, y, bw, bh] of [[0, h / 2, w, t], [0, -h / 2, w, t], [-w / 2, 0, t, h], [w / 2, 0, t, h]]) {
 		const bar = new THREE.Mesh(new THREE.PlaneGeometry(bw, bh), mat);

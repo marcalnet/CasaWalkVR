@@ -8,16 +8,22 @@
 // The back carries a small viewfinder screen: the view through the lens,
 // about 192 x 128, refreshed a few times a second (fewer on Quest 2), and not
 // at all when it faces away from you; nothing is written on the back (build 215's C5).
+// It switches on with use mode (build-215 asks C10 §5): in the dock its screen
+// is dark and there is no red frame; away from the other tools the screen
+// shows the view and the frame is out. A camera whose screen is dark plainly
+// won't shoot.
 // After a shot a small print pops out of the camera, floats a moment and
 // drifts back into the camera. One lens, 28 mm, fixed: no choice to make (the
 // user's simpler tools, 27 Nov 2026; three lenses and a dial before).
 
 import * as THREE from 'three';
 import { DEVICE } from './device.js';
+import { COLOURS } from './theme.js';
 import { buildCamera } from './tool-models.js';
 import { FramingGuide } from './framing-guide.js';
 
 const SCREEN = [192, 128]; // viewfinder pixels
+const SCREEN_OFF = COLOURS.text; // the screen while off (in the dock): dark graphite
 // Viewfinder frames: 4 a second, 2 on Quest 2 (a phone GPU); a frame after a slow one is skipped;
 // it draws only out to VIEW_FAR (the tester's measurement: the whole home every 18th frame was a hitch).
 const SLOW_GPU = DEVICE.quest2;
@@ -48,7 +54,7 @@ export class StreetCamera {
 		this.target = typeof document !== 'undefined' ? new THREE.WebGLRenderTarget(...SCREEN) : null;
 		this.view = new THREE.PerspectiveCamera(lensFov(LENS), SCREEN[0] / SCREEN[1], 0.05, VIEW_FAR);
 		this.screen = new THREE.Mesh(new THREE.PlaneGeometry(0.048, 0.032),
-			new THREE.MeshBasicMaterial({ map: this.target?.texture ?? null, color: this.target ? 0xffffff : 0x5d6873, toneMapped: false }));
+			new THREE.MeshBasicMaterial({ map: null, color: SCREEN_OFF, toneMapped: false })); // (dark until it is on: update)
 		this.screen.position.copy(this.screenPoint.position).z += 0.0006;
 		this.screen.name = 'viewfinder';
 		this.object.add(this.screen);
@@ -56,7 +62,6 @@ export class StreetCamera {
 		this.held = null; // the hand holding it
 		this.t = 0;
 		this.prints = [];
-		this.controlPart = 'control'; // (its quiet ring: js/control-cue.js)
 		this.guide = new FramingGuide(xr); // the red frame where the photo's edges fall (js/framing-guide.js)
 		this._lens = new THREE.Matrix4(); this._turn = new THREE.Matrix4().makeRotationY(Math.PI);
 	}
@@ -99,20 +104,31 @@ export class StreetCamera {
 		}).catch(() => {});
 	}
 
+	/** True while held in use mode (away from the other tools: js/hold.js): the camera is on. */
+	get on() { const h = this.xr.tools?.held; return !!this.held && h?.tool === this && h.mode === 'use'; }
+
 	/** Once a frame (while held, and in the fan): the viewfinder, the flash, the prints. */
 	update(dt) {
-		const xr = this.xr;
+		const xr = this.xr, on = this.on;
 		this.t += dt;
-		// The framing guide: only while held (the lens empty's +Z looks out: turned round, as a camera).
-		if (this.held || this.guide.group.visible) {
+		// The screen: the view while on, dark (graphite) while off.
+		if (on !== this.wasOn) {
+			this.wasOn = on;
+			this.screen.material.map = on ? this.target?.texture ?? null : null;
+			this.screen.material.color.set(on && this.target ? 0xffffff : SCREEN_OFF);
+			this.screen.material.needsUpdate = true;
+			if (on) this.t = SCREEN_EVERY; // (the view at once)
+		}
+		// The framing guide: only while on (the lens empty's +Z looks out: turned round, as a camera).
+		if (on || this.guide.group.visible) {
 			this.object.updateMatrixWorld(true);
-			this.guide.update(dt, !!this.held, this._lens.copy(this.lensPoint.matrixWorld).multiply(this._turn), lensFov(LENS));
+			this.guide.update(dt, on, this._lens.copy(this.lensPoint.matrixWorld).multiply(this._turn), lensFov(LENS));
 		}
 		// The viewfinder: only while held and facing you, a few times a second.
 		// (After a slow frame, wait one more frame; never more than once in a row, or a slow device would never see it.)
 		const slow = (xr.frameDt ?? 0) > SLOW_FRAME && !this.skipped;
-		if (this.target && this.held && this.t >= SCREEN_EVERY && slow) this.skipped = true;
-		else if (this.target && this.held && this.t >= SCREEN_EVERY) {
+		if (this.target && on && this.t >= SCREEN_EVERY && slow) this.skipped = true;
+		else if (this.target && on && this.t >= SCREEN_EVERY) {
 			this.skipped = false;
 			this.t = 0;
 			this.object.updateMatrixWorld(true);
@@ -120,7 +136,7 @@ export class StreetCamera {
 			const toEye = xr.headWorld().sub(this.screenPoint.getWorldPosition(new THREE.Vector3())).normalize();
 			if (back.dot(toEye) > 0.2) this.renderView();
 		}
-		if (this.flash > 0) { this.flash = Math.max(0, this.flash - dt); this.screen.material.color.setScalar(this.flash > 0 ? 3 : 1); }
+		if (this.flash > 0) { this.flash = Math.max(0, this.flash - dt); if (on) this.screen.material.color.setScalar(this.flash > 0 ? 3 : 1); }
 		for (const p of [...this.prints]) {
 			p.t += dt;
 			const up = Math.min(1, p.t / 0.3), back = Math.max(0, (p.t - 1.3) / 0.5);

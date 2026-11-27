@@ -57,7 +57,6 @@ export class LaserMeter {
 		this.screenPoint = this.object.getObjectByName('screen');
 		this.m = new Measurements();
 		this.m.units = readSetting('meterUnits') ?? defaultUnits(globalThis.navigator?.languages?.[0] ?? ''); // (remembered; at first from the browser's region)
-		this.controlPart = 'hook'; // (its quiet ring: js/control-cue.js)
 		this.held = null;
 		this.hitDistance = null;
 		this.marks = []; // per line: { a, b, text, snap } (model space)
@@ -203,10 +202,22 @@ export class LaserMeter {
 		this.pendingMark.scale.setScalar(LINE_R * 2.5 / Math.max(1e-6, xr.anchor.scale.x));
 	}
 
-	/** Once a frame while held: the beam, the dot, the screen (reused vectors: nothing allocated). */
+	/**
+	 * Once a frame while held: the beam, the dot, the screen (reused vectors:
+	 * nothing allocated). It switches on with use mode (build-215 asks C10 §5):
+	 * in the dock, no beam, no dot, and "—" on the screen.
+	 */
 	update(dt, c) {
 		const xr = this.xr;
 		if (!this.held) return;
+		const h = xr.tools?.held;
+		if (h?.tool === this && h.mode !== 'use') {
+			this.beam.visible = this.dot.visible = false;
+			this.hit = null; this.history = []; // (a pinch just after it switches on never takes a point from before)
+			this.screen.set(readingParts(null, this.m.units));
+			this.drawDashes(null);
+			return;
+		}
 		this.object.updateMatrixWorld(true);
 		const o = this.tip.getWorldPosition(this._o), d = this._d.set(0, 0, 1).applyQuaternion(this.tip.getWorldQuaternion(this._q));
 		this.ray.set(o, d);

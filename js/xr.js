@@ -35,7 +35,7 @@
 // (session sessionMode model mode menu menus view vrView lift maxStorey
 // baseScale plinthSize plinthDistance and the settings snapAngle personHeight
 // seeThroughAmount toolFan), its services (lighting depth seeThrough ui modes
-// pause tools fan cues tweens haptics sound) and its methods. Each part owns what it
+// pause tools fan glow tweens haptics sound) and its methods. Each part owns what it
 // creates and reads shared values when it needs them, never keeping copies.
 
 import * as THREE from 'three';
@@ -50,7 +50,7 @@ import { attachTransientPointer } from './transient-pointer.js';
 import { SeeThrough, SEE_THROUGH_MAX } from './walls.js';
 import { Portals } from './portal.js';
 import { Pause } from './pause.js';
-import { ControlCues } from './control-cue.js';
+import { ToolGlow } from './tool-glow.js';
 import { SessionStore } from './session-store.js';
 import { aimOwner } from './hand-owner.js';
 import { scaleCentre, walkCentre, followBody, areaOf, bodyAreaOf, sideOf, yawTo } from './zones.js';
@@ -148,7 +148,7 @@ export class XRExperience {
 		this.ui = new XRUI(this);
 		this.tools = new ToolSystem(this);
 		this.fan = new ToolFan(this); // the tool fan over the left hand (milestone C)
-		this.cues = new ControlCues(this); // the quiet ring on each tool's control part (js/control-cue.js)
+		this.glow = new ToolGlow(this); // a held tool glows while in use mode (js/tool-glow.js)
 		this.tweens = new Tweens();
 		this.pause = new Pause(this); // every move between places, and the tips on the way (js/pause.js)
 		this.haptics = new Haptics();
@@ -362,12 +362,12 @@ export class XRExperience {
 	 * in this order, each with end(): depth shading, the wing and notes (and
 	 * the main hand's keys), the pause, the veil, the drawn hands, the ?hands
 	 * and ?stats readouts, the tools (back in the fan, measurements and
-	 * drawings cleared), the fan, the tweens, vibration,
+	 * drawings cleared), the fan, the glow, the tweens, vibration,
 	 * sound, the lasers and controllers. (Each "stuck after leaving VR" bug
 	 * was one more line here by hand: the audits' S5, C1, C2.)
 	 */
 	endingParts() {
-		return [this.depth, this.ui, this.pause, this.veil, ...this.handViews, this.readout, this.frameStats, this.tools, this.fan, this.tweens, this.haptics, this.sound, this.input];
+		return [this.depth, this.ui, this.pause, this.veil, ...this.handViews, this.readout, this.frameStats, this.tools, this.fan, this.glow, this.tweens, this.haptics, this.sound, this.input];
 	}
 
 	/**
@@ -737,7 +737,7 @@ export class XRExperience {
 		this.updateAreas(dt); // left, centre, right: where each hand is (js/zones.js)
 		this.fan.update(dt); // the tool fan: home or waiting at the edge, touch, take, swap, put back (milestone C)
 		this.tools.update(dt);
-		this.cues.update(dt); // (after the tools: the ring of a tool held in use mode is full)
+		this.glow.update(dt); // (after the tools: a tool held in use mode glows)
 		this.input.updateModels(dt, this.tools.held?.c ?? null, this.tools.buttons()); // the real controllers: buttons moving, faded while holding a tool
 		this.tweens.update(dt);
 		this.haptics.update(dt);

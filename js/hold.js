@@ -9,7 +9,7 @@
 //            swaps them.
 //   Use      the held tool more than HOLD.USE from the dock's middle (10 cm of
 //            hysteresis): the hand is free, and the holding hand's pinch (or
-//            the trigger) is the tool's trigger. Its quiet ring lights to full.
+//            the trigger) is the tool's trigger. The tool switches on and glows (js/tool-glow.js).
 //   Back     the magnet: armed once the tool has been in use mode since it was
 //            taken; an armed tool within HOLD.MAGNET of its own place (never
 //            another tool's) glides into it, and the hand is empty again.

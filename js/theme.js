@@ -23,8 +23,8 @@ export const BADGE = {
 	orb: { fill: '#d9822b', text: '#fff' },
 };
 
-/** Each tool's control part (the camera's top edge, the marker's cap, the meter's blade): a permanent quiet ring (draft: the orange accent at 40%), one soft pulse on the first take each session (js/control-cue.js). */
-export const CONTROL_CUE = { color: '#e07a1f', opacity: 0.4, width: 0.0025 }; // (2.5 mm, depth-tested: the UX review's S5)
+/** A tool's empty place in the fan, while its tool is near enough to go back (js/tool-fan.js, the magnet): a thin outline, the orange accent at 40%. */
+export const TOOL_OUTLINE = { color: '#e07a1f', opacity: 0.4, width: 0.0025 }; // (2.5 mm, depth-tested; once also the tools' control-part rings, gone with the simpler tools: build-215 asks C10)
 
 /** The marker's one ink (the user's simpler tools; build-215 asks C10 §2): a dark warm-grey graphite, clearly not black (the text's #1d2329). */
 export const MARKER = { ink: '#3A3F45' };

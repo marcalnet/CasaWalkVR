@@ -440,34 +440,56 @@ test('the pause: practising the teleport (hold the trigger, an arc onto the floo
 	for (let i = 0; i < 200 && P.fx; i++) frame();
 	assert.ok(!P.fx && x.veil.amount('layer') === 0, 'the room fades in');
 });
-test('the simpler tools (the user\'s decision, 27 Nov 2026): no options row and no stick stepping; one 28 mm lens, one dark grey ink; a quiet ring on each control part, pulsing on the first take, full in use mode', async () => {
+test('the simpler tools (the user\'s decision, 27 Nov 2026; build-215 asks C10): no options row and no stick stepping; one 28 mm lens, one dark grey ink; no ring on a tool: in use mode the tool switches on and glows (the camera\'s screen, the meter\'s beam, the marker\'s aim dot), with a tick', async () => {
 	const { x, frame, press, hands } = await setup();
-	const cam = x.fan.camera;
+	const cam = x.fan.camera, meter = x.fan.meter, marker = x.fan.marker, fan = x.fan;
 	hands.right.grip.visible = hands.left.grip.visible = true;
 	hands.left.grip.position.set(-0.45, 0.9, 0.05); // (the other hand away)
-	hands.right.ray.position.set(0.25, 1.15, -0.35); hands.right.grip.position.copy(hands.right.ray.position);
-	frame();
-	x.tools.take(cam, hands.right);
-	frame();
-	const cue = x.cues.cues.get(cam);
-	assert.ok(cue && cue.pulse > 0, 'the camera carries its quiet ring, pulsing on the first take');
-	for (let i = 0; i < 3; i++) frame();
-	const { CONTROL_CUE } = await import('../js/theme.js');
-	assert.ok(CONTROL_CUE.width === 0.0025 && [...x.cues.cues.values()].every((c) => c.mesh.material.depthTest), '2.5 mm, depth-tested');
+	const c = hands.right, moveTo = (p) => { c.ray.position.copy(x.rig.worldToLocal(p.clone())); c.grip.position.copy(c.ray.position); frame(); frame(); };
+	c.ray.position.set(0.25, 1.15, -0.35); c.grip.position.copy(c.ray.position);
+	for (let i = 0; i < 20; i++) frame();
+	assert.ok(x.tools.tools.every((t) => !t.object.getObjectByName('control-cue')), 'no ring on any tool');
 	// No options: no row, no stick stepping, no lens or colour to choose.
 	const { LENS, lensFov } = await import('../js/street-camera.js');
 	assert.ok(LENS === 28 && Math.abs(cam.view.fov - lensFov(28)) < 1e-9, 'one lens, 28 mm');
-	assert.ok(!x.dial && !cam.option && !x.fan.meter.option && !x.fan.marker.option && x.tools.tools.every((t) => !t.controls && !t.control), 'no tool offers options, nor a stick press');
+	assert.ok(!x.dial && !cam.option && !meter.option && !marker.option && x.tools.tools.every((t) => !t.controls && !t.control), 'no tool offers options, nor a stick press');
+	// The camera taken by the fan: dock mode, off: its screen dark, no red frame, no glow.
+	moveTo(fan.restWorld(0).add(new THREE.Vector3(0, 0, 0.05)));
+	x.tools.take(cam, c); frame(); frame();
+	assert.equal(x.tools.held.mode, 'dock');
+	const { COLOURS } = await import('../js/theme.js');
+	assert.ok(!cam.screen.material.map && '#' + cam.screen.material.color.getHexString() === COLOURS.text.toLowerCase() && !cam.guide.group.visible, 'in the dock: the screen dark, no red frame');
+	assert.ok(!x.glow.glows.get(cam).mesh.visible, 'no glow in the dock');
 	assert.deepEqual(x.tools.buttons(), ['trigger', 'a'], 'the held tool\'s buttons: the trigger and A');
 	press('right', 'stick'); frame(); press('right', 'stick', false); frame();
 	assert.ok(Math.abs(cam.view.fov - lensFov(28)) < 1e-9, 'the stick press changes nothing');
-	// Reaching near the held tool: nothing shows, and the other hand stays free (no rung owns it).
-	const tip = cam.object.getWorldPosition(new THREE.Vector3()).add(new THREE.Vector3(-0.3, 0.02, 0));
-	assert.notEqual(x.aimBlock(hands.left, tip), 'dial');
-	// In use mode, the ring full.
-	x.tools.held.mode = 'use'; frame();
-	assert.equal(cue.mesh.material.opacity, 1, 'in use mode: the ring full');
+	// Away from the others: use mode, on: the tick and a haptic tick, the screen shows the view, the frame is out, it glows.
+	const played = [], felt = [];
+	const play = x.sound.play.bind(x.sound), feel = x.haptics.play.bind(x.haptics);
+	x.sound.play = (n, ...a) => { played.push(n); return play(n, ...a); }; x.haptics.play = (k, n) => { felt.push(n); return feel(k, n); };
+	moveTo(fan.dockAt().add(new THREE.Vector3(0.45, 0, 0)));
+	assert.equal(x.tools.held.mode, 'use');
+	assert.ok(played.includes('tick') && felt.includes('tick'), `entering use mode: a tick and a haptic tick (${played}, ${felt})`);
+	for (let i = 0; i < 30; i++) frame();
+	assert.ok(cam.on && cam.guide.group.visible && (!cam.target || cam.screen.material.color.getHex() === 0xffffff), 'on: the frame out, the screen showing the view (in a browser: its picture; Node has no render target)');
+	const glow = x.glow.glows.get(cam);
+	assert.ok(glow.mesh.visible && glow.mesh.material.uniforms.strength.value > 0.25 && glow.mesh.material.blending === THREE.AdditiveBlending && glow.mesh.material.side === THREE.BackSide && !glow.mesh.material.depthWrite && x.photoHidden.has(glow.mesh), 'it glows: a back-face rim, additive, no depth write, never in photos');
+	// Back to the dock: the glow fades out in 0.3 s, the screen goes dark again.
+	moveTo(fan.restWorld(0).add(new THREE.Vector3(0, 0, 0.05)));
+	for (let i = 0; i < 30; i++) frame();
+	assert.ok(!glow.mesh.visible && !cam.screen.material.map, 'back in the dock: no glow, the screen dark');
+	x.sound.play = play; x.haptics.play = feel;
+	// The meter: in the dock no beam, no dot, "—"; in use, the beam.
+	x.tools.take(meter, c); frame(); frame();
+	assert.ok(x.tools.held.mode === 'dock' && !meter.beam.visible && !meter.dot.visible && !meter.hit, 'the meter in the dock: no beam, no dot');
+	moveTo(fan.dockAt().add(new THREE.Vector3(0.45, 0, 0)));
+	assert.ok(x.tools.held.mode === 'use' && meter.beam.visible, 'in use: its beam');
+	// The marker: in use, its aim dot where the nib points (8 mm, the ink at 60%), when it points at something.
+	x.tools.take(marker, c); moveTo(fan.dockAt().add(new THREE.Vector3(0.45, 0, 0)));
+	const dot = marker.aimDot;
+	assert.ok(dot && dot.material.opacity === 0.6 && Math.abs(dot.geometry.parameters.radius - 0.004) < 1e-9 && x.photoHidden.has(dot), 'the aim dot: 8 mm, at 60%, never in photos');
 	x.tools.putBack();
+	assert.ok(!dot.visible, 'put back: no aim dot');
 	x.store.start();
 });
 
@@ -480,8 +502,11 @@ test('the framing guide: while the camera is held, a red frame where the photo\'
 	frame();
 	assert.ok(!g.group.visible, 'not while the camera rests in the fan');
 	x.tools.take(cam, hands.right);
+	for (let i = 0; i < 10; i++) frame();
+	assert.ok(!g.group.visible, 'held in the dock (near the others): off, no frame (build-215 asks C10 §5)');
+	hands.right.grip.position.copy(x.rig.worldToLocal(x.fan.dockAt().add(new THREE.Vector3(0.45, 0, 0)))); hands.right.ray.position.copy(hands.right.grip.position);
 	for (let i = 0; i < 30; i++) frame();
-	assert.ok(g.group.visible && g.alpha === 1, 'held: the frame shows');
+	assert.ok(x.tools.held.mode === 'use' && g.group.visible && g.alpha === 1, 'in use mode: the frame shows');
 	assert.ok(g.dist >= GUIDE.NEAR && g.dist <= GUIDE.FAR, `its depth ${g.dist.toFixed(2)} m`);
 	const pos = g.outline.geometry.attributes.position.array, xs = [], ys = [];
 	for (let i = 0; i < pos.length; i += 3) { xs.push(pos[i]); ys.push(pos[i + 1]); }
@@ -1854,10 +1879,10 @@ test('sticky tools (build 215, C1 and C2), controllers: a take starts in dock mo
 	assert.equal(x.tools.held.mode, 'dock', 'taken: dock mode');
 	press('right', 'trigger'); frame(); press('right', 'trigger', false); frame();
 	assert.ok(!meter.m.pending, 'in dock mode the trigger does nothing (taking never fires it)');
-	// Away from the fan: use mode; the trigger measures; the quiet ring at full.
+	// Away from the fan: use mode; the trigger measures; it switches on and glows.
 	moveTo(fan.dockAt().add(new THREE.Vector3(0.45, 0, 0)));
 	assert.equal(x.tools.held.mode, 'use', 'more than 25 cm away: use mode');
-	assert.equal(x.cues.cues.get(meter)?.mesh.material.opacity, 1, 'its quiet ring lights to full');
+	assert.ok(meter.beam.visible && x.glow.glows.get(meter)?.mesh.visible, 'on: its beam, and it glows');
 	meter.hit = new THREE.Vector3(0, 1, -1); meter.trigger(c, 'down'); // (a point, as the trigger gives it where the dot is)
 	assert.ok(meter.m.pending, 'in use mode the trigger measures');
 	// The held tool itself at another tool's place (the marker's, 23 cm from its own): nothing; within 10 cm of its own: it glides home.
@@ -2159,4 +2184,21 @@ test('the meter\'s units are a Settings choice (build-215 asks C10 §1): General
 		assert.ok(/m$/.test(meter.m.lines[0].label), 'back to metric');
 	} finally { delete globalThis.localStorage; }
 	meter.clear();
+});
+
+test('the glow over time (build-215 asks C10 §5): up to 100% in 0.15 s, settling to 35% in 0.6 s, breathing ±7% over 3 s; out in 0.3 s; a shell pushed out from the body, the screens left out', async () => {
+	const { glowAt, GLOW, shellOf } = await import('../js/tool-glow.js');
+	assert.equal(glowAt(-1), 0);
+	assert.ok(Math.abs(glowAt(0.075) - 0.5) < 1e-9 && Math.abs(glowAt(0.15) - 1) < 1e-9, 'the swell');
+	assert.ok(Math.abs(glowAt(0.15 + 0.6) - GLOW.REST) < 1e-9, 'settled at 35%');
+	const breath = [...Array(60).keys()].map((i) => glowAt(0.75 + i * 0.05));
+	assert.ok(Math.max(...breath) <= 0.42 + 1e-9 && Math.min(...breath) >= 0.28 - 1e-9 && Math.max(...breath) > 0.41, 'breathing ±7%');
+	assert.ok(Math.abs(glowAt(-1, { out: 0.15, from: 0.35 }) - 0.175) < 1e-9 && glowAt(-1, { out: 0.3, from: 1 }) === 0, 'out in 0.3 s');
+	const { buildCamera, buildMeter } = await import('../js/tool-models.js');
+	const cam = buildCamera(), shell = shellOf(cam, GLOW.WIDTH.camera);
+	const box = new THREE.Box3().setFromObject(cam), sb = new THREE.Box3().setFromBufferAttribute(shell.geometry.attributes.position);
+	assert.ok(Math.abs(sb.max.x - box.max.x - 0.003) < 0.0015, `about 3 mm out (${((sb.max.x - box.max.x) * 1000).toFixed(1)} mm)`);
+	const meter = buildMeter(), screen = new THREE.Mesh(new THREE.PlaneGeometry(0.03, 0.06)); screen.name = 'meter-screen'; meter.add(screen);
+	const n = (o) => { let k = 0; o.traverse((m) => { if (m.isMesh && m.name.startsWith(`${o.name}:`)) k += m.geometry.attributes.position.count; }); return k; };
+	assert.ok(shellOf(meter, GLOW.WIDTH.meter).geometry.attributes.position.count <= n(meter), 'the body only: the screen is a mesh of its own, left out');
 });

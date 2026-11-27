@@ -4,6 +4,8 @@
 // place as you draw (a preallocated buffer: nothing rebuilt). One ink, dark
 // grey (the user's simpler tools, 27 Nov 2026: no colour to choose). A = undo
 // the last stroke; hold A = clear all (Y when mirrored). Bare hands: no undo.
+// In use mode (away from the other tools) it switches on: an aim dot, 8 mm,
+// the ink at 60%, on the surface its nib points at (build-215 asks C10 §5).
 // Bare hands: not yet (the marker held like a pen, drawing where its nib
 // touches, comes with item 11 of the Quest 2 fixes).
 //
@@ -20,6 +22,7 @@ const SIDES = 6; // the tube's sides
 const MAX_POINTS = 1500; // per stroke (a long stroke ends and a new one begins)
 const START_POINTS = 64; // a stroke's buffers start this big and double when full
 const JUMP = 0.3; // metres: the nib moving more than this in a frame ends the stroke
+const AIM_DOT = 0.008, AIM_REACH = 20; // the aim dot: 8 mm across (in the world, to the eye); found within this (m)
 const RIG_JUMP = 0.1; // metres: the rig moving more than this in a frame (a teleport, a step) ends it
 
 export class MarkerTool {
@@ -28,7 +31,6 @@ export class MarkerTool {
 		this.xr = xr;
 		this.name = 'marker';
 		this.live = true;
-		this.controlPart = 'cap'; // (its quiet ring: js/control-cue.js)
 		this.object = buildMarker();
 		this.tip = this.object.getObjectByName('tip');
 		this.strokes = [];
@@ -40,7 +42,7 @@ export class MarkerTool {
 	}
 
 	take(c) { this.held = c; }
-	putBack() { this.endStroke(); this.held = null; }
+	putBack() { this.endStroke(); this.held = null; if (this.aimDot) this.aimDot.visible = false; }
 
 	/** Controllers: down starts a stroke, up ends it. */
 	trigger(c, phase) {
@@ -58,6 +60,37 @@ export class MarkerTool {
 	/** The holding hand lost: a stroke in progress ends (nothing keeps drawing). */
 	gesture(c, e) {
 		if (e.type === 'lost') this.endStroke();
+	}
+
+	/**
+	 * The aim dot (in use mode only): where the nib points, on the first surface
+	 * within AIM_REACH; 8 mm across, the ink at 60%, facing you; never in photos.
+	 */
+	aim() {
+		const xr = this.xr, h = xr.tools?.held, on = !!this.held && h?.tool === this && h.mode === 'use';
+		if (!this.aimDot) {
+			if (!on || !xr.scene) return;
+			this.aimDot = new THREE.Mesh(new THREE.CircleGeometry(AIM_DOT / 2, 20), new THREE.MeshBasicMaterial({ color: MARKER_INK, transparent: true, opacity: 0.6, depthWrite: false, toneMapped: false }));
+			this.aimDot.name = 'marker-aim';
+			this.aimDot.raycast = () => {};
+			xr.scene.add(this.aimDot);
+			xr.hideFromPhotos(this.aimDot);
+			this._ray = new THREE.Raycaster(); this._hits = [];
+		}
+		let hit = null;
+		if (on && xr.targets) {
+			this.object.updateMatrixWorld(true);
+			const o = this.tip.getWorldPosition(this._u), d = this._v.set(0, 0, 1).applyQuaternion(this.tip.getWorldQuaternion(this._aq ??= new THREE.Quaternion()));
+			this._ray.set(o, d); this._ray.far = AIM_REACH;
+			this._hits.length = 0;
+			this._ray.intersectObjects(xr.targets().pointable, false, this._hits);
+			hit = this._hits[0] ?? null;
+		}
+		this.aimDot.visible = !!hit;
+		if (!hit) return;
+		const eye = xr.headWorld();
+		this.aimDot.position.copy(hit.point).addScaledVector(this._d.copy(eye).sub(hit.point).normalize(), 0.001); // (a millimetre towards you: never inside the surface)
+		this.aimDot.lookAt(eye);
 	}
 
 	/** Model-space radius for a stroke drawn now (8 mm thick to the eye). */
@@ -187,6 +220,7 @@ export class MarkerTool {
 		const rig = xr.rig;
 		const moved = rig && this._rig && (Math.abs(rig.rotation.y - this._rig.yaw) > 0.01 || rig.position.distanceTo(this._rig.pos) > RIG_JUMP);
 		if (rig) { this._rig ??= { yaw: 0, pos: new THREE.Vector3() }; this._rig.yaw = rig.rotation.y; this._rig.pos.copy(rig.position); }
+		this.aim();
 		if (!s || !this.held) return;
 		if (xr.layerFx || xr.modes?.walk?.fade || moved || (this.held.isHand && !this.held.touch?.tracked)) { this.endStroke(); return; }
 		s.age += dt;

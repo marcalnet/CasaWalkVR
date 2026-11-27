@@ -215,11 +215,6 @@ export function buildCamera({ inactive = false } = {}) {
 
 	point(g, 'grip', 0.044, -0.008, 0);
 	point(g, 'lens', lx, ly, zFront - 0.035, [0, 0, -1]);
-	// The control part and its quiet ring (js/control-cue.js): on the top of the body at its back edge, on the
-	// grip's side, where a real camera's dial sits, a flat ring facing up, seen from above while held. (On the lens it was
-	// hidden by the body in the hold: the Tester's xr-39; the Designer, next-build asks 3.6.)
-	point(g, 'control', 0.022, yTop, d / 2 - 0.011);
-	g.userData.cue = { shape: 'ring', at: [0.022, yTop + 0.0005, d / 2 - 0.011], radius: 0.011, up: true };
 	point(g, 'viewfinder', -0.040, ySplit + topH / 2, d / 2 + 0.003, [0, 0, 1]);
 	point(g, 'shutter', 0.043, yTop + 0.005, 0);
 	point(g, 'screen', -0.012, -0.008, d / 2 + 0.001, [0, 0, 1]);
@@ -313,9 +308,6 @@ export function buildMarker() {
 	const g = P.build('marker');
 	point(g, 'grip', 0, 0, (-0.0695 + 0.0823) / 2); // (held by its middle, between the nib and the cap's end: build 215's B2; before, 2.5 cm towards the nib)
 	point(g, 'tip', 0, 0, -0.0695, [0, 0, -1]);
-	point(g, 'cap', 0, 0, 0.067); // (the posted cap's middle: the marker's control part)
-	// Its quiet ring: round the cap's domed end, facing along the axis, 0.5 mm proud of the surface (the UX review's S5).
-	g.userData.cue = { shape: 'ring', at: [0, 0, 0.0823 + 0.0005], radius: 0.0085 };
 	g.userData.fanScale = MARKER_FAN_SCALE;
 	return g;
 }

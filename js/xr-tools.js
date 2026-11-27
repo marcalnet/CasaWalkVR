@@ -13,8 +13,7 @@
 // makes you jump.
 //
 // A tool is an object with:
-//   name, object (its Object3D, never in photos), controlPart (the empty in
-//   its model that carries the quiet ring: js/control-cue.js),
+//   name, object (its Object3D, never in photos),
 //   take(c), putBack(), update(dt, c),
 //   trigger(c, 'down' | 'up'),
 //   secondary(c, 'press' | 'hold')  ('hold': kept down for HOLD seconds, e.g.
@@ -117,7 +116,10 @@ export class ToolSystem {
 		const was = h.mode;
 		if (tool.object) h.mode = dock ? nextMode(h.mode, tool.object.getWorldPosition(this._at ??= new THREE.Vector3()).distanceTo(dock)) : 'use'; // (no fan shown: no dock)
 		if (h.mode !== was) {
-			if (h.mode === 'use' && this.xr.soundLevel !== 'off') this.xr.sound.play('tick', 0.35); // (one soft tick: the ring lights, js/control-cue.js)
+			if (h.mode === 'use') { // (the tool switches on and glows, js/tool-glow.js: one soft tick, and a light tick in a controller's hand: build-215 asks C10 §5)
+				if (this.xr.soundLevel !== 'off') this.xr.sound.play('tick', 0.35);
+				if (c.isController) this.xr.haptics.play(c, 'tick');
+			}
 			if (h.mode === 'dock' && h.pressed) { h.pressed = false; tool.trigger?.(c, 'up'); } // (back near the fan: a stroke ends)
 		}
 		const use = h.mode === 'use';
