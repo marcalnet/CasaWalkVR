@@ -1653,6 +1653,27 @@ test('the fan over the left hand: the meter straight over it, the camera outside
 	assert.ok(x.ui.wrist.wearer === hands.right && near >= 0.1 - 1e-3, `no tool within 10 cm of the orb (${near.toFixed(3)} m)`);
 });
 
+test('Main hand: Left, the fan over the right hand mirrors: the meter over it, the camera on its outer side (your right), the marker on its inner side (the Tester\'s finding on build 215\'s B1)', async () => {
+	const { x, frame, hands } = await setup();
+	const fan = x.fan;
+	x.menuAction({ id: 'mainHand', value: 'left' });
+	assert.equal(x.toolFan, 'right');
+	hands.left.grip.visible = hands.right.grip.visible = true;
+	hands.left.grip.position.set(-0.4, 0.8, 0.1);
+	hands.right.grip.position.set(0.45, 1.2, -0.3); // (out to the right: in its own area, the tools home over it)
+	for (let i = 0; i < 60; i++) frame();
+	const wrist = x.input.wristOf(hands.right).getWorldPosition(new THREE.Vector3()), right = x.viewAxes().right;
+	const at = (name) => fan.restWorld(fan.slots.findIndex((s) => s.name === name));
+	const across = (p) => p.clone().sub(wrist).dot(right); // (+: your right, the outer side of the right hand)
+	assert.ok(Math.abs(across(at('meter'))) < 0.01, `the meter over the hand (${across(at('meter')).toFixed(3)} m across)`);
+	assert.ok(across(at('camera')) > 0.05 && across(at('marker')) < -0.05, `the camera on the outer side (your right), the marker on the inner side (${across(at('camera')).toFixed(3)}, ${across(at('marker')).toFixed(3)})`);
+	const marker = fan.slots.find((s) => s.name === 'marker');
+	assert.ok(marker.pose.rotation.y < 0, 'the marker\'s pose mirrored: its cap end still turned to you');
+	x.menuAction({ id: 'mainHand', value: 'right' });
+	for (let i = 0; i < 3; i++) frame();
+	assert.ok(marker.pose.rotation.y > 0, 'back to the right main hand: as before');
+});
+
 test('the orb never hides a live key: resting over the Walk in door it goes small and faint (touch unchanged); clear again it grows back after 0.4 s; near the eyes it still yields; touched while yielded it opens', async () => {
 	const { x, frame, hands } = await setup();
 	const w = x.ui.wrist;

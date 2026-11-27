@@ -261,10 +261,24 @@ export class ToolFan {
 		return at;
 	}
 
+	/** True while the fan floats over the right hand (Main hand: Left): its order mirrors, the marker still on its inner side. */
+	get mirrored() { return this.xr.toolFan === 'right'; }
+
+	/**
+	 * Slot i's place in the arc (the fan's own space, without the lift and the
+	 * bob): the camera on the fan hand's outer side, the meter in the middle,
+	 * the marker on its inner side, either hand (B1; mirrored over the right
+	 * hand: the Tester's finding).
+	 */
+	slotAt(i, out = new THREE.Vector3()) {
+		const k = (i - 1) * (this.mirrored ? -1 : 1);
+		return out.set(k * SPACING, Math.cos((i - 1) * 0.5) * 0.02 - 0.02, 0);
+	}
+
 	/** Where slot i rests in the fan (world): its place in the arc, without the touched lift or the bob. */
 	restWorld(i, out = new THREE.Vector3()) {
 		this.group.updateWorldMatrix(true, false);
-		return this.group.localToWorld(out.set((i - 1) * SPACING, Math.cos((i - 1) * 0.5) * 0.02 - 0.02, 0));
+		return this.group.localToWorld(this.slotAt(i, out));
 	}
 
 	/** The fan where aim() put it, turned to face you; tools bob gently (not the inactive camera). */
@@ -275,7 +289,8 @@ export class ToolFan {
 		this.slots.forEach((s, i) => {
 			const lift = s === this.hot && s.live ? 0.012 : 0;
 			const bob = s.live ? 0.004 * Math.sin(this.t * 2 + i * 1.7) : 0;
-			s.home.position.set((i - 1) * SPACING, Math.cos((i - 1) * 0.5) * 0.02 - 0.02 + lift + bob, 0);
+			this.slotAt(i, s.home.position).y += lift + bob;
+			s.pose.rotation.y = this.mirrored ? -(VIEW[s.name] ?? 0) : VIEW[s.name] ?? 0; // (mirrored over the right hand: the marker's cap still turns to you)
 			if (!s.held) s.object.visible = shown;
 		});
 		for (const s of this.slots) s.label.mesh.visible = !s.held && shown; // (the name tags go while the tool is in your hand)
