@@ -9,7 +9,8 @@
 // about 192 x 128, refreshed a few times a second (fewer on Quest 2), and not
 // at all when it faces away from you; it shows the lens (e.g. "28 mm").
 // After a shot a small print pops out of the camera, floats a moment and
-// drifts back into the camera. Lens: 24, 28 (default), 35 or 50 mm, set in
+// drifts back into the camera. Lens: wide angle 24 mm (default), medium lens 50 mm or zoom lens 75 mm (the user's
+// three, build 215's B3), set in
 // on the camera's dial (js/tool-dial.js; remembered: js/settings.js cameraLens).
 
 import * as THREE from 'three';
@@ -32,6 +33,9 @@ const PHOTO = [1920, 1280]; // 3:2
 const FILM_H = 24; // 35 mm film height (mm): vertical field of view from the focal length
 
 /** Vertical field of view (degrees) of a focal length on 35 mm film (36 x 24). */
+/** The three lenses: their focal length (mm) and name (the dial's stops and its label; the viewfinder shows the mm). */
+export const LENSES = [{ mm: 24, name: 'Wide angle' }, { mm: 50, name: 'Medium lens' }, { mm: 75, name: 'Zoom lens' }];
+
 export const lensFov = (mm) => THREE.MathUtils.radToDeg(2 * Math.atan(FILM_H / 2 / mm));
 
 export class StreetCamera {
@@ -45,7 +49,7 @@ export class StreetCamera {
 		this.screenPoint = this.object.getObjectByName('screen');
 		// The viewfinder: a render target on a plane over the back screen.
 		this.target = typeof document !== 'undefined' ? new THREE.WebGLRenderTarget(...SCREEN) : null;
-		this.view = new THREE.PerspectiveCamera(lensFov(xr.cameraLens ?? 28), SCREEN[0] / SCREEN[1], 0.05, VIEW_FAR);
+		this.view = new THREE.PerspectiveCamera(lensFov(xr.cameraLens ?? LENSES[0].mm), SCREEN[0] / SCREEN[1], 0.05, VIEW_FAR);
 		this.screen = new THREE.Mesh(new THREE.PlaneGeometry(0.048, 0.032),
 			new THREE.MeshBasicMaterial({ map: this.target?.texture ?? null, color: this.target ? 0xffffff : 0x5d6873, toneMapped: false }));
 		this.screen.position.copy(this.screenPoint.position).z += 0.0006;
@@ -64,10 +68,10 @@ export class StreetCamera {
 		this.t = 0;
 		this.prints = [];
 		this.controls = ['stickPress']; // the stick press of its hand steps its one option: the lens (js/tool-dial.js)
-		this.option = { part: 'control', stops: [24, 28, 35, 50].map((mm) => ({ value: mm, label: `${mm} mm` })), get: () => this.mm, set: (mm) => this.xr.menuAction({ id: 'lens', value: mm }) };
+		this.option = { part: 'control', stops: LENSES.map((l) => ({ value: l.mm, label: l.name })), get: () => this.mm, set: (mm) => this.xr.menuAction({ id: 'lens', value: mm }) };
 		this.guide = new FramingGuide(xr); // the red frame where the photo's edges fall (js/framing-guide.js)
 		this._lens = new THREE.Matrix4(); this._turn = new THREE.Matrix4().makeRotationY(Math.PI);
-		this.setLens(xr.cameraLens ?? 28);
+		this.setLens(xr.cameraLens ?? LENSES[0].mm);
 	}
 
 	setLens(mm) {

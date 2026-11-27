@@ -34,7 +34,7 @@ export const SETTINGS = {
 	mainHand: { key: 'casawalk.mainHand', options: ['right', 'left'], fallback: 'right' }, // the hand that wears the wrist menu and takes tools from the fan (the fan floats over the other)
 	sound: { key: 'casawalk.sound', options: ['off', 'effects', 'all'], fallback: 'all' }, // all: effects and the ambience (milestone H)
 	// (The guide's 'casawalk.walkGuide' setting went in Nov 2026: nothing read it. A stored value is simply never read.)
-	cameraLens: { key: 'casawalk.cameraLens', options: [24, 28, 35, 50], fallback: 28 }, // the street camera's lens, mm (milestone D)
+	cameraLens: { key: 'casawalk.cameraLens', options: [24, 50, 75], fallback: 24 }, // the street camera's lens, mm (milestone D; three since build 215's B3: a stored 28 or 35 reads as the fallback)
 	markerColour: { key: 'casawalk.markerColour', options: ['black', 'blue', 'green', 'red'], fallback: 'black' }, // the marker's ink (its cap's dial)
 	meterUnits: { key: 'casawalk.meterUnits', options: ['cm', 'ftin'], fallback: null }, // the laser meter's units (null: from the browser's region, js/measure.js defaultUnits)
 	// (The first-time lessons' and the pinch hand's 'casawalk.welcome.*' keys went on 26 Nov 2026: tips are per VR

@@ -1533,7 +1533,7 @@ check('back from walking: eyes at 1.89 m again, gallery shown, lasers on', Math.
 	await click('right', 'squeeze'); await frames(6);
 	await page.evaluate(() => { const d = window.__device.controllers.right; d.position.set(0.05, 1.35, -0.3); d.quaternion.set(0, 0, 0, 1); }); await frames(30);
 	const cam = await page.evaluate(() => { const x = window.__casawalk.xr, c = x.fan.camera; return { tool: x.tools.held?.tool.name, meterBack: !x.fan.slots[1].held, frames: c.frames ?? 0, lens: c.mm }; });
-	check('the street camera is taken (the meter goes back); its viewfinder shows the view through the lens', cam.tool === 'camera' && cam.meterBack && cam.frames > 0 && cam.lens === 28, JSON.stringify(cam));
+	check('the street camera is taken (the meter goes back); its viewfinder shows the view through the lens', cam.tool === 'camera' && cam.meterBack && cam.frames > 0 && cam.lens === 24, JSON.stringify(cam));
 	await shot('camera-held');
 	// The shutter: a 3:2 photo from the lens, kept for the page. (Called directly: from inside the
 	// emulator's XR frame, saving to IndexedDB stalls in headless Chromium.)

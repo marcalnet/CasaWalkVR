@@ -1,7 +1,7 @@
 // One option per tool, set on one round dial (the next-build asks 3.4): every
 // tool has exactly one option and one control part, the same way on each.
 //
-//   camera  its top, back edge 24 · 28 · 35 · 50 mm   (the viewfinder shows it)
+//   camera  its top, back edge wide angle · medium lens · zoom lens (24 · 50 · 75 mm; the viewfinder shows the mm)
 //   marker  the cap           black · blue · green · red (the cap's colour)
 //   meter   the blade end     cm · ft in             (the reading's units)
 //

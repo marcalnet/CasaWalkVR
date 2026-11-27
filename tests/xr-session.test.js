@@ -433,7 +433,9 @@ test('one option per tool, on one dial: the stick steps it (the dial shows 1.5 s
 	assert.ok(cues.meter.faces, 'the meter: a ring at its blade, facing you');
 	const lens0 = x.cameraLens;
 	press('right', 'stick'); frame(); press('right', 'stick', false); frame();
-	assert.ok(x.cameraLens !== lens0 && dial.open?.stepped && dial.label.mesh.visible && dial.label.text === `${x.cameraLens} mm`, 'the stick: the next lens, the dial and its label');
+	const { LENSES } = await import('../js/street-camera.js');
+	assert.deepEqual(cam.option.stops.map((s) => [s.value, s.label]), [[24, 'Wide angle'], [50, 'Medium lens'], [75, 'Zoom lens']], 'three lenses, named (build 215, B3)');
+	assert.ok(x.cameraLens !== lens0 && dial.open?.stepped && dial.label.mesh.visible && dial.label.text === LENSES.find((l) => l.mm === x.cameraLens).name, 'the stick: the next lens, the dial and its label');
 	for (let i = 0; i < 120; i++) frame();
 	assert.ok(!dial.open, 'stepped: it shows 1.5 s');
 	// The other hand's tip on the lens: the dial opens; a stop chosen closes it.
@@ -1231,7 +1233,7 @@ test('the tool fan: floats over the tracked left hand, wherever it is; the right
 	press('right', 'grip'); frame(); press('right', 'grip', false); frame();
 	assert.equal(x.tools.held?.tool.name, 'camera', 'the camera is taken too');
 	let shots = 0;
-	x.capturePhoto = (o) => { shots++; assert.ok(o.width / o.height === 1.5 && Math.abs(o.fov - 46.4) < 0.1, '3:2, 28 mm'); };
+	x.capturePhoto = (o) => { shots++; assert.ok(o.width / o.height === 1.5 && Math.abs(o.fov - 53.1) < 0.1, '3:2, 24 mm (wide angle, the default)'); };
 	press('right', 'trigger'); frame(); press('right', 'trigger', false); frame();
 	assert.equal(shots, 1, 'the trigger is the shutter');
 	x.menuAction({ id: 'lens', value: 50 });

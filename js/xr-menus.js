@@ -240,7 +240,7 @@ export function menuAction(xr, target) {
 			} });
 			break;
 		case 'lens':
-			xr.cameraLens = SETTINGS.cameraLens.options.includes(value) ? value : 28;
+			xr.cameraLens = SETTINGS.cameraLens.options.includes(value) ? value : SETTINGS.cameraLens.fallback;
 			writeSetting('cameraLens', xr.cameraLens);
 			xr.fan?.camera?.setLens(xr.cameraLens);
 			updateLabels(xr);
