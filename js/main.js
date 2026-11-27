@@ -432,10 +432,28 @@ const linkWayRound = () => (ON_HEADSET
 
 /** Opens a link's model: the model service checks and downloads it (saying what is wrong), then load() shows it. */
 async function loadUrl(url, { remember = true } = {}) {
-	const { name, bytes } = await models.fetchLink(url, { base: location.href, wayRound: linkWayRound });
-	url = url.trim();
-	if (remember) { setLastLink(url); $('link-input').value = url; }
-	return load([{ name, bytes }], name, { type: 'link', url });
+	try {
+		const { name, bytes } = await models.fetchLink(url, { base: location.href, wayRound: linkWayRound });
+		url = url.trim();
+		if (remember) { setLastLink(url); $('link-input').value = url; }
+		return await load([{ name, bytes }], name, { type: 'link', url });
+	} finally {
+		forgetModelParam();
+	}
+}
+
+/**
+ * Takes ?model= out of the address once a link has been tried (security
+ * review C2): a share link can carry its key (a Dropbox rlkey, a Drive share),
+ * and it should not stay in the headset's address bar or history. Replaced,
+ * not pushed, as Receive does with ?pair= (js/page/send.js). A link from
+ * another site waits in the link box until Load, so it leaves the address then.
+ */
+function forgetModelParam() {
+	const clean = new URL(location.href);
+	if (!clean.searchParams.has('model')) return;
+	clean.searchParams.delete('model');
+	history.replaceState(history.state, '', clean);
 }
 
 // The photos taken in VR, kept until saved to Downloads (js/page/files-card.js).
