@@ -64,7 +64,7 @@ export class StreetCamera {
 		this.t = 0;
 		this.prints = [];
 		this.controls = ['stickPress']; // the stick press of its hand steps its one option: the lens (js/tool-dial.js)
-		this.option = { part: 'lens', stops: [24, 28, 35, 50].map((mm) => ({ value: mm, label: `${mm} mm` })), get: () => this.mm, set: (mm) => this.xr.menuAction({ id: 'lens', value: mm }) };
+		this.option = { part: 'control', stops: [24, 28, 35, 50].map((mm) => ({ value: mm, label: `${mm} mm` })), get: () => this.mm, set: (mm) => this.xr.menuAction({ id: 'lens', value: mm }) };
 		this.guide = new FramingGuide(xr); // the red frame where the photo's edges fall (js/framing-guide.js)
 		this._lens = new THREE.Matrix4(); this._turn = new THREE.Matrix4().makeRotationY(Math.PI);
 		this.setLens(xr.cameraLens ?? 28);

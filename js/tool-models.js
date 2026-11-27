@@ -221,9 +221,11 @@ export function buildCamera({ inactive = false } = {}) {
 
 	point(g, 'grip', 0.044, -0.008, 0);
 	point(g, 'lens', lx, ly, zFront - 0.035, [0, 0, -1]);
-	// The quiet ring on the control part (js/tool-dial.js): a band round the lens barrel's side at its back edge, just in
-	// front of the mount, where it is seen from behind in the hold (the UX review's S5).
-	g.userData.cue = { shape: 'band', at: [lx, ly, zFront - 0.0055 - 0.00125], radius: 0.0212 + 0.0005 };
+	// The control part (its dial: the lens) and its quiet ring (js/tool-dial.js): on the top of the body at its back edge, on the
+	// grip's side, where a real camera's dial sits, a flat ring facing up, seen from above while held. (On the lens it was
+	// hidden by the body in the hold: the Tester's xr-39; the Designer, next-build asks 3.6.)
+	point(g, 'control', 0.022, yTop, d / 2 - 0.011);
+	g.userData.cue = { shape: 'ring', at: [0.022, yTop + 0.0005, d / 2 - 0.011], radius: 0.011, up: true };
 	point(g, 'viewfinder', -0.040, ySplit + topH / 2, d / 2 + 0.003, [0, 0, 1]);
 	point(g, 'shutter', 0.043, yTop + 0.005, 0);
 	point(g, 'screen', -0.012, -0.008, d / 2 + 0.001, [0, 0, 1]);

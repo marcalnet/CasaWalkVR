@@ -420,13 +420,15 @@ test('one option per tool, on one dial: the stick steps it (the dial shows 1.5 s
 	frame();
 	const cue = dial.cues.get(cam);
 	assert.ok(cue && cue.pulse > 0, 'the lens carries its quiet ring, pulsing on the first take');
-	// Where each is seen in the hand (the UX review's S5): 2.5 mm, depth-tested; the camera's a band round the lens barrel's back edge,
+	// Where each is seen in the hand (the UX review's S5): 2.5 mm, depth-tested; the camera's a flat ring facing up on its top's back edge,
 	// the marker's a ring on its cap's end facing along the axis, the meter's a ring at its blade facing you.
 	for (let i = 0; i < 3; i++) frame();
 	const { CONTROL_CUE } = await import('../js/theme.js');
 	const cues = Object.fromEntries([...dial.cues].map(([t, c]) => [t.name, c]));
 	assert.ok(CONTROL_CUE.width === 0.0025 && Object.values(cues).every((c) => c.mesh.material.depthTest), '2.5 mm, depth-tested');
-	assert.ok(cues.camera.mesh.geometry.type === 'CylinderGeometry' && cues.camera.mesh.parent === cam.object && !cues.camera.faces, 'the camera: a band on its body, round the lens barrel');
+	const camN = new THREE.Vector3(0, 0, 1).applyQuaternion(cues.camera.mesh.quaternion), camG = cues.camera.mesh.geometry;
+	camG.computeBoundingBox();
+	assert.ok(camG.type === 'RingGeometry' && cues.camera.mesh.parent === cam.object && !cues.camera.faces && camG.boundingBox.max.y - camG.boundingBox.min.y < 1e-6 && cam.option.part === 'control', 'the camera: a flat ring facing up on its top edge, the touch zone there too (the Designer, 3.6)');
 	assert.ok(cues.marker.mesh.geometry.type === 'RingGeometry' && cues.marker.mesh.parent === x.fan.marker.object && cues.marker.mesh.position.z > 0.082 && !cues.marker.faces, 'the marker: a ring on the cap\'s end, along the axis');
 	assert.ok(cues.meter.faces, 'the meter: a ring at its blade, facing you');
 	const lens0 = x.cameraLens;

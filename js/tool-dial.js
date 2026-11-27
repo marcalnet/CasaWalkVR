@@ -1,7 +1,7 @@
 // One option per tool, set on one round dial (the next-build asks 3.4): every
 // tool has exactly one option and one control part, the same way on each.
 //
-//   camera  the lens barrel   24 · 28 · 35 · 50 mm   (the viewfinder shows it)
+//   camera  its top, back edge 24 · 28 · 35 · 50 mm   (the viewfinder shows it)
 //   marker  the cap           black · blue · green · red (the cap's colour)
 //   meter   the blade end     cm · ft in             (the reading's units)
 //
@@ -203,11 +203,11 @@ export class ToolDial {
 			if (!tool.option) continue;
 			let cue = this.cues.get(tool);
 			if (!cue) {
-				// Where the model says it is seen in the hand (userData.cue: a band round the camera's lens barrel, a ring on
+				// Where the model says it is seen in the hand (userData.cue: a flat ring on the camera's top edge, a ring on
 				// the marker's cap end), else a ring round the control part, facing you (the meter's blade). Depth-tested.
 				const spec = tool.object.userData.cue, w = CONTROL_CUE.width;
 				const geo = spec?.shape === 'band' ? new THREE.CylinderGeometry(spec.radius, spec.radius, w, 32, 1, true).rotateX(Math.PI / 2)
-					: spec?.shape === 'ring' ? new THREE.RingGeometry(spec.radius - w, spec.radius, 32)
+					: spec?.shape === 'ring' ? new THREE.RingGeometry(spec.radius - w, spec.radius, 32).rotateX(spec.up ? -Math.PI / 2 : 0)
 						: new THREE.RingGeometry(DIAL.ZONE / 2, DIAL.ZONE / 2 + w, 32);
 				cue = { mesh: new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: CONTROL_CUE.color, transparent: true, opacity: CONTROL_CUE.opacity, depthWrite: false, side: THREE.DoubleSide })), pulse: 0, faces: !spec };
 				cue.mesh.name = 'control-cue';

@@ -23,7 +23,7 @@ export const BADGE = {
 	orb: { fill: '#d9822b', text: '#fff' },
 };
 
-/** Each tool's control part (the lens, the cap, the blade): a permanent quiet ring (draft: the orange accent at 40%), one soft pulse on the first take each session (js/tool-dial.js). */
+/** Each tool's control part (the camera's top edge, the marker's cap, the meter's blade): a permanent quiet ring (draft: the orange accent at 40%), one soft pulse on the first take each session (js/tool-dial.js). */
 export const CONTROL_CUE = { color: '#e07a1f', opacity: 0.4, width: 0.0025 }; // (2.5 mm, depth-tested: the UX review's S5)
 
 /** The real controllers (js/controller-model.js): the held tool's buttons glow faintly in the orange of the thing to press. */
