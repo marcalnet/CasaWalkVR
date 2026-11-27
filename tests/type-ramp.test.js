@@ -7,6 +7,7 @@
 // interface font as Roboto, the Quest Browser's), in em.
 // (Not listed: the ?hands and ?stats readouts, development only.)
 import { test } from 'node:test';
+import * as THREE from 'three';
 import assert from 'node:assert/strict';
 import { RAMP, CAP, capDeg, pxFor, kalamEm } from '../js/type-ramp.js';
 import { PX_H, labelRange } from '../js/keys.js';
@@ -19,8 +20,7 @@ import { PHOTO_TEXT, PHOTO_NOTE, photoNoteType, NOTES, LABEL_PX_LASER } from '..
 import { PAUSE } from '../js/pause.js';
 import { BOARD_PX_PER_M } from '../js/xr-menus.js';
 import { LINES } from '../js/guide.js';
-import { SCREEN, LABEL_H as METER_LABEL_H, SLOT } from '../js/laser-meter.js';
-import { CAMERA_TYPE } from '../js/street-camera.js';
+import { SCREEN, LABEL_H as METER_LABEL_H, SLOT, LABEL_DEG, labelScale } from '../js/laser-meter.js';
 import { PLATE, WRIST } from '../js/theme.js';
 
 // Widths in em (Chromium, 27 Nov 2026).
@@ -104,11 +104,7 @@ function texts() {
 		const unit = { '87': 'cm', '2.45': 'm', "12' 4½\"": 'ft in' }[v];
 		add(`meter screen: "${unit}" under "${v}"`, 'ui', Math.max(Math.round(px * 0.6), SCREEN.unitMin), sm, SCREEN.readAt, RAMP.label);
 	}
-	add('a measured line\'s label, 2 m away', 'ui', 40, METER_LABEL_H / SLOT[1], DIST.meterNear, RAMP.label);
-	add('a measured line\'s label, 5 m away', 'ui', 40, METER_LABEL_H / SLOT[1], DIST.meterFar, RAMP.label);
-	// The camera's back: known to be small (open).
-	add('camera: its hint ("Pinch: take a photo")', 'kalam', CAMERA_TYPE.hint.px, CAMERA_TYPE.hint.h / CAMERA_TYPE.hint.canvas[1], 0.45, RAMP.kalam, 'the camera\'s back is 5 cm across: the Designer to decide (build 215\'s C5 review)');
-	add('camera: the lens on the viewfinder', 'ui', CAMERA_TYPE.lens.px, CAMERA_TYPE.lens.h / CAMERA_TYPE.lens.canvas[1], 0.45, RAMP.label, 'as above');
+	for (const [m, d] of [['dollhouse', 0.8], ['walk', 1], ['walk', DIST.meterNear], ['walk', DIST.meterFar], ['walk', 12]]) add(`a measured line's label, ${m === 'dollhouse' ? 'at the scale model' : 'inside'}, ${d} m away`, 'ui', 40, labelScale(d, m) * METER_LABEL_H / SLOT[1], d, LABEL_DEG[0]);
 	return t;
 }
 
@@ -121,7 +117,7 @@ test('every drawn word is at least its line of the type ramp, at the distance it
 	});
 	console.log(`Every drawn word (cap height, its line, at its distance):\n${report.join('\n')}`);
 	assert.deepEqual(under, [], 'under the ramp');
-	assert.deepEqual(rows.filter((r) => r.open).map((r) => r.what), ['camera: its hint ("Pinch: take a photo")', 'camera: the lens on the viewfinder'], 'only the camera\'s back is open');
+	assert.deepEqual(rows.filter((r) => r.open), [], 'nothing open (the camera\'s back has no words: the Designer)');
 });
 
 test('the C5 numbers: keys\' words 11-14 mm at 0.45 m, the level keys\' 18 mm at 0.72 m, the tool tags\' 12 mm at 0.5 m', () => {
@@ -135,3 +131,14 @@ test('the C5 numbers: keys\' words 11-14 mm at 0.45 m, the level keys\' 18 mm at
 	assert.ok(Math.abs(levelKeyWidth(['Ground floor', 'First floor'], 0.05) - 0.14) < 0.005 && levelKeyWidth(['Level 0', 'Level 1'], 0.05) === 0.11, 'one width for the stack, from its longest name');
 	assert.equal(DOOR_TYPE.label[0], 1.2, 'past 14 cm a name shrinks to 1.2° at the least');
 });
+
+test('a measured line\'s label: the user\'s 20 cm at 1:1, its capitals never under 0.8° as seen; at the scale model never over 2.0° (about 2.8 cm), inside no cap (5x at any distance: about 7 cm, 4° at 1 m)', () => {
+	assert.deepEqual(LABEL_DEG, [0.8, 2.0]);
+	const capAt = (d, m) => CAP.ui * 40 / SLOT[1] * METER_LABEL_H * labelScale(d, m), deg = (d, m) => THREE.MathUtils.radToDeg(Math.atan(capAt(d, m) / d));
+	for (const d of [0.3, 0.8, 1.5, 2, 3, 5, 9, 20]) assert.ok(deg(d, 'dollhouse') >= 0.8 - 1e-9 && deg(d, 'dollhouse') <= 2.0 + 1e-9, `the scale model, ${d} m: ${deg(d, 'dollhouse').toFixed(2)}°`);
+	assert.ok(Math.abs(capAt(0.8, 'dollhouse') - 0.028) < 0.001, `at the scale model, 0.8 m: ${(capAt(0.8, 'dollhouse') * 100).toFixed(1)} cm of capitals`);
+	for (const d of [0.5, 1, 1.5, 2, 5]) assert.equal(labelScale(d, 'walk'), 1, `inside, ${d} m: the user's size, no cap`);
+	assert.ok(Math.abs(capAt(1, 'walk') - 0.072) < 1e-6 && deg(1, 'walk') > 4 && deg(1, 'walk') < 4.2, `inside at 1 m: 7.2 cm, ${deg(1, 'walk').toFixed(1)}°`);
+	for (const d of [9, 20]) assert.ok(labelScale(d, 'walk') > 1 && Math.abs(deg(d, 'walk') - 0.8) < 1e-9, `inside, ${d} m: grown to the 0.8° floor`);
+});
+

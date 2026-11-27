@@ -7,17 +7,15 @@
 //
 // The back carries a small viewfinder screen: the view through the lens,
 // about 192 x 128, refreshed a few times a second (fewer on Quest 2), and not
-// at all when it faces away from you; it shows the lens (e.g. "28 mm").
+// at all when it faces away from you; nothing is written on the back (build 215's C5).
 // After a shot a small print pops out of the camera, floats a moment and
 // drifts back into the camera. Lens: wide angle 24 mm (default), medium lens 50 mm or zoom lens 75 mm (the user's
 // three, build 215's B3), set in
 // on the camera's dial (js/tool-dial.js; remembered: js/settings.js cameraLens).
 
 import * as THREE from 'three';
-import { canvasTexture } from './canvas-card.js';
 import { DEVICE } from './device.js';
 import { buildCamera } from './tool-models.js';
-import { COLOURS, FONT, GUIDE } from './theme.js';
 import { FramingGuide } from './framing-guide.js';
 
 const SCREEN = [192, 128]; // viewfinder pixels
@@ -55,15 +53,8 @@ export class StreetCamera {
 		this.screen.position.copy(this.screenPoint.position).z += 0.0006;
 		this.screen.name = 'viewfinder';
 		this.object.add(this.screen);
-		// The lens, written over the screen's corner.
-		this.lensLabel = makeLabel();
-		this.lensLabel.mesh.position.copy(this.screenPoint.position).add(new THREE.Vector3(0.016, -0.012, 0.001));
-		this.object.add(this.lensLabel.mesh);
-		// Its instruction, hand-lettered on the back under the screen (the user: simple, almost no printing).
-		this.hint = makeHint();
-		this.hint.mesh.position.copy(this.screenPoint.position).add(new THREE.Vector3(0, -0.0225, 0.001));
-		this.object.add(this.hint.mesh);
-		this.hint.set('Trigger: take a photo');
+		// (Nothing written on its back: the viewfinder alone. How to move and the use-mode ring say how to use it; the options row
+		// names the lens, and a change of lens shows its name for 1 s: build 215's C5, the Designer.)
 		this.held = null; // the hand holding it
 		this.t = 0;
 		this.prints = [];
@@ -78,14 +69,9 @@ export class StreetCamera {
 		this.mm = mm;
 		this.view.fov = lensFov(mm);
 		this.view.updateProjectionMatrix();
-		this.lensLabel.set(`${mm} mm`);
 	}
 
-	take(c) {
-		this.held = c;
-		// (Bare hands: the holding hand's pinch is the shutter, in use mode: build 215's C2, js/xr-tools.js.)
-		this.hint.set(c?.isHand ? 'Pinch: take a photo' : 'Trigger: take a photo');
-	}
+	take(c) { this.held = c; } // (bare hands: the holding hand's pinch is the shutter, in use mode: build 215's C2, js/xr-tools.js)
 	putBack() { this.held = null; this.guide.reset(); }
 
 	/** The stick press of the holding controller: the next lens, the dial shown (js/tool-dial.js). */
@@ -209,42 +195,3 @@ export class StreetCamera {
 }
 
 /** The camera's instruction: one short hand-lettered line in the orange of the thing to press. */
-// The words on the camera's back (canvas px over their height in metres): under the type ramp, open for the Designer (build 215's C5: tests/type-ramp.test.js lists them).
-export const CAMERA_TYPE = { hint: { px: 46, canvas: [512, 64], h: 0.00625 }, lens: { px: 28, canvas: [128, 48], h: 0.006 } };
-
-function makeHint() {
-	const { canvas, texture } = canvasTexture(512, 64);
-	const mesh = new THREE.Mesh(new THREE.PlaneGeometry(0.05, 0.00625), new THREE.MeshBasicMaterial({ map: texture, transparent: true, toneMapped: false }));
-	mesh.name = 'camera-hint';
-	return {
-		mesh,
-		set(text) {
-			if (!canvas) return;
-			const ctx = canvas.getContext('2d');
-			ctx.clearRect(0, 0, 512, 64);
-			ctx.fillStyle = COLOURS.primary; ctx.font = `700 ${CAMERA_TYPE.hint.px}px ${GUIDE.font}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-			ctx.fillText(text, 256, 34);
-			texture.needsUpdate = true;
-		},
-	};
-}
-
-/** A small canvas label (the lens, on the viewfinder). */
-function makeLabel() {
-	const { canvas, texture } = canvasTexture(128, 48, { anisotropy: 1 });
-	const mesh = new THREE.Mesh(new THREE.PlaneGeometry(0.016, 0.006), new THREE.MeshBasicMaterial({ map: texture, transparent: true, toneMapped: false }));
-	mesh.name = 'lens-label';
-	return {
-		mesh,
-		set(text) {
-			if (!canvas) return;
-			const ctx = canvas.getContext('2d');
-			ctx.clearRect(0, 0, 128, 48);
-			ctx.fillStyle = 'rgba(29,35,41,0.7)';
-			ctx.beginPath(); ctx.roundRect(0, 0, 128, 48, 12); ctx.fill();
-			ctx.fillStyle = COLOURS.cell; ctx.font = `600 ${CAMERA_TYPE.lens.px}px ${FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-			ctx.fillText(text, 64, 25);
-			texture.needsUpdate = true;
-		},
-	};
-}

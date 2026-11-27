@@ -2064,7 +2064,7 @@ test('sticky tools, bare hands (build 215, C1 and C2): the pinch is the trigger 
 	assert.equal(x.tools.held.mode, 'use');
 	pinch();
 	assert.equal(shots, 1, 'in use mode the pinch takes the photo');
-	assert.equal(cam.hint?.text ?? 'Pinch: take a photo', 'Pinch: take a photo', 'the camera says so (no more "with a controller, for now")');
+	assert.ok(!cam.hint && !cam.lensLabel && !cam.object.getObjectByName('camera-hint') && !cam.object.getObjectByName('lens-label'), 'nothing written on the camera\'s back (build 215, C5: How to move and the use-mode ring say how)');
 	// Tracking lost for 3 s: still in the hand; faded after 1 s; back with the hand.
 	c.touch.tracked = false;
 	for (let t = 0; t < 3; t += 1 / 72) x.tools.update(1 / 72);

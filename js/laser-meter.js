@@ -27,7 +27,7 @@ import { Measurements, readingParts, formatLength, defaultUnits } from './measur
 import { readSetting, writeSetting } from './settings.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { COLOURS, FONT } from './theme.js';
-import { RAMP, pxFor } from './type-ramp.js';
+import { RAMP, CAP, pxFor } from './type-ramp.js';
 
 const REACH = 20; // metres: the laser's reach (in the world)
 const LINE_R = 0.002; // metres, to the eye: a measuring line's radius
@@ -36,6 +36,12 @@ export const SCREEN = { W: 256, H: 480, size: [0.032, 0.060], readAt: 0.45 };
 SCREEN.unitMin = pxFor(RAMP.label, 'ui', SCREEN.size[1] / SCREEN.H, SCREEN.readAt);
 export const LABEL_H = 0.20; // metres, to the eye, at 1:1 (a label's height: 5x, build 215's C4)
 const LABEL_LIFT = 0.10; // metres, to the eye: a label's lower edge over its line's middle, never on it
+// A label's text, as seen (the Designer's angular cap, after the Tester's C4 review: at the scale model a 20 cm label covered the
+// floor you measured): the user's 20 cm at 1:1, its capitals never under 0.8° from the eyes, and at the scale model never over
+// 2.0° (about 2.8 cm of capitals at 0.8 m). Inside there is no cap: the user's 5x holds at any distance (about 7 cm of capitals,
+// 4° at 1 m). The lift scales with it. Each frame.
+export const LABEL_DEG = [0.8, 2.0];
+const LABEL_TEXT_PX = 40; // the text's size in its slot (canvas px of SLOT[1])
 const DASH = { on: 0.02, off: 0.01, opacity: 0.5, MAX: 400 }; // the dashed line to the dot (to the eye): 2 cm on, 1 cm off, half strength
 const BEAM = 0xe5484d, LINE = 0xe07a1f; // red laser; the measured lines in the orange accent
 export const LABEL_SLOTS = 32, SLOT = [256, 80], ATLAS = [1024, 640]; // the labels' shared picture: 4 x 8 slots
@@ -292,7 +298,7 @@ class LabelLayer {
 				ctx.fillStyle = '#ffffff'; // (opaque: build 215's C4)
 				ctx.beginPath(); ctx.roundRect(x + 4, y + 4, sw - 8, sh - 8, 24); ctx.fill();
 				ctx.strokeStyle = COLOURS.primary; ctx.lineWidth = 4; ctx.stroke();
-				ctx.fillStyle = COLOURS.text; ctx.font = `700 40px ${FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+				ctx.fillStyle = COLOURS.text; ctx.font = `700 ${LABEL_TEXT_PX}px ${FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
 				ctx.fillText(it.text, x + sw / 2, y + sh / 2 + 2);
 			}
 			const u0 = x / ATLAS[0], u1 = (x + sw) / ATLAS[0], v1 = 1 - y / ATLAS[1], v0 = 1 - (y + sh) / ATLAS[1];
@@ -303,7 +309,7 @@ class LabelLayer {
 		if (this.texture) this.texture.needsUpdate = true;
 	}
 
-	/** Turns every label to you, LABEL_H tall to the eye (k: model units per metre). */
+	/** Turns every label to you, LABEL_H tall to the eye, its capitals clamped to LABEL_DEG as seen (k: model units per metre). */
 	face(xr, k) {
 		if (!this.items.length) return;
 		const parent = this.mesh.parent;
@@ -312,17 +318,30 @@ class LabelLayer {
 		const inv = this._m.copy(parent.matrixWorld).invert();
 		const cam = xr.camera.matrixWorld;
 		const r = this._r.setFromMatrixColumn(cam, 0).transformDirection(inv), u = this._u.setFromMatrixColumn(cam, 1).transformDirection(inv);
-		const h = LABEL_H * k, w = h * SLOT[0] / SLOT[1];
+		const eye = this._eye ??= new THREE.Vector3(), at = this._at ??= new THREE.Vector3();
+		eye.setFromMatrixPosition(cam);
 		const pos = this.mesh.geometry.attributes.position.array, e = this._e;
 		this.items.forEach((it, i) => {
-			const c = it.at;
+			const c = it.at, s = labelScale(at.copy(c).applyMatrix4(parent.matrixWorld).distanceTo(eye), xr.mode);
+			const h = LABEL_H * s * k, w = h * SLOT[0] / SLOT[1];
 			for (const [j, sx, sy] of [[0, -1, -1], [1, 1, -1], [2, 1, 1], [3, -1, 1]]) {
-				e.copy(c).addScaledVector(r, sx * w / 2).addScaledVector(u, sy * h / 2 + h / 2 + LABEL_LIFT * k); // (its lower edge LABEL_LIFT over the line's middle)
+				e.copy(c).addScaledVector(r, sx * w / 2).addScaledVector(u, sy * h / 2 + h / 2 + LABEL_LIFT * s * k); // (its lower edge LABEL_LIFT over the line's middle, scaled with it)
 				pos.set([e.x, e.y, e.z], (i * 4 + j) * 3);
 			}
 		});
 		this.mesh.geometry.attributes.position.needsUpdate = true;
 	}
+}
+
+/**
+ * A label's scale (1: the user's LABEL_H) for a label d metres from the eyes
+ * in mode ('dollhouse' | 'walk'): its capitals (LABEL_TEXT_PX of SLOT[1],
+ * times the font's cap ratio) never under LABEL_DEG[0] as seen, and at the
+ * scale model never over LABEL_DEG[1].
+ */
+export function labelScale(d, mode = 'walk') {
+	const cap = CAP.ui * LABEL_TEXT_PX / SLOT[1] * LABEL_H, t = (deg) => Math.tan(THREE.MathUtils.degToRad(deg)) * Math.max(d, 1e-3);
+	return THREE.MathUtils.clamp(cap, t(LABEL_DEG[0]), mode === 'dollhouse' ? t(LABEL_DEG[1]) : Infinity) / cap;
 }
 
 /**
