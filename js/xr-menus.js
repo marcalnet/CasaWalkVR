@@ -169,8 +169,8 @@ export function updateLabels(xr) {
 /**
  * Runs a key or a board cell: { id } for keys and switches (a switch flips),
  * { id, value } for an option. A bare id string works too. The doors (In,
- * Back) move one layer, through xr.goLayer(); Settings and Help open and
- * close the board and the help card; settings stay open.
+ * Back) move one layer, through xr.goLayer(); Settings opens and closes the
+ * wing (help is its How to move tab); settings keep it open.
  */
 export function menuAction(xr, target) {
 	const { id, value } = typeof target === 'string' ? { id: target } : target;

@@ -12,7 +12,7 @@
 //            opening at each place in a session shows How to move; after
 //            that, the last other tab used there (View at first; the
 //            next-build asks 3.3, kept in xr.store.tabs). It closes with the
-//            orb, Settings again, B/Y, moving between layers, or a press at
+//            Settings key again, B/Y, moving between layers, or a press at
 //            empty space (build 120's M1: a trigger pull, or a quick pinch,
 //            aimed at nothing you can use: emptyPress()); there is no Close key.
 //   Photo    the flash and note of a photo (the street camera, milestone D).
@@ -37,7 +37,7 @@ import { handAimRay, pinchGate } from './gestures.js';
 import { CLAIM } from './xr-targets.js';
 import { CLOSE_HINT } from './xr-menus.js';
 
-const KEEP_CLEAR = CLAIM.near; // a press with the hand this near a live key, the orb or a wing is never "empty" (m)
+const KEEP_CLEAR = CLAIM.near; // a press with the hand this near a live key or a wing is never "empty" (m)
 
 // The note after a photo. Photos are kept in the app and saved from the page
 // after VR (a download in VR would end the session).
@@ -79,8 +79,6 @@ export class XRUI {
 		this.xr = xr;
 		this.menu = null; // the open settings wing (a Panel), or null
 		this.menuPlace = null; // the place it opened at ('dollhouse' or 'walk')
-		this.opened = false; // Settings has opened this session
-		this.teleports = 0; // this session's teleports
 		this.wrist = new WristMenu(xr);
 		guideSheet.onLoad = () => this.menu?.draw(); // (the How to move pictures, once loaded)
 		this.touches = []; // per input entry: its touch on the open board (js/touch.js)
@@ -218,7 +216,6 @@ export class XRUI {
 		this.menu = panel;
 		this.menuPlace = xr.mode;
 		this.feel(null, 'open');
-		this.opened = true;
 	}
 
 	/** Which side the wing opens on: the main hand's (+1 left, -1 right). */
@@ -249,10 +246,10 @@ export class XRUI {
 	/**
 	 * Whether a press (a trigger pull, or a quick pinch) along the raycaster's
 	 * ray lands on nothing you can use, so it closes the wings (build 120, M1).
-	 * Usable: a wing, a key, the orb, the fan, a tool, the doors and levels
+	 * Usable: a wing, a key (the main hand's keys too), the fan, a tool, the doors and levels
 	 * keys, the model's box, the plinth. Never empty with a tool in that hand,
 	 * the fan open, or the hand (points: its fingertip, its pinch) within
-	 * KEEP_CLEAR of a key, the orb or a wing. Gallery walls, the floor, the sky,
+	 * KEEP_CLEAR of a key or a wing. Gallery walls, the floor, the sky,
 	 * and inside the home its walls and floors are empty.
 	 */
 	emptyPress(c, points = []) { return this.notEmpty(c, points) === null; }
@@ -302,9 +299,6 @@ export class XRUI {
 		}
 		return false;
 	}
-
-	/** Counts this session's teleports. */
-	onTeleport() { this.teleports++; } // (walk mode's own count runs across sessions: this one is per session)
 
 	/** Closes everything: the wing (moving between layers). */
 	closeAll() {
@@ -488,6 +482,9 @@ export class XRUI {
 	}
 
 	/** Leaving VR: everything closed and put away. */
+	/** The session ends (js/xr.js handleEnd): the wing, the notes and the main hand's keys put away. */
+	end() { this.reset(); }
+
 	reset() {
 		this.spent.clear();
 		this.closeMenu();
@@ -497,8 +494,6 @@ export class XRUI {
 		this.handsNote.mesh.visible = false;
 		this.errorNote.mesh.visible = false;
 		this.wrist.reset();
-		this.opened = false;
-		this.teleports = 0;
 		for (const row of this.touches) for (const st of row?.values() ?? []) { resetTouch(st.s); st.ring.visible = false; }
 	}
 }

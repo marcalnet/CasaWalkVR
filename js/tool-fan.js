@@ -17,11 +17,6 @@
 // hand, bring the tool back to its place in the fan. While a tool is held its
 // hand's trigger, grip and second button are the tool's (js/xr-tools.js).
 //
-// The street camera sits in the fan from milestone C, honestly inactive
-// (until milestone D): dimmed, not bobbing, a "Coming soon" tag on a string.
-// Touched or squeezed, it gives a small side-to-side wobble (sound deny) and
-// the tag swings forward and grows for 2 s.
-//
 // Keeping the two wrists apart: while the taking hand is within reach of the
 // tools (fanBusy: the reach, 0.25 m, let go at 0.35 m). (The orb ignored touches then; the keys that replaced it, build 215's C8, never do.)
 
@@ -75,9 +70,9 @@ export class ToolFan {
 		this.target = null; // the slot a closing bare hand would take: the touched one, one touched a moment ago, or the one at the palm
 		this.mem = null; // { slot, t }: the last slot a bare fingertip touched
 		this._outward = new THREE.Vector3(); // across the view, away from the middle, on the fan hand's side
-		const make = (name, object, live, tool = null) => {
-			const slot = { name, object, live, home: new THREE.Group(), pose: new THREE.Group(), wobble: 0, tagGrow: 0, held: false };
-			slot.pose.rotation.y = VIEW[name] ?? 0; // (the pose is the group's, so the tool's own rotation stays free for the wobble)
+		const make = (name, tool) => {
+			const object = tool.object, slot = { name, object, home: new THREE.Group(), pose: new THREE.Group(), held: false };
+			slot.pose.rotation.y = VIEW[name] ?? 0; // (the pose is the group's, so the tool's own rotation stays free)
 			slot.pose.add(object);
 			slot.home.add(slot.pose);
 			slot.label = new Label({ height: TAG.height, px: TAG.px, font: 'kalam' });
@@ -87,12 +82,11 @@ export class ToolFan {
 			slot.outline = outlineOf(object); // (the empty place, while its armed tool is near: js/hold.js, the magnet)
 			slot.home.add(slot.outline);
 			this.group.add(slot.home);
-			tool = tool ?? { name, object, live, trigger: () => {}, secondary: () => {} }; // (the meter in milestone E, the marker in F)
 			const own = { take: tool.take?.bind(tool), putBack: tool.putBack?.bind(tool) };
 			tool.take = (c) => { this.attach(slot, c); own.take?.(c); };
 			tool.putBack = () => { this.detach(slot); own.putBack?.(); };
 			slot.tool = tool;
-			if (live) xr.tools.add(tool);
+			xr.tools.add(tool);
 			return slot;
 		};
 		// The street camera works from milestone D (js/street-camera.js).
@@ -100,9 +94,9 @@ export class ToolFan {
 		this.meter = new LaserMeter(xr); // (milestone E)
 		this.marker = new MarkerTool(xr); // (milestone F)
 		this.slots = [
-			make('camera', this.camera.object, true, this.camera),
-			make('meter', this.meter.object, true, this.meter),
-			make('marker', this.marker.object, true, this.marker),
+			make('camera', this.camera),
+			make('meter', this.meter),
+			make('marker', this.marker),
 		];
 		for (const s of this.slots) s.object.scale.setScalar(s.object.userData.fanScale);
 		xr.scene.add(this.group);
@@ -170,8 +164,7 @@ export class ToolFan {
 		if (hot !== this.hot) {
 			if (hot && (hot.tickAt ?? -Infinity) <= this.t - TICK_GAP) {
 				hot.tickAt = this.t;
-				if (hot.live) this.feel(take, 'tick', 'tick');
-				else this.refuse(hot, take);
+				this.feel(take, 'tick', 'tick');
 			}
 			this.hot = hot;
 		}
@@ -197,8 +190,7 @@ export class ToolFan {
 			const grab = take.isController ? take.state.down.grip : take.gestures?.some((e) => e.type === 'fist');
 			const aim = take.isHand ? this.target : this.hot;
 			if (grab && aim && (!held || held.c !== take || held.mode !== 'use')) { // (in use mode the held tool owns its hand: js/hold.js)
-				if (!aim.live) this.refuse(aim, take);
-				else xr.tools.take(aim.tool, take);
+				xr.tools.take(aim.tool, take);
 			} else if (grab && held?.c === take && take.isController) {
 				// A squeeze away from the fan puts the held tool back.
 				xr.tools.putBack();
@@ -216,7 +208,6 @@ export class ToolFan {
 			}
 		}
 		this.meter.fit(); // (the measured lines keep their size to the eye whatever the zoom)
-		this.animate(dt);
 	}
 
 	/**
@@ -285,40 +276,19 @@ export class ToolFan {
 		return this.group.localToWorld(this.slotAt(i, out));
 	}
 
-	/** The fan where aim() put it, turned to face you; tools bob gently (not the inactive camera). */
+	/** The fan where aim() put it, turned to face you; tools bob gently. */
 	place(head) {
 		this.group.position.copy(this.pos ?? this._anchor);
 		this.group.lookAt(head);
 		const shown = this.alpha > 0.05;
 		this.slots.forEach((s, i) => {
-			const lift = s === this.hot && s.live ? 0.012 : 0;
-			const bob = s.live ? 0.004 * Math.sin(this.t * 2 + i * 1.7) : 0;
+			const lift = s === this.hot ? 0.012 : 0;
+			const bob = 0.004 * Math.sin(this.t * 2 + i * 1.7);
 			this.slotAt(i, s.home.position).y += lift + bob;
 			s.pose.rotation.y = this.mirrored ? -(VIEW[s.name] ?? 0) : VIEW[s.name] ?? 0; // (mirrored over the right hand: the marker's cap still turns to you)
 			if (!s.held) s.object.visible = shown;
 		});
 		for (const s of this.slots) s.label.mesh.visible = !s.held && shown; // (the name tags go while the tool is in your hand)
-	}
-
-	/** The inactive camera: a small shake of the head, sound deny, and its tag grows for 2 s. */
-	refuse(slot, c) {
-		slot.wobble = 0.3;
-		slot.tagGrow = 2;
-		this.feel(c, 'deny', 'deny');
-	}
-
-	animate(dt) {
-		for (const s of this.slots) {
-			if (s.wobble > 0) {
-				s.wobble = Math.max(0, s.wobble - dt);
-				s.object.rotation.z = Math.sin((0.3 - s.wobble) / 0.3 * Math.PI * 3) * 0.15 * (s.wobble / 0.3);
-			}
-			if (!s.live) {
-				s.tagGrow = Math.max(0, s.tagGrow - dt);
-				const tag = s.object.getObjectByName('tag');
-				if (tag) tag.scale.setScalar(1 + 0.8 * Math.min(1, s.tagGrow * 2));
-			}
-		}
 	}
 
 	/**
@@ -394,6 +364,9 @@ export class ToolFan {
 	}
 
 	/** Leaving VR: closed, nothing touched. */
+	/** The session ends (js/xr.js handleEnd): the fan put away (the tools themselves: js/xr-tools.js end). */
+	end() { this.reset(); }
+
 	reset() {
 		this.alpha = 0;
 		this.group.visible = false;

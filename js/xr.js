@@ -34,8 +34,8 @@
 // showroom gallery pedestal walkSky), input and raycaster, shared state
 // (session sessionMode model mode menu menus view vrView lift maxStorey
 // baseScale plinthSize plinthDistance and the settings snapAngle personHeight
-// solid seeThroughAmount toolFan), its services (lighting depth seeThrough ui
-// modes tools tweens haptics sound) and its methods. Each part owns what it
+// seeThroughAmount toolFan cameraLens), its services (lighting depth seeThrough
+// ui modes pause tools fan dial tweens haptics sound) and its methods. Each part owns what it
 // creates and reads shared values when it needs them, never keeping copies.
 
 import * as THREE from 'three';
@@ -118,7 +118,7 @@ export class XRExperience {
 		this.floorRay.layers.enableAll();
 		this.input = new XRInput(renderer, rig);
 		this.input.setVisible(false);
-		this.hideFromPhotos(...this.input.controllers.flatMap((c) => [c.ray, c.grip, c.wrist])); // lasers, controllers, and what they carry (orbs, tools)
+		this.hideFromPhotos(...this.input.controllers.flatMap((c) => [c.ray, c.grip, c.wrist])); // lasers, controllers, and what they carry (tools)
 		this.handViews = this.input.controllers.map((c) => new HandView(c)); // bare hands, drawn (milestone C0.2)
 		this.readout = DEV.hands ? new HandReadout(this) : null; // (?hands: the bare-hand tuning readout, for development)
 		this.frameStats = DEV.stats ? new FrameStats(this) : null; // (?stats: fps and draw calls in the headset, for measuring)
@@ -158,7 +158,7 @@ export class XRExperience {
 
 	/** The open settings board (a Panel), or null. */
 	get menu() { return this.ui.menu; } // the settings wing (right)
-	/** True while either wing (Settings, How to move) is open: nothing else claims the hands then. */
+	/** True while the Settings wing (How to move is its first tab) is open: nothing else claims the hands then. */
 	get boardOpen() { return !!this.ui.menu; }
 
 	/** A move between places in progress (js/pause.js), or null: the modes wait meanwhile. */
@@ -334,27 +334,14 @@ export class XRExperience {
 		for (const m of Object.values(this.modes)) m.exit(); // (drops grabs, aims, pulls and any teleport)
 		this.session = null;
 		this.hidden = false;
-		this.depth?.setActive(false);
-		this.applySeeThrough(); // the 2D page shows the model as modelled
 		this.mode = null;
 		this.pendingRecentre = false;
-		this.ui.reset(); // menus, notes, the wrist menu
-		this.pause.stop();
-		this.veil.clear();
 		this.body = null; this.areas = null;
-		for (const v of this.handViews) v.hide();
-		this.readout?.hide();
-		this.frameStats?.reset();
 		this.photoPending = false;
-		this.tools.end(); // tools back in the fan; measurements and drawings cleared
-		this.fan.reset();
-		this.dial.close(); this.dial.label.mesh.visible = false; // (an open dial would stay drawn on the 2D page: the audit's C1)
-		this.tweens.clear();
-		this.shadowsBusy = false; // (its tween just went: the switch would read "Shadows …" and ignore presses: the audit's C2)
-		this.haptics.stop();
-		this.sound.suspend();
+		this.shadowsBusy = false; // (its tween goes below: the switch would read "Shadows …" and ignore presses: the audit's C2)
+		for (const part of this.endingParts()) part?.end(); // (each part puts itself away: a new part joins the list)
+		this.applySeeThrough(); // the 2D page shows the model as modelled
 		this.walkSky.visible = false;
-		this.input.setVisible(false);
 		this.showroom.visible = false;
 		this.stage.visible = false;
 		this.stage.scale.setScalar(1); // (a session ended mid walk-in, in the tunnel zoom: the gallery would come back too big: the audit's S5)
@@ -368,6 +355,19 @@ export class XRExperience {
 		if (this.model) this.model.layers.ground.visible = true;
 		this.scene.background = this.saved?.background ?? null;
 		this.onEnd?.();
+	}
+
+	/**
+	 * The parts that put themselves away when the session ends (handleEnd),
+	 * in this order, each with end(): depth shading, the wing and notes (and
+	 * the main hand's keys), the pause, the veil, the drawn hands, the ?hands
+	 * and ?stats readouts, the tools (back in the fan, measurements and
+	 * drawings cleared), the fan, the options row, the tweens, vibration,
+	 * sound, the lasers and controllers. (Each "stuck after leaving VR" bug
+	 * was one more line here by hand: the audits' S5, C1, C2.)
+	 */
+	endingParts() {
+		return [this.depth, this.ui, this.pause, this.veil, ...this.handViews, this.readout, this.frameStats, this.tools, this.fan, this.dial, this.tweens, this.haptics, this.sound, this.input];
 	}
 
 	/**
@@ -488,7 +488,7 @@ export class XRExperience {
 		this.rig.updateMatrixWorld(true);
 	}
 
-	/** Shows the current settings in both menus (js/xr-menus.js). */
+	/** Shows the current settings on the Settings wing (js/xr-menus.js). */
 	updateLabels() { updateLabels(this); }
 
 	/** Runs a menu target: { id }, { id, value } or a bare id (js/xr-menus.js). */
@@ -538,9 +538,10 @@ export class XRExperience {
 	}
 
 	/**
-	 * The live keys the orb must never hide (the next-build asks 5.8): the
-	 * doors and level keys while they take presses, and each open wing (as one
-	 * key: its cells, tabs and close line). Not the wrist's own keys. Each
+	 * The live keys the main hand's keys must never hide (the next-build asks
+	 * 5.8, the orb's rule until build 215's C8): the doors and level keys while
+	 * they take presses, and the open wing (as one key: its cells, tabs and
+	 * close line); not the main hand's own keys. Each
 	 * { p (world centre), r (half-diagonal, m) }.
 	 */
 	liveKeys() {
@@ -556,7 +557,7 @@ export class XRExperience {
 			const g = panel.mesh.geometry.parameters;
 			out.push({ p: panel.mesh.getWorldPosition(new THREE.Vector3()), r: Math.hypot(g.width, g.height) / 2 });
 		}
-		// While a hand is within reach of the tools, they are live keys for the orb's line of sight: it never hides the tool you reach for.
+		// While a hand is within reach of the tools, they are live keys for the main hand's keys' line of sight: those never hide the tool you reach for.
 		if (this.fan?.reach) for (const s of this.fan.slots) if (!s.held) out.push({ p: s.home.getWorldPosition(new THREE.Vector3()), r: TOOL_SIGHT_R });
 		return out;
 	}
@@ -671,7 +672,7 @@ export class XRExperience {
 
 	/**
 	 * Photo button: the view from your head, level, without the menu, lasers,
-	 * controllers, orbs or arc (the interface layer: the photo's camera
+	 * controllers, the hand's keys or arc (the interface layer: the photo's camera
 	 * leaves it out), as a JPEG (js/photo.js), kept in the page's photo roll
 	 * (onPhoto).
 	 */
@@ -748,7 +749,7 @@ export class XRExperience {
 	}
 }
 
-const TOOL_SIGHT_R = 0.06; // a tool in the fan, as a live key for the orb's line of sight: its size at fan scale (m)
+const TOOL_SIGHT_R = 0.06; // a tool in the fan, as a live key for the main hand's keys' line of sight: its size at fan scale (m)
 const _fwd = new THREE.Vector3();
 /** Yaw of a matrix's forward (-Z) direction. */
 function yawOfMatrix(m) {

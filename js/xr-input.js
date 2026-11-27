@@ -274,8 +274,8 @@ export class XRInput {
 	/**
 	 * A controller put down while a bare hand is tracked (build 120's B3: the
 	 * Quest still reports it for a while; its laser pointed at the ceiling and
-	 * the orb floated where it lay): still within 2 mm and 1.5° for 1.5 s (a held one always drifts more), it
-	 * counts as resting (no laser, no orb, not active) until it moves.
+	 * the wrist's orb, since gone, floated where it lay): still within 2 mm and 1.5° for 1.5 s (a held one always drifts more), it
+	 * counts as resting (no laser, no keys over it, not active) until it moves.
 	 */
 	updateResting(c) {
 		const now = performance.now() / 1000, r = c.rest ??= { p: new THREE.Vector3(), q: new THREE.Quaternion(), since: now };
@@ -338,6 +338,9 @@ export class XRInput {
 		c.line.visible = v && c.isController && !c.resting;
 		if (!v) c.dot.visible = false;
 	}
+
+	/** The session ends (js/xr.js handleEnd): the lasers and controllers hidden. */
+	end() { this.setVisible(false); }
 
 	setVisible(v) {
 		for (const c of this.controllers) { c.ray.visible = v; c.grip.visible = v; c.body.visible = v && c.isController && !c.model; }

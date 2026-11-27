@@ -31,6 +31,9 @@ export class FrameStats {
 		this.reset();
 	}
 
+	/** The session ends (js/xr.js handleEnd): the counter emptied. */
+	end() { this.reset(); }
+
 	reset() { this.frames = 0; this.t = 0; this.label.set(''); }
 
 	/** Once a frame (before this frame's render: renderer.info still holds the last one). */

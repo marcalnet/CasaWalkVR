@@ -38,7 +38,7 @@ import { keepFromEyes } from './zones.js';
 import { HOLD } from './hold.js';
 
 export const DIAL = {
-	KEY: 0.07, GAP: 0.012, PER_ROW: 3, // round keys 7 cm across (as the orb's ← Back), 1.2 cm apart, three a row (m)
+	KEY: 0.07, GAP: 0.012, PER_ROW: 3, // round keys 7 cm across (as the main hand's), 1.2 cm apart, three a row (m)
 	NEAR: 0.12, FAR: 0.18, // the other hand's tip this near the held tool shows the row; beyond FAR it goes (m)
 	OPEN_FOR: 3, STEP_SHOW: 1.5, LABEL_FOR: 1, // seconds: untouched it goes; a stick step shows it; the chosen label
 	CHOSEN_HOLD: 1, FADE: 0.2, // seconds: after a choice the row stays, then fades
@@ -140,6 +140,9 @@ export class ToolDial {
 		else this.group.position.lerp(want, 1 - Math.exp(-dt / DIAL.FOLLOW));
 		this.group.lookAt(eye);
 	}
+
+	/** The session ends (js/xr.js handleEnd): the options row and its label gone from the 2D page (the audit's C1). */
+	end() { this.close(); this.label.mesh.visible = false; }
 
 	close() {
 		if (this.open) this.armed = false; // (it shows again once the hand has been away)

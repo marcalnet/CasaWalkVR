@@ -197,6 +197,9 @@ export class Sound {
 	}
 
 	/** Pauses all sound (quiet for a while, or the session ended): saves the headset's battery. */
+	/** The session ends (js/xr.js handleEnd): the sound suspended. */
+	end() { this.suspend(); }
+
 	suspend() {
 		if (!this.ctx || this.paused) return;
 		this.paused = true;

@@ -234,6 +234,9 @@ export class Pause {
 	}
 
 	/** Leaving VR: everything put away. */
+	/** The session ends (js/xr.js handleEnd): any move between places, its tip and rings put away. */
+	end() { this.stop(); }
+
 	stop() {
 		this.fx = null;
 		this.group.visible = this.floor.visible = this.arc.visible = this.target.visible = false;

@@ -162,7 +162,7 @@ export class Dollhouse {
 		for (const l of this.labels) xr.scene.add(l.mesh);
 		xr.hideFromPhotos(...this.markers, ...this.labels.map((l) => l.mesh));
 		// The door at the scale model (the user's Quest 2 tests): always there,
-		// without opening the orb. A big Walk in → in front of you at waist
+		// without opening anything. A big Walk in → in front of you at waist
 		// height, tilted up towards you, the levels on its left. Pressed by
 		// touch, a controller's tip or its laser.
 		this.doors = new KeyPad(xr, 'plinth-door', DOOR_TYPE);

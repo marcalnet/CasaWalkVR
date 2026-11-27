@@ -259,8 +259,6 @@ export class Walk {
 						this.tele = null;
 						this.hideAim();
 						this.go(r.point);
-						this.teleports = (this.teleports ?? 0) + 1;
-						xr.ui.onTeleport?.(this.teleports);
 					} else cancel(); // (let go on red, or a quick pinch-and-open: a slip never moves you)
 				} else if (e.type === 'open' || e.type === 'lost') {
 					cancel();
@@ -438,8 +436,6 @@ export class Walk {
 				this.hideAim();
 				if (r?.valid) {
 					this.go(r.point);
-					this.teleports = (this.teleports ?? 0) + 1;
-					xr.ui.onTeleport?.(this.teleports);
 				}
 			} else {
 				c.ray.updateMatrixWorld(true);

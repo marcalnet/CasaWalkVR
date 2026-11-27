@@ -1,11 +1,11 @@
 // The areas (the next-build asks, section 5; the code audit's step 3): three
 // horizontal areas round you, left, centre and right, so the tools, the
-// hands and the orb never meet by accident.
+// hands and the main hand's keys never meet by accident.
 //
 //   left    belongs to the tools: in it they float full size over the left
 //           hand; nothing hides them.
 //   centre  belongs to the model (inside, to the view ahead).
-//   right   belongs to the orb and the Settings wing.
+//   right   belongs to the main hand's keys (← Back, Settings) and the Settings wing.
 // (Written for the main hand on the right; with Main hand: Left everything
 // mirrors: "left" is the fan hand's side, `side` below.)
 //

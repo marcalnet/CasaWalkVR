@@ -137,6 +137,9 @@ export class HandView {
 	}
 
 	/** Leaving VR. */
+	/** The session ends (js/xr.js handleEnd): the hand no longer drawn. */
+	end() { this.hide(); }
+
 	hide() { this.alpha = 0; this.group.visible = false; this.near = false; }
 }
 

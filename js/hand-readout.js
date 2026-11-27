@@ -79,5 +79,8 @@ export class HandReadout {
 		});
 	}
 
+	/** The session ends (js/xr.js handleEnd): the readouts emptied. */
+	end() { this.hide(); }
+
 	hide() { for (const l of this.labels) l.set(''); }
 }

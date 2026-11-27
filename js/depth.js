@@ -208,6 +208,9 @@ export class DepthShading {
 	}
 
 	/** Called when a headset session starts and ends. */
+	/** The session ends (js/xr.js handleEnd): depth shading off. */
+	end() { this.setActive(false); }
+
 	setActive(active) {
 		this.active = !!active;
 		this.apply();

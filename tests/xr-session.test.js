@@ -2276,3 +2276,37 @@ test('a tip\'s time from its words (build 215, C9): 1.5 s + 0.4 s a word, the ro
 	x.store.start();
 	assert.equal(x.store.tipsOff, false, 'a new session: tips again');
 });
+
+test('a session ended in the middle of everything leaves nothing: each part puts itself away (end()), from one list in the hub', async () => {
+	const { x, frame } = await setup();
+	frame();
+	assert.ok(x.endingParts().filter(Boolean).every((p) => typeof p.end === 'function'), 'every part in the list has its own end()');
+	// Everything at once: the wing open, a tool held with its options row, a photo note, a measurement, a move between places in its tunnel.
+	x.menuAction('settings');
+	const c = x.input.hands.right;
+	x.tools.take(x.fan.meter, c);
+	x.dial.step(x.fan.meter);
+	x.fan.meter.hit = x.centerer.localToWorld(new THREE.Vector3(0.5, 1, 0.5)); x.fan.meter.trigger(c, 'down');
+	x.ui.showPhotoResult(null, { dropped: false }); x.ui.runPhotoFx(0.01);
+	x.haptics.play(c, 'tick');
+	x.menuAction('in');
+	for (let i = 0; i < 30; i++) frame();
+	assert.ok(x.layerFx && x.dial.open && x.tools.held && x.ui.photoNote.mesh.visible, 'all of it going on');
+	x.handleEnd();
+	const left = [];
+	const want = (n, ok) => ok || left.push(n);
+	want('session/mode', x.session === null && x.mode === null);
+	want('menu', x.menu === null && Object.values(x.menus).every((p) => !p.mesh.visible && !p.open));
+	want('layers', !x.layerFx && !(x.veil.amount('layer') > 0) && !x.pause.group.visible && !x.pause.floor.visible);
+	want('photo', !x.photoPending && !x.ui.photoFx && !x.ui.photoNote.mesh.visible);
+	want('tools', !x.tools.held && x.fan.meter.m.lines.length === 0 && !x.fan.meter.m.pending);
+	want('dial', !x.dial.open && !x.dial.group.visible && !x.dial.label.mesh.visible);
+	want('keys', !x.ui.wrist.group.visible && !x.ui.wrist.holder);
+	want('hands', x.handViews.every((v) => !v.group.visible));
+	want('controllers', x.input.controllers.every((k) => !k.ray.visible && !k.grip.visible));
+	want('tweens', x.tweens.list.length === 0);
+	want('rooms', !x.showroom.visible && !x.stage.visible && !x.walkSky.visible && x.stage.scale.x === 1);
+	want('rig', x.rig.position.lengthSq() === 0 && x.rig.rotation.y === 0 && x.lift === 0);
+	want('anchor', x.anchor.position.lengthSq() === 0 && x.anchor.scale.x === 1);
+	assert.deepEqual(left, [], 'left behind');
+});
