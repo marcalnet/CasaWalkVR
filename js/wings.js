@@ -22,6 +22,11 @@ export const WING = {
 	maxDist: 0.62, // the last resort: further away a wing covers less of the view, never past a fingertip's reach (the harmony's conflict 13)
 	ceiling: D(10), // no corner of a wing above this (the handbook's ceiling: keys up there cost the neck and the arm)
 	maxUp: D(-5), // the centre never higher than this
+	// With controllers (build 215's B5, the user's decision: it opened at neck or head height, pushed up clear of the
+	// model): never up. Clearing the model it goes outward, then further away (a laser reaches it; past a controller
+	// tip's reach, maxDist, only for controllers), then lower.
+	laserDist: 0.9, // metres: as far as it goes
+	laserDrop: D(30), // its centre at most this far below eye level
 };
 
 /** { az (+ = left of where the head's yaw looks), el } of world point p from head. */
@@ -133,7 +138,7 @@ export function overlaps(r, zone, margin = 0) {
  * interaction harmony's conflict 13). clear is false when even that cannot
  * keep the model uncovered (a model zoomed up to fill the view).
  */
-export function placeWing(side, w, h, zone) {
+export function placeWing(side, w, h, zone, { laser = false } = {}) {
 	let az = side * WING.side, el = -WING.drop, dist = WING.dist, margin = WING.margin;
 	if (!zone) return { az, el, dist, margin, clear: true };
 	const hull = zoneHull(zone), a = { az: 0, el: 0 };
@@ -144,6 +149,13 @@ export function placeWing(side, w, h, zone) {
 		return false;
 	};
 	while (hits() && Math.abs(az) < WING.maxSide) az += side * D(1); // outward first
+	if (laser) { // (controllers: never up; further away, then lower: see WING.laserDist)
+		while (hits() && dist + 0.01 <= WING.laserDist + 1e-9) dist += 0.01;
+		while (hits() && el - D(1) >= -WING.laserDrop - 1e-9) el -= D(1);
+		while (hits() && margin - D(0.5) >= WING.minMargin - 1e-9) margin -= D(0.5);
+		if (Math.abs(az) < WING.minSide) az = side * WING.minSide;
+		return { az, el, dist, margin, clear: !hits() };
+	}
 	const under = (e) => wingRect(az, e, w, h, dist).el1 <= WING.ceiling + 1e-9; // (its top corners within the ceiling)
 	while (hits() && el + D(1) <= WING.maxUp && under(el + D(1))) el += D(1); // then up, never past the ceiling
 	while (hits() && dist + 0.01 <= WING.maxDist + 1e-9) dist += 0.01; // then back, within reach
