@@ -1335,7 +1335,7 @@ await pressWrist('settings');
 s = await state();
 check('Settings opens the inside board', s.menu === 'walk' && await page.evaluate(() => window.__casawalk.xr.menu === window.__casawalk.xr.menus.walk && window.__casawalk.xr.menu.title === 'Settings'));
 await shot('walk-menu');
-check('General: Height, Main hand, Sound (New visitor went: build 215, B4; Turn and Solid walls left the wing: 30° turns; the stick always stops at walls)', s.snap === 30 && await page.evaluate(() => { const p = window.__casawalk.xr.menus.walk; return !p.get('turn') && !p.get('solid') && p.tabs.find((t) => t.id === 'general').rows.flat().map((c) => c.id).join() === 'height,mainHand,sound'; }));
+check('General: Height, Main hand, Units, Sound (New visitor went: build 215, B4; Units came with the simpler tools, C10; Turn and Solid walls left the wing: 30° turns; the stick always stops at walls)', s.snap === 30 && await page.evaluate(() => { const p = window.__casawalk.xr.menus.walk; return !p.get('turn') && !p.get('solid') && p.tabs.find((t) => t.id === 'general').rows.flat().map((c) => c.id).join() === 'height,mainHand,units,sound'; }));
 const feet = (await state()).rig[1] - (await state()).lift;
 await clickMenu('height', 1.4);
 s = await state();

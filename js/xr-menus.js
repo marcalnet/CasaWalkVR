@@ -52,6 +52,8 @@ const CELLS = {
 	mainHand: { type: 'choice', id: 'mainHand', label: 'Main hand', options: [{ value: 'right', label: 'Right' }, { value: 'left', label: 'Left' }], value: 'right' }, // flips the wrist menu and the tool fan together
 	sound: sw('sound', 'Sound'), // on: the sound effects (a choice again when ambience comes, milestone H)
 	guide: GUIDE_CELL,
+	// The meter's units (build-215 asks C10 §1): "Metric" (cm or m, by length) or "Imperial" (feet and inches); a choice, since neither is "on".
+	units: { type: 'choice', id: 'units', label: 'Units', options: [{ value: 'cm', label: 'Metric' }, { value: 'ftin', label: 'Imperial' }], value: 'cm' },
 	height: { type: 'choice', id: 'height', label: 'Height', options: HEIGHTS.map((h) => ({ value: h, label: h ? `${h.toFixed(1)} m` : 'Yours' })), value: 0 },
 };
 
@@ -64,7 +66,7 @@ const CELLS = {
 export const TABS = [
 	{ id: 'move', label: 'How to move', rows: [['guide']] },
 	{ id: 'view', label: 'View', rows: [['light'], ['shadows'], ['depth'], ['view'], ['seethrough']] }, // (the long words on full rows: half a row clipped "Depth shading" and "Passthrough", build 120)
-	{ id: 'general', label: 'General', rows: [['height'], ['mainHand'], ['sound']] }, // (New visitor went in build 215's B4, the user's decision: leaving VR and entering again starts the session over)
+	{ id: 'general', label: 'General', rows: [['height'], ['mainHand'], ['units'], ['sound']] }, // (New visitor went in build 215's B4, the user's decision: leaving VR and entering again starts the session over)
 ];
 
 /** The boards, one per layer: the title names the layer. */
@@ -161,6 +163,7 @@ export function updateLabels(xr) {
 		}
 		p.set('sound', { value: xr.soundLevel !== 'off' });
 		p.set('height', { value: xr.personHeight });
+		if (xr.fan?.meter) p.set('units', { value: xr.fan.meter.m.units });
 	}
 	// (Levels are not here: a stack of keys beside the doors at the scale model, js/xr-dollhouse.js.)
 	xr.modes.dollhouse?.refreshLevels?.();
@@ -199,6 +202,13 @@ export function menuAction(xr, target) {
 			xr.view = next;
 			writeSetting('view', xr.view);
 			xr.applyView();
+			updateLabels(xr);
+			break;
+		}
+		case 'units': { // (remembered as casawalk.meterUnits; every measured line and the meter's screen relabelled at once)
+			const meter = xr.fan?.meter;
+			if (!meter) break;
+			meter.setUnits(SETTINGS.meterUnits.options.includes(value) ? value : meter.m.units === 'cm' ? 'ftin' : 'cm');
 			updateLabels(xr);
 			break;
 		}

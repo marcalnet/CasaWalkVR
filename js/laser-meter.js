@@ -134,7 +134,7 @@ export class LaserMeter {
 		if (xr.soundLevel !== 'off') xr.sound.play(went ? 'release' : 'deny');
 	}
 
-	/** The meter's units ('cm' | 'ftin'): remembered; every line's label and the live reading in them. */
+	/** The meter's units ('cm' | 'ftin'), from Settings, General, Units (build-215 asks C10): remembered; every line's label and the live reading in them. */
 	setUnits(units) {
 		this.m.units = units;
 		writeSetting('meterUnits', units);

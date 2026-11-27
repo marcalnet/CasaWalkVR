@@ -155,7 +155,7 @@ test('the settings wing: the same three tabs at both layers (How to move, View, 
 		assert.deepEqual(shape(p.tabs[1].rows), ['light:choice:Time of day:Morning:Noon:Sunset:Night', 'shadows:switch:Shadows',
 			'depth:switch:Depth shading', 'view:switch:Passthrough', 'seethrough:switch:Transparent walls']);
 		assert.deepEqual(shape(p.tabs[2].rows), ['height:choice:Height:Yours:1.4 m:1.7 m:2.0 m', 'mainHand:choice:Main hand:Right:Left',
-			'sound:switch:Sound'], 'General: Height, Main hand, Sound (New visitor went: build 215, B4)');
+			'units:choice:Units:Metric:Imperial', 'sound:switch:Sound'], 'General: Height, Main hand, Units, Sound (New visitor went: build 215, B4; Units came with the simpler tools, C10)');
 		assert.ok(!p.get('lens'), 'no lens to choose: the camera has one, 28 mm');
 		assert.ok(p.size.h / p.size.w * p.mesh.geometry.parameters.width <= 0.34 + 1e-6, `34 cm tall at most (harmony conflict 13): ${(p.size.h / p.size.w * p.mesh.geometry.parameters.width * 100).toFixed(1)} cm`);
 		assert.equal(p.actions, undefined, 'no action rows on the board: the doors are on the wrist');
@@ -2136,4 +2136,27 @@ test('a session ended in the middle of everything leaves nothing: each part puts
 	want('rig', x.rig.position.lengthSq() === 0 && x.rig.rotation.y === 0 && x.lift === 0);
 	want('anchor', x.anchor.position.lengthSq() === 0 && x.anchor.scale.x === 1);
 	assert.deepEqual(left, [], 'left behind');
+});
+
+test('the meter\'s units are a Settings choice (build-215 asks C10 §1): General, "Units", Metric or Imperial; every line and the screen relabelled at once; remembered', async () => {
+	const { x, frame } = await setup();
+	const meter = x.fan.meter, c = x.input.hands.right;
+	frame();
+	const at = (mx) => x.centerer.localToWorld(new THREE.Vector3(mx, 1, 0.5));
+	meter.hit = at(0); meter.trigger(c, 'down'); meter.hit = at(1); meter.trigger(c, 'down');
+	assert.ok(/m$/.test(meter.m.lines[0].label), `metric: ${meter.m.lines[0].label}`);
+	const cell = () => x.menus.dollhouse.get('units');
+	x.updateLabels();
+	assert.equal(cell().value, 'cm', 'the choice shows Metric');
+	const stored = [];
+	globalThis.localStorage = { getItem: () => null, setItem: (k, v) => stored.push([k, v]), removeItem() {} };
+	try {
+		x.menuAction({ id: 'units', value: 'ftin' });
+		assert.ok(/'/.test(meter.m.lines[0].label) && meter.m.units === 'ftin', `imperial at once: ${meter.m.lines[0].label}`);
+		assert.equal(cell().value, 'ftin', 'the choice shows Imperial');
+		assert.deepEqual(stored.at(-1), ['casawalk.meterUnits', 'ftin'], 'remembered (the same key, the same values)');
+		x.menuAction({ id: 'units', value: 'cm' });
+		assert.ok(/m$/.test(meter.m.lines[0].label), 'back to metric');
+	} finally { delete globalThis.localStorage; }
+	meter.clear();
 });
