@@ -45,3 +45,31 @@ test('the note shows only for bare hands without joints, and only without contro
 	assert.equal(make([hand(false), pad]).handsOnly(), false);
 	assert.deepEqual(make([hand(true), hand(true, false), pad]).wearers().map((c) => c.isHand), [true, false]);
 });
+
+// Build 215's A1 and A2: the Quest went on reporting a hand it did not see, frozen at its last pose; it was drawn in
+// the face, wore the orb and the tools, and aimed at the ceiling. A bare hand counts only once seen moving, and not
+// while it holds perfectly still, in the room or with the head.
+test('a hand the headset froze is not tracked; a real one, trembling, is', async () => {
+	const THREE = await import('three');
+	const { staleStep, freshStale, STALE } = await import('../js/xr-input.js');
+	const V = (x, y, z) => new THREE.Vector3(x, y, z);
+	const dt = 1 / 72;
+	// Reported, never seen moving (the hand at the waist since Enter VR): never live.
+	let s = freshStale(), live = false;
+	for (let t = 0; t < 1; t += dt) live = staleStep(s, V(0.2, 1.2, -0.4), V(0.2, -0.4, -0.4), t);
+	assert.equal(live, false, 'frozen from the start: not tracked');
+	// A real hand: it trembles by a tenth of a millimetre (far above STALE.MOVE), and is live from its first move.
+	s = freshStale();
+	const lives = [];
+	for (let i = 0; i < 60; i++) { const j = 1e-4 * Math.sin(i * 2.1); lives.push(staleStep(s, V(0.2 + j, 1.2, -0.4), V(0.2 + j, -0.4, -0.4 + j), i * dt)); }
+	assert.ok(lives.slice(1).every(Boolean), 'trembling: tracked from the first move');
+	// It freezes: still tracked for STALE.AFTER, then not; moving again, at once.
+	const at = 60 * dt;
+	assert.equal(staleStep(s, s.room.clone(), s.head.clone(), at + STALE.AFTER / 2), true, 'a moment of stillness is not a freeze');
+	assert.equal(staleStep(s, s.room.clone(), s.head.clone(), at + STALE.AFTER + 0.01), false, `held still ${STALE.AFTER} s: frozen`);
+	assert.equal(staleStep(s, V(0.25, 1.2, -0.4), V(0.25, -0.4, -0.4), at + 1), true, 'moved: tracked again');
+	// Frozen with the head (the room moving under it as the head turns): the same.
+	const head = s.head.clone();
+	for (let t = 0; t <= STALE.AFTER + 0.05; t += dt) live = staleStep(s, V(0.25 + t, 1.2, -0.4), head, at + 1 + dt + t);
+	assert.equal(live, false, 'held still with the head: frozen');
+});

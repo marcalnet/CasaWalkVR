@@ -732,7 +732,7 @@ export class XRExperience {
 		if (!this.session || !this.model) return;
 		if (this.hidden) return; // (Meta's menu covers the app: nothing reads input behind it)
 		this.frameDt = dt;
-		this.input.update(); // (also clears every controller's claims)
+		this.input.update(this.camera.matrix); // (also clears every controller's claims; the head pose tells a frozen hand: build 215's A1, A2)
 		this.input.readGestures(dt, this.headWorld(), this.viewYaw()); // bare hands: the teleport gesture, the closed hand (C0.4)
 		for (const v of this.handViews) v.near = false; // (a key or the board near a fingertip lights it up again this frame)
 		this.ui.showHandsNote(); // bare hands: "Pick up your controllers" (their pinches are never read)

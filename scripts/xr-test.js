@@ -56,6 +56,19 @@ await page.addInitScript((name) => {
 	d.stereoEnabled = false; // one view, so screenshots are easy to read
 	d.installRuntime({ forceInstall: true });
 	window.__device = d;
+	// The emulated hands tremble by up to 0.1 mm each frame, as real ones always do: the app counts a hand that holds
+	// perfectly still as one the headset froze, not tracked (js/xr-input.js, STALE: build 215's A1 and A2). Done in the
+	// session's own frame loop (the page's timers fire only a few times a second while it renders).
+	const was = { left: 0, right: 0 };
+	window.__frozen = false; // (true: the hands hold perfectly still, as when the headset freezes a hand it has lost)
+	let sign = 1; // (alternating, so every frame moves by at least 0.1 mm: a random step could be smaller than the app's 0.01 mm)
+	const tremble = () => { if (window.__frozen) return; sign = -sign; for (const side of ['left', 'right']) { const n = sign * (0.5 + 0.5 * Math.random()) * 1e-4; d.hands[side].position.x += n - was[side]; was[side] = n; } };
+	const request = navigator.xr.requestSession.bind(navigator.xr);
+	navigator.xr.requestSession = async (...args) => {
+		const session = await request(...args), raf = session.requestAnimationFrame.bind(session);
+		session.requestAnimationFrame = (cb) => raf((t, frame) => { tremble(); cb(t, frame); });
+		return session;
+	};
 }, DEVICE);
 
 let step = 0;
@@ -730,6 +743,17 @@ check('B closes the board', (await state()).menu === null);
 	await page.evaluate(() => { window.__device.hands.right.updatePinchValue(0); window.__device.hands.right.connected = true; }); await frames(8);
 	const back2 = right(await touch());
 	check('touch: the hand comes back, tracked and not pinching', back2.kind === 'hand' && back2.tracked && !back2.held, JSON.stringify(back2));
+	// Build 215's A1 and A2: the Quest went on reporting hands it no longer saw, frozen where they were; they were drawn in
+	// the face, wore the orb and carried the tools. Hands that hold perfectly still: not drawn, no orb, no tools; moving: back.
+	{
+		const seen = () => page.evaluate(() => { const x = window.__casawalk.xr; return { views: x.handViews.map((v) => v.group.visible), tracked: x.input.controllers.map((c) => c.touch.tracked), orb: x.ui.wrist.orb.holder?.handedness ?? null, fan: +x.fan.alpha.toFixed(2) }; });
+		await page.evaluate(() => { window.__frozen = true; }); await page.waitForFunction(() => window.__casawalk.xr.fan.alpha === 0, null, { timeout: 10000, polling: 'raf' }).catch(() => {}); // (still 0.3 s: frozen; the tools stay 1 s, then fade)
+		const frozen = await seen();
+		await page.evaluate(() => { window.__frozen = false; }); await page.waitForFunction(() => window.__casawalk.xr.fan.alpha > 0.5, null, { timeout: 10000, polling: 'raf' }).catch(() => {});
+		const back = await seen();
+		check('hands the headset froze: not drawn, no orb, no tools; moving again, all back (build 215, A1 and A2)',
+			frozen.views.every((v) => !v) && frozen.tracked.every((t) => !t) && frozen.orb === null && frozen.fan === 0 && back.views.every(Boolean) && back.orb === 'right' && back.fan > 0, JSON.stringify({ frozen, back }));
+	}
 	// Lost while pinching, found again still pinching: not a new press, until the pinch has been seen open.
 	await page.evaluate(() => window.__device.hands.right.updatePinchValue(1)); await frames(6);
 	await page.evaluate(() => { window.__device.hands.right.connected = false; }); await frames(8);

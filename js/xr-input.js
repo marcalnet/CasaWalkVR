@@ -42,6 +42,15 @@
 // joint(c, name, out) gives any hand joint's world position (WebXR joint
 // names, such as 'wrist' or 'index-finger-tip').
 //
+// A hand reported but not seen (build 215's A1 and A2): the Quest can go on
+// reporting a hand it does not see, its joints frozen at their last pose
+// (often the pinch that pressed Enter VR). Drawn, it floated where the real
+// hand was not: in the face once inside, wearing the orb and the tools, its
+// aim ray pointing at the ceiling. Real tracking never holds a joint still to
+// the hundredth of a millimetre, so a bare hand counts as tracked only once
+// its wrist has been seen moving, and stops counting when it holds perfectly
+// still (in the room, or with the head) for STALE.AFTER: see staleStep().
+//
 // Gestures (C0.4): readGestures() runs each bare hand's gesture reader
 // (js/gestures.js: the pinch-and-hold teleport, the wrist flick, the closed hand) and
 // leaves this frame's events on c.gestures (an array) and the reader on
@@ -64,6 +73,8 @@ const PINCH_OPEN = 0.07; // select.value is 0 from here, 1 at PINCH_ON
 const TIP_OFFSET = new THREE.Vector3(0, -0.01, -0.045); // a controller's poke point, in its grip space
 const TIP_RADIUS = TOUCH.RADIUS; // the poke point's size, fingertip and controller tip alike
 const WRIST_ORB = new THREE.Vector3(0, 0.035, 0.01); // the orb over the back of a bare wrist, in the wrist joint's space
+/** A frozen hand (see the top of the file): its wrist within MOVE (m) of where it was, in the room or relative to the head, for AFTER s. */
+export const STALE = { MOVE: 1e-5, AFTER: 0.3 };
 
 export class XRInput {
 	constructor(renderer, rig) {
@@ -117,6 +128,7 @@ export class XRInput {
 				if (c.isController) this.loadModel(c, e.data);
 				c.state = emptyState();
 				c.touch = emptyTouch();
+				c.stale = freshStale(); // (a hand just connected counts once seen moving)
 				c.gesture = c.isHand ? new HandGestures(c.handedness) : null;
 				c.gestures = [];
 				if (c.isController) this.hands[c.handedness] = c;
@@ -137,8 +149,9 @@ export class XRInput {
 		this._m = new THREE.Matrix4();
 	}
 
-	/** Reads gamepads; call once per frame. */
-	update() {
+	/** Reads gamepads; call once per frame. head: the head pose this frame (rig space: the camera's matrix), for frozen hands. */
+	update(head = null) {
+		this._headInv = head ? (this._headInv ?? new THREE.Matrix4()).copy(head).invert() : null;
 		for (const c of this.controllers) {
 			const gp = c.isController ? c.source?.gamepad : null; // a hand's pinch is never read
 			const prev = c.state;
@@ -174,6 +187,11 @@ export class XRInput {
 		if (c.isHand) {
 			const tip = c.hand.joints['index-finger-tip'], thumb = c.hand.joints['thumb-tip'], wrist = c.hand.joints.wrist;
 			t.tracked = !!(c.hand.visible && tip?.visible && thumb?.visible && wrist?.visible);
+			if (t.tracked) {
+				// (Rig space is the headset's own: a hand the headset froze holds still here, or with the head.)
+				const atHead = this._headInv ? _w.copy(wrist.position).applyMatrix4(this._headInv) : null;
+				t.tracked = staleStep(c.stale ??= freshStale(), wrist.position, atHead, performance.now() / 1000);
+			}
 			if (t.tracked) {
 				// The orb's anchor follows the wrist joint (its +Y is out of the back of the hand).
 				c.wrist.position.copy(wrist.position);
@@ -392,6 +410,32 @@ export function isHandSource(source) {
 
 export { WRIST_ORB };
 
+/** A frozen-hand record that has seen nothing yet (staleStep). */
+export function freshStale() {
+	return { room: null, head: null, since: 0, live: false };
+}
+
+/**
+ * One frame of a bare hand's frozen check (see the top of the file). s: the
+ * hand's record (freshStale()); room: the wrist in rig space; head: the wrist
+ * relative to the head (or null); now: seconds. Returns whether the hand is
+ * live: it has moved since it was first reported, and not held perfectly
+ * still, in the room or with the head, for STALE.AFTER since.
+ */
+export function staleStep(s, room, head, now) {
+	const still = (a, b) => !!a && a.distanceTo(b) <= STALE.MOVE;
+	if (!s.room) { s.room = room.clone(); s.head = head?.clone() ?? null; s.since = now; return s.live; }
+	if (still(s.room, room) || (head && still(s.head, head))) {
+		if (now - s.since >= STALE.AFTER) s.live = false;
+	} else {
+		s.room.copy(room);
+		if (head) (s.head ??= new THREE.Vector3()).copy(head);
+		s.since = now;
+		s.live = true;
+	}
+	return s.live;
+}
+
 /** Pinch with hysteresis: held from PINCH_ON, until the tips are more than PINCH_OFF apart. */
 export function nextPinch(held, distance) {
 	return held ? distance <= PINCH_OFF : distance <= PINCH_ON;
@@ -403,6 +447,7 @@ export function pinchValue(distance) {
 }
 
 const _v = new THREE.Vector3();
+const _w = new THREE.Vector3();
 const _q = new THREE.Quaternion();
 
 function emptyTouch(lost = false) {
