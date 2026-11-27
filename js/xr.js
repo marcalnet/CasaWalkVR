@@ -73,7 +73,7 @@ import { Sound } from './sound.js';
 // Clip planes for the headset, set explicitly: left alone they come from how
 // the 2D page framed the model, which can clip things held near the face.
 const XR_NEAR = 0.05, XR_FAR = 300;
-const DOLLHOUSE_SIZE = 1.4; // metres across at most (build 120's design, item 8: was 1.2 m; wider pushes the wings to their limit)
+export const DOLLHOUSE_SIZE = 1.2; // metres across at most (build 215's C6: back to the size before build 120; with the plinth 45 cm away the whole model lies 18-41° below the eyes, and the wings have room)
 export class XRExperience {
 	/**
 	 * @param opts.renderer, opts.scene, opts.camera, opts.rig, opts.anchor, opts.centerer

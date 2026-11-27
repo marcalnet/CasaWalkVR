@@ -28,6 +28,10 @@ export const WING = {
 	// text keeps about 0.74° there; only a home that needs more rises, just enough, its top within the ceiling (the
 	// Designer, 27 Nov 2026).
 	laserDist: 0.75, // metres: as far as it goes
+	// ... and then the margin gives way (to minMargin) before it rises; it rises only to laserTop: its centre at least 10° below
+	// the eyes, the low edge of the handbook's 10-20° resting band, never head height (build 215's C6: with the model closer,
+	// the example home pushed it to eye level; the Designer, 27 Nov 2026).
+	laserTop: D(-10),
 };
 
 /** { az (+ = left of where the head's yaw looks), el } of world point p from head. */
@@ -152,8 +156,8 @@ export function placeWing(side, w, h, zone, { laser = false } = {}) {
 	while (hits() && Math.abs(az) < WING.maxSide) az += side * D(1); // outward first
 	if (laser) { // (controllers: further away, then up just enough: see WING.laserDist)
 		while (hits() && dist + 0.01 <= WING.laserDist + 1e-9) dist += 0.01;
-		while (hits() && wingRect(az, el + D(1), w, h, dist).el1 <= WING.ceiling + 1e-9) el += D(1);
 		while (hits() && margin - D(0.5) >= WING.minMargin - 1e-9) margin -= D(0.5);
+		while (hits() && el + D(1) <= WING.laserTop + 1e-9 && wingRect(az, el + D(1), w, h, dist).el1 <= WING.ceiling + 1e-9) el += D(1);
 		if (Math.abs(az) < WING.minSide) az = side * WING.minSide;
 		return { az, el, dist, margin, clear: !hits() };
 	}

@@ -1882,10 +1882,12 @@ test('harmony, conflict 13: no wing corner within 5° of the house as seen (its 
 						// Controllers (build 215's B5): 15° below the eyes, cleared by distance up to 0.75 m; only past that cap does it rise.
 						const rose = panel.placed.el > -W.WING.drop + 1e-9;
 						assert.ok(far <= W.WING.laserDist + 1e-6 && (!rose || panel.placed.dist >= W.WING.laserDist - 1e-6), `${name}, ${panel.title}, controllers: within ${W.WING.laserDist} m, rising only past it (${JSON.stringify(panel.placed)})`);
+						// Never head height (build 215's C6, the Designer): its centre 10° or more below the eyes, the house still clear (the margin gave way first).
+						assert.ok(panel.placed.el <= W.WING.laserTop + 1e-9 && panel.placed.clear, `${name}, ${main} hand, controllers: the wing's centre ${(-panel.placed.el * 180 / Math.PI).toFixed(0)}° below the eyes (10° at least), the house clear (${JSON.stringify(panel.placed)})`);
 						// Its row labels 15% larger, so their text keeps at least 0.7° (the handbook's body size; 32 px read 0.88° at 0.55 m, the Designer's figure).
 						const deg = 0.88 * (panel.labelPx / 32) * (0.55 / far);
 						assert.ok(panel.labelPx === Math.round(32 * 1.15) && deg >= 0.7, `${name}, controllers: row text ${deg.toFixed(2)}° at ${far.toFixed(2)} m`);
-						caps.push(`${name}${main === 'left' ? ' (left main hand)' : ''}: ${far.toFixed(2)} m, ${(panel.placed.el * 180 / Math.PI).toFixed(0)}° from the eyes${rose ? ', rose' : ''}`);
+						caps.push(`${name}${main === 'left' ? ' (left main hand)' : ''}: ${far.toFixed(2)} m, ${(-panel.placed.el * 180 / Math.PI).toFixed(0)}° below the eyes, ${(Math.abs(panel.placed.az) * 180 / Math.PI).toFixed(0)}° out, margin ${(panel.placed.margin * 180 / Math.PI).toFixed(1)}°${rose ? ', rose' : ''}`);
 					}
 					for (const [sx, sy] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
 						const p = panel.mesh.localToWorld(new THREE.Vector3(sx * g.width / 2, sy * g.height / 2, 0));
@@ -2123,6 +2125,38 @@ test('bringing a tool home with the fan hand\'s tip close by: no options row, th
 	assert.ok(!dial.open, 'within 30 cm of its own place, reaching shows no row');
 	toolTo(place().add(new THREE.Vector3(0, 0, 0.06)));
 	assert.ok(!x.tools.held && !dial.open, 'it goes home, no row in the way');
+});
+
+test('the plinth\'s distance (build 215, C6): its front edge 45 cm from where you stand, a model at most 1.2 m across, all of it below the eyes, 45° down and 45° across at most, the same standing or seated; the doors and levels 3 cm or more in front of the plinth', async () => {
+	const { PLINTH_FRONT_GAP, PLINTH_MARGIN } = await import('../js/xr-scene.js'), { DOLLHOUSE_SIZE } = await import('../js/xr.js');
+	assert.deepEqual([PLINTH_FRONT_GAP, DOLLHOUSE_SIZE], [0.45, 1.2]);
+	const rows = [];
+	for (const name of ['example-home', 'pond-house', 'apartment']) for (const eyes of [1.6, 1.15]) {
+		const { x, frame } = await setup({ file: path.resolve(import.meta.dirname, `../examples/${name}.sh3d`) });
+		x.camera.position.y = eyes; x.camera.updateMatrix(); x.camera.updateMatrixWorld(true);
+		x.modes.dollhouse.measureLift(x.camera.matrix); // (the lift puts the eyes where a 2 m person's are, standing or seated)
+		for (let i = 0; i < 8; i++) frame();
+		x.scene.updateMatrixWorld(true);
+		const d = x.modes.dollhouse, eye = x.headWorld().clone(), stand = x.rig.getWorldPosition(new THREE.Vector3());
+		const plinth = new THREE.Box3().setFromObject(x.pedestal), front = plinth.max.z, house = d.houseBox();
+		const size = house.getSize(new THREE.Vector3());
+		assert.ok(Math.max(size.x, size.z) <= 1.2 + 1e-3, `${name}: ${size.x.toFixed(2)} x ${size.z.toFixed(2)} m, 1.2 m across at most`);
+		assert.ok(Math.abs(stand.z - front - PLINTH_FRONT_GAP) < 1e-3, `${name}: the plinth's front edge ${(stand.z - front).toFixed(2)} m ahead`);
+		// Every corner of the model below the eyes, from about 18° (its far top) to about 41° (its near foot), and within 45° either side.
+		let lo = Infinity, hi = -Infinity, side = 0;
+		for (const px of [house.min.x, house.max.x]) for (const py of [house.min.y, house.max.y]) for (const pz of [house.min.z, house.max.z]) {
+			const to = new THREE.Vector3(px, py, pz).sub(eye), down = THREE.MathUtils.radToDeg(Math.atan2(-to.y, Math.hypot(to.x, to.z)));
+			lo = Math.min(lo, down); hi = Math.max(hi, down); side = Math.max(side, Math.abs(THREE.MathUtils.radToDeg(Math.atan2(to.x, -to.z))));
+		}
+		rows.push(`${name} eyes ${eyes} m: ${lo.toFixed(0)}-${hi.toFixed(0)}° down, ${side.toFixed(0)}° across, near edge ${(stand.z - house.max.z).toFixed(2)} m`);
+		assert.ok(lo > 0 && hi <= 45 && side <= 45, `${name}: the whole model in view without stepping (${rows.at(-1)})`);
+		// The doors and levels: every corner of every key 3 cm or more in front of the plinth's front edge.
+		const keys = [...d.doors.keys.values()].filter((k) => k.group.visible);
+		const back = Math.min(...keys.flatMap((k) => [-1, 1].flatMap((sx) => [-1, 1].map((sy) => k.group.localToWorld(new THREE.Vector3(sx * k.w / 2, sy * k.h / 2, 0)).z))));
+		assert.ok(back >= front + 0.03 - 1e-6, `${name}: the keys' back edge ${((back - front) * 100).toFixed(1)} cm in front of the plinth`);
+		rows[rows.length - 1] += `, keys ${((back - front) * 100).toFixed(1)} cm clear`;
+	}
+	console.log(`# the plinth (C6): ${rows.join('; ')}`);
 });
 
 test('inside, the areas by the body (build 215, C7): a hand by the hip, out at arm\'s length or at the shoulder is on its side; in front of you, the centre; the scale model keeps its view-based areas', async () => {

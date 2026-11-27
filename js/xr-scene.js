@@ -16,10 +16,11 @@ export const PLINTH_HEIGHT = 1.24;
 // two surfaces at the same height fight for the same pixels ("z-fighting"),
 // which showed as flickering polygon-shaped patches all over the floors.
 const SLAB = 0.03, GAP = 0.05, INSET = 0.025; // the plinth's top slab, its dark base gap, the base's inset
-export const PLINTH_MARGIN = 0.3; // table left around the model (at most 1.4 m across): the bare-hands plinth's (build 120's design, item 8), for both inputs
-// From where you stand to the plinth's front edge (60 cm at the user's request:
-// you can't walk around in the gallery, and 30 cm put the model too close).
-const PLINTH_FRONT_GAP = 0.6;
+export const PLINTH_MARGIN = 0.3; // table left around the model (at most 1.2 m across): the bare-hands plinth's (build 120's design, item 8), for both inputs
+// From where you stand to the plinth's front edge: 45 cm (build 215's C6: the model's near edge 0.75 m away, 41° below the
+// eyes; you look down into it, not at its side). The nearest it can be: Walk in → and the levels, 0.36 m ahead and tilted 70°,
+// keep their back edge 3 cm or more in front of the plinth (60 cm before, at the user's request; 30 cm put the model too close).
+export const PLINTH_FRONT_GAP = 0.45;
 export const EYE_BELOW_TOP = 0.11; // eyes are about this far below the top of the head
 
 /**

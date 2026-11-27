@@ -235,8 +235,8 @@ const aimW = async (hand, from, world) => aim(hand, from, await toLocal(world));
 const lookDown = (a = -0.45) => page.evaluate((a) => { window.__device.quaternion.set(Math.sin(a / 2), 0, 0, Math.cos(a / 2)); }, a);
 const lookAhead = () => page.evaluate(() => window.__device.quaternion.set(0, 0, 0, 1));
 const R = [0.25, 1.1, -0.25], L = [-0.25, 1.0, -0.2];
-const restRight = () => aim('right', R, [0.6, 1.1, -1.5]); // pointing at nothing
-const restLeft = () => aim('left', L, [-0.6, 1.0, -1.5]);
+const restRight = () => aim('right', R, [1.1, 1.1, -1.2]); // pointing at nothing (out past the scale model's side: since build 215's C6 it is nearer)
+const restLeft = () => aim('left', L, [-1.1, 1.0, -1.2]);
 /** Aims a laser at a point on the open wing from 0.4 m in front of it (a wing is 0.55 m from the eyes: from the resting hand the beam would graze it). */
 const aimAtMenu = async (hand, target) => {
 	const from = await page.evaluate((t) => { const x = window.__casawalk.xr, V = x.rig.position.constructor, m = x.menu.mesh; m.updateMatrixWorld(true);
@@ -1317,8 +1317,9 @@ check(`right stick snap-turns ${s.snap}°`, Math.abs(turned - s.snap) < 0.5 && M
 // 14 cm left of the middle, held ahead, is already the left (by the angle from the eyes it was the centre).
 {
 	const saved = await page.evaluate(() => { const d = window.__device; return ['left', 'right'].map((h) => [d.controllers[h].position.toArray?.() ?? [d.controllers[h].position.x, d.controllers[h].position.y, d.controllers[h].position.z], [d.controllers[h].quaternion.x, d.controllers[h].quaternion.y, d.controllers[h].quaternion.z, d.controllers[h].quaternion.w]]); });
-	const place = (l, r) => page.evaluate(([l, r]) => { const d = window.__device, q = d.quaternion, yaw = Math.atan2(2 * (q.w * q.y + q.x * q.z), 1 - 2 * (q.y * q.y + q.x * q.x)), h = d.position;
-		const put = (c, [x, y, z]) => c.position.set(h.x + x * Math.cos(yaw) + z * Math.sin(yaw), h.y - 1.6 + y, h.z - x * Math.sin(yaw) + z * Math.cos(yaw));
+	// (Placed by the body: its direction (world) and the eyes, offsets x to the right, y from the floor under the eyes, z backwards; into the rig's space.)
+	const place = (l, r) => page.evaluate(([l, r]) => { const x = window.__casawalk.xr, d = window.__device, V = x.rig.position.constructor, yaw = x.body.yaw, h = x.headWorld();
+		const put = (c, [ox, oy, oz]) => { const w = new V(h.x + ox * Math.cos(yaw) + oz * Math.sin(yaw), h.y - 1.6 + oy, h.z - ox * Math.sin(yaw) + oz * Math.cos(yaw)); const p = x.rig.worldToLocal(w); c.position.set(p.x, p.y, p.z); };
 		put(d.controllers.left, l); put(d.controllers.right, r); }, [l, r]);
 	const areas = () => page.evaluate(() => { const x = window.__casawalk.xr, i = x.input.controllers; return [x.areas.hands[i.indexOf(x.input.hands.left)], x.areas.hands[i.indexOf(x.input.hands.right)]]; });
 	const got = {};
@@ -1736,7 +1737,7 @@ check('example home: two storeys, all shown', lv.count === 2 && lv.multi && lv.h
 		const front = x.stage.localToWorld(new V(0, 0, x.pedestal.position.z + x.plinthSize.D / 2)); // (the plinth's own front edge: bare hands widen it backwards)
 		return { gap: Math.hypot(front.x - head.x, front.z - head.z), plate: x.plate.text, ratio: 1 / x.anchor.scale.x, onPlinth: x.plate.mesh.parent === x.pedestal && x.plate.mesh.visible };
 	});
-	check('the plinth\'s front edge is 60 cm in front of you; its plate shows the scale', Math.abs(pl.gap - 0.6) < 0.01 && pl.plate === `1:${Math.round(pl.ratio)}` && pl.onPlinth, JSON.stringify(pl));
+	check('the plinth\'s front edge is 45 cm in front of you (build 215, C6); its plate shows the scale', Math.abs(pl.gap - 0.45) < 0.01 && pl.plate === `1:${Math.round(pl.ratio)}` && pl.onPlinth, JSON.stringify(pl));
 	// (The plinth may be mid-move after a hands/controllers change: wait for it, so the point aimed at stays where it was.)
 	await frames(4);
 	// Pointing at a room: the marker hops to its clear middle, with its name; you land there facing along the room.
