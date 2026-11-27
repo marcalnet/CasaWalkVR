@@ -34,19 +34,20 @@ js/xr-dollhouse.js  scale model mode ("dollhouse" in code): one plinth (1.24 m),
 js/xr-walk.js     walk mode: teleport and fade, snap turn, the stick walk (it stops at walls), floor following
 js/xr-ui.js       the one Settings wing (opening on the tab per place, closing, touch and lasers, trigger claims), B / Y held, notes
 js/wings.js       where the wing goes: 0.55 m, 40-50° to the main hand's side, never over the scale model (pure, Node-testable)
-js/wrist-menu.js  the wrist menu: orb on one wrist (it makes room for live keys), two keys on an arc: the round held ← Back, and Settings
-js/keys.js        keys pressed by touch or laser (wrist menu, the doors and levels on the plinth, the tool dial), held keys and their ring
+js/wrist-menu.js  the main hand's keys: ← Back (held 1 s) and Settings, always over that hand like the tools over the other (the orb went in build 215)
+js/keys.js        keys pressed by touch or laser (the main hand's keys, the doors and levels on the plinth), held keys and their ring
 js/xr-menus.js    the wing as data (cells by id; tabs as rows of ids), How to move's words, the pause's tips, what a key or cell does
 js/xr-scene.js    scenery builders: gallery room, plinth, skies, markers
 js/xr-targets.js  what lasers, the teleport arc and the feet may hit (pure, Node-testable)
 js/xr-tools.js    hand-held tool system: claims, routing, annotations in model space (tools from milestone C)
-js/tool-fan.js    the tools over the left hand, or waiting at the edge of the centre: touch and grip (or a closed hand) to take, swap, put back; the reach
-js/tool-dial.js   each tool's one option (lens, colour, units) on one round dial at its control part, and the quiet ring there
+js/tool-fan.js    the tools over the left hand, or waiting at the edge of the centre: touch and grip (or a closed hand) to take, swap; the reach
+js/hold.js        holding a tool: dock and use modes, the magnet home, how each tool sits in the hand (pure, Node-testable)
+js/tool-glow.js   a held tool glows while in use (a rim shell, one draw call, never in photos)
 js/tool-models.js the three tools' models (camera, meter, marker), plain theme colours
 js/laser-meter.js the laser meter tool: beam and dot, live reading, measured lines with labels in model space
-js/marker-tool.js the marker tool: strokes as growing tubes (one draw call each), colours, undo
+js/marker-tool.js the marker tool: strokes as growing tubes (one draw call each), one dark grey ink, undo (controllers)
 js/measure.js     the meter's measuring: snapping, labels, undo (pure, Node-testable)
-js/street-camera.js the street camera tool: shutter (photo from the lens, 3:2), viewfinder render target, lens setting, the print
+js/street-camera.js the street camera tool: shutter (photo from the lens, 3:2), viewfinder render target, its one 28 mm lens, its tag, the print
 js/framing-guide.js the camera's red frame: where the photo's edges fall, at the depth it is aimed at (never in photos)
 js/settings.js    every remembered setting: key, default, meaning (page and headset)
 js/rooms.js       where stepping inside lands: a room's clear middle and long direction (pure, Node-testable)
@@ -67,9 +68,9 @@ js/controller-model.js the real controllers (vendor/controllers/), one draw call
 js/touch.js       touch keys: hover, contact, click, release, front-only (pure, Node-testable)
 js/hands.js       bare hands drawn from the WebXR joints (translucent capsules, orange fingertip)
 js/gestures.js    bare-hand gestures from the joints: the pinch-and-hold teleport and wrist flick, the quick pinch (closes the wing), the closed hand, the aim ray (pure, Node-testable)
-js/hand-owner.js  who owns a hand this frame: the ladder (a held tool, a dial, the wing, the wrist menu, a key, the tools, the model) (pure, Node-testable)
-js/zones.js       the areas (left, centre, right), where the tools wait, the orb's line of sight (pure, Node-testable)
-js/dev.js         the development switches in the page address (?test, ?hands, ?stats, ?nomerge, ?nofold, ?sw, ?worker), read in one place
+js/hand-owner.js  who owns a hand this frame: the ladder (a held tool, the wing, the main hand's keys, a key, the tools, the model) (pure, Node-testable)
+js/zones.js       the areas (left, centre, right; inside, by the body), where the tools and the main hand's keys wait, their line of sight (pure, Node-testable)
+js/dev.js         the development switches in the page address (?test, ?hands, ?stats, ?nomerge, ?nofold, ?sw, ?worker, ?tips, ?tipwait), read in one place
 js/device.js      which device: the headset's own browser, a Quest 2 (the one place that reads the browser's name)
 js/hand-readout.js the bare-hand tuning readout over each wrist, only with ?hands on the page URL (development)
 js/frame-stats.js the headset's fps and draw-call counter, only with ?stats on the page URL (measuring)
@@ -78,11 +79,12 @@ js/landing.js     where the teleport lands beside what you can't stand on: a wal
 js/guide.js       How to move, the wing's first tab: pictures and lines for hands or controllers, the build at its foot
 js/pause.js       every move between places (Enter VR, Walk in, ← Back, leaving), held until the place is ready, and the tips on the way
 js/tip-demo.js    the pause's looping hand, showing the tip's move
-js/session-store.js what belongs to this VR session only (the tips, the first tabs): cleared at Enter VR and by New visitor
+js/session-store.js what belongs to this VR session only (the tips, the first tabs): cleared at Enter VR
 js/transient-pointer.js Apple Vision Pro's look-and-pinch: one pinch acts along its ray (isolated)
 js/hand-model.js  the hand model: the generic hand (vendor/generic-hand/) dressed in the hand look, posed from joints or presets
 js/hand-poses.js  preset hand poses (from IWER, MIT) for the pause's demonstration hand
 js/panel.js       canvas-texture wing (switches, options, buttons, tabs), note cards, labels
+js/type-ramp.js   text sizes in degrees: the type ramp, cap ratios, Kalam's letter widths (pure, Node-testable)
 js/canvas-card.js the one way every drawn card, key and label makes its canvas and texture
 js/veil.js        the one sphere round the eyes: teleport fade, layer change, photo flash
 js/walls.js       the walls the stick walk stops at, and see-through walls and furniture (headset only)
