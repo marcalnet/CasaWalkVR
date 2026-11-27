@@ -759,6 +759,17 @@ check('B closes the board', (await state()).menu === null);
 	check('bare hands: pinches do nothing (no step inside, no menu, no laser)', !before && h.mode === 'dollhouse' && !h.menu && h.active === 0 && h.hands === 2 && !h.lasers && !h.bodies && !h.marker, JSON.stringify(h));
 	const drawn = await page.evaluate(() => { const x = window.__casawalk.xr; return { views: x.handViews.map((v) => v.group.visible && (v.model ? v.model.userData.colour.visible : v.colourMesh.visible) && v.alpha === 1), orb: [x.ui.wrist.orb.holder?.handedness, x.ui.wrist.orb.holder?.isHand && x.ui.wrist.orb.group.parent === x.ui.wrist.orb.holder.wrist] }; });
 	check('bare hands with joints: drawn, the orb on the right wrist, no "Pick up your controllers" note', !h.note && drawn.views.every(Boolean) && drawn.orb[0] === 'right' && drawn.orb[1], JSON.stringify(drawn));
+	// Build 215's A1 and A2: the Quest went on reporting hands it no longer saw, frozen where they were; they were drawn in
+	// the face, wore the orb and carried the tools. Hands that hold perfectly still: not drawn, no orb, no tools; moving: back.
+	{
+		const seen = () => page.evaluate(() => { const x = window.__casawalk.xr; return { views: x.handViews.map((v) => v.group.visible), tracked: x.input.controllers.map((c) => c.touch.tracked), orb: x.ui.wrist.orb.holder?.handedness ?? null, fan: +x.fan.alpha.toFixed(2) }; });
+		await page.evaluate(() => { window.__frozen = true; }); await page.waitForFunction(() => window.__casawalk.xr.fan.alpha === 0, null, { timeout: 10000, polling: 'raf' }).catch(() => {}); // (still 0.3 s: frozen; the tools stay 1 s, then fade)
+		const frozen = await seen();
+		await page.evaluate(() => { window.__frozen = false; }); await page.waitForFunction(() => window.__casawalk.xr.fan.alpha > 0.5, null, { timeout: 10000, polling: 'raf' }).catch(() => {});
+		const back = await seen();
+		check('hands the headset froze: not drawn, no orb, no tools; moving again, all back (build 215, A1 and A2)',
+			frozen.views.every((v) => !v) && frozen.tracked.every((t) => !t) && frozen.orb === null && frozen.fan === 0 && back.views.every(Boolean) && back.orb === 'right' && back.fan > 0, JSON.stringify({ frozen, back }));
+	}
 	// Touch groundwork (C0): the hands' poke points and pinches are read (nothing uses them yet).
 	const touch = () => page.evaluate(() => window.__casawalk.xr.input.controllers.map((c) => ({ side: c.handedness, kind: c.touch.kind, tracked: c.touch.tracked,
 		tip: c.touch.tip.toArray(), radius: c.touch.radius, held: c.touch.select.held, value: c.touch.select.value, lost: c.touch.select.lost,
@@ -783,17 +794,6 @@ check('B closes the board', (await state()).menu === null);
 	await page.evaluate(() => { window.__device.hands.right.updatePinchValue(0); window.__device.hands.right.connected = true; }); await frames(8); await page.waitForFunction(() => window.__casawalk.xr.input.controllers.find((c) => c.handedness === 'right')?.touch.tracked, null, { timeout: 3000, polling: 'raf' }).catch(() => {}); // (a hand found again counts once seen moving: build 215's A1)
 	const back2 = right(await touch());
 	check('touch: the hand comes back, tracked and not pinching', back2.kind === 'hand' && back2.tracked && !back2.held, JSON.stringify(back2));
-	// Build 215's A1 and A2: the Quest went on reporting hands it no longer saw, frozen where they were; they were drawn in
-	// the face, wore the orb and carried the tools. Hands that hold perfectly still: not drawn, no orb, no tools; moving: back.
-	{
-		const seen = () => page.evaluate(() => { const x = window.__casawalk.xr; return { views: x.handViews.map((v) => v.group.visible), tracked: x.input.controllers.map((c) => c.touch.tracked), orb: x.ui.wrist.orb.holder?.handedness ?? null, fan: +x.fan.alpha.toFixed(2) }; });
-		await page.evaluate(() => { window.__frozen = true; }); await page.waitForFunction(() => window.__casawalk.xr.fan.alpha === 0, null, { timeout: 10000, polling: 'raf' }).catch(() => {}); // (still 0.3 s: frozen; the tools stay 1 s, then fade)
-		const frozen = await seen();
-		await page.evaluate(() => { window.__frozen = false; }); await page.waitForFunction(() => window.__casawalk.xr.fan.alpha > 0.5, null, { timeout: 10000, polling: 'raf' }).catch(() => {});
-		const back = await seen();
-		check('hands the headset froze: not drawn, no orb, no tools; moving again, all back (build 215, A1 and A2)',
-			frozen.views.every((v) => !v) && frozen.tracked.every((t) => !t) && frozen.orb === null && frozen.fan === 0 && back.views.every(Boolean) && back.orb === 'right' && back.fan > 0, JSON.stringify({ frozen, back }));
-	}
 	// Lost while pinching, found again still pinching: not a new press, until the pinch has been seen open.
 	await page.evaluate(() => window.__device.hands.right.updatePinchValue(1)); await frames(6);
 	await page.evaluate(() => { window.__device.hands.right.connected = false; }); await frames(8);
@@ -1080,6 +1080,41 @@ check('B closes the board', (await state()).menu === null);
 		check('Enter VR with bare hands: the walk-in tip in the hands\' words, 1.4 m in front of the head, the rings under you', et.tip === 'walkin' && et.kind === 'hands' && et.words === 'Pinch a room, let go: walk in' && Math.abs(et.dist - 1.4 * Math.cos(10 * Math.PI / 180)) < 0.1 && et.ahead > 0.98 && et.ring && et.ringUnder < 0.05, JSON.stringify(et));
 		await page.evaluate(() => { window.__casawalk.xr.pause.tipsOn = false; });
 		await settled(); await frames(4);
+	}
+	// Build 215's C1 and C2 (the user's sticky tools), bare hands: a closed hand on the camera takes it (dock mode: a pinch
+	// fires nothing); away from the fan (use mode) the pinch is the shutter; tracking lost 3 s, it is still in the hand;
+	// brought back near its own place, the magnet takes it home.
+	{
+		await page.evaluate(() => { const d = window.__device; d.hands.left.position.set(-0.45, 1.2, -0.3); });
+		await page.waitForFunction(() => window.__casawalk.xr.fan.alpha === 1, null, { timeout: 10000, polling: 'raf' }).catch(() => {});
+		const placeOf = (name) => page.evaluate((name) => { const f = window.__casawalk.xr.fan; return f.restWorld(f.slots.findIndex((s) => s.name === name)).toArray(); }, name);
+		await tipPath('hand', 'right', [await placeOf('camera')]);
+		await gesture('right', { type: 'fist' }); await frames(6);
+		const took = await page.evaluate(() => { const h = window.__casawalk.xr.tools.held; return h ? `${h.tool.name}/${h.mode}` : null; });
+		await page.evaluate(() => { const x = window.__casawalk.xr; window.__shots = 0; x.__capture = x.capturePhoto; x.capturePhoto = () => { window.__shots++; }; });
+		const pinch = async () => { await page.evaluate(() => window.__device.hands.right.updatePinchValue(1)); await frames(6); await page.evaluate(() => window.__device.hands.right.updatePinchValue(0)); await frames(6); };
+		await pinch();
+		const inDock = await page.evaluate(() => window.__shots);
+		await page.evaluate(() => { window.__device.hands.right.position.set(0.35, 1.35, -0.35); }); await frames(8);
+		const mode = await page.evaluate(() => window.__casawalk.xr.tools.held?.mode ?? null);
+		await pinch();
+		const inUse = await page.evaluate(() => window.__shots);
+		await shot('camera-held-hand');
+		check('bare hands: a closed hand takes the camera (dock mode: a pinch takes no photo); away from the fan, the pinch is the shutter (build 215, C1 and C2)', took === 'camera/dock' && inDock === 0 && mode === 'use' && inUse === 1, JSON.stringify({ took, inDock, mode, inUse }));
+		await page.evaluate(() => { window.__device.hands.right.connected = false; }); await page.waitForTimeout(3000); await frames(4);
+		const lost = await page.evaluate(() => window.__casawalk.xr.tools.held?.tool.name ?? null);
+		await page.evaluate(() => { window.__device.hands.right.connected = true; }); await frames(10);
+		// Brought back: the camera itself within a few centimetres of its own place.
+		for (let i = 0; i < 4; i++) {
+			await page.evaluate((to) => { const x = window.__casawalk.xr, V = x.rig.position.constructor, o = x.fan.camera.object, d = window.__device.hands.right.position;
+				if (!x.tools.held) return; x.rig.updateMatrixWorld(true);
+				const delta = x.rig.worldToLocal(new V(...to)).sub(x.rig.worldToLocal(o.getWorldPosition(new V())));
+				d.set(d.x + delta.x, d.y + delta.y, d.z + delta.z + 0.04); }, await placeOf('camera'));
+			await frames(6);
+		}
+		const home = await page.evaluate(() => window.__casawalk.xr.tools.held === null);
+		check('bare hands: tracking lost 3 s, the tool is still in the hand; brought back near its own place, it goes home (build 215, C1)', lost === 'camera' && home, JSON.stringify({ lost, home }));
+		await page.evaluate(() => { const x = window.__casawalk.xr; x.capturePhoto = x.__capture; if (x.tools.held) x.tools.putBack(); });
 	}
 	// Real gestures again for the rest of the run.
 	await page.evaluate(() => { const x = window.__casawalk.xr; for (const c of x.input.controllers) if (c.gesture) delete c.gesture.step; });
@@ -1517,6 +1552,8 @@ check('back from walking: eyes at 1.89 m again, gallery shown, lasers on', Math.
 			const q = new (x.rig.quaternion.constructor)().setFromUnitVectors(new V(0, 0, -1), dir);
 			d.quaternion.set(q.x, q.y, q.z, q.w);
 		}, to);
+		// (Away from the fan first: near it, in dock mode, the trigger does nothing: build 215's C1.)
+		await page.evaluate(() => { window.__device.controllers.right.position.set(0.2, 1.3, -0.35); }); await frames(6);
 		const box = await page.evaluate(() => { const b = window.__casawalk.xr.modes.dollhouse.modelBox(); return [b.min.toArray(), b.max.toArray()]; });
 		const mid = (fx, fz) => [box[0][0] + (box[1][0] - box[0][0]) * fx, box[1][1], box[0][2] + (box[1][2] - box[0][2]) * fz];
 		await aimMeter(mid(0.3, 0.5)); await frames(8);

@@ -32,20 +32,26 @@ import { StreetCamera } from './street-camera.js';
 import { ease } from './tween.js';
 import { Label } from './panel.js';
 import { TOOLS, edgeSpot, keepFromEyes, dampTowards } from './zones.js';
+import { HOLD, magnetStep, toolPose } from './hold.js';
+import { CONTROL_CUE } from './theme.js';
 
 export const ABOVE = 0.15; // the fan's middle, above the fan hand (metres)
 const SPACING = 0.115; // between tools in the arc (the marker and the meter lie across it, 9 and 11 cm long)
 // How each tool shows in the fan (the user's note, 24 Nov): the camera from the front, its lens towards you; the meter and
 // the marker from the side, their length across the fan like tools on a pegboard, nib to the left as you see it.
-const VIEW = { camera: Math.PI, meter: Math.PI / 2, marker: Math.PI / 2 };
+// The marker turns its cap end 40° towards you, so the ring on its back shows (build 215's B2: lying flat across the
+// fan, the ring was seen edge-on).
+const VIEW = { camera: Math.PI, meter: Math.PI / 2, marker: Math.PI / 2 - THREE.MathUtils.degToRad(40) };
 const TAG = { height: 0.03, below: -0.05 }; // each tool's name tag
 const NAMES = { camera: 'Camera', meter: 'Meter', marker: 'Marker' };
 const REACH = 0.05; // a controller's tip this close to a tool touches it
 const REACH_HAND = 0.07; // a bare fingertip: tracking is looser, and the tools are small (the marker is 9 cm)
 const PALM_REACH = 0.09; // a closing bare hand: its palm this close to a tool still takes it (the fingers curl away from the tool as the hand closes)
 const MEMORY = 0.6; // seconds a touched tool stays the one a closing hand takes
-const OUT = 0.08; // the open fan sits this far to the fan hand's outer side, beside its ABOVE
-const RETURN = 0.08; // a bare hand bringing its tool this close to its place puts it back
+const OUT = 0; // the fan's middle (the meter) sits straight over the fan hand (build 215's B1: the camera on its outer side, the marker on its inner side; before, 8 cm outward put the marker over the hand, out of the other hand's easy reach)
+const ORB_CLEAR = 0.1; // no tool nearer the orb than this (m): the fan moves outward (build 215's B1: never over the orb)
+const FRONT = 0.005; // a tool held by a controller: its back this far in front of the laser's start (the controller's front face)
+const OUTLINE_W = 0.0025; // the empty place's outline: 2.5 mm (CONTROL_CUE, 40%)
 const FADE = 0.2; // seconds: the fan appears and goes (tracking found or lost)
 // A touched tool (build 215's A7: the tick and the lift repeated like an alarm, faster or slower with the distance:
 // the lift carried the tool out of reach, it dropped back, and was touched again): touched within the reach of where
@@ -75,6 +81,8 @@ export class ToolFan {
 			slot.label.set(NAMES[name] ?? name);
 			slot.label.mesh.position.y = TAG.below;
 			slot.home.add(slot.label.mesh);
+			slot.outline = outlineOf(object); // (the empty place, while its armed tool is near: js/hold.js, the magnet)
+			slot.home.add(slot.outline);
 			this.group.add(slot.home);
 			tool = tool ?? { name, object, live, trigger: () => {}, secondary: () => {} }; // (the meter in milestone E, the marker in F)
 			const own = { take: tool.take?.bind(tool), putBack: tool.putBack?.bind(tool) };
@@ -137,6 +145,7 @@ export class ToolFan {
 			outward.copy(xr.viewAxes().right).multiplyScalar(xr.toolFan === 'right' ? 1 : -1);
 			anchor.copy(wrist).addScaledVector(outward, OUT);
 			anchor.y += ABOVE;
+			this.clearOfOrb(anchor, outward);
 			this.aim(fan, take, anchor, wrist, head, dt);
 		} else this.lost = (this.lost ?? 0) + dt;
 		// (The pause's dark covers it between places: js/pause.js. Tracking lost: it stays LOST_HOLD, then fades.)
@@ -184,7 +193,7 @@ export class ToolFan {
 		if (take) {
 			const grab = take.isController ? take.state.down.grip : take.gestures?.some((e) => e.type === 'fist');
 			const aim = take.isHand ? this.target : this.hot;
-			if (grab && aim) {
+			if (grab && aim && (!held || held.c !== take || held.mode !== 'use')) { // (in use mode the held tool owns its hand: js/hold.js)
 				if (!aim.live) this.refuse(aim, take);
 				else xr.tools.take(aim.tool, take);
 			} else if (grab && held?.c === take && take.isController) {
@@ -192,11 +201,15 @@ export class ToolFan {
 				xr.tools.putBack();
 			}
 		}
-		// A bare hand brings its tool back to its place: it goes back.
-		if (held?.c?.isHand && this.alpha > 0.5) {
-			const slot = this.slots.find((s) => s.tool === held.tool);
-			const tip = held.tool.object.getWorldPosition(at);
-			if (slot && tip.distanceTo(slot.home.getWorldPosition(this._at2 ??= new THREE.Vector3())) < RETURN && slot.settled) xr.tools.putBack();
+		// The magnet (js/hold.js): an armed tool near its own place shows the place's outline, and within reach of it goes back.
+		for (const s of this.slots) s.outline.visible = false;
+		if (held && this.alpha > 0.5) {
+			const i = this.slots.findIndex((s) => s.tool === held.tool);
+			if (i >= 0) {
+				const m = magnetStep(held.magnet ??= { armed: false }, held.mode, held.tool.object.getWorldPosition(at).distanceTo(this.restWorld(i, this._at2 ??= new THREE.Vector3())));
+				this.slots[i].outline.visible = m.outline;
+				if (m.fire) { xr.tools.putBack(); if (xr.soundLevel !== 'off') xr.sound.play('tick', 0.6); }
+			}
 		}
 		this.meter.fit(); // (the measured lines keep their size to the eye whatever the zoom)
 		this.animate(dt);
@@ -231,6 +244,20 @@ export class ToolFan {
 			dampTowards(this.pos, this.vel, target, dt);
 			if (this.mode === 'home' && this.pos.distanceTo(target) < 0.01) this.gliding = false;
 		} else { this.pos.copy(target); this.vel.set(0, 0, 0); }
+	}
+
+	/** Moves a fan middle outward (along `outward`) until no tool rests within ORB_CLEAR of the orb. */
+	clearOfOrb(at, outward) {
+		const orb = this.xr.ui?.wrist?.orb;
+		if (!orb?.holder || !orb.group.parent || this.xr.tools?.held) return at; // (a tool held: the orb's hand is bringing it home; the dock never runs from it)
+		const o = orb.group.getWorldPosition(this._orb ??= new THREE.Vector3()), right = this.xr.viewAxes().right, t = this._ot ??= new THREE.Vector3();
+		for (let round = 0; round < 3; round++) {
+			let worst = 0;
+			for (let i = -1; i <= 1; i++) worst = Math.max(worst, ORB_CLEAR - t.copy(at).addScaledVector(right, i * SPACING).distanceTo(o));
+			if (worst <= 0) break;
+			at.addScaledVector(outward, worst + 0.005);
+		}
+		return at;
 	}
 
 	/** Where slot i rests in the fan (world): its place in the arc, without the touched lift or the bob. */
@@ -274,40 +301,71 @@ export class ToolFan {
 		}
 	}
 
-	/** A tool springs into hand c: at the hand, its grip point in the palm. */
+	/**
+	 * A tool springs into hand c (js/hold.js, "How each tool sits on the
+	 * hand"): a bare hand holds it in its hold frame (c.hold, placed each frame
+	 * by the ToolSystem), a controller along its pointing ray (target-ray
+	 * space, not its grip: the lens, the beam and the nib point where you aim),
+	 * just in front of its front face. Each tool sits its own way (toolPose),
+	 * its grip point at the frame's origin.
+	 */
 	attach(slot, c) {
-		// A controller carries its tool along its pointing ray (target-ray space), not its grip:
-		// the grip tilts up from where the controller points, and the meter's beam, the
-		// camera's lens and the marker's nib must point where you aim. A bare hand: its wrist.
-		const xr = this.xr, o = slot.object, at = c.isHand ? c.wrist : c.ray;
+		const xr = this.xr, o = slot.object;
+		if (slot.glide) { xr.tweens.stop(slot.glide); slot.glide = null; }
 		slot.held = true;
-		slot.settled = false;
+		const at = c.isHand ? this.holdGroup(c) : c.ray;
 		at.add(o);
-		const grip = o.getObjectByName('grip');
+		const pose = toolPose(slot.name, c.handedness);
 		o.scale.setScalar(1);
-		o.rotation.set(0, 0, 0);
-		// (Controllers: a little back from the ray's start, at the front of the controller, and below it.
-		// Bare hands: the wrist, a little towards the fingers and the palm.)
-		o.position.copy(grip ? grip.position.clone().negate() : new THREE.Vector3());
-		o.position.add(c.isHand ? new THREE.Vector3(0, -0.03, -0.07) : new THREE.Vector3(0, -0.025, 0.04));
+		o.rotation.set(...pose.rotation);
+		const grip = o.getObjectByName('grip')?.position ?? new THREE.Vector3();
+		o.position.fromArray(pose.position).sub(grip.clone().applyEuler(o.rotation));
+		if (!c.isHand) o.position.z -= FRONT + backOf(o); // (its back just in front of the controller's front face)
 		o.visible = true;
 		const s0 = slot.object.userData.fanScale;
-		xr.tweens.start({ duration: 0.3, ease: ease.spring, step: (k) => o.scale.setScalar(s0 + (1 - s0) * k), done: () => { slot.settled = true; } });
+		slot.spring = xr.tweens.start({ duration: 0.3, ease: ease.spring, step: (k) => o.scale.setScalar(s0 + (1 - s0) * k), done: () => { slot.spring = null; } });
 		this.feel(c, 'grab', 'click');
 	}
 
-	/** The tool flies back to its place in the fan. */
-	detach(slot) {
-		const o = slot.object;
-		slot.held = false;
-		if (slot.tool === this.camera) this.camera.clearPrints(); // (no print left floating over the fan)
-		slot.pose.add(o);
-		o.position.set(0, 0, 0);
-		o.rotation.set(0, 0, 0);
-		o.scale.setScalar(o.userData.fanScale);
-		o.visible = this.alpha > 0.05;
-		if (this.xr.soundLevel !== 'off') this.xr.sound.play('whoosh', 0.6);
+	/** The group a bare hand holds its tool in (in the rig; the ToolSystem places it each frame from the joints). */
+	holdGroup(c) {
+		if (!c.hold) {
+			c.hold = new THREE.Group();
+			c.hold.name = `hold-${c.index}`;
+			c.wrist.parent.add(c.hold);
+			c.hold.position.copy(c.wrist.position); c.hold.quaternion.copy(c.wrist.quaternion); // (until the first frame places it)
+		}
+		return c.hold;
 	}
+
+	/** The tool glides back to its place in the fan (HOLD.GLIDE, easing out; at once when the fan is not shown). */
+	detach(slot) {
+		const o = slot.object, xr = this.xr;
+		slot.held = false;
+		if (slot.spring) { xr.tweens.stop(slot.spring); slot.spring = null; }
+		if (slot.tool === this.camera) this.camera.clearPrints(); // (no print left floating over the fan)
+		const fs = o.userData.fanScale;
+		if (this.alpha > 0.05 && xr.session && o.parent) {
+			o.updateWorldMatrix(true, false); slot.pose.updateWorldMatrix(true, false);
+			slot.pose.attach(o); // (where it is now, in the place's space: it glides from there)
+			const p0 = o.position.clone(), q0 = o.quaternion.clone(), s0 = o.scale.x, q1 = new THREE.Quaternion();
+			slot.glide = xr.tweens.start({ duration: HOLD.GLIDE, ease: ease.out, step: (k) => {
+				o.position.copy(p0).multiplyScalar(1 - k);
+				o.quaternion.slerpQuaternions(q0, q1, k);
+				o.scale.setScalar(s0 + (fs - s0) * k);
+			}, done: () => { slot.glide = null; o.position.set(0, 0, 0); o.quaternion.identity(); o.scale.setScalar(fs); } });
+		} else {
+			slot.pose.add(o);
+			o.position.set(0, 0, 0);
+			o.rotation.set(0, 0, 0);
+			o.scale.setScalar(fs);
+		}
+		o.visible = this.alpha > 0.05;
+		if (xr.soundLevel !== 'off') xr.sound.play('whoosh', 0.6);
+	}
+
+	/** Where the dock's middle is (world): the fan's middle, over the fan hand or waiting at the edge (js/hold.js); null while the fan is not shown (no dock: a held tool is in use). */
+	dockAt(out = new THREE.Vector3()) { return this.alpha > 0 ? this.group.getWorldPosition(out) : null; }
 
 	feel(c, sound, haptic) {
 		const xr = this.xr;
@@ -324,4 +382,40 @@ export class ToolFan {
 		this.fanBusy = false;
 		this.pos = this.vel = null; this.mode = this.was = null; this.gliding = false; this.reach = false; this.lost = 0;
 	}
+}
+
+/** How far a tool reaches behind its own origin (+Z, its back), at its own rotation (m). */
+function backOf(o) {
+	const box = new THREE.Box3(), m = new THREE.Matrix4().makeRotationFromEuler(o.rotation);
+	o.updateMatrixWorld(true);
+	const inv = new THREE.Matrix4().copy(o.matrixWorld).invert();
+	o.traverse((c) => { if (c.isMesh && c.geometry) { c.geometry.computeBoundingBox(); box.union(c.geometry.boundingBox.clone().applyMatrix4(new THREE.Matrix4().multiplyMatrices(inv, c.matrixWorld))); } });
+	box.applyMatrix4(m);
+	const grip = o.getObjectByName('grip')?.position.clone().applyMatrix4(m) ?? new THREE.Vector3();
+	return box.isEmpty() ? 0 : Math.max(0, box.max.z - grip.z);
+}
+
+/**
+ * The outline of a tool's place in the fan (C1, the magnet): a thin frame
+ * round the tool as it sits in the fan (its box at fan scale, facing you),
+ * CONTROL_CUE's colour at 40%, 2.5 mm wide. Hidden until its armed tool is near.
+ */
+function outlineOf(object) {
+	const box = new THREE.Box3();
+	object.updateMatrixWorld(true);
+	const inv = new THREE.Matrix4().copy(object.matrixWorld).invert();
+	object.traverse((c) => { if (c.isMesh && c.geometry) { c.geometry.computeBoundingBox(); box.union(c.geometry.boundingBox.clone().applyMatrix4(new THREE.Matrix4().multiplyMatrices(inv, c.matrixWorld))); } });
+	const k = object.userData.fanScale ?? 1, size = box.isEmpty() ? new THREE.Vector3(0.05, 0.05, 0.05) : box.getSize(new THREE.Vector3());
+	const w = Math.max(size.x, size.z) * k + 0.01, h = size.y * k + 0.01, t = OUTLINE_W;
+	const mat = new THREE.MeshBasicMaterial({ color: CONTROL_CUE.color, transparent: true, opacity: CONTROL_CUE.opacity, depthWrite: false });
+	const g = new THREE.Group();
+	for (const [x, y, bw, bh] of [[0, h / 2, w, t], [0, -h / 2, w, t], [-w / 2, 0, t, h], [w / 2, 0, t, h]]) {
+		const bar = new THREE.Mesh(new THREE.PlaneGeometry(bw, bh), mat);
+		bar.position.set(x, y, 0);
+		bar.raycast = () => {};
+		g.add(bar);
+	}
+	g.name = 'place-outline';
+	g.visible = false;
+	return g;
 }

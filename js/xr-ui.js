@@ -277,7 +277,7 @@ export class XRUI {
 	handTaps() {
 		const xr = this.xr, raycaster = xr.raycaster;
 		for (const c of xr.input.controllers) {
-			if (!c.isHand || !c.gesture || c.gesture.fist || !c.gestures.some((e) => e.type === 'tap')) continue;
+			if (!c.isHand || !c.gesture || c.gesture.fist || !xr.emptyHand(c) || !c.gestures.some((e) => e.type === 'tap')) continue; // (a hand holding a tool never closes the wing: harmony rule 2)
 			const s = c.gesture.shape;
 			if (!s) continue;
 			const head = xr.headWorld(), axes = xr.viewAxes();

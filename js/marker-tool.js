@@ -12,6 +12,7 @@
 // scale model and stay put while walking. Photos keep them.
 
 import * as THREE from 'three';
+import { HOLD } from './hold.js';
 import { buildMarker, MARKER_INKS } from './tool-models.js';
 import { readSetting, writeSetting } from './settings.js';
 
@@ -87,7 +88,7 @@ export class MarkerTool {
 		mesh.name = 'stroke';
 		mesh.frustumCulled = false;
 		this.xr.tools.annotations.add(mesh);
-		this.drawing = { mesh, geo, ink: this.ink, n: 0, cap: 0, last: null, r: this.radius() };
+		this.drawing = { mesh, geo, ink: this.ink, n: 0, cap: 0, last: null, r: this.radius(), age: 0 };
 		this.grow(this.drawing, START_POINTS);
 		if (this.xr.soundLevel !== 'off') this.xr.sound.play('squeak', 0.6);
 	}
@@ -206,6 +207,8 @@ export class MarkerTool {
 		if (rig) { this._rig ??= { yaw: 0, pos: new THREE.Vector3() }; this._rig.yaw = rig.rotation.y; this._rig.pos.copy(rig.position); }
 		if (!s || !this.held) return;
 		if (xr.layerFx || xr.modes?.walk?.fade || moved || (this.held.isHand && !this.held.touch?.tracked)) { this.endStroke(); return; }
+		s.age += dt;
+		if (this.held.isHand && s.age < HOLD.STROKE_SKIP) return; // (a pinched stroke: its first 30 ms not drawn, the pinch moved the hand: build 215's C2)
 		this.object.updateMatrixWorld(true);
 		const world = this.tip.getWorldPosition(this._p);
 		if (this._nib && world.distanceTo(this._nib) > JUMP) { this._nib.copy(world); this.endStroke(); return; }

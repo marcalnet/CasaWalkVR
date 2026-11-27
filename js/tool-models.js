@@ -318,7 +318,7 @@ export function buildMarker({ ink = 'blue' } = {}) {
 	cap([[0.0119, 0.0], [0.0122, 0.001], [0.0122, 0.026], [0.0105, 0.0295], [0.0060, 0.0313], [0, 0.0318]]);
 
 	const g = P.build('marker', { keep: ['ink'] });
-	point(g, 'grip', 0, 0, -0.018);
+	point(g, 'grip', 0, 0, (-0.0695 + 0.0823) / 2); // (held by its middle, between the nib and the cap's end: build 215's B2; before, 2.5 cm towards the nib)
 	point(g, 'tip', 0, 0, -0.0695, [0, 0, -1]);
 	point(g, 'cap', 0, 0, 0.067); // (the posted cap's middle: the marker's control part, its colour dial)
 	point(g, 'dial', 0, 0, 0.067 - 0.07); // (its dial opens round here, 7 cm from the cap towards the nib: the cap is by the holding wrist)

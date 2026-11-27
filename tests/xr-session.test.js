@@ -1182,7 +1182,10 @@ test('the fan shows the camera from the front, the meter and the marker from the
 	const by = Object.fromEntries(x.fan.slots.map((s) => [s.name, s]));
 	assert.equal(by.camera.pose.rotation.y, Math.PI, 'camera: lens towards you');
 	assert.equal(by.meter.pose.rotation.y, Math.PI / 2, 'meter: side on');
-	assert.equal(by.marker.pose.rotation.y, Math.PI / 2, 'marker: side on');
+	assert.ok(Math.abs(by.marker.pose.rotation.y - (Math.PI / 2 - THREE.MathUtils.degToRad(40))) < 1e-9, 'marker: side on, its cap end turned 40° towards you (build 215, B2: the ring on its back shows)');
+	// The ring on the marker's back, seen from the eyes over the fan: no longer edge-on.
+	const cue = new THREE.Vector3(0, 0, 1).applyAxisAngle(new THREE.Vector3(0, 1, 0), by.marker.pose.rotation.y); // (its axis, in the fan, which faces you along +Z)
+	assert.ok(cue.z > 0.6, `the ring faces you enough to see (${cue.z.toFixed(2)})`);
 	assert.deepEqual(x.fan.slots.map((s) => s.label.text), ['Camera', 'Meter', 'Marker']);
 	assert.ok(x.fan.slots.every((s) => s.label.mesh.parent === s.home && s.object.parent === s.pose), 'tags beside the tools, tools in their pose');
 });
@@ -1203,6 +1206,7 @@ test('the tool fan: floats over the tracked left hand, wherever it is; the right
 		// (the tip is 4.5 cm in front of the grip, in its own space: put the grip so the tip lands on the tool)
 		hands.right.grip.position.copy(x.rig.worldToLocal(at.clone().add(new THREE.Vector3(0, 0.01, 0.045))));
 		hands.right.grip.rotation.set(0, 0, 0);
+		hands.right.ray.position.copy(hands.right.grip.position); // (the ray and the grip move together: a held tool rides the ray)
 	};
 	tipTo('meter'); frame(); frame();
 	assert.equal(fan.hot?.name, 'meter', 'touched: it lifts');
@@ -1220,7 +1224,11 @@ test('the tool fan: floats over the tracked left hand, wherever it is; the right
 	tipTo('camera'); frame(); frame();
 	press('right', 'grip'); frame(); press('right', 'grip', false); frame();
 	assert.equal(x.tools.held?.tool.name, 'camera', 'the camera is taken too');
+	assert.equal(x.tools.held.mode, 'dock', 'every take starts in dock mode (build 215, C1)');
 	let shots = 0;
+	press('right', 'trigger'); frame(); press('right', 'trigger', false); frame(); // (in dock mode the trigger does nothing)
+	hands.right.grip.position.set(0.35, 1.25, -0.25); hands.right.ray.position.copy(hands.right.grip.position); frame(); frame(); // (away from the fan: use mode)
+	assert.equal(x.tools.held.mode, 'use', 'away from the fan: use mode');
 	x.capturePhoto = (o) => { shots++; assert.ok(o.width / o.height === 1.5 && Math.abs(o.fov - 53.1) < 0.1, '3:2, 24 mm (wide angle, the default)'); };
 	press('right', 'trigger'); frame(); press('right', 'trigger', false); frame();
 	assert.equal(shots, 1, 'the trigger is the shutter');
@@ -1416,7 +1424,7 @@ test('the laser meter: two triggers measure a line in model space; A undoes, hol
 test('the marker: hold the trigger and move to draw; the stick press changes colour; A undoes', async () => {
 	const { x, press, frame, hands } = await setup();
 	const marker = x.fan.marker, c = hands.right;
-	c.grip.position.set(0.2, 1.2, -0.4);
+	c.grip.position.set(0.2, 1.2, -0.4); c.ray.position.copy(c.grip.position);
 	frame();
 	x.tools.take(marker, c);
 	frame();
@@ -1591,6 +1599,26 @@ test('a tool touched and held still ticks once, not like an alarm; touched again
 	back();
 	assert.equal(ticks.length, 2, 'back again within a second of it: none');
 	x.sound.play = play;
+});
+
+test('the fan over the left hand: the meter straight over it, the camera outside, the marker inside; no tool within 10 cm of the orb (build 215, B1)', async () => {
+	const { x, frame, hands } = await setup();
+	const fan = x.fan;
+	hands.left.grip.visible = hands.right.grip.visible = true;
+	hands.right.grip.position.set(0.4, 0.8, 0.1);
+	hands.left.grip.position.set(-0.45, 1.2, -0.3); // (out to the left: in its own area, the tools home over it)
+	for (let i = 0; i < 60; i++) frame();
+	const wrist = x.input.wristOf(hands.left).getWorldPosition(new THREE.Vector3()), right = x.viewAxes().right;
+	const at = (name) => fan.restWorld(fan.slots.findIndex((s) => s.name === name));
+	const across = (p) => p.clone().sub(wrist).dot(right); // (+: towards the right hand, as you see it; the fan faces you from the left, so its 11.5 cm read shorter)
+	assert.ok(Math.abs(across(at('meter'))) < 0.01, `the meter over the hand (${across(at('meter')).toFixed(3)} m across)`);
+	assert.ok(across(at('camera')) < -0.05 && across(at('marker')) > 0.05, `the camera on the outer side, the marker on the inner side (${across(at('camera')).toFixed(3)}, ${across(at('marker')).toFixed(3)})`);
+	// The right wrist (the orb) brought in beside the left hand: the fan moves out, every tool 10 cm or more from the orb.
+	hands.right.grip.position.set(-0.32, 1.25, -0.3);
+	for (let i = 0; i < 60; i++) frame();
+	const orb = x.ui.wrist.orb.group.getWorldPosition(new THREE.Vector3());
+	const near = Math.min(...fan.slots.map((s, i) => fan.restWorld(i).distanceTo(orb)));
+	assert.ok(x.ui.wrist.wearer === hands.right && near >= 0.1 - 1e-3, `no tool within 10 cm of the orb (${near.toFixed(3)} m)`);
 });
 
 test('the orb never hides a live key: resting over the Walk in door it goes small and faint (touch unchanged); clear again it grows back after 0.4 s; near the eyes it still yields; touched while yielded it opens', async () => {
@@ -1910,4 +1938,72 @@ test('a home without a Sweet Home 3D visitor walks in at the clear middle of the
 	assert.ok(room?.name, `in a named room (${room?.name ?? 'none'})`);
 	assert.ok(edgeDistance(modelPt.x, modelPt.z, room.points) >= 0.35, 'clear of its walls');
 	assert.ok(Number.isFinite(yaw), 'facing along it');
+});
+
+test('sticky tools (build 215, C1 and C2), controllers: a take starts in dock mode, where the trigger does nothing; away, in use mode, it fires and the ring lights; the magnet takes it home to its own place only', async () => {
+	const { x, press, frame, hands } = await setup();
+	const fan = x.fan, meter = fan.meter, c = hands.right;
+	hands.left.grip.visible = c.grip.visible = true;
+	hands.left.grip.position.set(-0.45, 1.2, -0.3);
+	c.grip.position.set(0.4, 0.8, 0.1); c.ray.position.copy(c.grip.position);
+	for (let i = 0; i < 40; i++) frame();
+	const place = (name) => fan.restWorld(fan.slots.findIndex((s) => s.name === name));
+	const moveTo = (p) => { c.ray.position.copy(x.rig.worldToLocal(p.clone())); c.grip.position.copy(c.ray.position); frame(); frame(); };
+	moveTo(place('meter').add(new THREE.Vector3(0, 0, 0.05)));
+	x.tools.take(meter, c); frame();
+	assert.equal(x.tools.held.mode, 'dock', 'taken: dock mode');
+	press('right', 'trigger'); frame(); press('right', 'trigger', false); frame();
+	assert.ok(!meter.m.pending, 'in dock mode the trigger does nothing (taking never fires it)');
+	// Away from the fan: use mode; the trigger measures; the quiet ring at full.
+	moveTo(fan.dockAt().add(new THREE.Vector3(0.45, 0, 0)));
+	assert.equal(x.tools.held.mode, 'use', 'more than 25 cm away: use mode');
+	assert.equal(x.dial.cues.get(meter)?.mesh.material.opacity, 1, 'its quiet ring lights to full');
+	meter.hit = new THREE.Vector3(0, 1, -1); meter.trigger(c, 'down'); // (a point, as the trigger gives it where the dot is)
+	assert.ok(meter.m.pending, 'in use mode the trigger measures');
+	// The held tool itself at another tool's place (the marker's, 23 cm from its own): nothing; within 10 cm of its own: it glides home.
+	const toolTo = (p) => { for (let i = 0; i < 3; i++) moveTo(c.ray.getWorldPosition(new THREE.Vector3()).add(p.clone().sub(meter.object.getWorldPosition(new THREE.Vector3())))); };
+	toolTo(place('marker'));
+	assert.equal(x.tools.held?.tool.name, 'meter', 'at another tool\'s place: still held');
+	toolTo(place('meter').add(new THREE.Vector3(0, 0, 0.06)));
+	assert.ok(!x.tools.held, 'within 10 cm of its own place: back');
+	for (let i = 0; i < 30; i++) frame();
+	const slot = fan.slots.find((s) => s.name === 'meter');
+	assert.ok(meter.object.parent === slot.pose && meter.object.position.length() < 1e-6 && Math.abs(meter.object.scale.x - meter.object.userData.fanScale) < 1e-6, 'glided into its place');
+	// A tool just taken never snaps back (not armed until used).
+	moveTo(place('marker').add(new THREE.Vector3(0, 0, 0.04)));
+	x.tools.take(fan.marker, c); frame(); frame();
+	assert.equal(x.tools.held?.tool.name, 'marker', 'just taken, at its own place: stays in the hand');
+	x.tools.putBack();
+});
+
+test('sticky tools, bare hands (build 215, C1 and C2): the pinch is the trigger in use mode only; tracking lost, the tool never drops (it fades after 1 s and comes back)', async () => {
+	const { x, frame, hands } = await setup();
+	const fan = x.fan, cam = fan.camera, c = hands.right;
+	hands.left.grip.visible = true; hands.left.grip.position.set(-0.45, 1.2, -0.3);
+	for (let i = 0; i < 40; i++) frame();
+	Object.assign(c, { isHand: true, isController: false });
+	c.touch.tracked = true;
+	let shots = 0;
+	x.capturePhoto = () => { shots++; };
+	x.tools.take(cam, c);
+	const sel = c.touch.select, pinch = () => { sel.down = true; x.tools.update(1 / 72); sel.down = false; sel.up = true; x.tools.update(1 / 72); sel.up = false; };
+	// (The hold group, where the fan puts it: by the dock first, then far from it.)
+	c.hold.position.copy(x.rig.worldToLocal(fan.dockAt().add(new THREE.Vector3(0.05, 0, 0))));
+	x.tools.update(1 / 72);
+	assert.equal(x.tools.held.mode, 'dock');
+	pinch();
+	assert.equal(shots, 0, 'a pinch in dock mode fires nothing');
+	c.hold.position.copy(x.rig.worldToLocal(fan.dockAt().add(new THREE.Vector3(0.5, 0, 0))));
+	x.tools.update(1 / 72);
+	assert.equal(x.tools.held.mode, 'use');
+	pinch();
+	assert.equal(shots, 1, 'in use mode the pinch takes the photo');
+	assert.equal(cam.hint?.text ?? 'Pinch: take a photo', 'Pinch: take a photo', 'the camera says so (no more "with a controller, for now")');
+	// Tracking lost for 3 s: still in the hand; faded after 1 s; back with the hand.
+	c.touch.tracked = false;
+	for (let t = 0; t < 3; t += 1 / 72) x.tools.update(1 / 72);
+	assert.equal(x.tools.held?.tool.name, 'camera', 'still in the hand after 3 s');
+	assert.equal(cam.object.visible, false, 'faded');
+	x.tools.putBack();
+	Object.assign(c, { isHand: false, isController: true });
 });

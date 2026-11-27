@@ -14,6 +14,7 @@
 // labels' size are kept the same to the eye whatever the zoom. Photos keep them.
 
 import * as THREE from 'three';
+import { HOLD } from './hold.js';
 import { canvasTexture } from './canvas-card.js';
 import { buildMeter } from './tool-models.js';
 import { Measurements, liveReading, formatLength, defaultUnits } from './measure.js';
@@ -71,17 +72,30 @@ export class LaserMeter {
 	take(c) { this.held = c; }
 	putBack() { this.held = null; this.beam.visible = this.dot.visible = false; }
 
-	/** Trigger: a point where the dot is. */
+	/**
+	 * Trigger: a point where the dot is. A bare hand's pinch: where the dot was
+	 * HOLD.PINCH_BACK before the pinch closed (pinching moves the hand: build
+	 * 215's C2).
+	 */
 	trigger(c, phase) {
 		if (phase !== 'down') return;
 		const xr = this.xr;
-		if (!this.hit) { if (xr.soundLevel !== 'off') xr.sound.play('deny'); return; }
-		const p = xr.centerer.worldToLocal(this.hit.clone());
+		const at = c?.isHand ? this.hitBefore(HOLD.PINCH_BACK) : this.hit;
+		if (!at) { if (xr.soundLevel !== 'off') xr.sound.play('deny'); return; }
+		const p = xr.centerer.worldToLocal(at.clone());
 		const r = this.m.point(p);
 		if (xr.soundLevel !== 'off') xr.sound.play('beep');
 		if (c?.isController) xr.haptics.play(c, 'tick');
 		if (r.kind === 'line') { this.pendingMark.visible = false; this.addLine(r.line); }
 		else this.showPending(p);
+	}
+
+	/** Where the dot was `back` seconds ago (its oldest kept, at most 0.15 s; null if it had no hit then). */
+	hitBefore(back) {
+		const h = this.history ?? [];
+		let best = null;
+		for (const e of h) if (this.clock - e.t <= back + 1e-6) { best = e; break; }
+		return (best ?? h[h.length - 1])?.hit ?? this.hit;
 	}
 
 	/** Second button: press = undo, hold = clear all. */
@@ -177,6 +191,11 @@ export class LaserMeter {
 		this.ray.intersectObjects(xr.targets().pointable, false, this._hits);
 		const hit = this._hits[0];
 		this.hit = hit ? (this._hit ??= new THREE.Vector3()).copy(hit.point) : null;
+		// The last 0.15 s of the dot (oldest first), for a pinch's point (trigger).
+		this.clock = (this.clock ?? 0) + dt;
+		const hist = this.history ??= [];
+		hist.push({ t: this.clock, hit: this.hit?.clone() ?? null });
+		while (hist.length > 1 && this.clock - hist[0].t > 0.15) hist.shift();
 		const dist = hit ? hit.distance / Math.max(1e-6, xr.anchor.scale.x) : null; // (real metres, in the scale model too)
 		this.beam.visible = true;
 		this.beam.position.copy(o);

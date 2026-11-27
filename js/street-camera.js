@@ -83,8 +83,8 @@ export class StreetCamera {
 
 	take(c) {
 		this.held = c;
-		// (Bare hands: no shutter yet; the button on the camera comes with item 11 of the Quest 2 fixes. Until then, say so.)
-		this.hint.set(c?.isHand ? 'Photos: with a controller, for now' : 'Trigger: take a photo');
+		// (Bare hands: the holding hand's pinch is the shutter, in use mode: build 215's C2, js/xr-tools.js.)
+		this.hint.set(c?.isHand ? 'Pinch: take a photo' : 'Trigger: take a photo');
 	}
 	putBack() { this.held = null; this.guide.reset(); }
 

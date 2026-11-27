@@ -224,7 +224,8 @@ export class ToolDial {
 			}
 			cue.pulse = Math.max(0, cue.pulse - dt);
 			const k = cue.pulse > 0 ? Math.sin((1 - cue.pulse / DIAL.PULSE) * Math.PI) : 0;
-			cue.mesh.material.opacity = this.open?.tool === tool ? 1 : CONTROL_CUE.opacity + (1 - CONTROL_CUE.opacity) * k; // (its dial open: full, so you see which part it belongs to)
+			const live = this.open?.tool === tool || (held?.tool === tool && held.mode === 'use'); // (its dial open: full, so you see which part it belongs to; in use mode, full: "this tool is live", build 215's C1)
+			cue.mesh.material.opacity = live ? 1 : CONTROL_CUE.opacity + (1 - CONTROL_CUE.opacity) * k;
 			if (cue.faces) cue.mesh.lookAt(this.xr.headWorld());
 		}
 	}

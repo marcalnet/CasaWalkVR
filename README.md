@@ -215,6 +215,7 @@ js/xr-scene.js    gallery room, plinth, skies, markers
 js/xr-targets.js  what the lasers, the teleport arc and your feet can hit (no DOM)
 js/xr-tools.js    the hand-held tool system
 js/tool-fan.js    the tool fan (take, swap, put back)
+js/hold.js        holding a tool: dock and use modes, the magnet home, how each tool sits in the hand (pure)
 js/tool-models.js the tools' models
 js/street-camera.js the street camera: shutter, viewfinder, lens, the print
 js/framing-guide.js the camera's red frame where the photo's edges fall

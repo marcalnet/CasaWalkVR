@@ -92,7 +92,7 @@ export const GUIDES = {
 		lines: ['Right stick left or right: turn', 'Left stick: walk', 'Hold B or Y: back to the scale model', 'The Meta button leaves VR at any moment'] },
 	'dollhouse-hands': { row: 2,
 		frames: ['Close your hand on it: hold', 'Let go: it floats, then goes home', 'Pinch and hold, point at a room', 'Let go: walk in'],
-		lines: ['Turn it: it stays level', 'Palm towards you: cancel', 'Touch the ring on a tool: options', 'Hold \u2190 Back: leave VR'] },
+		lines: ['Turn it: it stays level', 'Palm towards you: cancel', 'Tools: pinch to use, bring back to put away', 'Hold \u2190 Back: leave VR'] },
 	'dollhouse-controllers': { row: 3,
 		frames: ['Grip: hold it', 'Stick: turn', 'Point at a room', 'Pull the trigger: walk in'],
 		lines: ['Turn it: it stays level', 'Let go: it floats home', 'Holding a tool, stick: its options', 'Hold B or Y: leave VR'] },
