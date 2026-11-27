@@ -874,17 +874,27 @@ check('B closes the board', (await state()).menu === null);
 		return list;
 	});
 	await gesture('right', { type: 'pinch' }); await frames(2);
-	let floorAhead = targets[0];
+	// Aim as a person does: watch the ring and steer until it sits on the hotspot. The arc (7 m/s, under gravity) lands short
+	// of the straight line through the hand, so pointing that line at a hotspot leaves the ring about 0.6 m short of it (the
+	// Apartment on 77208e7). Only a target the ring really reaches counts: since step 2b a wall in the way is a valid landing
+	// too, 0.3 m back on your side, so a hotspot in the next room gives a blue ring at your feet (a 0.42 m "jump", 213bb97).
+	const HOTSPOT_SNAP = 0.5; // (js/hotspots.js HOTSPOT.SNAP: the ring snaps to a hotspot within this distance)
+	let floorAhead = targets[0], aimAt = targets[0];
+	const ringNow = () => page.evaluate(() => { const r = window.__casawalk.xr.modes.walk.tele?.result; return r?.valid && r.point ? r.point.toArray() : null; });
 	for (const t of targets) {
-		await handAimAt(t); await frames(3); await handAimAt(t); await frames(3);
-		// (A target the ring really reaches: since step 2b a wall in the way is a valid landing too, 0.3 m back on your side, so a
-		// hotspot in the next room gives a blue ring at your feet. The first try did exactly that, a 0.42 m "jump".)
-		if (await page.evaluate((t) => { const r = window.__casawalk.xr.modes.walk.tele?.result; return !!r?.valid && !!r.point && Math.hypot(r.point.x - t[0], r.point.z - t[2]) < 0.6; }, t)) { floorAhead = t; break; }
+		let a = t.slice(), r = null;
+		for (let k = 0; k < 4; k++) {
+			await handAimAt(a); await frames(3); await handAimAt(a); await frames(3);
+			r = await ringNow();
+			if (!r || Math.hypot(t[0] - r[0], t[2] - r[2]) < 0.1) break;
+			a = [a[0] + t[0] - r[0], a[1], a[2] + t[2] - r[2]]; // (the ring was short or wide: aim that much further)
+		}
+		if (r && Math.hypot(r[0] - t[0], r[2] - t[2]) <= HOTSPOT_SNAP) { floorAhead = t; aimAt = a; break; }
 	}
-	await handAimAt(floorAhead); await frames(2);
+	await handAimAt(aimAt); await frames(2);
 	const settling = await page.evaluate(() => { const x = window.__casawalk.xr, w = x.modes.walk, c = x.input.controllers.find((c) => c.handedness === 'right');
 		return { via: w.tele?.via, dots: w.arc.dots.visible, colour: w.arc.dots.material.color.getHexString(), block: x.aimBlock(c, c.gesture?.shape?.pinchAt) }; });
-	await handAimAt(floorAhead); await frames(10);
+	await handAimAt(aimAt); await frames(10);
 	// (The arc must have shown 0.3 s of the app's own time: a slow emulator needs more real time.)
 	await page.waitForFunction(() => (window.__casawalk.xr.modes.walk.tele?.age ?? 0) >= 0.4, null, { timeout: 8000, polling: 'raf' }).catch(() => {});
 	const steady = await page.evaluate(() => { const x = window.__casawalk.xr, w = x.modes.walk; return { held: x.tools.held ? `${x.tools.held.tool.name}@${x.tools.held.c.handedness}` : null, open: +x.fan.alpha.toFixed(2), age: w.tele?.age ?? 0, valid: !!w.tele?.result?.valid, colour: w.arc.dots.material.color.getHexString(), discs: w.discs.count }; });
@@ -896,10 +906,11 @@ check('B closes the board', (await state()).menu === null);
 	await page.waitForFunction(() => { const w = window.__casawalk.xr.modes.walk; return !w.fade && !w.tele; }, null, { timeout: 8000, polling: 'raf' }).catch(() => {}); // (the fade does the move: a slow emulator needs time)
 	const after = await page.evaluate(() => ({ head: window.__casawalk.xr.headWorld().toArray(), tele: !!window.__casawalk.xr.modes.walk.tele }));
 	const jumped = Math.hypot(after.head[0] - head0[0], after.head[2] - head0[2]);
-	// You land where you aimed: the aimed hotspot (1.2-3.5 m away), the ring snapping at most 0.5 m (HOTSPOT.SNAP). Logged: the aim, the ring, the landing.
+	// You land on the ring you were shown, and that ring is where you aimed: within the hotspot snap (HOTSPOT.SNAP, 0.5 m) of the
+	// aimed hotspot, 1.2-3.5 m away. Logged: the aim, the ring, the landing.
 	const flat = (a, b) => a && b ? +Math.hypot(a[0] - b[0], a[2] - b[2]).toFixed(2) : null;
 	const landed = { jumped: +jumped.toFixed(2), aimedAt: flat(floorAhead, head0), ringFromAim: flat(ring, floorAhead), endFromAim: flat(after.head, floorAhead), endFromRing: flat(after.head, ring) };
-	check('bare hands walking: opening the pinch on blue teleports, to where it aimed', !after.tele && jumped > 0.5 && landed.endFromAim !== null && landed.endFromAim < 0.6, JSON.stringify(landed));
+	check('bare hands walking: opening the pinch on blue teleports, to where it aimed', !after.tele && jumped > 0.5 && landed.endFromRing !== null && landed.endFromRing < 0.05 && landed.endFromAim <= HOTSPOT_SNAP, JSON.stringify(landed));
 	// Turning: a wrist flick while aiming turns 30°; the arc stays. Letting go before blue: nothing.
 	await gesture('right', { type: 'pinch' }); await frames(3);
 	const yaw0 = await page.evaluate(() => window.__casawalk.xr.rig.rotation.y);
