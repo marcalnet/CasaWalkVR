@@ -1,5 +1,5 @@
 // Scripted VR session in headless Chromium using Meta's WebXR emulator (IWER):
-// enter VR, point at the model, rotate, grab, orbs (point and touch) and
+// enter VR, point at the model, rotate, grab, the main hand's keys (point and touch) and
 // menu, VR/passthrough switch, jump in at 1:1, walk, snap turn, teleport,
 // pull with the trigger, turn and height options, solid walls, see-through,
 // exit, and re-enter from another spot. Screenshots go to test-output/xr-*.png.
@@ -13,7 +13,7 @@
 //   (change the code)
 //   XR_STEADY=1 XR_OUT=test-output/after XR_BASELINE=test-output/before/xr-fingerprint-metaQuest2.json npm run xr-test -- examples/example-home.sh3d
 //   node scripts/xr-compare.js test-output/before test-output/after
-// XR_STEADY hides the breathing orbs in screenshots and fixes the model's
+// XR_STEADY fixes the model's
 // turn after the stick steps, so two runs give the same pictures.
 
 import fs from 'node:fs';
@@ -86,10 +86,7 @@ const check = (name, ok, detail = '') => {
 };
 const shot = async (name) => {
 	await page.waitForTimeout(250);
-	const orbs = (v) => page.evaluate((v) => { const o = window.__casawalk?.xr.ui.wrist.orb; if (o) o.body.visible = v; }, v);
-	if (STEADY) { await orbs(false); await page.waitForTimeout(60); }
 	await page.screenshot({ path: path.join(out, `xr-${String(++step).padStart(2, '0')}-${name}.png`) });
-	if (STEADY) await orbs(true);
 };
 const THREE_deg = (r) => r * 180 / Math.PI;
 const frames = (n = 10) => page.waitForTimeout(n * 20);
@@ -152,9 +149,8 @@ const pressKey = async (kind, side, menu, id, { from = 0.06, to = -0.006, hold =
 	if (!backOnly) await tipPath(kind, side, pts.path, 2);
 	if (!hold) await tipPath(kind, side, [pts.out], 3);
 };
-/** Presses a wrist-menu key by touch, straight along the cross's normal (as pressKey). */
+/** Presses one of the main hand's keys ('back', 'settings') by touch, straight along its normal (as pressKey). */
 const pressWristKey = async (kind, side, slot, { from = 0.06, to = -0.006 } = {}) => {
-	await page.waitForFunction((slot) => window.__casawalk.xr.ui.wrist.keys[slot].out, slot, { timeout: 2000 }).catch(() => {});
 	const pts = await page.evaluate(({ slot, from, to }) => {
 		const x = window.__casawalk.xr, k = x.ui.wrist.keys[slot], V = x.rig.position.constructor;
 		k.group.updateMatrixWorld(true);
@@ -173,8 +169,7 @@ const state = () => page.evaluate(() => {
 		showroom: x.showroom.visible, walkSky: x.walkSky.visible, yaw: x.modes.dollhouse.doll.yaw, zoom: x.modes.dollhouse.doll.zoom, pos: x.modes.dollhouse.doll.pos.toArray(),
 		marker: x.modes.dollhouse.markers.some((m) => m.visible), rig: x.rig.position.toArray(), rigYaw: x.rig.rotation.y, head, lift: x.lift,
 		ceilings: x.model?.layers.ceilings.visible, menu: x.menu ? Object.keys(x.menus).find((k) => x.menus[k] === x.menu) : null,
-		hover: x.menu?.hover ?? null, anchorScale: x.anchor.scale.x, orb: x.ui.wrist.orb.holder?.handedness ?? null, wrist: x.ui.wrist.open,
-		orbGlow: x.ui.wrist.orb.glow, snap: x.snapAngle, height: x.personHeight, layerFx: !!x.layerFx,
+		hover: x.menu?.hover ?? null, anchorScale: x.anchor.scale.x, keys: x.ui.wrist.holder?.handedness ?? null, snap: x.snapAngle, height: x.personHeight, layerFx: !!x.layerFx,
 		arc: x.modes.walk.arc.dots.visible, ring: x.modes.walk.arc.ring.visible ? x.modes.walk.arc.ring.position.toArray() : null, valid: x.modes.walk.tele?.result?.valid ?? null,
 		stage: [...x.stage.position.toArray(), x.stage.rotation.y] };
 });
@@ -198,14 +193,8 @@ const menuPoint = (id, value) => page.evaluate(async ({ id, value }) => {
 }, { id, value });
 /** A menu cell's current state: { value, label, disabled, note }. */
 const cell = (menu, id) => page.evaluate(({ menu, id }) => { const c = window.__casawalk.xr.menus[menu].get(id); return { value: c.value, label: c.label, disabled: !!c.disabled, note: c.note ?? null }; }, { menu, id });
-/** World position of the wrist menu's orb (on the right wrist by default). */
-const orbPoint = () => page.evaluate(async () => {
-	const THREE = await import('three');
-	return window.__casawalk.xr.ui.wrist.orb.group.getWorldPosition(new THREE.Vector3()).toArray();
-});
-/** World position of a wrist-menu key's face ('left': ← Back, 'right': Settings), once the cross is open and its keys are out. */
+/** World position of one of the main hand's keys' face ('back': ← Back, 'settings': Settings). */
 const keyPoint = async (slot) => {
-	await page.waitForFunction((slot) => window.__casawalk.xr.ui.wrist.keys[slot].out, slot, { timeout: 2000 }).catch(() => {});
 	return page.evaluate(async (slot) => {
 		const THREE = await import('three'), k = window.__casawalk.xr.ui.wrist.keys[slot];
 		k.face.updateMatrixWorld(true);
@@ -222,15 +211,14 @@ const keyFront = (slot) => page.evaluate(async (slot) => {
 /** Waits until a move between layers (the dive or surface transition) is over. */
 const settled = () => page.waitForFunction(() => !window.__casawalk.xr.layerFx, null, { timeout: 20000 }).catch(() => {});
 /**
- * Presses a wrist-menu key with the left controller's laser (the menu is on
- * the right wrist, which can't press its own keys): opens the cross with A
- * first if it is closed, then waits for any move between layers.
+ * Presses one of the main hand's keys with the left controller's laser (the
+ * keys float over the right hand, which can't press its own), then waits for
+ * any move between layers. (They always show: build 215's C8.)
  */
 const pressWrist = async (slot) => {
-	if (!(await state()).wrist) { await click('right', 'a-button'); await frames(3); }
 	const at = await keyPoint(slot), from = await toLocal(await keyFront(slot));
 	await aim('left', from, await toLocal(at)); await frames(5);
-	if (slot === 'left') { // (← Back is held 0.6 s: the trigger stays down until the move begins)
+	if (slot === 'back') { // (← Back is held 1 s: the trigger stays down until the move begins)
 		await button('left', 'trigger', 1);
 		await page.waitForFunction(() => !!window.__casawalk.xr.layerFx, null, { timeout: 10000, polling: 'raf' }).catch(() => {});
 		await button('left', 'trigger', 0); await frames(3);
@@ -238,8 +226,8 @@ const pressWrist = async (slot) => {
 	await restLeft(); await frames(3);
 	await settled();
 };
-/** Opens the settings board: A, then the Settings key. */
-const openBoard = () => pressWrist('right');
+/** Opens the settings wing: the Settings key. */
+const openBoard = () => pressWrist('settings');
 /** Converts a world point to tracking space (where IWER poses live). */
 const toLocal = (p) => page.evaluate((p) => { const x = window.__casawalk.xr; x.rig.updateMatrixWorld(true); return x.rig.worldToLocal(new (x.rig.position.constructor)(...p)).toArray(); }, p);
 /** Aims from a tracking-space point at a world point. */
@@ -280,7 +268,7 @@ const modelTop = () => page.evaluate(async () => {
 	}
 	return p.toArray();
 });
-const waitXR = () => page.waitForFunction(() => { const x = window.__casawalk.xr; return x.mode && !x.pendingRecentre && x.ui.wrist.orb.holder && !x.layerFx; }, null, { timeout: 45000 }).catch(() => {}); // (Enter VR holds the dark until the head has a pose and the room is ready, at most 3 s of real time: js/pause.js. The emulator's slow start comes first.)
+const waitXR = () => page.waitForFunction(() => { const x = window.__casawalk.xr; return x.mode && !x.pendingRecentre && x.ui.wrist.holder && !x.layerFx; }, null, { timeout: 45000 }).catch(() => {}); // (Enter VR holds the dark until the head has a pose and the room is ready, at most 3 s of real time: js/pause.js. The emulator's slow start comes first.)
 /** The Enter VR tip, once chosen: its words' kind, and where it stands from the head (the audit's B1). */
 const enterTip = async () => {
 	await page.waitForFunction(() => { const p = window.__casawalk.xr.pause.fx?.pause; return !p || (!p.choosing && p.tip); }, null, { timeout: 15000, polling: 'raf' }).catch(() => {});
@@ -297,12 +285,12 @@ const leftovers = () => page.evaluate(() => {
 	const S = window.__casawalk, x = S.xr, bad = [], want = (n, ok) => ok || bad.push(n);
 	want('session', x.session === null && x.mode === null);
 	want('grab/tele/fade/drag', !x.modes.dollhouse.grab && !x.modes.walk.tele && !x.modes.walk.fade && !x.pendingRecentre);
-	want('menu', x.menu === null && Object.values(x.menus).every((p) => !p.mesh.visible && !p.open) && !x.ui.wrist.open && !x.ui.wrist.cross.visible);
+	want('menu', x.menu === null && Object.values(x.menus).every((p) => !p.mesh.visible && !p.open));
 	want('layers', !x.layerFx && !(x.veil.amount('layer') > 0) && !x.pause.arrival.mesh.visible);
 	want('hands note', !x.ui.handsNote.mesh.visible);
 	want('photo', !x.photoPending && !x.ui.photoFx && !x.veil.mesh.visible && !x.ui.photoNote.mesh.visible);
 	want('arc', !x.modes.walk.arc.dots.visible && !x.modes.walk.arc.ring.visible);
-	want('orb', !x.ui.wrist.orb.group.parent && !x.ui.wrist.orb.holder);
+	want('keys', !x.ui.wrist.group.visible && !x.ui.wrist.holder);
 	want('hands', x.handViews.every((v) => !v.group.visible));
 	want('controllers', x.input.controllers.every((c) => !c.ray.visible && !c.grip.visible));
 	want('rooms', !x.showroom.visible && !x.stage.visible && !x.walkSky.visible && x.modes.dollhouse.markers.every((m) => !m.visible));
@@ -322,7 +310,7 @@ const entry = () => page.evaluate(() => {
 	want('model reset', x.modes.dollhouse.doll.yaw === 0 && x.modes.dollhouse.doll.zoom === 1 && Math.abs(x.anchor.scale.x - x.baseScale) < 1e-9);
 	want('idle: grab', !x.modes.dollhouse.grab); want('idle: aim', !x.modes.walk.tele); want('idle: fade', !x.modes.walk.fade && !(x.veil.amount('teleport') > 0));
 	want('idle: arc', !x.modes.walk.arc.dots.visible); want('idle: markers', x.modes.dollhouse.markers.every((m) => !m.visible));
-	want('orb on the right grip', x.ui.wrist.orb.holder?.handedness === 'right' && x.ui.wrist.orb.group.parent === x.ui.wrist.orb.holder.grip && !x.ui.wrist.open);
+	want('keys over the right controller', x.ui.wrist.holder?.handedness === 'right' && x.ui.wrist.group.visible);
 	want('lasers', x.input.active().length === 2 && x.input.active().every((c) => c.line.visible));
 	want('eyes 1.89', Math.abs(x.headWorld().y - 1.89) < 0.005);
 	return bad;
@@ -360,8 +348,8 @@ const FINGERPRINT = async () => {
 		anchor: [...v3(x.anchor.position), n(x.anchor.rotation.y), n(x.anchor.scale.x)], doll: [...v3(x.modes.dollhouse.doll.pos), n(x.modes.dollhouse.doll.yaw), n(x.modes.dollhouse.doll.zoom)],
 		plinth: [n(x.plinthSize.W), n(x.plinthSize.D), n(x.plinthDistance), n(x.baseScale)],
 		clip: [x.camera.near, x.camera.far], background: S.scene.background?.getHex?.() ?? S.scene.background,
-		hands: x.input.controllers.map((c) => [c.handedness, vis(c.ray), vis(c.grip), vis(c.line), vis(c.dot), x.ui.wrist.orb.group.parent === c.grip]),
-		wrist: [x.ui.wrist.side, x.ui.wrist.open, false], // (the third: Help's card, gone since 25 Nov; kept false so old fingerprints still compare)
+		hands: x.input.controllers.map((c) => [c.handedness, vis(c.ray), vis(c.grip), vis(c.line), vis(c.dot), x.ui.wrist.holder === c]),
+		wrist: [x.ui.wrist.side, vis(x.ui.wrist.group), false], // (the main hand's keys, build 215's C8: their side, shown; the third: Help's card, gone since 25 Nov)
 		menus: { dollhouse: menu(x.menus.dollhouse), walk: menu(x.menus.walk) },
 		settings: [x.snapAngle, x.personHeight, false, x.seeThroughAmount, S.lighting.time, S.lighting.shadows, S.depth.enabled],
 		draw: [r.info.render.calls, r.info.render.triangles, r.info.memory.geometries, r.info.memory.textures],
@@ -437,7 +425,7 @@ await restRight();
 await restLeft();
 const enteredAt = Date.now();
 await enterVR.click();
-// Wait until the session is up: the orb is on the right wrist and the plinth was placed.
+// Wait until the session is up: the keys float over the right hand and the plinth was placed.
 await waitXR();
 {
 	// The dark after Enter VR (js/pause.js): how long it really lasted, in wall time and in frames. It ends when the room is
@@ -453,7 +441,7 @@ await frames(10);
 let s = await state();
 check('enters the VR dollhouse', s.presenting && s.mode === 'dollhouse' && s.showroom, JSON.stringify({ mode: s.mode, session: s.session }));
 check('dollhouse: eyes where a 2 m person\'s would be (1.89 m)', Math.abs(s.head[1] - 1.89) < 0.005 && Math.abs(s.rig[1] - 0.29) < 0.005, `eyes ${s.head[1].toFixed(3)} m, raised ${s.rig[1].toFixed(3)} m`);
-check('the menu\'s orb is on the right wrist (the tool fan takes the left)', s.orb === 'right' && !s.wrist, JSON.stringify({ orb: s.orb, wrist: s.wrist }));
+check('the main hand\'s keys float over the right controller (the tool fan takes the left; build 215, C8)', s.keys === 'right', JSON.stringify({ keys: s.keys }));
 {
 	// No two large surfaces at the same height: the model's floor is clear of the plinth top. (The plate standing on the plinth is not its top.)
 	const gap = await page.evaluate(() => { const x = window.__casawalk.xr, V = x.rig.position.constructor; const floor = x.centerer.localToWorld(new V(0, x.model.bounds.min.y, 0)).y;
@@ -461,44 +449,29 @@ check('the menu\'s orb is on the right wrist (the tool fan takes the left)', s.o
 	check('the model\'s floor is clear of the plinth top (no flicker)', gap.gap > 0.003 && gap.gap < 0.006 && gap.near === 0.05 && gap.far === 300, JSON.stringify(gap));
 }
 check('no scale figure by the scale model (the landing markers show a person\'s size)', await page.evaluate(() => !window.__casawalk.xr.scene.getObjectByName('scale-figure') && !window.__casawalk.xr.menus.dollhouse.get('figure')));
-/** Where the wrist menu's keys are, as seen: the right key on your right, Settings above. */
-const crossSeen = () => page.evaluate(() => {
+/** Where the main hand's keys are, as seen (build 215's C8): over the right controller, ← Back on its axis, Settings to its outer side, facing the eyes. */
+const keysSeen = () => page.evaluate(() => {
 	const x = window.__casawalk.xr, w = x.ui.wrist, V = x.rig.position.constructor;
 	x.camera.updateMatrixWorld(true);
-	const seen = (slot) => w.keys[slot].face.getWorldPosition(new V()).applyMatrix4(x.camera.matrixWorldInverse);
-	const slots = ['left', 'right'].filter((k) => w.keys[k].group.visible); // along the arc, as seen: ← Back, Settings (the same two at both layers)
-	const p = slots.map(seen);
-	const orb = w.orb.group.getWorldPosition(new V()).applyMatrix4(x.camera.matrixWorldInverse);
-	const centre = w.cross.getWorldPosition(new V());
-	const face = new V(0, 0, 1).transformDirection(w.cross.matrixWorld);
-	const toEye = x.camera.getWorldPosition(new V()).sub(centre).normalize();
-	const fwd = new V(0, 0, -1).transformDirection(x.camera.matrixWorld), eye = x.camera.getWorldPosition(new V());
-	const gaps = p.slice(1).map((q, i) => p[i].distanceTo(q));
-	return { out: +w.outT.toFixed(2), seenAt: +(fwd.angleTo(w.orb.group.getWorldPosition(new V()).sub(eye)) * 180 / Math.PI).toFixed(1), open: w.open, frozen: w.frozen,
-		leftToRight: p.every((q, i) => !i || p[i - 1].x < q.x), clearBelow: p.every((q) => q.y > orb.y - 0.03), step: +(gaps.reduce((a, b) => a + b) / gaps.length).toFixed(3),
-		facing: +(Math.acos(Math.min(1, face.dot(toEye))) * 180 / Math.PI).toFixed(1), ids: slots.map((k) => w.keys[k].spec?.id ?? null), shown: slots.length };
+	const at = (slot) => w.keys[slot].group.getWorldPosition(new V()), grip = w.holder ? (w.holder.isHand ? x.input.joint(w.holder, 'wrist') : w.holder.grip.getWorldPosition(new V())) : null;
+	const seen = (p) => p.clone().applyMatrix4(x.camera.matrixWorldInverse);
+	const face = new V(0, 0, 1).transformDirection(w.group.matrixWorld), toEye = x.camera.getWorldPosition(new V()).sub(w.group.getWorldPosition(new V())).normalize();
+	return { shown: w.group.visible, holder: w.holder?.handedness ?? null, above: grip ? +(at('back').y - grip.y).toFixed(3) : null,
+		outer: +(seen(at('settings')).x - seen(at('back')).x).toFixed(3), facing: +(Math.acos(Math.min(1, face.dot(toEye))) * 180 / Math.PI).toFixed(1),
+		ids: ['back', 'settings'].map((k) => w.keys[k].spec?.id ?? null), mode: w.mode };
 });
 {
 	await fingerprint('doll-entry');
-	// Raise the right wrist into view, clear of the waist-height doors (a tip within 15 cm of a live key makes the orb
-	// yield and ignore touches: the interaction harmony's conflict 11); the left controller touches its orb: the wrist menu opens.
-	await aim('right', [0.12, 1.5, -0.4], [-0.1, 1.2, -1.2]); await frames(3);
-	const orb = await toLocal(await orbPoint());
-	await aim('left', orb, [orb[0], orb[1], orb[2] - 1]); await frames(5);
-	s = await state();
-	check('the left controller touching the orb opens the wrist menu', s.wrist && s.menu === null, JSON.stringify({ wrist: s.wrist }));
-	await aim('left', [-0.35, 1.0, -0.2], [-0.6, 1.0, -1.5]); await frames(3); // (away from the orb, so the cross doesn't hold still)
-	await page.waitForFunction(() => Object.values(window.__casawalk.xr.ui.wrist.keys).every((k) => k.out), null, { timeout: 2000 }).catch(() => {});
-	const cs = await crossSeen();
-	check('the wrist menu: an arc over the orb as you see it: ← Back, Settings, the orb\'s underside clear, frozen', cs.open && cs.leftToRight && cs.clearBelow && cs.frozen && cs.step > 0.10 && cs.step < 0.14 && cs.facing < 3
-		&& JSON.stringify(cs.ids) === JSON.stringify(['back', 'settings']), JSON.stringify(cs));
-	await shot('wrist-menu');
-	await click('right', 'b-button');
-	check('B closes the wrist menu', !(await state()).wrist);
+	// The right controller raised into view: its keys float 15 cm over it, ← Back over its axis, Settings to its outer side.
+	await aim('right', [0.3, 1.2, -0.35], [0.4, 1.1, -1.2]); await frames(10);
+	const ks = await keysSeen();
+	check('the main hand\'s keys float over the right controller, as seen: ← Back, then Settings to its outer side, facing the eyes (build 215, C8)', ks.shown && ks.holder === 'right' && Math.abs(ks.above - 0.15) < 0.02 && ks.outer > 0.03 && ks.facing < 3
+		&& JSON.stringify(ks.ids) === JSON.stringify(['back', 'settings']), JSON.stringify(ks));
+	await shot('hand-keys');
 	await restRight(); await restLeft(); await frames(3);
 }
 {
-	// Settings on the wrist menu opens the board, within reach and 45° to the left of where you look.
+	// Settings (the main hand's key) opens the wing, within reach and 45° to the right of where you look.
 	await openBoard();
 	s = await state();
 	const m = await page.evaluate(() => {
@@ -507,9 +480,9 @@ const crossSeen = () => page.evaluate(() => {
 		const fwd = new V(0, 0, -1).transformDirection(x.camera.matrixWorld).setY(0).normalize();
 		const to = menu.clone().sub(head).setY(0);
 		const angle = Math.atan2(fwd.clone().cross(to.clone().normalize()).y, fwd.dot(to.clone().normalize())) * 180 / Math.PI; // + = left
-		return { angle: +angle.toFixed(1), distance: +to.length().toFixed(2), below: +(head.y - menu.y).toFixed(2), wrist: x.ui.wrist.open, title: x.menu.title };
+		return { angle: +angle.toFixed(1), distance: +to.length().toFixed(2), below: +(head.y - menu.y).toFixed(2), title: x.menu.title };
 	});
-	check('Settings opens the right wing beside the model: about 45° to the right (out of the model\'s way), 0.55 m from the eyes (up to 0.9 when a large model fills the view), below eye level (15°, less when a large model lifts it: its leaned corners count, harmony conflict 13); the wrist menu closes', s.menu === 'dollhouse' && m.angle < -34 && m.angle > -56 && m.distance > 0.45 && m.distance < 0.91 && m.below > 0.03 && m.below < 0.3 && !m.wrist && m.title === 'Settings', JSON.stringify(m));
+	check('Settings opens the right wing beside the model: about 45° to the right (out of the model\'s way), 0.55 m from the eyes (up to 0.9 when a large model fills the view), below eye level (15°, less when a large model lifts it: its leaned corners count, harmony conflict 13)', s.menu === 'dollhouse' && m.angle < -34 && m.angle > -56 && m.distance > 0.45 && m.distance < 0.91 && m.below > 0.03 && m.below < 0.3 && m.title === 'Settings', JSON.stringify(m));
 	// Nothing covers the model: no open wing overlaps the model's outline seen from the eyes, with the 5° margin.
 	const cover = await page.evaluate(async () => {
 		const THREE = await import('three'), W = await import('/js/wings.js');
@@ -596,46 +569,30 @@ await page.evaluate(() => { const d = window.__casawalk.xr.modes.dollhouse; d.do
 await page.evaluate(() => window.__casawalk.xr.modes.dollhouse.recentre());
 await frames(3);
 
-// The orb (right wrist raised into view): the left laser makes it glow; a pull opens the wrist menu, pinned.
-await aim('right', [0.12, 1.2, -0.4], [-0.1, 0.9, -1.2]);
-await frames(3);
-await aimW('left', L, await orbPoint());
-await page.waitForFunction(() => window.__casawalk.xr.ui.wrist.orb.glow > 0.5, null, { timeout: 2000 }).catch(() => {});
-s = await state();
-check('laser makes the orb glow', s.orbGlow > 0.5, `glow ${s.orbGlow.toFixed(2)}`);
-await shot('orb-hover');
-await click('left', 'trigger');
-s = await state();
-check('the left laser on the orb opens the wrist menu, pinned', s.wrist && await page.evaluate(() => window.__casawalk.xr.ui.wrist.pinned));
-await shot('wrist-menu-laser');
-// Build 215's A4 and A5 (the user's decision: clicking is touching): a second pull on the orb closes the keys, a third
-// opens them; ← Back held by the laser from the resting left hand (it meets the key from below its plane) fills its ring.
+// The main hand's keys by laser (build 215's A5 and C8): ← Back held by the laser from the resting left hand (it meets the key
+// from below its plane) fills its ring; let go early, nothing.
+await aim('right', [0.3, 1.2, -0.35], [0.4, 1.1, -1.2]); await frames(6);
 {
 	/** Turns the left controller until the app's own laser passes through world point p (the emulator's ray is not the device's -Z). */
 	const rayAt = async (p) => { for (let i = 0; i < 4; i++) { await page.evaluate(async (p) => { const THREE = await import('three'); const x = window.__casawalk.xr, c = x.input.hands.left, d = window.__device.controllers.left;
 		c.ray.updateMatrixWorld(true); const o = new THREE.Vector3().setFromMatrixPosition(c.ray.matrixWorld), dir = new THREE.Vector3(0, 0, -1).transformDirection(c.ray.matrixWorld);
 		const q = new THREE.Quaternion().setFromUnitVectors(dir, new THREE.Vector3(...p).sub(o).normalize()), dq = new THREE.Quaternion(d.quaternion.x, d.quaternion.y, d.quaternion.z, d.quaternion.w).premultiply(q);
 		d.quaternion.set(dq.x, dq.y, dq.z, dq.w); }, p); await frames(3); } };
-	await click('left', 'trigger');
-	const closed = !(await state()).wrist;
-	await click('left', 'trigger');
-	const reopened = (await state()).wrist;
-	check('a second pull on the orb closes its keys, a third opens them (build 215, A4)', closed && reopened, JSON.stringify({ closed, reopened }));
-	const back = await keyPoint('left');
+	const back = await keyPoint('back');
 	await aimW('left', [-0.2, 1.05, -0.25], back); await frames(3); await rayAt(back);
+	await shot('keys-laser');
 	await button('left', 'trigger', 1); await appSees('left', 'trigger', true);
-	await page.waitForFunction(() => (window.__casawalk.xr.ui.wrist.keys.left.progress ?? 0) > 0.2, null, { timeout: 3000, polling: 'raf' }).catch(() => {});
-	const filling = await page.evaluate(() => { const x = window.__casawalk.xr; return { progress: +(x.ui.wrist.keys.left.progress ?? 0).toFixed(2), ring: x.ui.wrist.keys.left.ring?.group?.visible ?? null, mode: x.mode }; });
-	await button('left', 'trigger', 0); await appSees('left', 'trigger', false); await frames(3); // (let go before 0.6 s: nothing happens)
+	await page.waitForFunction(() => (window.__casawalk.xr.ui.wrist.keys.back.progress ?? 0) > 0.2, null, { timeout: 3000, polling: 'raf' }).catch(() => {});
+	const filling = await page.evaluate(() => { const x = window.__casawalk.xr; return { progress: +(x.ui.wrist.keys.back.progress ?? 0).toFixed(2), ring: x.ui.wrist.keys.back.ring?.group?.visible ?? null, mode: x.mode }; });
+	await button('left', 'trigger', 0); await appSees('left', 'trigger', false); await frames(3); // (let go before 1 s: nothing happens)
 	const after = await state();
-	check('← Back held by the laser from the resting hand: its ring fills; let go early, nothing (build 215, A5)', filling.progress > 0.2 && filling.progress < 1 && after.mode === 'dollhouse' && after.presenting, JSON.stringify({ filling, mode: after.mode }));
-	await aimW('left', L, await orbPoint()); await frames(3);
-	if (!(await state()).wrist) await click('left', 'trigger'); // (pressWrist below expects the keys open, as before)
+	check('← Back held by the laser from the resting hand: its ring fills; let go early, nothing (build 215, A5 and C8)', filling.progress > 0.1 && filling.progress < 1 && after.mode === 'dollhouse' && after.presenting, JSON.stringify({ filling, mode: after.mode }));
+	await restLeft(); await frames(3);
 }
-// Settings by laser; then the board's own settings.
-await pressWrist('right');
+// Settings by laser (a click acts as a touch); then the board's own settings.
+await pressWrist('settings');
 s = await state();
-check('Settings by laser opens the board', s.menu === 'dollhouse' && !s.wrist);
+check('Settings by laser opens the board', s.menu === 'dollhouse');
 await restRight(); await frames(3);
 await fingerprint('doll-menu');
 const c0 = (await cell('dollhouse', 'seethrough')).value; // (a switch to press: Ceilings, the old one, went on 26 Nov 2026)
@@ -726,7 +683,7 @@ check('B closes the board', (await state()).menu === null);
 // Bare hands (milestones C0.1, C0.2): the Quest turns a pinch into a select of
 // a hand source. Put the controllers down, aim the right hand at the model
 // and pinch: nothing may happen (no step inside, no menu). The app asks for
-// hand tracking, so the hands have joints: they are drawn, wear the orb, and
+// hand tracking, so the hands have joints: they are drawn, carry the main hand's keys, and
 // press the menu's keys by touch (the "Pick up your controllers" note is only
 // for hands without joints). Then pick the controllers up again: all as before.
 {
@@ -757,18 +714,18 @@ check('B closes the board', (await state()).menu === null);
 	await shot('hands-note');
 	check('bare hands: a pinch reaches the app as a select', h.selects >= 2, JSON.stringify(h));
 	check('bare hands: pinches do nothing (no step inside, no menu, no laser)', !before && h.mode === 'dollhouse' && !h.menu && h.active === 0 && h.hands === 2 && !h.lasers && !h.bodies && !h.marker, JSON.stringify(h));
-	const drawn = await page.evaluate(() => { const x = window.__casawalk.xr; return { views: x.handViews.map((v) => v.group.visible && (v.model ? v.model.userData.colour.visible : v.colourMesh.visible) && v.alpha === 1), orb: [x.ui.wrist.orb.holder?.handedness, x.ui.wrist.orb.holder?.isHand && x.ui.wrist.orb.group.parent === x.ui.wrist.orb.holder.wrist] }; });
-	check('bare hands with joints: drawn, the orb on the right wrist, no "Pick up your controllers" note', !h.note && drawn.views.every(Boolean) && drawn.orb[0] === 'right' && drawn.orb[1], JSON.stringify(drawn));
+	const drawn = await page.evaluate(() => { const x = window.__casawalk.xr; return { views: x.handViews.map((v) => v.group.visible && (v.model ? v.model.userData.colour.visible : v.colourMesh.visible) && v.alpha === 1), keys: [x.ui.wrist.holder?.handedness, x.ui.wrist.holder?.isHand && x.ui.wrist.group.visible] }; });
+	check('bare hands with joints: drawn, the keys over the right hand, no "Pick up your controllers" note', !h.note && drawn.views.every(Boolean) && drawn.keys[0] === 'right' && drawn.keys[1], JSON.stringify(drawn));
 	// Build 215's A1 and A2: the Quest went on reporting hands it no longer saw, frozen where they were; they were drawn in
 	// the face, wore the orb and carried the tools. Hands that hold perfectly still: not drawn, no orb, no tools; moving: back.
 	{
-		const seen = () => page.evaluate(() => { const x = window.__casawalk.xr; return { views: x.handViews.map((v) => v.group.visible), tracked: x.input.controllers.map((c) => c.touch.tracked), orb: x.ui.wrist.orb.holder?.handedness ?? null, fan: +x.fan.alpha.toFixed(2) }; });
+		const seen = () => page.evaluate(() => { const x = window.__casawalk.xr; return { views: x.handViews.map((v) => v.group.visible), tracked: x.input.controllers.map((c) => c.touch.tracked), keys: x.ui.wrist.group.visible ? x.ui.wrist.holder?.handedness ?? null : null, fan: +x.fan.alpha.toFixed(2) }; });
 		await page.evaluate(() => { window.__frozen = true; }); await page.waitForFunction(() => window.__casawalk.xr.fan.alpha === 0, null, { timeout: 10000, polling: 'raf' }).catch(() => {}); // (still 0.3 s: frozen; the tools stay 1 s, then fade)
 		const frozen = await seen();
 		await page.evaluate(() => { window.__frozen = false; }); await page.waitForFunction(() => window.__casawalk.xr.fan.alpha > 0.5, null, { timeout: 10000, polling: 'raf' }).catch(() => {});
 		const back = await seen();
-		check('hands the headset froze: not drawn, no orb, no tools; moving again, all back (build 215, A1 and A2)',
-			frozen.views.every((v) => !v) && frozen.tracked.every((t) => !t) && frozen.orb === null && frozen.fan === 0 && back.views.every(Boolean) && back.orb === 'right' && back.fan > 0, JSON.stringify({ frozen, back }));
+		check('hands the headset froze: not drawn, no keys, no tools; moving again, all back (build 215, A1 and A2)',
+			frozen.views.every((v) => !v) && frozen.tracked.every((t) => !t) && frozen.keys === null && frozen.fan === 0 && back.views.every(Boolean) && back.keys === 'right' && back.fan > 0, JSON.stringify({ frozen, back }));
 	}
 	// Touch groundwork (C0): the hands' poke points and pinches are read (nothing uses them yet).
 	const touch = () => page.evaluate(() => window.__casawalk.xr.input.controllers.map((c) => ({ side: c.handedness, kind: c.touch.kind, tracked: c.touch.tracked,
@@ -805,25 +762,21 @@ check('B closes the board', (await state()).menu === null);
 	await page.evaluate(() => window.__device.hands.right.updatePinchValue(0)); await frames(6);
 	check('touch: a hand found again mid-pinch is no new press; open and pinch again is', stillPinched.tracked && !stillPinched.held && again.held, JSON.stringify({ still: stillPinched.held, again: again.held }));
 
-	// Touch keys (C0.2, C0.3). Raise the right hand into view; the left index touches the orb on its wrist: the wrist menu opens.
-	await page.evaluate(() => { const h = window.__device.hands.right; h.position.set(0.1, 1.3, -0.4); h.quaternion.set(0, 0, 0, 1); });
-	await frames(6);
-	const orbR = await orbPoint();
-	await tipPath('hand', 'left', [orbR.map((v, i) => v + [-0.08, 0.04, 0.04][i]), orbR]);
-	await tipPath('hand', 'left', [orbR.map((v, i) => v + [-0.14, 0.02, 0.08][i])]);
-	await page.waitForFunction(() => Object.values(window.__casawalk.xr.ui.wrist.keys).every((k) => k.out), null, { timeout: 2000 }).catch(() => {});
-	const hs = await crossSeen();
-	check('the left index touching the orb opens the wrist menu over the right wrist, laid out as seen', hs.open && hs.leftToRight && hs.clearBelow && !(await page.evaluate(() => window.__casawalk.xr.ui.wrist.pinned)), JSON.stringify(hs));
-	await shot('hands-wrist-menu');
+	// Touch keys (C0.2, C0.3; build 215's C8). The right hand raised into view: its keys float 15 cm over it, as seen.
+	await page.evaluate(() => { const h = window.__device.hands.right; h.position.set(0.3, 1.2, -0.35); h.quaternion.set(0, 0, 0, 1); });
+	await frames(10);
+	const hs = await keysSeen();
+	check('bare hands: the keys float over the right hand, ← Back then Settings to its outer side, facing the eyes (build 215, C8)', hs.shown && hs.holder === 'right' && hs.outer > 0.03 && hs.facing < 3, JSON.stringify(hs));
+	await shot('hands-keys');
 	// Settings, pressed with the left index: the board opens within reach.
-	await pressWristKey('hand', 'left', 'right');
+	await pressWristKey('hand', 'left', 'settings');
 	const nm = await page.evaluate(() => {
 		const x = window.__casawalk.xr, p = x.menu?.mesh, V = x.rig.position.constructor;
-		if (!p) return { open: false, wrist: x.ui.wrist.open };
+		if (!p) return { open: false };
 		const at = p.getWorldPosition(new V()), head = x.headWorld();
-		return { open: x.menu === x.menus.dollhouse, ahead: +Math.hypot(at.x - head.x, at.z - head.z).toFixed(3), below: +(head.y - at.y).toFixed(3), wrist: x.ui.wrist.open };
+		return { open: x.menu === x.menus.dollhouse, ahead: +Math.hypot(at.x - head.x, at.z - head.z).toFixed(3), below: +(head.y - at.y).toFixed(3) };
 	});
-	check('Settings pressed with a fingertip opens the wing within reach (0.55 m from the eyes, 15° below)', nm.open && nm.ahead > 0.45 && nm.ahead < 0.95 && nm.below > -0.05 && nm.below < 0.3 && !nm.wrist, JSON.stringify(nm));
+	check('Settings pressed with a fingertip opens the wing within reach (0.55 m from the eyes, 15° below)', nm.open && nm.ahead > 0.45 && nm.ahead < 0.95 && nm.below > -0.05 && nm.below < 0.3, JSON.stringify(nm));
 	const key = () => page.evaluate(() => window.__casawalk.xr.menus.dollhouse.get('seethrough').value);
 	const c0v = await key();
 	await pressKey('hand', 'right', 'dollhouse', 'seethrough', { hold: true });
@@ -1351,19 +1304,16 @@ s = await state();
 const turned = THREE_deg(ry0 - s.rigYaw);
 check(`right stick snap-turns ${s.snap}°`, Math.abs(turned - s.snap) < 0.5 && Math.hypot(s.head[0] - h0[0], s.head[2] - h0[2]) < 1e-3, `${turned.toFixed(1)}°`);
 
-// Inside: the wrist menu has ← Back on the left and a flat "Inside" plate on the right (no Exit VR); Settings opens the inside board.
-await click('right', 'a-button');
-await page.waitForFunction(() => Object.values(window.__casawalk.xr.ui.wrist.keys).every((k) => k.out), null, { timeout: 2000 }).catch(() => {});
+// Inside: the main hand's keys are the same two, ← Back (to the scale model) and Settings; Settings opens the inside board.
 {
-	const cs = await crossSeen();
-	const plate = await page.evaluate(() => { const k = window.__casawalk.xr.ui.wrist.keys; return { back: k.left.spec.caption, round: k.left.round, hold: k.left.spec.hold }; });
-	check('inside, the wrist menu: the same two keys, ← Back (round, held: to the scale model) and Settings; no Exit VR', cs.leftToRight && JSON.stringify(cs.ids) === JSON.stringify(['back', 'settings'])
-		&& plate.back === 'Scale model' && plate.round && plate.hold === 0.6, JSON.stringify({ ids: cs.ids, plate }));
-	await lookDown(); await aim('right', [0.12, 1.2, -0.4], [-0.1, 0.9, -1.2]); await frames(5);
-	await shot('walk-wrist-menu');
-	await lookAhead(); await restRight(); await frames(3);
+	await aim('right', [0.3, 1.2, -0.35], [0.4, 1.1, -1.2]); await frames(10);
+	const cs = await keysSeen();
+	const plate = await page.evaluate(() => { const k = window.__casawalk.xr.ui.wrist.keys; return { back: k.back.spec.caption, round: k.back.round, hold: k.back.spec.hold }; });
+	check('inside, the main hand\'s keys: the same two, ← Back (round, held 1 s: to the scale model) and Settings; no Exit VR', cs.shown && JSON.stringify(cs.ids) === JSON.stringify(['back', 'settings'])
+		&& plate.back === 'Scale model' && plate.round && plate.hold === 1, JSON.stringify({ ids: cs.ids, plate }));
+	await shot('walk-hand-keys');
 }
-await pressWrist('right');
+await pressWrist('settings');
 s = await state();
 check('Settings opens the inside board', s.menu === 'walk' && await page.evaluate(() => window.__casawalk.xr.menu === window.__casawalk.xr.menus.walk && window.__casawalk.xr.menu.title === 'Settings'));
 await shot('walk-menu');
@@ -1508,7 +1458,7 @@ const walkUntil = async (pred, arg, timeout = 15000) => {
 	}
 }
 if ((await state()).menu) { await click('right', 'b-button'); await frames(3); } // (the board, if still open; with nothing open, B inside is Back)
-await pressWrist('left');
+await pressWrist('back');
 s = await state();
 check('← Back on the wrist menu returns to the scale model', s.mode === 'dollhouse' && s.rig[0] === 0 && s.rig[2] === 0 && s.menu === null);
 check('back from walking: eyes at 1.89 m again, gallery shown, lasers on', Math.abs(s.head[1] - 1.89) < 0.005 && s.showroom && !s.walkSky && (await lasers()) === 'left:on right:on', `eyes ${s.head[1].toFixed(3)}, lasers ${await lasers()}`);
@@ -1540,7 +1490,7 @@ check('back from walking: eyes at 1.89 m again, gallery shown, lasers on', Math.
 	const hot = await page.evaluate(() => window.__casawalk.xr.fan.hot?.name ?? null);
 	await click('right', 'squeeze'); await frames(10);
 	const held = await page.evaluate(() => { const x = window.__casawalk.xr; return { tool: x.tools.held?.tool.name ?? null, grab: !!x.modes.dollhouse.grab, laser: x.input.hands.right.line.visible }; });
-	check('the right tip touches the meter, the grip takes it (not the model); its laser goes', hot === 'meter' && held.tool === 'meter' && !held.grab && !held.laser, JSON.stringify({ hot, ...held, fan: await page.evaluate(() => { const x = window.__casawalk.xr, f = x.fan; return { alpha: f.alpha, busy: f.fanBusy, tip: x.input.hands.right.touch.tracked && x.input.hands.right.touch.tip.toArray().map((v) => +v.toFixed(2)), slots: f.slots.map((q) => q.home.getWorldPosition(new (x.rig.position.constructor)()).toArray().map((v) => +v.toFixed(2))), push: f.slots.map((q) => q.pushWorld?.length().toFixed(2)), orbYield: x.ui.wrist.orbYield, hands: f.hands().fan?.handedness }; }) }));
+	check('the right tip touches the meter, the grip takes it (not the model); its laser goes', hot === 'meter' && held.tool === 'meter' && !held.grab && !held.laser, JSON.stringify({ hot, ...held, fan: await page.evaluate(() => { const x = window.__casawalk.xr, f = x.fan; return { alpha: f.alpha, busy: f.fanBusy, tip: x.input.hands.right.touch.tracked && x.input.hands.right.touch.tip.toArray().map((v) => +v.toFixed(2)), slots: f.slots.map((q) => q.home.getWorldPosition(new (x.rig.position.constructor)()).toArray().map((v) => +v.toFixed(2))), push: f.slots.map((q) => q.pushWorld?.length().toFixed(2)), keysYield: x.ui.wrist.yielded, hands: f.hands().fan?.handedness }; }) }));
 	await shot('tool-held');
 	// The laser meter (milestone E): its beam and dot on the model, the reading on its screen; two triggers: a line.
 	{
@@ -1658,7 +1608,7 @@ check('back from walking: eyes at 1.89 m again, gallery shown, lasers on', Math.
 
 // ← Back at the scale model leaves VR (a fade to white, then the page).
 await lookDown();
-await pressWrist('left');
+await pressWrist('back');
 await frames(10);
 s = await state();
 check('← Back at the scale model leaves VR (the wrist menu\'s, held 0.6 s)', !s.presenting);
@@ -1912,28 +1862,27 @@ s = await state();
 const backLasers = await lasers();
 check('walking in and back: lasers on at the scale model', wkMode === 'walk' && s.mode === 'dollhouse' && backLasers === 'left:on right:on' && Math.abs(s.head[1] - 1.89) < 0.005, JSON.stringify({ wkMode, backLasers }));
 
-// Trigger ownership, and A closing what it opened.
-await click('right', 'a-button');
-const opened = (await state()).wrist;
+// Trigger ownership: with the wing open, a pull on the model does nothing; a pull at empty space closes it (build 120, M1).
+await page.evaluate(() => window.__casawalk.xr.menuAction('settings')); await frames(6);
+const opened = (await state()).menu;
 await aimW('right', R, await modelTop()); await frames(5); await click('right', 'trigger');
 s = await state();
-const atModelW = { wrist: s.wrist, mode: s.mode };
+const atModelW = { menu: s.menu, mode: s.mode };
 await aim('right', [0.3, 1.45, -0.2], [1.2, 2.4, -1.5]); await frames(3); await click('right', 'trigger'); // (raised, clear of the doors at your waist: a hand within 15 cm of them never closes)
 s = await state();
-const whyW = await page.evaluate(() => { const x = window.__casawalk.xr, c = x.input.controllers.find((c) => c.handedness === 'right'); x.input.setRaycaster(c, x.raycaster); return { not: x.ui.notEmpty(c, [c.touch.tracked ? c.touch.tip : null]), pinned: x.ui.wrist.pinned, wearer: x.ui.wrist.wearer === c, claim: c.claim.trigger }; });
-check('wrist menu open: a pull on the model does nothing (never empty space); a pull at empty space closes it (build 120, M1)', opened && atModelW.wrist && atModelW.mode === 'dollhouse' && !s.wrist && s.mode === 'dollhouse', JSON.stringify({ opened, atModelW, wrist: s.wrist, whyW }));
-await restRight(); await frames(3); await click('right', 'a-button'); await click('right', 'a-button');
-check('A closes the wrist menu it opened', !(await state()).wrist);
+const whyW = await page.evaluate(() => { const x = window.__casawalk.xr, c = x.input.controllers.find((c) => c.handedness === 'right'); x.input.setRaycaster(c, x.raycaster); return { not: x.ui.notEmpty(c, [c.touch.tracked ? c.touch.tip : null]) }; });
+check('wing open: a pull on the model does nothing (never empty space); a pull at empty space closes it (build 120, M1)', opened && atModelW.menu && atModelW.mode === 'dollhouse' && !s.menu && s.mode === 'dollhouse', JSON.stringify({ opened, atModelW, menu: s.menu, whyW }));
+await restRight(); await frames(3);
 
 // How to move: the wing's first tab (its first opening at a place), for controllers, with the build at its foot; B closes it.
 await page.evaluate(() => { const x = window.__casawalk.xr; delete x.store.tabs.dollhouse; x.menuAction('settings'); });
 {
 	await frames(30); // (the doors fade out over the board)
-	const hp = await page.evaluate(() => { const x = window.__casawalk.xr, m = x.menu, c = m?.cells.get('guide'); return { tab: m?.tab ?? null, kind: c?.kind, foot: c?.foot ?? '', wrist: x.ui.wrist.open, doors: x.modes.dollhouse.doorGroup.visible }; });
+	const hp = await page.evaluate(() => { const x = window.__casawalk.xr, m = x.menu, c = m?.cells.get('guide'); return { tab: m?.tab ?? null, kind: c?.kind, foot: c?.foot ?? '', doors: x.modes.dollhouse.doorGroup.visible }; });
 	await shot('dollhouse-help');
 	check('Help shows the build at the foot of How to move, and that a newer version waits (reload after VR)', /^Build \d+/.test(hp.foot) && /Newer version: reload after VR$/.test(hp.foot), JSON.stringify(hp));
 	await click('right', 'b-button');
-	check('How to move, for controllers; the plinth doors gone while the wing is open; B closes it', hp.tab === 'move' && hp.kind === 'dollhouse-controllers' && !hp.wrist && !hp.doors && !(await page.evaluate(() => window.__casawalk.xr.boardOpen)), JSON.stringify(hp));
+	check('How to move, for controllers; the plinth doors gone while the wing is open; B closes it', hp.tab === 'move' && hp.kind === 'dollhouse-controllers' && !hp.doors && !(await page.evaluate(() => window.__casawalk.xr.boardOpen)), JSON.stringify(hp));
 }
 
 // Photo: nothing of the interface in the picture, all of it back afterwards.
@@ -1942,7 +1891,7 @@ await aimW('left', L, await modelTop()); await frames(6); // a marker under the 
 const seen = page.evaluate(() => new Promise((done) => {
 	const S = window.__casawalk, x = S.xr, r = S.renderer, render = r.render;
 	const ui = { menu: Object.values(x.menus).map((p) => p.mesh), feedback: [x.veil.mesh, x.ui.photoNote.mesh], arc: [x.modes.walk.arc.dots, x.modes.walk.arc.ring],
-		markers: x.modes.dollhouse.markers, orbs: [x.ui.wrist.orb.group, x.ui.wrist.cross], hands: x.input.controllers.flatMap((c) => [c.ray, c.grip]) };
+		markers: x.modes.dollhouse.markers, keys: [x.ui.wrist.group], hands: x.input.controllers.flatMap((c) => [c.ray, c.grip]) };
 	const shown = (o) => { for (let a = o; a; a = a.parent) if (!a.visible) return false; return true; };
 	// (Since A5 nothing is hidden for a photo: the interface is on its own layer, which the photo's camera doesn't show.)
 	const showing = (camera = x.camera) => Object.keys(ui).filter((k) => ui[k].some((o) => { let seen = false; o.traverse((c) => { if (c.isMesh || c.isLine || c.isPoints) seen ||= c.layers.test(camera.layers); }); return shown(o) && seen; }));
@@ -1961,8 +1910,8 @@ await page.waitForFunction(async (n) => (await (await import('/js/storage.js')).
 await page.waitForFunction(() => !window.__casawalk.xr.ui.photoFx, null, { timeout: 10000 }).catch(() => {});
 await frames(3);
 const pfx = await page.evaluate(() => { const x = window.__casawalk.xr; return { flash: x.veil.amount('flash') > 0, note: x.ui.photoNote.mesh.visible, fx: x.ui.photoFx }; });
-check('Photo: no menu, laser, controller, orb, arc, marker, flash or note in it; all back after',
-	ph.during?.length === 0 && ph.before.join() === 'menu,markers,orbs,hands' && ph.after.join() === 'menu,markers,orbs,hands', JSON.stringify(ph));
+check('Photo: no menu, laser, controller, hand keys, arc, marker, flash or note in it; all back after',
+	ph.during?.length === 0 && ph.before.join() === 'menu,markers,keys,hands' && ph.after.join() === 'menu,markers,keys,hands', JSON.stringify(ph));
 await click('right', 'b-button');
 check('Photo: the flash and the note go again', !pfx.flash && !pfx.note && pfx.fx === null, JSON.stringify(pfx));
 await restLeft();
@@ -1970,10 +1919,8 @@ await restLeft();
 // Walking: lasers, the inside board, B, trigger ownership, snap, two-hand pull, fade.
 await page.evaluate(() => window.__casawalk.xr.menuAction('in')); await settled(); await frames(4); // (Walk in → left the wrist: it is the plinth's door now)
 await lookAhead(); await restRight(); await restLeft(); await frames(5);
-const l0 = await lasers(); await click('right', 'a-button'); await frames(3); const l1 = await lasers();
-check('walking: lasers hidden, shown while the wrist menu is open', l0 === 'left:off right:off' && l1 === 'left:on right:on', `${l0} / ${l1}`);
-await click('right', 'b-button');
-await openBoard();
+const l0 = await lasers(); await page.evaluate(() => window.__casawalk.xr.menuAction('settings')); await frames(3); const l1 = await lasers();
+check('walking: lasers hidden, shown while the wing is open', l0 === 'left:off right:off' && l1 === 'left:on right:on', `${l0} / ${l1}`);
 const wm = await page.evaluate(() => { const x = window.__casawalk.xr, V = x.rig.position.constructor, head = x.headWorld(), p = x.menu.mesh.getWorldPosition(new V());
 	const nrm = new V(0, 0, 1).transformDirection(x.menu.mesh.matrixWorld).setY(0).normalize(), to = head.clone().sub(p).setY(0).normalize();
 	return { dist: Math.hypot(p.x - head.x, p.z - head.z), drop: head.y - p.y, facing: Math.acos(Math.min(1, nrm.dot(to))) * 180 / Math.PI }; });
@@ -1998,10 +1945,10 @@ await aim('right', R, [0.25, 0, -1.0]); await frames(3);
 h0 = (await state()).head;
 await button('right', 'trigger', 1); await frames(6);
 const aiming = (await state()).arc;
-await click('right', 'a-button'); await button('right', 'trigger', 0); await frames(20); s = await state();
-check('A while aiming opens the wrist menu and cancels the teleport', aiming && s.wrist && !s.arc && Math.hypot(s.head[0] - h0[0], s.head[2] - h0[2]) < 1e-3, JSON.stringify({ aiming, wrist: s.wrist, arc: s.arc }));
-await click('right', 'trigger'); await frames(20); s = await state(); // the laser is on the floor, not the menu
-check('wrist menu open: a pull on the floor only closes it', !s.wrist && !s.arc && Math.hypot(s.head[0] - h0[0], s.head[2] - h0[2]) < 1e-3);
+await page.evaluate(() => window.__casawalk.xr.menuAction('settings')); await button('right', 'trigger', 0); await frames(20); s = await state();
+check('the wing opened while aiming cancels the teleport', aiming && s.menu && !s.arc && Math.hypot(s.head[0] - h0[0], s.head[2] - h0[2]) < 1e-3, JSON.stringify({ aiming, menu: s.menu, arc: s.arc }));
+await click('right', 'trigger'); await frames(20); s = await state(); // the laser is on the floor, not the wing
+check('wing open: a pull on the floor only closes it', !s.menu && !s.arc && Math.hypot(s.head[0] - h0[0], s.head[2] - h0[2]) < 1e-3);
 {
 	const y0 = (await state()).rigYaw;
 	await stick('right', 0, -1); await frames(6); await stick('right', 0.9, -0.5); await frames(6);

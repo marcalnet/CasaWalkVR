@@ -94,7 +94,7 @@ export const KEY = {
 export const DOOR = { fill: '#2f5fd0', outline: '#2f5fd0', text: '#ffffff', soft: '#5d6873' };
 
 /**
- * The wrist menu (milestone C0.3): four keys in a cross around the orb.
+ * The main hand's keys (build 215's C8; the wrist menu of milestone C0.3 until then), also the plinth's doors and the options row.
  * Icons come from assets/ui/wrist-keys.png (a row of dark icons over a row of
  * white ones, 128 px each: Settings, Help, In, Back); words are drawn by code.
  */
@@ -103,12 +103,6 @@ export const WRIST = {
 	iconSize: 128, // pixels per icon in the atlas
 	iconOrder: ['settings', 'help', 'in', 'back'],
 	key: 0.07, // key face, metres (square): 7 cm, well above the 32 mm floor for icon plus text (HB §3)
-	// The keys sit on an arc over the upper outer side of the orb, like a quarter rainbow (the design of 24 Nov, item 5):
-	// the left side and the underside of the orb stay clear for the other index. Angles in degrees from the orb's right, as seen,
-	// counter-clockwise: ← Back (round, 7 cm across) just above the orb, then Settings (11 cm long) to its right; Walk in → left the wrist
-	// (it is on the plinth: the next-build asks 3.1).
-	arc: { radius: 0.14, angles: { left: 100, right: 50 } },
-	settingsW: 0.11, // Settings is longer: Settings, and help (7 cm high like ← Back)
 	raise: 0.006, // a key's face above its base
 	face: '#ffffff', edge: '#d3d9df', text: COLOURS.text, flat: COLOURS.off, flatText: COLOURS.offText,
 	labelFont: '"Kalam", "Bradley Hand", cursive', // hand-lettered labels (vendor/kalam)

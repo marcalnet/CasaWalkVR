@@ -273,7 +273,7 @@ export class Walk {
 		const tele = this.tele;
 		if (tele?.via !== 'hand') return;
 		const at = tele.c.gesture.shape?.pinchAt;
-		if (xr.boardOpen || xr.ui.wrist.open || !tele.c.touch.tracked || !at) { this.tele = null; this.hideAim(); return; }
+		if (xr.boardOpen || !tele.c.touch.tracked || !at) { this.tele = null; this.hideAim(); return; }
 		if (at.y < xr.headWorld().y - WAIST) { cancel(); return; } // (the hand dropped below the waist)
 		const { origin, dir } = handAimRay(xr.headWorld(), xr.viewAxes().right, at, tele.c.handedness);
 		// Smoothed more the further it lands (0.05 s a metre: about 0.15 s at 3 m, 0.3 s at 6 m).
@@ -408,10 +408,10 @@ export class Walk {
 			xr.menuAction(action);
 			if (xr.mode !== 'walk' || !xr.session) return;
 		}
-		// Lasers only show while a menu is open or one points at the orb (never
+		// Lasers only show while the wing is open or one points at a key (never
 		// on a hand holding a tool).
 		for (const c of input.active()) {
-			const show = c.claim.trigger === 'ui' || ((xr.boardOpen || ui.wrist.open) && c.claim.trigger !== 'tool');
+			const show = c.claim.trigger === 'ui' || (xr.boardOpen && c.claim.trigger !== 'tool');
 			input.setLaser(c, show);
 			if (!show) input.showHit(c, null);
 		}
@@ -429,6 +429,7 @@ export class Walk {
 				if (c) this.tele = { c, via: 'trigger' };
 			}
 		}
+		if (this.tele && this.tele.via !== 'hand' && xr.boardOpen) { this.tele = null; this.hideAim(); } // (the wing opened mid-aim: cancelled, as a bare hand's is; A used to do it, opening the arc: build 215's C8)
 		if (this.tele && this.tele.via !== 'hand') {
 			const { c, via } = this.tele;
 			if (!c.source || (via === 'stick' ? c.state.stick.length() < 0.3 : !c.state.trigger)) {

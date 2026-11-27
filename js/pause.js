@@ -32,7 +32,7 @@
 //
 // The pause draws over the veil's dark (js/veil.js: renderOrder 1002; the
 // tip, the ring, the hand and the practice arc are 1003): everything else,
-// the orb, the tools and the lasers, stays hidden behind it. Timings are data
+// the main hand's keys, the tools and the lasers, stays hidden behind it. Timings are data
 // (PAUSE); which tip is next is pure (nextTip), and so is "ready".
 
 import * as THREE from 'three';

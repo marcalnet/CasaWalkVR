@@ -82,7 +82,7 @@ Supported files:
 
 Press **Enter VR →** once a model is open: it starts at the scale model. The app has three layers, one inside the other: the page, the scale model, and inside the home. Going one layer in is always on the right (**Walk in →**, blue); going one layer back is always on the left (**← Back**). Nothing skips a layer: from inside, ← Back twice leaves VR, and so does the Quest's Meta button, from anywhere.
 
-**Wrist menu:** a glowing orb sits on your right wrist. Touch it with your left hand (a fingertip, or the left controller), point at it and pull the trigger, or press **A**: two keys spring out in front of your wrist, the same everywhere: a round **← Back** on the left, which you **hold** for a moment (a ring fills round it: at the scale model it leaves VR, inside it goes back to the scale model), and **Settings** on the right. Press a key with a fingertip, like a real key (push in to click; come back out before the next press), with a controller's tip, or point and pull the trigger. **B** / **Y** closes what is open; with nothing open, holding B or Y is ← Back (the same ring fills round the orb). Walk in → is the big door at the plinth. With Main hand: Left (General tab), the menu moves to your left wrist and X opens it.
+**← Back and Settings:** two round keys float over your right hand (or controller), always there, the way the tools float over your left: **← Back** over the hand, which you **hold** for a second (a ring fills round it: at the scale model it leaves VR, inside it goes back to the scale model), and **Settings** beside it, on the outer side. Press one with your left fingertip, like a real key (push in to click; come back out before the next press), with the left controller's tip, or point at it and pull the trigger. When your right hand moves over the model, the keys wait at the right edge. **B** / **Y** closes the open wing; with nothing open, holding B or Y is ← Back (the same ring fills on the key). Walk in → is the big door at the plinth. With Main hand: Left (General tab), the keys float over your left hand.
 
 **Settings** opens one wing beside the model, on your main hand's side, never over the model. Tabs **How to move** (pictures and a few lines for the hands or controllers you are using, and which build is running), **View** and **General**, the same at both layers. The first time you open it at the scale model, and the first time inside, it shows How to move; after that, the last other tab you used there. There is no close key: its header says how to close it (pull the trigger, or pinch, outside it; B / Y and Settings again close it too). Settings are **switches** for what is on or off (Shadows, Depth shading, Passthrough, Transparent walls, Sound) and a row of **options** with the current one in blue (Time of day, Height, Main hand). Levels are keys beside the doors on the plinth. What you see is remembered; Height and the tabs start over with every Enter VR.
 
@@ -208,7 +208,7 @@ js/xr.js          VR/AR session: the frame order and the parts below
 js/xr-dollhouse.js  the scale model on its plinth: turn, move, scale plate, where stepping inside lands
 js/xr-walk.js     walking at 1:1: stick, teleport, snap turn, floors and solid walls
 js/xr-ui.js       the settings board, help and notes; touch and lasers on the board
-js/wrist-menu.js  the wrist menu: the orb and four keys (Settings, Help, ← Back, Walk in →)
+js/wrist-menu.js  the main hand's keys: ← Back and Settings, always over that hand
 js/keys.js        keys pressed by touch or laser (wrist menu, the doors on the plinth)
 js/xr-menus.js    what the board and keys say and do (cells defined once, rows of ids)
 js/xr-scene.js    gallery room, plinth, skies, markers
@@ -237,7 +237,7 @@ js/hand-poses.js  preset hand poses for the pause's looping hand
 js/settings.js    every setting, its key, meaning and scope (remembered, or this session only)
 js/hand-owner.js  who owns a hand: the ladder (a held tool, a wing, the wrist menu, a key, the tools, the model), on one snapshot a frame
 js/landing.js     where the teleport lands when you aim at something you can't stand on (beside it, on your side)
-js/zones.js       the areas round you (left: the tools; centre: the model; right: the orb and Settings) and where each hand is
+js/zones.js       the areas round you (left: the tools; centre: the model; right: ← Back and Settings) and where each hand is
 js/session-store.js what belongs to this VR session only (the tips, the first tabs): cleared at Enter VR
 js/tween.js, js/haptics.js, js/sound.js   feedback: motion, vibration, synthesised sounds
 js/panel.js       canvas-texture board (switches, options, buttons, tabs), note cards and labels

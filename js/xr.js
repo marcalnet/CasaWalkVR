@@ -302,8 +302,8 @@ export class XRExperience {
 	 * input is read (XRExperience.update returns early), an aim or a hold in
 	 * progress is dropped (nothing happens on return), the sound and the
 	 * vibration stop, and nothing of yours stays drawn frozen in the world:
-	 * hands, controllers and what they carry (the orb, a held tool), the
-	 * wrist menu and the tool fan (a store check, Input.4). Shown again, the
+	 * hands, controllers and what they carry (a held tool), the main hand's
+	 * keys and the tool fan (a store check, Input.4). Shown again, the
 	 * controllers come back here and the rest with the next frame's update.
 	 */
 	setHidden(hidden) {
@@ -313,9 +313,9 @@ export class XRExperience {
 			this.sound.suspend();
 			this.haptics.stop();
 			for (const m of Object.values(this.modes)) m.drop?.();
-			this.ui.wrist.close();
+			this.ui.wrist.group.visible = false;
 			this.input.setVisible(false);
-			for (const c of this.input.controllers) c.wrist.visible = false; // (a bare hand's orb and held tool)
+			for (const c of this.input.controllers) c.wrist.visible = false; // (a bare hand's held tool)
 			for (const v of this.handViews) v.hide();
 			if (this.fan) this.fan.group.visible = false;
 		} else {
@@ -574,17 +574,15 @@ export class XRExperience {
 
 	/**
 	 * True if world point p is within `margin` of any key you could press: the
-	 * orb, the plinth doors and levels, the wrist keys, an open wing (its
-	 * rectangle). by: the input whose point it is: the orb and the wrist keys
-	 * ride the wearer's own wrist, so they never count for the wearer. (One
-	 * check for the orb's yield, the empty-space close and the fan's reach:
-	 * it was two, nearKey and nearUsable, before the hand arbiter.)
+	 * plinth doors and levels, the main hand's keys, an open options row, an
+	 * open wing (its rectangle). by: the input whose point it is: the main
+	 * hand's keys ride over that hand, so they never count for it. (One check
+	 * for the empty-space close and the fan's reach.)
 	 */
-	nearKey(p, margin, { orb: withOrb = true, wristKeys = true, by = null } = {}) {
-		const wrist = this.ui.wrist, orb = wrist.orb?.group, own = !!by && wrist.wearer === by;
-		if (withOrb && !own && orb?.visible && orb.getWorldPosition(this._nk ??= new THREE.Vector3()).distanceTo(p) < margin) return true;
-		for (const pad of this.livePads()) if (pad.near(p, margin)) return true; // (only live keys: faded doors guard nothing; an open dial's stops do)
-		if (wristKeys && !own && wrist.open && wrist.pad.near(p, margin)) return true;
+	nearKey(p, margin, { by = null } = {}) {
+		const wrist = this.ui.wrist, own = !!by && wrist.wearer === by;
+		for (const pad of this.livePads()) if (pad.near(p, margin)) return true; // (only live keys: faded doors guard nothing; an open row's keys do)
+		if (!own && wrist.group.visible && wrist.pad.near(p, margin)) return true;
 		const q = this._nk2 ??= new THREE.Vector3();
 		for (const panel of this.ui.openPanels()) {
 			panel.mesh.updateMatrixWorld(true);
@@ -609,13 +607,13 @@ export class XRExperience {
 	/**
 	 * Why bare hand c's pinch may not aim a teleport here (the design of 24
 	 * Nov: a pinch near something belongs to it), or null. p: the pinch point
-	 * (world). 'board', 'wrist menu', 'key', 'fan', 'model', 'tool': the hand
+	 * (world). 'board', 'hand keys', 'key', 'fan', 'model', 'tool': the hand
 	 * arbiter's ladder (js/hand-owner.js), on this frame's snapshot.
 	 */
 	aimBlock(c, p) {
 		const s = this.claims ?? this.claimSnapshot();
-		// (What can change within the frame is read now: a tool taken, a wing or the wrist menu opened.)
-		return aimOwner(c, p, { ...s, held: this.heldNow(), dial: !!this.dial?.open, board: this.boardOpen, wristOpen: this.ui.wrist.open }, !!this.handViews[c.index]?.near);
+		// (What can change within the frame is read now: a tool taken, a wing opened.)
+		return aimOwner(c, p, { ...s, held: this.heldNow(), dial: !!this.dial?.open, board: this.boardOpen }, !!this.handViews[c.index]?.near);
 	}
 
 	/** The held tool's hand and where it is (world), or null. */
@@ -626,19 +624,18 @@ export class XRExperience {
 
 	/**
 	 * What can claim a hand this frame (js/hand-owner.js), read once: the held
-	 * tool, an open wing or wrist menu, the orb, the live doors and levels,
+	 * tool, an open wing, the main hand's keys, the live doors and levels,
 	 * the tools in the fan, the model. Every place asks the arbiter of the same
 	 * picture.
 	 */
 	claimSnapshot() {
-		const wrist = this.ui.wrist, orb = wrist.orb?.group, fan = this.fan;
+		const wrist = this.ui.wrist, fan = this.fan;
 		const doll = this.mode === 'dollhouse' ? this.modes.dollhouse : null;
 		const at = (o) => o.getWorldPosition(new THREE.Vector3());
 		return {
 			held: this.heldNow(),
 			board: this.boardOpen,
-			wristOpen: wrist.open,
-			orb: orb?.visible ? { at: at(orb), wearer: wrist.wearer } : null,
+			keys: wrist.group.visible ? { near: (p, m) => wrist.pad.near(p, m), wearer: wrist.wearer } : null,
 			doors: doll?.doorsLive ? doll.doors : null,
 			tools: fan?.group.visible ? fan.slots.filter((s) => !s.held).map((s) => at(s.home)) : [],
 			model: doll && this.model ? doll.modelBox() : null,

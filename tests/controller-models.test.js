@@ -9,8 +9,8 @@ import path from 'node:path';
 import * as THREE from 'three';
 import { buildControllerModel, ControllerModel, frontAlong, LOOK } from '../js/controller-model.js';
 import { MotionController } from 'three/addons/libs/motion-controllers.module.js';
-import { ORB_ON_GRIP } from '../js/wrist-menu.js';
-import { SIGHT } from '../js/zones.js';
+import { KEYS } from '../js/wrist-menu.js';
+import { WRIST } from '../js/theme.js';
 import { ABOVE } from '../js/tool-fan.js';
 import { buildCamera, buildMeter, buildMarker } from '../js/tool-models.js';
 import { readGlb, sceneOf } from './glb-scene.js';
@@ -116,7 +116,7 @@ test('the touch point: where the laser\'s line leaves the front of the model', (
 	// (Each profile's own line comes from WebXR at run time: measured once per profile and hand, js/xr-input.js updateModels.)
 });
 
-test('the orb sits at least 1 cm clear of every model, and the tools at least 4 cm above its ring', () => {
+test('the main hand\'s keys float 4 cm or more clear of every controller (its ring included), and the tools at least 4 cm above it (build 215, C8)', () => {
 	// The lowest point of a tool in the fan: its lowest part (at its fan size), the outer slots' sag and the bob (js/tool-fan.js place()).
 	const drop = Math.max(...[buildCamera(), buildMeter(), buildMarker()].map((g) => -new THREE.Box3().setFromObject(g).min.y * g.userData.fanScale));
 	const lowestTool = ABOVE - drop - (0.02 - Math.cos(0.5) * 0.02) - 0.004;
@@ -124,14 +124,13 @@ test('the orb sits at least 1 cm clear of every model, and the tools at least 4 
 		const { b } = model(id, hand);
 		const pos = b.probe.geometry.attributes.position, index = b.probe.geometry.index;
 		const tri = new THREE.Triangle(), q = new THREE.Vector3();
-		let orb = Infinity, top = -Infinity;
+		let top = -Infinity;
 		for (let i = 0; i < index.count; i += 3) {
 			tri.setFromAttributeAndIndices(pos, index.getX(i), index.getX(i + 1), index.getX(i + 2));
-			tri.closestPointToPoint(ORB_ON_GRIP, q);
-			orb = Math.min(orb, q.distanceTo(ORB_ON_GRIP));
 			top = Math.max(top, tri.a.y, tri.b.y, tri.c.y);
 		}
-		assert.ok(orb - SIGHT.ORB_R >= 0.01, `${id} ${hand}: the orb (rings included) ${((orb - SIGHT.ORB_R) * 100).toFixed(1)} cm clear`);
+		const lowestKey = KEYS.ABOVE - WRIST.key / 2; // (the keys float ABOVE over the grip, world up; the controller held level)
+		assert.ok(lowestKey - top >= 0.04, `${id} ${hand}: the lowest key ${((lowestKey - top) * 100).toFixed(1)} cm above the controller's top`);
 		assert.ok(lowestTool - top >= 0.04, `${id} ${hand}: the lowest tool ${((lowestTool - top) * 100).toFixed(1)} cm above the ring`);
 	}
 });

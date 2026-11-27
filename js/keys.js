@@ -102,18 +102,18 @@ export class KeyPad {
 	 * over the same key). A key with spec.hold is pressed only once held that
 	 * long, by touch or laser (a ring fills; letting go early does nothing).
 	 */
-	update(dt, { active = true, exclude = null, tips = 'all', blockers = null, laserOnRelease = false, rules = TOUCH, own = null } = {}) {
+	update(dt, { active = true, exclude = null, skip = null, tips = 'all', blockers = null, laserOnRelease = false, rules = TOUCH, own = null, progress = null } = {}) {
 		const xr = this.xr, input = xr.input, now = performance.now() / 1000;
 		let action = null, laserHot = null;
 		const keys = this.list;
-		for (const k of keys) k.progress = 0;
+		for (const k of keys) k.progress = progress?.[k.slot] ?? 0; // (progress: a hold counted elsewhere, e.g. B or Y held for ← Back; skip(c): an input that may not press these keys this frame)
 		// Lasers: a controller pointing at a key; the trigger presses it.
 		if (active) {
 			const faces = this._faces;
 			faces.length = 0;
 			for (const k of keys) if (k.out && k.group.visible) faces.push(k.face);
 			for (const c of input.active()) {
-				if (c === exclude || (c.claim.trigger && c.claim.trigger !== own) || !faces.length) { this.armed[c.index] = null; continue; } // (own: a claim this pad's owner made for it, earlier in the frame)
+				if (c === exclude || skip?.(c) || (c.claim.trigger && c.claim.trigger !== own) || !faces.length) { this.armed[c.index] = null; continue; } // (own: a claim this pad's owner made for it, earlier in the frame)
 				input.setRaycaster(c, xr.raycaster);
 				const hits = this._hits;
 				hits.length = 0;
@@ -157,7 +157,7 @@ export class KeyPad {
 			const row = this.touches[c.index] ||= {};
 			const ring = this.rings[c.index] ||= makeRing(xr);
 			ring.visible = false;
-			const can = active && c !== exclude && c.touch.tracked && c.claim.trigger !== 'tool' && (tips !== 'hands' || c.isHand);
+			const can = active && c !== exclude && !skip?.(c) && c.touch.tracked && c.claim.trigger !== 'tool' && (tips !== 'hands' || c.isHand);
 			for (const k of keys) {
 				const st = row[k.slot] ||= Object.assign(touchState(), { lx: 0, ly: 0, seen: false });
 				if (!can || !k.out || !k.group.visible) { if (st.phase !== 'away') resetTouch(st); st.seen = false; continue; }
@@ -251,10 +251,10 @@ function sharedAtlas() {
  * line in the theme's text colour; its track (25%) shows as soon as a fingertip
  * or laser is on the key, the fill (90%) grows clockwise from the top while it
  * is held, drains back in 0.2 s if let go early, and flashes once (0.1 s) when
- * full. The same ring circles the orb while B or Y is held (js/wrist-menu.js).
+ * full. The same ring fills on ← Back while B or Y is held (js/wrist-menu.js, js/xr-ui.js).
  */
 export class HoldRing {
-	/** r: the inner radius (m), just outside what it circles; colour: its track and fill (graphite round a key, COLOURS.onDark round the orb). */
+	/** r: the inner radius (m), just outside what it circles; colour: its track and fill (graphite round a key). */
 	constructor(r, colour = COLOURS.text) {
 		const mat = (opacity) => new THREE.MeshBasicMaterial({ color: colour, transparent: true, opacity, depthTest: false, depthWrite: false });
 		this.group = new THREE.Group();

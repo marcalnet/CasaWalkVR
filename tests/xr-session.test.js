@@ -181,19 +181,23 @@ test('the settings wing: the same three tabs at both layers (How to move, View, 
 	x.menus.dollhouse.setTab('view');
 });
 
-test('the wrist menu: two keys, the same at both layers: ← Back on the left (round, held 0.6 s), Settings on the right; Walk in → is on the plinth only', async () => {
-	const { keysFor, BACK_HOLD } = await import('../js/wrist-menu.js');
+test('the main hand\'s keys (build 215, C8): ← Back (round, held 1 s) and Settings, the same at both layers; Walk in → is on the plinth only', async () => {
+	const { keysFor, BACK_HOLD, KEYS } = await import('../js/wrist-menu.js');
 	const doll = keysFor('dollhouse'), inside = keysFor('walk');
 	assert.deepEqual(Object.fromEntries(Object.entries(doll).map(([k, v]) => [k, [v.id, v.look, v.label, v.caption ?? '', v.hold ?? 0]])), {
-		left: ['back', 'outline', '\u2190 Back', 'Leave VR', BACK_HOLD], right: ['settings', 'plain', 'Settings', 'and help', 0],
+		back: ['back', 'outline', '\u2190 Back', 'Leave VR', BACK_HOLD], settings: ['settings', 'plain', 'Settings', 'and help', 0],
 	});
-	assert.equal(BACK_HOLD, 0.6);
-	assert.deepEqual([inside.left.id, inside.left.caption, inside.right.id], ['back', 'Scale model', 'settings'], 'inside: the same two keys');
+	assert.equal(BACK_HOLD, 1);
+	assert.deepEqual([inside.back.id, inside.back.caption, inside.settings.id], ['back', 'Scale model', 'settings'], 'inside: the same two keys');
 	const { x } = await setup();
-	assert.ok(x.ui.wrist.keys.left.round && !x.ui.wrist.keys.right.round, '← Back is round: the shape itself says "hold"');
+	assert.ok(x.ui.wrist.keys.back.round && x.ui.wrist.keys.settings.round && x.ui.wrist.keys.back.w === 0.07, 'both round, 7 cm');
+	assert.ok(KEYS.ABOVE === 0.15 && Math.abs(KEYS.APART - 0.082) < 1e-9, '15 cm over the hand, 8.2 cm apart');
+	assert.ok(!x.ui.wrist.orb && !x.ui.wrist.cross, 'no orb, no arc');
 });
-test('B / Y with nothing open: a light tick on the press; held 0.6 s it is ← Back (the ring fills round the orb); a short press does nothing; let go early, the ring drains', async () => {
-	const { x, press, frame, settle, go, ended } = await setup();
+
+test('B / Y with nothing open: a light tick on the press; held 1 s it is ← Back (the ring fills on the ← Back key); a short press does nothing; let go early, the ring drains', async () => {
+	const { x, press, frame, settle, go, ended, hands } = await setup();
+	hands.left.grip.visible = hands.right.grip.visible = true;
 	go('in');
 	const felt = [], play = x.haptics.play.bind(x.haptics);
 	x.haptics.play = (c, name) => { felt.push(name); return play(c, name); };
@@ -201,26 +205,25 @@ test('B / Y with nothing open: a light tick on the press; held 0.6 s it is ← B
 	assert.deepEqual(felt, ['tick'], 'the press: a light tick at once (the hold has begun: the UX review\'s S4)');
 	for (let i = 0; i < 9; i++) frame(); press('right', 'b', false); frame();
 	assert.ok(x.mode === 'walk' && !x.layerFx, 'a short press: nothing');
-	press('right', 'b'); for (let i = 0; i < 25; i++) frame();
-	assert.ok(x.ui.wrist.backRing.group.visible && x.ui.wrist.backRing.shown > 0.4, 'the ring fills round the orb');
-	assert.equal('#' + x.ui.wrist.backRing.fill.material.color.getHexString(), '#ffffff', 'in the light colour, over the room (the UX review\'s C3)');
+	const ring = () => x.ui.wrist.keys.back.ring;
+	press('right', 'b'); for (let i = 0; i < 40; i++) frame();
+	assert.ok(ring()?.group.visible && ring().shown > 0.4, 'the ring fills on ← Back');
 	press('right', 'b', false); frame();
 	for (let i = 0; i < 20; i++) frame();
-	assert.ok(x.mode === 'walk' && x.ui.wrist.backRing.shown === 0, 'let go early: it drains back, nothing happens');
-	press('right', 'b'); for (let i = 0; i < 50; i++) frame(); press('right', 'b', false); frame(); settle();
-	assert.equal(x.mode, 'dollhouse', 'held 0.6 s: back to the scale model');
-	press('right', 'b'); for (let i = 0; i < 50; i++) frame(); press('right', 'b', false); frame(); settle();
+	assert.ok(x.mode === 'walk' && ring().shown === 0, 'let go early: it drains back, nothing happens');
+	press('right', 'b'); for (let i = 0; i < 80; i++) frame(); press('right', 'b', false); frame(); settle();
+	assert.equal(x.mode, 'dollhouse', 'held 1 s: back to the scale model');
+	press('right', 'b'); for (let i = 0; i < 80; i++) frame(); press('right', 'b', false); frame(); settle();
 	assert.equal(ended(), 1, 'at the scale model, held: it leaves VR (one key, one behaviour)');
 });
 
-test('the held ← Back key fills from the first contact (the asks 3.2; the UX review\'s C2): a tip resting on its face, never pushed in, presses it at 0.6 s', async () => {
+test('the held ← Back key fills from the first contact (the asks 3.2; the UX review\'s C2): a tip resting on its face, never pushed in, presses it at 1 s', async () => {
 	const { x, frame, hands, ended } = await setup();
 	const { TOUCH } = await import('../js/touch.js');
 	hands.left.grip.visible = hands.right.grip.visible = true;
-	frame();
-	x.ui.wrist.show({ pinned: true });
-	for (let i = 0; i < 30; i++) frame(); // (the keys spring out)
-	const k = x.ui.wrist.keys.left;
+	hands.right.grip.position.set(0.3, 1.1, -0.35);
+	for (let i = 0; i < 20; i++) frame(); // (the keys over the right controller)
+	const k = x.ui.wrist.keys.back;
 	const put = (depth) => { // (the left controller's tip `depth` in front of the key's face: negative is pushed in)
 		k.group.updateMatrixWorld(true);
 		const at = k.group.localToWorld(new THREE.Vector3(0, 0, 0.006 + TOUCH.RADIUS + depth));
@@ -232,44 +235,64 @@ test('the held ← Back key fills from the first contact (the asks 3.2; the UX r
 	put(0.03); frame(); put(0.03); frame();
 	for (let d = 0.03; d > 0.002; d -= 0.004) { put(d); frame(); } // (coming in from the front)
 	let n = 0;
-	for (; n < 72 && !x.layerFx && !ended(); n++) { put(-0.002); frame(); } // (resting on it: in contact, never past the 8 mm click)
+	for (; n < 110 && !x.layerFx && !ended(); n++) { put(-0.002); frame(); } // (resting on it: in contact, never past the 8 mm click)
 	assert.ok(x.layerFx || ended(), `pressed after ${(n / 72).toFixed(2)} s in contact`);
-	assert.ok(n / 72 >= 0.55 && n / 72 <= 0.7, `about 0.6 s (${(n / 72).toFixed(2)} s)`);
+	assert.ok(n / 72 >= 0.95 && n / 72 <= 1.1, `about 1 s (${(n / 72).toFixed(2)} s)`);
 });
 
-test('the wrist menu: an arc over the upper outer side of the orb, frozen once open, closed after 12 s with no finger or laser near a key', async () => {
-	const { WRIST } = await import('../js/theme.js');
+test('the main hand\'s keys float over it (build 215, C8): 15 cm up, ← Back on its axis, Settings to its outer side, facing the eyes; in the centre they wait at the right edge; a reaching left tip never moves them; one touch on Settings opens the wing; the left hand\'s keys mirror', async () => {
 	const { x, frame, hands } = await setup();
-	hands.left.grip.visible = hands.right.grip.visible = true; // (tracked)
-	frame();
 	const w = x.ui.wrist;
-	w.show({ pinned: true });
-	for (let i = 0; i < 20; i++) frame();
-	assert.ok(w.open && Object.values(w.keys).every((k) => k.out), 'open, every key out');
-	// Along the arc, as seen: ← Back, then Settings; 50° apart on a 14 cm radius, 7 cm keys (Settings 11 cm long).
-	const at = (slot) => w.keys[slot].group.position;
-	const ang = (slot) => Math.round(THREE.MathUtils.radToDeg(Math.atan2(at(slot).y, at(slot).x)));
-	assert.deepEqual(['left', 'right'].map(ang), [100, 50]);
-	for (const slot of ['left', 'right']) assert.ok(Math.abs(at(slot).length() - 0.14) < 0.003, slot);
-	assert.equal(WRIST.key, 0.07);
-	assert.ok(['left', 'right'].every((s) => at(s).y > -0.03), 'the orb\'s underside stays clear');
-	assert.ok(['left', 'right'].every((s) => at(s).distanceTo(new THREE.Vector3()) > 0.1), 'no key over the orb');
-	// Frozen: the cross stays where it opened while the wrist moves.
-	const before = w.cross.position.clone();
-	x.input.controllers.forEach((c) => c.grip.position.x += 0.2);
-	for (let i = 0; i < 5; i++) frame();
-	assert.ok(w.open && w.cross.position.distanceTo(before) < 1e-6, 'world-locked');
-	// 12 s with no finger within 15 cm of the nearest key and no laser on one: it closes.
-	for (let t = 0; t < 11.5; t += 1 / 72) w.update(1 / 72);
-	assert.ok(w.open, 'still open at 11.5 s');
-	// A fingertip near the nearest key (far from the cross's middle) holds it open.
-	const tip = x.input.controllers.find((c) => c !== w.wearer);
-	tip.touch.tracked = true; tip.touch.tip.copy(w.keys.right.group.getWorldPosition(new THREE.Vector3())).add(new THREE.Vector3(0, 0.1, 0));
-	for (let t = 0; t < 3; t += 1 / 72) w.update(1 / 72);
-	assert.ok(w.open, 'a finger near the far key: still open');
-	tip.touch.tracked = false;
-	for (let t = 0; t < 12.5; t += 1 / 72) w.update(1 / 72);
-	assert.ok(!w.open, 'closed after 12 s');
+	hands.left.grip.visible = hands.right.grip.visible = true;
+	hands.left.grip.position.set(-0.45, 0.9, 0.05);
+	hands.right.grip.position.set(0.4, 1.1, -0.3); // (out to the right: in its own area)
+	for (let i = 0; i < 40; i++) frame();
+	const grip = hands.right.grip.getWorldPosition(new THREE.Vector3()), right = x.viewAxes().right;
+	const back = w.keys.back.group.getWorldPosition(new THREE.Vector3()), set = w.keys.settings.group.getWorldPosition(new THREE.Vector3());
+	assert.ok(w.wearer === hands.right && w.group.visible, 'over the right controller');
+	assert.ok(Math.abs(back.y - grip.y - 0.15) < 0.01 && Math.hypot(back.x - grip.x, back.z - grip.z) < 0.01, `← Back 15 cm straight over the grip (${(back.y - grip.y).toFixed(3)} up)`);
+	assert.ok(set.clone().sub(back).dot(right) > 0.03, `Settings to the outer side (your right; 8.2 cm, seen from the side): ${set.clone().sub(back).dot(right).toFixed(3)}`);
+	const toEye = x.headWorld().sub(w.group.getWorldPosition(new THREE.Vector3())).normalize(), face = new THREE.Vector3(0, 0, 1).transformDirection(w.group.matrixWorld);
+	assert.ok(face.dot(toEye) > 0.99, 'facing the eyes');
+	// The right hand over the model (the centre): they glide to the right edge and wait there.
+	hands.right.grip.position.set(0.0, 1.2, -0.6);
+	for (let i = 0; i < 72; i++) frame();
+	assert.equal(w.mode, 'edge', 'waiting at the edge');
+	// A reaching left tip (within 25 cm of a key): they stay put while the right hand moves.
+	hands.right.grip.position.set(0.4, 1.1, -0.3); for (let i = 0; i < 72; i++) frame();
+	const still = w.group.position.clone();
+	hands.left.grip.position.copy(x.rig.worldToLocal(w.keys.back.group.getWorldPosition(new THREE.Vector3()).add(new THREE.Vector3(-0.15, 0, 0.05))));
+	frame();
+	assert.ok(w.reach, 'the left tip within reach');
+	// One touch on Settings: the wing opens; again: it closes.
+	const { TOUCH } = await import('../js/touch.js');
+	const tap = () => { const k = w.keys.settings; for (const d of [0.04, 0.02, 0.005, -0.01, -0.01, 0.04, 0.06]) { k.group.updateMatrixWorld(true); const at = k.group.localToWorld(new THREE.Vector3(0, 0, 0.006 + TOUCH.RADIUS + d)); hands.left.grip.position.add(x.rig.worldToLocal(at).sub(x.rig.worldToLocal(hands.left.touch.tip.clone()))); frame(); } };
+	tap();
+	assert.ok(x.ui.menu, 'one touch on Settings opens the wing');
+	assert.ok(w.group.position.distanceTo(still) < 0.02, 'the reaching hand never moved them');
+	hands.left.grip.position.set(-0.45, 0.9, 0.05); for (let i = 0; i < 10; i++) frame();
+	w.pad.lastClick = []; // (two clicks within TOUCH.PANEL_GAP of real time count once: here they come within milliseconds)
+	tap();
+	assert.ok(!x.ui.menu, 'and closes it');
+	// Inside: ← Back's caption says where it goes.
+	x.ui.closeAll(); x.menuAction('in'); for (let i = 0; i < 240 && x.layerFx; i++) frame(); frame();
+	assert.equal(w.keys.back.spec.caption, 'Scale model', 'inside, ← Back goes to the scale model');
+	// A controller's aim, then the wing opened: the aim is cancelled (as a bare hand's), nothing moves on release.
+	hands.left.grip.position.set(-0.45, 0.9, 0.05); hands.right.ray.position.set(0.3, 1.2, -0.3); hands.right.ray.lookAt(new THREE.Vector3(0.3, 0, -1.5));
+	const pads = x.input.controllers.map((c) => c.source.gamepad);
+	pads[1].buttons[0].pressed = true; frame(); frame();
+	const aiming = !!x.modes.walk.tele, rig0 = x.rig.position.clone();
+	x.menuAction('settings'); frame();
+	pads[1].buttons[0].pressed = false; frame(); frame();
+	assert.ok(aiming && !x.modes.walk.tele && x.rig.position.distanceTo(rig0) < 1e-6, 'the wing opened mid-aim: cancelled, no jump');
+	x.ui.closeAll(); x.menuAction('back'); for (let i = 0; i < 240 && x.layerFx; i++) frame(); frame();
+	// Main hand: Left: the keys over the left hand, Settings to its outer side (your left).
+	x.menuAction({ id: 'mainHand', value: 'left' });
+	hands.left.grip.position.set(-0.4, 1.1, -0.3); hands.right.grip.position.set(0.45, 0.9, 0.05);
+	for (let i = 0; i < 60; i++) frame();
+	const b2 = w.keys.back.group.getWorldPosition(new THREE.Vector3()), s2 = w.keys.settings.group.getWorldPosition(new THREE.Vector3());
+	assert.ok(w.wearer === hands.left && s2.clone().sub(b2).dot(right) < -0.015, `mirrored: over the left hand, Settings on your left (${w.wearer?.handedness}, ${s2.clone().sub(b2).dot(right).toFixed(3)}, side ${w.side})`);
+	x.menuAction({ id: 'mainHand', value: 'right' });
 });
 
 test('the levels stack beside the doors: one key per level, ground at the bottom, the chosen one filled; one level has none', async () => {
@@ -485,7 +508,7 @@ test('the options row (build 215, C3): reaching near the held tool shows it, key
 	x.store.start();
 });
 
-test('the options row, the orb and the holding hand (the audit\'s S8; the Designer, §5.8; build 215, C3): it floats 3 cm towards the eyes and 10 cm up, never within 0.30 m of them; keys 10 cm or more from the orb; nothing of the holding controller within 2 cm behind a stop (Quest 2, 3, Pro); a bare holding hand 4 cm or more from every stop; while open, the orb yields and its stops are live keys', async () => {
+test('the options row, the hand\'s keys and the holding hand (the audit\'s S8; the Designer, §5.8; build 215, C3 and C8): it floats 3 cm towards the eyes, 10 cm up and 14 cm in, never within 0.30 m of them; never over the hand\'s keys as seen (rising 6 cm at most); nothing of the holding controller within 2 cm behind a key (Quest 2, 3, Pro); a bare holding hand 4 cm or more from every key; while it shows, the hand\'s keys make room and its keys are live keys', async () => {
 	const { x, frame, hands } = await setup();
 	const { DIAL } = await import('../js/tool-dial.js');
 	const { sceneOf } = await import('./glb-scene.js');
@@ -521,9 +544,11 @@ test('the options row, the orb and the holding hand (the audit\'s S8; the Design
 			frame(); frame();
 			x.dial.show(tool, { stepped: true }); // (as the stick shows it: it stays 1.5 s whatever the other hand does)
 			x.scene.updateMatrixWorld(true);
-			const orb = x.ui.wrist.orb.group.getWorldPosition(new THREE.Vector3());
-			const least = Math.min(...stops().map((k) => k.group.getWorldPosition(new THREE.Vector3()).distanceTo(orb)));
-			assert.ok(least >= 0.10, `${main} hand, ${tool.name}: the nearest stop ${(least * 100).toFixed(1)} cm from the orb (10 cm or more)`);
+			// The main hand's keys (build 215's C8): the row never overlaps them as seen (it rises at most 6 cm to clear them).
+			const mine = Object.values(x.ui.wrist.keys).map((k) => k.group.getWorldPosition(new THREE.Vector3()));
+			const least = Math.min(...stops().flatMap((k) => mine.map((o) => k.group.getWorldPosition(new THREE.Vector3()).distanceTo(o))));
+			const eye = x.headWorld();
+			assert.ok(!x.dial.overlapsKeys(x.dial.group.position, eye) && x.dial.rose <= DIAL.RISE + 1e-9, `${main} hand, ${tool.name}: the row clear of the hand's keys as seen (rose ${(x.dial.rose * 100).toFixed(0)} cm; nearest ${(least * 100).toFixed(1)} cm)`);
 			// Behind each stop's face, along its normal: the 8 mm press plus 12 mm. Five lines (the middle and four edge points) per stop.
 			const behind = {};
 			for (const [profile, ctl] of Object.entries(ctls)) {
@@ -541,12 +566,12 @@ test('the options row, the orb and the holding hand (the audit\'s S8; the Design
 				behind[profile] = worst;
 				if (!OPEN.has(`${main} ${tool.name}`)) assert.ok(worst === Infinity, `${main} hand, ${tool.name}, ${profile}: the controller ${(worst * 100).toFixed(1)} cm behind a stop's face (none within 2 cm)`);
 			}
-			// While open: the orb yields, and its stops are live keys (for the orb's sight and the touch guard).
+			// While open: the hand's keys make room and take no touches (C8), and the row's keys are live keys.
 			frame();
-			assert.ok(x.ui.wrist.orbYield && x.liveKeys().length >= tool.option.stops.length, 'the orb yields; the stops are live keys');
+			assert.ok(x.ui.wrist.rowYield && x.ui.wrist.yielded && x.liveKeys().length >= tool.option.stops.length, 'the hand\'s keys make room; the row\'s keys are live keys');
 			const stop = stops()[0].group.getWorldPosition(new THREE.Vector3());
 			assert.ok(x.nearKey(stop.clone().add(new THREE.Vector3(0, 0, 0.05)), 0.15), 'a fingertip near a stop is near a live key');
-			rows.push(`${main} ${tool.name}: ${(least * 100).toFixed(1)} cm from the orb; behind a stop: ${Object.entries(behind).map(([k, v]) => `${k.replace('meta-quest-touch-', '').replace('oculus-touch-v3', 'quest2')} ${v === Infinity ? 'clear' : (v * 100).toFixed(1) + ' cm'}`).join(', ')}`);
+			rows.push(`${main} ${tool.name}: ${(least * 100).toFixed(1)} cm from the hand's keys (rose ${(x.dial.rose * 100).toFixed(0)} cm); behind a stop: ${Object.entries(behind).map(([k, v]) => `${k.replace('meta-quest-touch-', '').replace('oculus-touch-v3', 'quest2')} ${v === Infinity ? 'clear' : (v * 100).toFixed(1) + ' cm'}`).join(', ')}`);
 			x.dial.close();
 			x.tools.putBack();
 		}
@@ -738,7 +763,7 @@ test('settings keep the board open; the doors move one layer at a time', async (
 test('the interface is never in a photo; what the tools make is', async () => {
 	const { x } = await setup();
 	const hidden = x.photoHidden;
-	for (const o of [...Object.values(x.menus).map((p) => p.mesh), x.ui.wrist.cross, x.veil.mesh, x.arrival.mesh, x.ui.photoNote.mesh, x.modes.walk.arc.dots, x.modes.walk.arc.ring,
+	for (const o of [...Object.values(x.menus).map((p) => p.mesh), x.ui.wrist.group, x.veil.mesh, x.arrival.mesh, x.ui.photoNote.mesh, x.modes.walk.arc.dots, x.modes.walk.arc.ring,
 		...x.modes.dollhouse.markers, ...x.input.controllers.flatMap((c) => [c.ray, c.grip])]) assert.ok(hidden.has(o), o.name || o.type);
 	assert.ok(!hidden.has(x.tools.annotations) && x.tools.annotations.parent === x.centerer, 'measurements and drawings live in model space and show in photos');
 });
@@ -754,7 +779,7 @@ test('the interface lives on its own layer: the headset shows it, a photo\'s cam
 	assert.ok(x.tools.annotations.layers.test(photoCamera.layers) && x.model.layers.walls.layers.test(photoCamera.layers), 'the model and what the tools made are in photos');
 	// Added later under the interface (a ring on a key, a print): moved onto its layer before any photo.
 	const ring = new THREE.Mesh(new THREE.RingGeometry(0.1, 0.2), new THREE.MeshBasicMaterial());
-	x.ui.wrist.cross.add(ring);
+	x.ui.wrist.group.add(ring);
 	x.markInterface();
 	assert.ok(ring.layers.isEnabled(INTERFACE_LAYER) && !ring.layers.test(photoCamera.layers));
 	// A laser still hits the board.
@@ -773,7 +798,7 @@ test('leaving VR in the middle of a walk leaves nothing behind', async () => {
 	x.ui.openMenu();
 	const c = x.input.controllers[0];
 	frame();
-	assert.ok(x.ui.wrist.orb.holder, 'the orb is on a wrist');
+	assert.ok(x.ui.wrist.holder, 'the keys float over a hand');
 	const walk = x.modes.walk;
 	Object.assign(walk, { tele: { c, via: 'trigger' }, fade: { t: 0, action: () => { throw new Error('a stale teleport ran'); } } });
 	walk.arc.dots.visible = true;
@@ -784,7 +809,7 @@ test('leaving VR in the middle of a walk leaves nothing behind', async () => {
 	assert.deepEqual([x.mode, x.menu, walk.tele, walk.fade, x.modes.dollhouse.grab, x.pendingRecentre, x.photoPending], [null, null, null, null, null, false, false]);
 	const shown = [walk.arc.dots, walk.arc.ring, x.veil.mesh, x.ui.photoNote.mesh, x.walkSky, x.showroom, x.stage, ...x.modes.dollhouse.markers, ...Object.values(x.menus).map((p) => p.mesh)].filter((o) => o.visible);
 	assert.deepEqual(shown.map((o) => o.name || o.type), []);
-	assert.ok(!x.ui.wrist.orb.group.parent && !x.ui.wrist.orb.holder && !x.ui.wrist.open);
+	assert.ok(!x.ui.wrist.group.visible && !x.ui.wrist.holder);
 	assert.equal(x.rig.position.length() + x.anchor.position.length() + x.lift, 0);
 	assert.ok(x.model.layers.ground.visible && ended() === 1);
 	assert.equal(x.tools.annotations.children.length, 0, 'measurements and drawings are cleared');
@@ -878,13 +903,9 @@ test('a held tool owns its hand\'s trigger, grip and A; the other hand and the m
 	for (let t = 0; t < HOLD + 0.1; t += 0.05) frame(0.05);
 	press('right', 'a', false); frame();
 	assert.deepEqual(got.splice(0), ['A press', 'A hold']);
-	// X does nothing (the menu is on the right wrist); the other hand touching the orb opens it.
+	// X does nothing (A no longer opens anything: the keys always show, build 215's C8).
 	press('left', 'a'); frame(); press('left', 'a', false); frame();
-	assert.ok(!x.ui.wrist.open, 'X: not the menu wrist');
-	x.rig.updateMatrixWorld(true);
-	hands.left.grip.position.copy(x.rig.worldToLocal(x.ui.wrist.orb.group.getWorldPosition(new THREE.Vector3()))); // (the grip lives in the rig)
-	frame();
-	assert.ok(x.ui.wrist.open, 'the left controller touching the orb on the right wrist opens the menu');
+	assert.ok(!x.ui.menu, 'X: nothing');
 	assert.equal(hands.left.claim.trigger, null);
 	hands.left.grip.position.set(-0.3, 1, -0.3);
 	frame();
@@ -913,7 +934,7 @@ test('mirrored: a tool in the left hand has Y as its second button', async () =>
 	x.ui.closeMenu();
 	assert.equal(hands.left.claim.b, 'tool');
 	press('right', 'a'); frame(); press('right', 'a', false); frame();
-	assert.ok(x.ui.wrist.open && x.ui.wrist.pinned, 'A opens the wrist menu, pinned');
+	assert.ok(!x.ui.menu, 'A opens nothing (the keys always show: build 215, C8)');
 });
 
 test('the door at the scale model: one big Walk in → (no ← Back since 26 Nov 2026); Walk in goes inside', async () => {
@@ -1099,17 +1120,17 @@ test('the wing: on the main hand\'s side, 30° or more off straight ahead', asyn
 	x.menuAction({ id: 'mainHand', value: 'right' });
 });
 
-test('the orb, or A, with a wing open closes everything', async () => {
+test('B with the wing open closes it; A does nothing (build 215, C8: no orb, no arc)', async () => {
 	const { x, frame } = await setup();
 	frame();
 	x.menuAction('settings');
 	assert.ok(x.menu);
 	const wearer = x.ui.wrist.wearer;
-	assert.ok(wearer, 'the orb is worn');
-	wearer.state.down.a = true;
-	x.ui.buttons();
-	wearer.state.down.a = false;
-	assert.ok(!x.menu && !x.ui.wrist.open, 'A: the wing and the arc');
+	assert.ok(wearer, 'the keys float over a hand');
+	wearer.state.down.a = true; x.ui.buttons(); wearer.state.down.a = false;
+	assert.ok(x.menu, 'A: nothing');
+	wearer.state.down.b = true; x.ui.buttons(); wearer.state.down.b = false;
+	assert.ok(!x.menu, 'B: the wing closes');
 });
 
 test('holding the model: it follows the grip, level (turned only about the vertical); let go in the air it floats, then goes home by itself', async () => {
@@ -1308,13 +1329,13 @@ test('bare hands, Quest 2: a pinch held aims; opening it on white goes nowhere; 
 	c.gestures = [];
 	x.modes.walk.handMoves(1 / 72);
 	assert.equal(x.modes.walk.tele, null, 'the hand dropped: cancelled');
-	// The wrist menu open: a pinch is not a teleport.
+	// The wing open: a pinch is not a teleport.
 	c.gesture.shape.pinchAt.y = 1.15;
-	x.ui.wrist.open = true;
+	x.ui.openMenu();
 	c.gestures = [{ type: 'pinch' }];
 	x.modes.walk.handMoves(1 / 72);
-	assert.equal(x.modes.walk.tele, null, 'the wrist menu is open: no aim');
-	x.ui.wrist.open = false;
+	assert.ok(x.modes.walk.tele === null, 'the wing is open: no aim');
+	x.ui.closeMenu();
 });
 
 test('a pinch within 15 cm of a door\'s face is the door\'s, not a teleport; further away it may aim', async () => {
@@ -1378,15 +1399,15 @@ test('Meta\'s menu over the app: nothing of yours stays drawn frozen (hands, con
 	const stop = x.haptics.stop.bind(x.haptics);
 	x.haptics.stop = () => { stopped++; stop(); };
 	frame();
-	x.ui.wrist.open = true; x.fan.group.visible = true;
+	x.ui.wrist.group.visible = true; x.fan.group.visible = true;
 	for (const v of x.handViews) v.group.visible = true;
 	x.setHidden(true);
 	frame();
 	assert.ok(stopped > 0, 'the vibration stopped');
-	assert.ok(!x.ui.wrist.open, 'the wrist menu closed');
+	assert.ok(!x.ui.wrist.group.visible, 'the main hand\'s keys hidden');
 	assert.ok(!x.fan.group.visible, 'the fan hidden');
 	assert.ok(x.handViews.every((v) => !v.group.visible), 'hands hidden');
-	assert.ok(x.input.controllers.every((c) => !c.ray.visible && !c.grip.visible && !c.wrist.visible), 'controllers, their orb and tools hidden');
+	assert.ok(x.input.controllers.every((c) => !c.ray.visible && !c.grip.visible && !c.wrist.visible), 'controllers and their tools hidden');
 	x.setHidden(false);
 	frame();
 	assert.ok(x.input.controllers.every((c) => c.ray.visible && c.grip.visible && c.wrist.visible), 'back again');
@@ -1420,9 +1441,9 @@ test('the development switches (js/dev.js) and the ?hands readout: only with ?ha
 	c.gesture.shape.normal.set(0, -1, 0);
 	assert.match(readoutText(x, c), /below the waist$/);
 	c.gesture.shape.pinchAt.y = eye - 0.45;
-	x.ui.wrist.open = true;
-	assert.match(readoutText(x, c), /blocked: wrist menu$/);
-	x.ui.wrist.open = false;
+	x.ui.openMenu();
+	assert.match(readoutText(x, c), /blocked: board$/);
+	x.ui.closeMenu();
 	x.modes.walk.tele = { c, via: 'hand' };
 	assert.match(readoutText(x, c), /aiming$/);
 	x.modes.walk.tele = null;
@@ -1595,11 +1616,10 @@ test('the areas: the tools home over the left hand in the left area; the hand ov
 	hands.left.grip.position.set(-0.45, 1.2, -0.3);
 	for (let i = 0; i < 30; i++) frame();
 	assert.ok(fan.reach && fan.group.position.distanceTo(waiting) < 0.01, 'within reach: they stay where the hand reaches');
-	// Within reach (0.25 m, let go at 0.35 m): the orb ignores touches (fanBusy follows the reach), and the tools are live keys for its line of
-	// sight, so it never hides the tool you reach for; it no longer shrinks for the reach itself (the Designer, after the audit).
+	// Within reach (0.25 m, let go at 0.35 m): the tools are live keys for the hand keys' line of sight, so those never hide the tool
+	// you reach for (the orb's rule, kept by the keys: build 215's C8).
 	assert.ok(fan.fanBusy, 'fanBusy is the reach');
-	assert.ok(x.liveKeys().filter((k) => Math.abs(k.r - 0.06) < 1e-9).length === fan.slots.filter((s) => !s.held).length, 'the tools are live keys for the orb\'s sight');
-	assert.equal(x.ui.wrist.orbYield, x.ui.wrist.keyYield || x.ui.wrist.sightYield, 'the orb makes room only for a key or by sight');
+	assert.ok(x.liveKeys().filter((k) => Math.abs(k.r - 0.06) < 1e-9).length === fan.slots.filter((s) => !s.held).length, 'the tools are live keys for the keys\' sight');
 	hands.right.grip.position.set(0.4, 0.8, 0.1);
 	for (let i = 0; i < 72; i++) frame();
 	assert.ok(!fan.reach && fan.mode === 'home' && fan.group.position.distanceTo(fan._anchor) < 0.02, 'the hand gone: home again');
@@ -1633,7 +1653,7 @@ test('a tool touched and held still ticks once, not like an alarm; touched again
 	x.sound.play = play;
 });
 
-test('the fan over the left hand: the meter straight over it, the camera outside, the marker inside; no tool within 10 cm of the orb (build 215, B1)', async () => {
+test('the fan over the left hand: the meter straight over it, the camera outside, the marker inside; no tool within 10 cm of the main hand\'s keys (build 215, B1 and C8)', async () => {
 	const { x, frame, hands } = await setup();
 	const fan = x.fan;
 	hands.left.grip.visible = hands.right.grip.visible = true;
@@ -1645,12 +1665,12 @@ test('the fan over the left hand: the meter straight over it, the camera outside
 	const across = (p) => p.clone().sub(wrist).dot(right); // (+: towards the right hand, as you see it; the fan faces you from the left, so its 11.5 cm read shorter)
 	assert.ok(Math.abs(across(at('meter'))) < 0.01, `the meter over the hand (${across(at('meter')).toFixed(3)} m across)`);
 	assert.ok(across(at('camera')) < -0.05 && across(at('marker')) > 0.05, `the camera on the outer side, the marker on the inner side (${across(at('camera')).toFixed(3)}, ${across(at('marker')).toFixed(3)})`);
-	// The right wrist (the orb) brought in beside the left hand: the fan moves out, every tool 10 cm or more from the orb.
-	hands.right.grip.position.set(-0.32, 1.25, -0.3);
+	// The right hand (its keys over it, build 215's C8) brought in beside the left: the fan moves out, every tool 10 cm or more from its keys.
+	hands.right.grip.position.set(-0.32, 1.05, -0.3);
 	for (let i = 0; i < 60; i++) frame();
-	const orb = x.ui.wrist.orb.group.getWorldPosition(new THREE.Vector3());
-	const near = Math.min(...fan.slots.map((s, i) => fan.restWorld(i).distanceTo(orb)));
-	assert.ok(x.ui.wrist.wearer === hands.right && near >= 0.1 - 1e-3, `no tool within 10 cm of the orb (${near.toFixed(3)} m)`);
+	const mine = Object.values(x.ui.wrist.keys).map((k) => k.group.getWorldPosition(new THREE.Vector3()));
+	const near = Math.min(...fan.slots.flatMap((s, i) => mine.map((o) => fan.restWorld(i).distanceTo(o))));
+	assert.ok(x.ui.wrist.wearer === hands.right && near >= 0.1 - 1e-3, `no tool within 10 cm of the hand's keys (${near.toFixed(3)} m)`);
 });
 
 test('Main hand: Left, the fan over the right hand mirrors: the meter over it, the camera on its outer side (your right), the marker on its inner side (the Tester\'s finding on build 215\'s B1)', async () => {
@@ -1674,38 +1694,32 @@ test('Main hand: Left, the fan over the right hand mirrors: the meter over it, t
 	assert.ok(marker.pose.rotation.y > 0, 'back to the right main hand: as before');
 });
 
-test('the orb never hides a live key: resting over the Walk in door it goes small and faint (touch unchanged); clear again it grows back after 0.4 s; near the eyes it still yields; touched while yielded it opens', async () => {
+test('the main hand\'s keys never hide a live key (the orb\'s rule, build 215, C8): on the line from the eyes to Walk in → they make room (half size, 30%), touches unchanged; clear again, back after 0.4 s', async () => {
 	const { x, frame, hands } = await setup();
 	const w = x.ui.wrist;
 	hands.left.grip.visible = hands.right.grip.visible = true;
-	hands.left.grip.position.set(-0.6, 0.8, 0.2); // (out of the way, far from the level keys)
-	frame();
-	const door = x.modes.dollhouse.doors.keys.get('in').face.getWorldPosition(new THREE.Vector3()), eye = x.headWorld();
-	// The right wrist resting so its orb sits on the line from the eyes to the door.
-	const want = eye.clone().lerp(door, 0.5); // (about 0.35 m from the eyes: resting, not raised to look; its tip clear of the door's 15 cm)
-	for (let i = 0; i < 3; i++) { const o = w.orb.group.getWorldPosition(new THREE.Vector3()); hands.right.grip.position.add(x.rig.worldToLocal(want.clone()).sub(x.rig.worldToLocal(o))); frame(); }
-	for (let i = 0; i < 30; i++) frame();
-	assert.ok(w.sightYield && w.orb.yieldK > 0.9 && !w.keyYield, `over the door: it yields (by sight, not by touch) ${JSON.stringify({ sight: w.sightYield, key: w.keyYield, k: w.orb.yieldK })}`);
-	assert.ok(!w.orb.ringMat.depthWrite && w.orb.target.scale.x < 1, 'no depth while yielded; its laser target shrinks to its body');
-	// Away: it grows back only after 0.4 s clear.
-	hands.right.grip.position.set(0.5, 1.0, 0.1);
-	for (let i = 0; i < 14; i++) frame(); // (0.19 s)
-	assert.ok(w.sightYield, 'not at once');
-	for (let i = 0; i < 30; i++) frame();
-	assert.ok(!w.sightYield, 'after 0.4 s clear');
-	// Close to the eyes on the line (0.32-0.39 m, as measured in use), looking at the door: it still yields (no "on purpose" exception).
-	const d = door.distanceTo(eye), near = eye.clone().lerp(door, 0.35 / d);
-	for (let i = 0; i < 3; i++) { const o = w.orb.group.getWorldPosition(new THREE.Vector3()); hands.right.grip.position.add(x.rig.worldToLocal(near.clone()).sub(x.rig.worldToLocal(o))); frame(); }
+	hands.left.grip.position.set(-0.6, 0.8, 0.2);
+	hands.right.grip.position.set(0.4, 1.1, -0.3);
 	for (let i = 0; i < 20; i++) frame();
-	assert.ok(w.sightYield, 'at 0.35 m on the line: it yields');
-	// Touch still works on the yielded orb: a tip within 3.5 cm of its centre opens the menu.
-	const orbAt = w.orb.group.getWorldPosition(new THREE.Vector3());
-	hands.left.grip.position.copy(x.rig.worldToLocal(orbAt.clone().add(new THREE.Vector3(0, 0.01, 0.045))));
-	for (let i = 0; i < 4; i++) frame();
-	assert.ok(w.open, 'touched while yielded: the wrist menu opens');
+	const door = x.modes.dollhouse.doors.keys.get('in').face.getWorldPosition(new THREE.Vector3()), eye = x.headWorld();
+	const put = (p) => { w.group.position.copy(p); w.group.lookAt(eye); w.group.updateMatrixWorld(true); };
+	put(eye.clone().lerp(door, 0.5));
+	let y = false;
+	for (let i = 0; i < 5; i++) y = w.sightYieldNow(eye, 1 / 72);
+	assert.ok(y, 'on the line to the door: they make room');
+	put(eye.clone().add(new THREE.Vector3(0.5, 0, 0)));
+	w.sightYield = true;
+	for (let i = 0; i < 14; i++) w.sightYield = w.sightYieldNow(eye, 1 / 72);
+	assert.ok(w.sightYield, 'not back at once');
+	for (let i = 0; i < 30; i++) w.sightYield = w.sightYieldNow(eye, 1 / 72);
+	assert.ok(!w.sightYield, 'back after 0.4 s clear');
+	// Making room by sight never stops a touch (only the options row does).
+	w.sightYield = true;
+	frame();
+	assert.ok(!w.rowYield, 'touches still count while they make room by sight');
 });
 
-test('the fan: over the left controller however it is turned; the orb\'s own hand reaching into the fan: the orb yields', async () => {
+test('the fan: over the left controller however it is turned', async () => {
 	const { x, frame, hands } = await setup();
 	const fan = x.fan;
 	hands.left.grip.visible = hands.right.grip.visible = true;
@@ -1714,13 +1728,7 @@ test('the fan: over the left controller however it is turned; the orb\'s own han
 	hands.left.grip.rotation.set(0, 0, Math.PI / 2);
 	for (let i = 0; i < 20; i++) frame();
 	assert.ok(fan.group.visible && fan.alpha === 1, 'turned any way: the tools float over it');
-	const p = new THREE.Vector3(), meter = fan.slots.find((s) => s.name === 'meter');
-	// The orb's own hand reaching into the fan: no push; the orb shrinks and fades instead.
-	meter.home.getWorldPosition(p);
-	hands.right.grip.position.copy(x.rig.worldToLocal(p.clone().add(new THREE.Vector3(0.05, 0, 0.05))));
-	for (let i = 0; i < 60; i++) frame();
-	assert.ok(x.ui.wrist.orbYield && x.ui.wrist.orb.yieldK > 0.9, 'the orb yields');
-	assert.ok(x.ui.wrist.orb.body.scale.x < 0.7 && x.ui.wrist.orb.shellMat.opacity < 0.3, 'half size, a third of the strength');
+	// (Until build 215's C8 the orb shrank when its own hand reached into the fan; the keys that replaced it float 15 cm over that hand.)
 });
 
 test('the plinth: one height, 1.24 m, for controllers and bare hands, 30 cm of table each side; it never moves by itself', async () => {
@@ -1816,29 +1824,22 @@ test('a press at empty space closes the wing (build 120, M1): a pull at the sky 
 	Object.assign(h, saved);
 });
 
-test('harmony, live keys only (rule 4; conflicts 2 and 11): the wrist arc fades the doors to 30% and they guard nothing; the orb makes room for a tip at a live key, claimed at 15 cm, let go at 25 cm', async () => {
+test('harmony, live keys only (rule 4; conflict 2): an open wing fades the doors out and they guard nothing; closed, they are keys again (the arc that faded them to 30% went with the orb: build 215, C8)', async () => {
 	const { CLAIM } = await import('../js/xr-targets.js');
 	assert.deepEqual(CLAIM, { near: 0.15, clear: 0.25 }, 'one place for every claim');
 	const { x, frame, hands } = await setup();
 	hands.left.grip.visible = hands.right.grip.visible = true; // (tracked)
 	frame();
-	const d = x.modes.dollhouse, w = x.ui.wrist;
+	const d = x.modes.dollhouse;
 	const walkIn = d.doors.keys.get('in') ?? [...d.doors.keys.values()][0];
 	const doorAt = walkIn.group.getWorldPosition(new THREE.Vector3());
 	assert.ok(d.doorsLive && x.nearKey(doorAt, CLAIM.near), 'live: a key');
-	w.show({ pinned: true });
-	for (let i = 0; i < 20; i++) frame();
-	assert.ok(w.open && !d.doorsLive && Math.abs(d.doorAlpha - 0.3) < 1e-9 && d.doorGroup.visible, `the arc open: the doors at 30%, taking no presses (${d.doorAlpha})`);
-	assert.ok(!x.nearKey(doorAt, CLAIM.near), 'faded: they guard nothing');
-	w.close();
-	for (let i = 0; i < 20; i++) frame();
-	assert.ok(d.doorsLive && d.doorAlpha === 1, 'back once it closes');
-	// The left controller's tip at Walk in →, then 20 cm away (still claimed), then 40 cm (let go).
-	const put = (offset) => { const tip = doorAt.clone().add(offset); hands.left.grip.position.copy(x.rig.worldToLocal(tip.sub(new THREE.Vector3(0, 0, -0.045)))); frame(); return w.keyYield; };
-	assert.equal(put(new THREE.Vector3(0, 0.05, 0)), true, 'a tip at a live key: the orb yields');
-	assert.equal(put(new THREE.Vector3(0, 0.2, 0)), true, '20 cm: still (released at 25 cm)');
-	assert.equal(put(new THREE.Vector3(0, 0.4, 0)), false, '40 cm: the orb is back');
-	assert.ok(!x.fan.fanBusy && w.orbYield === w.keyYield);
+	x.ui.openMenu();
+	for (let i = 0; i < 30; i++) frame();
+	assert.ok(!d.doorsLive && d.doorAlpha === 0, `the wing open: the doors out, taking no presses (${d.doorAlpha})`);
+	x.ui.closeMenu();
+	for (let i = 0; i < 30; i++) frame();
+	assert.ok(d.doorsLive && d.doorAlpha === 1 && x.nearKey(doorAt, CLAIM.near), 'back once it closes');
 });
 
 

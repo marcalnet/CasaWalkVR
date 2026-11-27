@@ -154,21 +154,20 @@ export function dampTowards(pos, vel, target, dt, time = TOOLS.SPRING) {
 }
 
 /**
- * The orb never hides a live key (the next-build asks 5.8, the Lead's
- * decision): from the eyes, the orb covers a key when it is nearer than the
- * key and the angle between their centres is under the orb's angular radius +
- * the key's angular half-diagonal + IN; clear again only beyond the same sum +
- * OUT (2° of hysteresis). Both at full size, so the orb shrinking never makes
- * it "clear". A live key behind the orb always wins (the Designer's revision, 26 Nov:
- * no "on purpose" exception: looking at the orb and at the key behind it are the same look).
+ * The right hand's keys never hide a live key (the next-build asks 5.8, the
+ * Lead's decision; the orb's rule until build 215's C8): from the eyes, a
+ * round thing (centre at, radius r) covers a key when it is nearer than the
+ * key and the angle between their centres is under its angular radius + the
+ * key's + IN (1°), or once covering, OUT (2° of hysteresis). Both at full
+ * size, so making room never makes it "clear". A live key behind always wins.
  */
-export const SIGHT = { IN: THREE.MathUtils.degToRad(1), OUT: THREE.MathUtils.degToRad(3), CLEAR_FOR: 0.4, ORB_R: 0.037 };
+export const SIGHT = { IN: THREE.MathUtils.degToRad(1), OUT: THREE.MathUtils.degToRad(3), CLEAR_FOR: 0.4 };
 
 const _o = new THREE.Vector3(), _k = new THREE.Vector3();
-/** True if the orb (centre orb, radius orbR) covers a key (centre key, half-diagonal keyR) seen from eye; was: it covered last frame. */
-export function orbCovers(eye, orb, orbR, key, keyR, was = false) {
-	const dO = _o.subVectors(orb, eye).length(), dK = _k.subVectors(key, eye).length();
+/** True if a round thing (centre at, radius r) covers a key (centre key, half-diagonal keyR) seen from eye; was: it covered last frame. */
+export function covers(eye, at, r, key, keyR, was = false) {
+	const dO = _o.subVectors(at, eye).length(), dK = _k.subVectors(key, eye).length();
 	if (dO >= dK || dO < 1e-6) return false;
-	const sum = Math.asin(Math.min(1, orbR / dO)) + Math.asin(Math.min(1, keyR / dK)) + (was ? SIGHT.OUT : SIGHT.IN);
+	const sum = Math.asin(Math.min(1, r / dO)) + Math.asin(Math.min(1, keyR / dK)) + (was ? SIGHT.OUT : SIGHT.IN);
 	return _o.angleTo(_k) < sum;
 }

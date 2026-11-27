@@ -5,7 +5,7 @@
 // "step inside" in the dollhouse); a web page cannot see the Meta button, so
 // it cannot tell the two apart. Instead the menu has a Photo button: it
 // renders the view once more, from your head, without the menu, lasers and
-// orbs, into an image off screen, and saves it as a JPEG download (on the
+// keys, into an image off screen, and saves it as a JPEG download (on the
 // Quest: the Files app, Downloads; a web page cannot write into the
 // headset's own screenshot gallery).
 //
@@ -92,7 +92,7 @@ export async function takePhoto(renderer, scene, eye, { width = 1920, height = 1
 
 /**
  * The three.js layer the interface is drawn on (code audit, A5): the menus,
- * lasers, controllers, orbs, the arc, hands, tools, labels and cards
+ * lasers, controllers, the keys, the arc, hands, tools, labels and cards
  * (XRExperience.hideFromPhotos() puts them there). The headset's camera
  * shows it; a photo's camera and the street camera's viewfinder are new
  * cameras on the default layer only, so they leave the interface out without

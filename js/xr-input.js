@@ -10,7 +10,7 @@
 //
 // Claims: each frame, every controller's c.claim says who owns its trigger,
 // grip and buttons this frame: null (free: the mode uses it), 'ui' (the laser
-// is on the menu or an orb) or 'tool' (a hand-held tool, milestones C-F). They
+// is on the menu or a key) or 'tool' (a hand-held tool, milestones C-F). They
 // are taken in this order: a held tool, then the UI, then the mode, which
 // only uses what is still free. Sticks are never claimed. Cleared by update().
 //
@@ -19,7 +19,7 @@
 // sources are not controllers here: their buttons are never read (a pinch
 // never clicks anything), they get no laser or body. With joints (the
 // session asks for hand tracking) a hand presses keys with its fingertip
-// (js/touch.js) and wears the orb on c.wrist; without joints, handsOnly()
+// (js/touch.js) and carries the main hand's keys over it; without joints, handsOnly()
 // tells the UI to ask for the controllers (C0.1).
 //
 // Touch (milestone C0 groundwork, read by nothing yet): every entry also has
@@ -45,7 +45,7 @@
 // A hand reported but not seen (build 215's A1 and A2): the Quest can go on
 // reporting a hand it does not see, its joints frozen at their last pose
 // (often the pinch that pressed Enter VR). Drawn, it floated where the real
-// hand was not: in the face once inside, wearing the orb and the tools, its
+// hand was not: in the face once inside, wearing the orb (since build 215's C8, the keys) and the tools, its
 // aim ray pointing at the ceiling. Real tracking never holds a joint still to
 // the hundredth of a millimetre, so a bare hand counts as tracked only once
 // its wrist has been seen moving, and stops counting when it holds perfectly
@@ -72,7 +72,6 @@ export const PINCH_OFF = 0.03; // and ends (more than PINCH_ON: hysteresis)
 const PINCH_OPEN = 0.07; // select.value is 0 from here, 1 at PINCH_ON
 const TIP_OFFSET = new THREE.Vector3(0, -0.01, -0.045); // a controller's poke point, in its grip space
 const TIP_RADIUS = TOUCH.RADIUS; // the poke point's size, fingertip and controller tip alike
-const WRIST_ORB = new THREE.Vector3(0, 0.035, 0.01); // the orb over the back of a bare wrist, in the wrist joint's space
 /** A frozen hand (see the top of the file): its wrist within MOVE (m) of where it was, in the room or relative to the head, for AFTER s. */
 export const STALE = { MOVE: 1e-5, AFTER: 0.3 };
 
@@ -110,7 +109,7 @@ export class XRInput {
 			nubEnd.position.copy(TIP_OFFSET);
 			body.add(nub);
 			grip.add(nubEnd); // (on the grip: it stays with the real model, at its nose)
-			// Where a bare hand wears the orb: follows the wrist joint (controllers wear it on the grip).
+			// A bare hand's wrist: follows the wrist joint (a held tool's hold frame starts from it until placed: js/xr-tools.js).
 			const wrist = new THREE.Group();
 			wrist.name = 'wrist';
 			rig.add(wrist);
@@ -193,7 +192,7 @@ export class XRInput {
 				t.tracked = staleStep(c.stale ??= freshStale(), wrist.position, atHead, performance.now() / 1000);
 			}
 			if (t.tracked) {
-				// The orb's anchor follows the wrist joint (its +Y is out of the back of the hand).
+				// The wrist anchor follows the wrist joint (its +Y is out of the back of the hand).
 				c.wrist.position.copy(wrist.position);
 				c.wrist.quaternion.copy(wrist.quaternion);
 				c.hand.updateMatrixWorld(true);
@@ -300,10 +299,10 @@ export class XRInput {
 		return hands.length > 0 && hands.every((c) => !c.source.hand) && this.active().length === 0;
 	}
 
-	/** Entries that wear an orb: controllers, and bare hands with tracked joints. */
+	/** Entries the main hand's keys may float over: controllers in use, and bare hands with tracked joints. */
 	wearers() { return this.controllers.filter((c) => c.source && ((c.isController && !c.resting) || (c.isHand && c.touch.tracked))); }
 
-	/** Where an entry wears the orb: a controller's grip, or a bare hand's wrist anchor. */
+	/** An entry's wrist: a controller's grip, or a bare hand's wrist anchor (the tool fan floats over it). */
 	wristOf(c) { return c.isHand ? c.wrist : c.grip; }
 
 	/** Sets a raycaster from a controller's laser. */
@@ -408,7 +407,6 @@ export function isHandSource(source) {
 	return !gp || (gp.axes?.length ?? 0) === 0;
 }
 
-export { WRIST_ORB };
 
 /** A frozen-hand record that has seen nothing yet (staleStep). */
 export function freshStale() {

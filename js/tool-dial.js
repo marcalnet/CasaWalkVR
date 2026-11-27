@@ -43,6 +43,7 @@ export const DIAL = {
 	CHOSEN_HOLD: 1, FADE: 0.2, // seconds: after a choice the row stays, then fades
 	TOWARDS: 0.03, UP: 0.10, // the row's middle: this far from the control part towards the eyes, and this far up (m; the Designer's §5.8)
 	INWARD: 0.14, // ... and this far towards the body's middle, away from the holding hand (m): above the hand, a bare hand's thumb came within 1 cm of the keys; 14 cm in keeps every key 6.5 cm or more from it (measured: tests/xr-session.test.js)
+	RISE: 0.06, RISE_STEP: 0.01, // where it overlaps the main hand's keys as seen, it rises until it doesn't, by at most RISE (m; build 215's C8)
 	FOLLOW: 0.08, // seconds: it follows the tool with the framing guide's smoothing
 	PULSE: 0.8, // seconds: the cue's one soft pulse on the first take
 };
@@ -97,8 +98,8 @@ export class ToolDial {
 	/** Shows a tool's row (stepped: by the stick, for STEP_SHOW). */
 	show(tool, { stepped = false } = {}) {
 		this.open = { tool, t: 0, until: stepped ? DIAL.STEP_SHOW : DIAL.OPEN_FOR, stepped, chosen: null };
+		this.redraw(); // (its keys first: where it goes depends on how many it has)
 		this.place(0, true);
-		this.redraw();
 		this.group.scale.setScalar(1);
 		this.group.visible = true;
 	}
@@ -130,6 +131,9 @@ export class ToolDial {
 		const held = xr.tools?.held;
 		if (held) want.addScaledVector(xr.viewAxes().right, (held.c.handedness === 'left' ? 1 : -1) * DIAL.INWARD);
 		keepFromEyes(want, eye);
+		// Never over the main hand's keys as seen (C8): up a centimetre at a time, at most RISE.
+		this.rose = 0;
+		while (this.rose < DIAL.RISE - 1e-9 && this.overlapsKeys(want, eye)) { want.y += DIAL.RISE_STEP; this.rose += DIAL.RISE_STEP; }
 		if (snap) this.group.position.copy(want);
 		else this.group.position.lerp(want, 1 - Math.exp(-dt / DIAL.FOLLOW));
 		this.group.lookAt(eye);
@@ -211,6 +215,24 @@ export class ToolDial {
 			return;
 		}
 		if (this.open.stepped ? this.open.t >= this.open.until : (d > DIAL.FAR || this.open.t >= this.open.until)) this.close();
+	}
+
+	/** True if the row, centred at `at` and facing `eye`, overlaps the main hand's keys as seen from the eye (each a disc, at its size now). */
+	overlapsKeys(at, eye) {
+		const keys = this.xr.ui?.wrist;
+		if (!keys?.group.visible) return false;
+		const g = this._probe ??= new THREE.Object3D();
+		g.position.copy(at); g.lookAt(eye); g.updateMatrixWorld(true);
+		const mine = Object.values(keys.keys).map((k) => ({ p: k.group.getWorldPosition(new THREE.Vector3()), r: (k.w / 2) * keys.group.scale.x }));
+		const n = this.pad.list.filter((k) => k.group.visible).length;
+		for (let i = 0; i < n; i++) {
+			const { x, y } = rowSpot(i, n), p = g.localToWorld(new THREE.Vector3(x, y, 0)), a = p.clone().sub(eye), dA = a.length();
+			for (const m of mine) {
+				const b = m.p.clone().sub(eye), dB = b.length();
+				if (a.angleTo(b) < Math.asin(Math.min(1, DIAL.KEY / 2 / dA)) + Math.asin(Math.min(1, m.r / dB))) return true;
+			}
+		}
+		return false;
 	}
 
 	/** How far a point is from a held tool: from its origin or its control part, whichever is nearer (m). */

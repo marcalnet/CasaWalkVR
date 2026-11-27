@@ -4,7 +4,7 @@
 // or controller is tracked: no watch pose, no fades (the next-build asks,
 // section 5). While the fan hand is in its own area (the left: js/zones.js)
 // they are home over it; out of it they wait, grouped, at the edge of the
-// centre (never over the model, the keys or the orb), and glide between on a
+// centre (never over the model or the keys), and glide between on a
 // 0.25 s spring. While the other hand is within reach of them (0.25 m, until
 // 0.35), nothing but the fan hand moves them: a tool never slides away from
 // the hand reaching for it. Tracking lost: they stay 1 s, then fade.
@@ -23,7 +23,7 @@
 // the tag swings forward and grows for 2 s.
 //
 // Keeping the two wrists apart: while the taking hand is within reach of the
-// tools (fanBusy: the reach, 0.25 m, let go at 0.35 m), the orb ignores touches (WristMenu reads it).
+// tools (fanBusy: the reach, 0.25 m, let go at 0.35 m). (The orb ignored touches then; the keys that replaced it, build 215's C8, never do.)
 
 import * as THREE from 'three';
 import { MarkerTool } from './marker-tool.js';
@@ -49,7 +49,7 @@ const REACH_HAND = 0.07; // a bare fingertip: tracking is looser, and the tools 
 const PALM_REACH = 0.09; // a closing bare hand: its palm this close to a tool still takes it (the fingers curl away from the tool as the hand closes)
 const MEMORY = 0.6; // seconds a touched tool stays the one a closing hand takes
 const OUT = 0; // the fan's middle (the meter) sits straight over the fan hand (build 215's B1: the camera on its outer side, the marker on its inner side; before, 8 cm outward put the marker over the hand, out of the other hand's easy reach)
-const ORB_CLEAR = 0.1; // no tool nearer the orb than this (m): the fan moves outward (build 215's B1: never over the orb)
+const KEYS_CLEAR = 0.1; // no tool nearer the main hand's keys than this (m): the fan moves outward (build 215's B1: never over the orb, now its keys, C8)
 const FRONT = 0.005; // a tool held by a controller: its back this far in front of the laser's start (the controller's front face)
 const OUTLINE_W = 0.0025; // the empty place's outline: 2.5 mm (CONTROL_CUE, 40%)
 const FADE = 0.2; // seconds: the fan appears and goes (tracking found or lost)
@@ -145,7 +145,7 @@ export class ToolFan {
 			outward.copy(xr.viewAxes().right).multiplyScalar(xr.toolFan === 'right' ? 1 : -1);
 			anchor.copy(wrist).addScaledVector(outward, OUT);
 			anchor.y += ABOVE;
-			this.clearOfOrb(anchor, outward);
+			this.clearOfKeys(anchor, outward);
 			this.aim(fan, take, anchor, wrist, head, dt);
 		} else this.lost = (this.lost ?? 0) + dt;
 		// (The pause's dark covers it between places: js/pause.js. Tracking lost: it stays LOST_HOLD, then fades.)
@@ -172,7 +172,7 @@ export class ToolFan {
 			}
 			this.hot = hot;
 		}
-		this.fanBusy = this.alpha > 0.5 && this.reach; // (within reach of the tools, 0.25 m in, 0.35 m out: the orb ignores touches; the next-build asks 5.4)
+		this.fanBusy = this.alpha > 0.5 && this.reach; // (within reach of the tools, 0.25 m in, 0.35 m out; the next-build asks 5.4. The main hand's keys take a touch whatever it says: build 215's C8)
 		// A closing bare hand takes the tool it touched (a moment ago: the fingers curl away as the hand closes) or holds in its palm.
 		this.target = this.hot;
 		if (take?.isHand && this.alpha > 0.5 && take.touch.tracked) {
@@ -247,14 +247,15 @@ export class ToolFan {
 		} else { this.pos.copy(target); this.vel.set(0, 0, 0); }
 	}
 
-	/** Moves a fan middle outward (along `outward`) until no tool rests within ORB_CLEAR of the orb. */
-	clearOfOrb(at, outward) {
-		const orb = this.xr.ui?.wrist?.orb;
-		if (!orb?.holder || !orb.group.parent || this.xr.tools?.held) return at; // (a tool held: the orb's hand is bringing it home; the dock never runs from it)
-		const o = orb.group.getWorldPosition(this._orb ??= new THREE.Vector3()), right = this.xr.viewAxes().right, t = this._ot ??= new THREE.Vector3();
+	/** Moves a fan middle outward (along `outward`) until no tool rests within KEYS_CLEAR of the main hand's keys. */
+	clearOfKeys(at, outward) {
+		const keys = this.xr.ui?.wrist;
+		if (!keys?.group.visible || this.xr.tools?.held) return at; // (a tool held: the keys' hand is bringing it home; the dock never runs from it)
+		const spots = Object.values(keys.keys).map((k) => k.group.getWorldPosition(new THREE.Vector3()));
+		const right = this.xr.viewAxes().right, t = this._ot ??= new THREE.Vector3();
 		for (let round = 0; round < 3; round++) {
 			let worst = 0;
-			for (let i = -1; i <= 1; i++) worst = Math.max(worst, ORB_CLEAR - t.copy(at).addScaledVector(right, i * SPACING).distanceTo(o));
+			for (let i = -1; i <= 1; i++) for (const o of spots) worst = Math.max(worst, KEYS_CLEAR - t.copy(at).addScaledVector(right, i * SPACING).distanceTo(o));
 			if (worst <= 0) break;
 			at.addScaledVector(outward, worst + 0.005);
 		}

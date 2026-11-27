@@ -62,7 +62,8 @@ test('the waiting tools: at the edge, 3° inside the fan\'s area, 10-35° below 
 });
 
 test('the orb never hides a live key: covers when nearer and within the radii plus 1°; clear only beyond plus 3°; a live key always wins', async () => {
-	const { SIGHT, orbCovers } = await import('../js/zones.js');
+	const { SIGHT, covers: orbCovers } = await import('../js/zones.js');
+	SIGHT.ORB_R = 0.035; // (a main hand's key, 7 cm across: the rule the orb had, build 215's C8)
 	const eye = V(0, 1.6, 0), key = V(0, 1.0, -0.4); // (the waist door, ahead and below)
 	const onLine = eye.clone().lerp(key, 0.6);
 	assert.ok(orbCovers(eye, onLine, SIGHT.ORB_R, key, 0.17), 'on the line to the key: covers');

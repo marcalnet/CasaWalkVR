@@ -104,7 +104,6 @@ const DOOR_TILT = 70;
 // The levels: a stack of keys to the left of the doors, ground at the bottom like the building's section (the UX design of 25 Nov).
 const LEVEL_KEY = [0.08, 0.04], LEVEL_KEY_MANY = 0.03, LEVEL_GAP = 0.012; // key size (m); with more than six levels they are 3 cm tall
 const DOORS_FADE = 0.15; // seconds: the doors fade out while the board is open (they showed through it), and back
-const DOORS_ARC = 0.3; // ... and to this while the wrist arc is open (still seen, never pressed)
 const DOOR_FOLLOW = 0.08; // the doors move to a new head height once it differs by this much
 const MARKER_HEIGHT = 1.7; // metres at the model's scale (the "stand here" figure)
 // A landing spot must be free of furniture from this height above the floor
@@ -401,14 +400,14 @@ export class Dollhouse {
 	 */
 	/**
 	 * True while the doors and level keys take presses: not while a wing is
-	 * open (they fade out) nor while the wrist arc is open (they fade to 30%:
-	 * its keys may sit beside them; the interaction harmony's conflict 2).
-	 * Only live keys guard anything (a press, the fan, the orb).
+	 * open (they fade out). Only live keys guard anything (a press, the fan,
+	 * the main hand's keys). (Until build 215's C8 they also faded to 30% while
+	 * the wrist arc was open: the arc went with the orb.)
 	 */
-	get doorsLive() { return !this.xr.boardOpen && !this.xr.ui.wrist.open; }
+	get doorsLive() { return !this.xr.boardOpen; }
 
 	fadeDoors(dt) {
-		const target = this.xr.boardOpen ? 0 : this.xr.ui.wrist.open ? DOORS_ARC : 1;
+		const target = this.xr.boardOpen ? 0 : 1;
 		if (this.doorAlpha === target) return;
 		this.doorAlpha = target > this.doorAlpha ? Math.min(target, this.doorAlpha + dt / DOORS_FADE) : Math.max(target, this.doorAlpha - dt / DOORS_FADE);
 		// (Each material's own opacity is recorded once, on first sight, and never read back from a faded
@@ -816,7 +815,7 @@ export class Dollhouse {
 	handMoves(dt, spots) {
 		const xr = this.xr, ui = xr.ui, input = xr.input;
 		const box = this.modelBox(this._box2 ??= new THREE.Box3()), p = this._p2 ??= new THREE.Vector3();
-		const busy = xr.boardOpen || ui.wrist.open;
+		const busy = xr.boardOpen;
 		let jump = null;
 		for (const c of input.gestureHands()) {
 			const palm = this.holdPoint(c, p);

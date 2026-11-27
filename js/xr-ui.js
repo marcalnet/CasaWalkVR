@@ -1,8 +1,8 @@
 // The headset's floating interface (SPEC.md, "Experience and controls" and
 // C0 "Hands and touch"):
 //
-//   Wrist    the wrist menu (js/wrist-menu.js): an orb on one wrist, and
-//            two keys: ← Back and Settings.
+//   Keys     the main hand's keys (js/wrist-menu.js): ← Back and Settings,
+//            always showing over that hand (build 215's C8; the orb went).
 //   Wing     Settings opens the one settings wing beside the model, on the
 //            main hand's side (js/wings.js: 0.55 m, 40-50° out, never over
 //            the model), pressed by touch (js/touch.js) or by a controller's
@@ -243,7 +243,7 @@ export class XRUI {
 	 */
 	emptyPress(c, points = []) { return this.notEmpty(c, points) === null; }
 
-	/** Why a press is not at empty space ('tool', 'fan', 'near', 'wing', 'wrist', 'orb', 'doors', 'plinth', 'model'), or null: it is (emptyPress). */
+	/** Why a press is not at empty space ('tool', 'fan', 'near', 'wing', 'keys', 'doors', 'plinth', 'model'), or null: it is (emptyPress). */
 	notEmpty(c, points = []) {
 		const xr = this.xr, r = xr.raycaster;
 		if (xr.tools?.held?.c === c) return 'tool';
@@ -251,8 +251,7 @@ export class XRUI {
 		for (const p of points) if (p && tools.some((t) => t.distanceTo(p) < KEEP_CLEAR)) return 'fan';
 		for (const p of points) if (p && xr.nearKey(p, KEEP_CLEAR, { by: c })) return 'near';
 		for (const panel of this.openPanels()) if (r.intersectObject(panel.mesh, false).length) return 'wing';
-		if (this.wrist.cross.visible && r.intersectObject(this.wrist.cross, true).length) return 'wrist';
-		if (this.wrist.wearer !== c && this.wrist.orb.group.visible && r.intersectObject(this.wrist.orb.group, true).length) return 'orb'; // (its own wrist's orb: the ray starts beside it)
+		if (this.wrist.wearer !== c && this.wrist.group.visible && r.intersectObject(this.wrist.group, true).length) return 'keys'; // (their own hand's: the ray starts beside them)
 		if (xr.mode === 'dollhouse' && xr.model) {
 			const doll = xr.modes.dollhouse;
 			if (doll.doorsLive && r.intersectObject(doll.doorGroup, true).length) return 'doors'; // (only live keys: faded doors take no presses, so they guard nothing)
@@ -293,19 +292,18 @@ export class XRUI {
 	/** Counts this session's teleports. */
 	onTeleport() { this.teleports++; } // (walk mode's own count runs across sessions: this one is per session)
 
-	/** Closes everything: the wing and the wrist menu (moving between layers). */
+	/** Closes everything: the wing (moving between layers). */
 	closeAll() {
 		this.closeMenu();
-		this.wrist.close();
 	}
 
 	/** The wing, if open, as a list (what a press may land on). */
 	openPanels() { return this.menu ? [this.menu] : []; }
 
-	/** True while the wing or the wrist menu is open. */
-	get anyOpen() { return !!this.menu || this.wrist.open; }
+	/** True while the wing is open. */
+	get anyOpen() { return !!this.menu; }
 
-	/** Settings on the wrist: opens the wing, or closes it. */
+	/** Settings (the main hand's key): opens the wing, or closes it. */
 	toggleBoard() { if (this.menu) this.closeMenu(); else this.openMenu(); }
 
 	/** A sound (if sound is on) and, on a controller, a vibration. */
@@ -316,7 +314,7 @@ export class XRUI {
 	}
 
 	/**
-	 * The wrist menu, then lasers and touch on the board, and its handle.
+	 * The main hand's keys, then lasers and touch on the board.
 	 * Claims the trigger of every controller whose laser is on the menus this
 	 * frame (c.claim.trigger = 'ui'), and returns the action to run, if any:
 	 * { action }. (A controller whose trigger a held tool owns is skipped.)
@@ -327,7 +325,7 @@ export class XRUI {
 		let { action } = this.wrist.update(dt);
 		const active = input.active();
 		let panels = this.openPanels();
-		let closable = panels.length > 0 || (this.wrist.open && this.wrist.pinned);
+		let closable = panels.length > 0;
 		for (const c of active) {
 			// (A pull that closed the wings is used up: never also an aim or a click, until let go.)
 			// (A new pull means it was let go meanwhile, even unseen: frames between layers skip the menus.)
@@ -352,7 +350,7 @@ export class XRUI {
 					} else if (panel.disabledAt(menuHit.uv)) this.feel(c, 'deny', 'deny');
 				}
 			} else if (closable && c.state.down.trigger) {
-				// A pull elsewhere while a wing or the pinned wrist menu is open: at
+				// A pull elsewhere while the wing is open: at
 				// empty space it closes them all (build 120, M1); at the model, the
 				// plinth, a key, it does nothing. Either way it is used up.
 				c.claim.trigger = 'ui';
@@ -445,18 +443,16 @@ export class XRUI {
 	}
 
 	/**
-	 * Controller buttons for the menus: A (X when the tool fan is on the right
-	 * hand), on the controller wearing the wrist menu, opens or closes it
-	 * (pinned); B or Y closes whatever is open. Returns true if a button was
-	 * used. (Inside, B / Y with nothing open is Back: js/xr-walk.js.)
+	 * Controller buttons for the menus: B or Y closes the wing if it is open;
+	 * with nothing open, held BACK_HOLD it is ← Back (the same rule as the
+	 * key: its ring fills on ← Back; a short press does nothing). (A no longer
+	 * opens anything: the keys always show, build 215's C8.) Returns true if
+	 * a button was used.
 	 */
 	buttons() {
-		const xr = this.xr, wearer = this.wrist.wearer, dt = xr.frameDt ?? 1 / 72;
+		const xr = this.xr, dt = xr.frameDt ?? 1 / 72;
 		for (const c of xr.input.active()) {
-			if (c.state.down.a && !c.claim.a && c === wearer && this.menu) { this.closeAll(); this.feel(c, 'close'); return true; } // (with the wing open, like the orb: closes everything)
-			if (c.state.down.a && !c.claim.a && c === wearer) { this.wrist.toggle({ pinned: true }); return true; }
-			if (c.state.down.b && !c.claim.b && this.anyOpen) { this.closeMenu(); this.wrist.close(true); return true; }
-			// B / Y with nothing open: held BACK_HOLD it is ← Back (the same rule as the key, the next-build asks 3.2): the ring fills round the orb; a short press does nothing.
+			if (c.state.down.b && !c.claim.b && this.anyOpen) { this.closeMenu(); return true; }
 			if (c.state.down.b && !c.claim.b) { this.backHold = { c, t: 0 }; xr.haptics.play(c, 'tick'); } // (a light tick on the press: the hold has begun; the UX review's S4)
 		}
 		const h = this.backHold;
@@ -466,14 +462,14 @@ export class XRUI {
 			h.t += dt;
 			if (h.t >= BACK_HOLD) {
 				this.backHold = null;
-				this.wrist.backRing?.flash();
+				this.wrist.flashBack();
 				this.wrist.setBackProgress(0);
 				this.feel(h.c, 'press', 'click');
 				xr.menuAction('back');
 				return true;
 			}
 		}
-		this.wrist.setBackProgress(this.backHold ? this.backHold.t / BACK_HOLD : 0, dt);
+		this.wrist.setBackProgress(this.backHold ? this.backHold.t / BACK_HOLD : 0);
 		return false;
 	}
 
