@@ -208,18 +208,18 @@ export class WristMenu {
 		// Place the cross: in front of the wrist, facing the eyes, right as you see it.
 		if (this.open) this.place(dt, p);
 
-		// The laser on the orb (closed): opens it, pinned.
-		if (!this.open) {
-			for (const c of input.active()) {
-				if (c === wearer || c.claim.trigger) continue;
-				input.setRaycaster(c, xr.raycaster);
-				const hit = xr.raycaster.intersectObject(o.target, false)[0];
-				if (!hit) continue;
-				c.claim.trigger = 'ui';
-				input.showHit(c, hit.distance);
-				hot = true;
-				if (c.state.down.trigger) { toggle = true; byController = true; }
-			}
+		// The laser on the orb: a pull does what a touch does (build 215's A4, the user's decision): opens the
+		// keys, pinned; closes them; closes an open wing. (Open, a key nearer along the laser takes it.)
+		for (const c of input.active()) {
+			if (c === wearer || c.claim.trigger) continue;
+			input.setRaycaster(c, xr.raycaster);
+			const hit = xr.raycaster.intersectObject(o.target, false)[0];
+			if (!hit) continue;
+			if (this.open && this.pad.list.some((k) => k.out && k.group.visible && xr.raycaster.intersectObject(k.face, false)[0]?.distance < hit.distance)) continue;
+			c.claim.trigger = 'ui';
+			input.showHit(c, hit.distance);
+			hot = true;
+			if (c.state.down.trigger) { toggle = true; byController = true; }
 		}
 
 		// The keys: touch and lasers (never the wearer's own hand or laser).
