@@ -16,9 +16,15 @@
 // than 60°; a snap turn or teleport turns it at once with the rig).
 // The centre: at the scale model, the span as seen of the model, the plinth
 // and its keys, plus 5° each side, at least ±20° and at most ±40° about
-// ahead; inside, ±20°. A hand is in an area by the horizontal angle from the
-// eyes to its wrist (or grip), with 5° of hysteresis: it enters the centre at
-// its edge and leaves only 5° outside it. Height doesn't matter.
+// ahead; inside, ±20° (where the waiting tools go). At the scale model a hand
+// is in an area by the horizontal angle from the eyes to its wrist (or grip),
+// with 5° of hysteresis: it enters the centre at its edge and leaves only 5°
+// outside it (what matters there is not covering the model). Inside, by the
+// body, in metres (build 215's C7): the body's centre line runs forward from
+// the base of the neck (15 cm below and 8 cm behind the eyes); a hand more
+// than 12 cm to its left is in the left area, more than 12 cm to its right in
+// the right, and it leaves a side only once back within 8 cm. By the hip, out
+// to the side or at the shoulder: the same area. Height doesn't matter.
 //
 // The tools (TOOLS): home over the left hand while it is in the left area;
 // else they wait at the left edge of the centre, 3° inside the left area, at
@@ -38,6 +44,9 @@ export const ZONES = {
 	HYST: deg(5), // a hand leaves the centre only this far outside its edge
 	WALK_HALF: deg(20), // inside: the centre is ±20° about the body's direction
 	BODY_STILL: deg(25), BODY_TAU: 0.8, BODY_LAG: deg(60), // the body's direction follows the head's
+	// Inside (build 215's C7): the body's centre line from the base of the neck (this far below and behind the eyes, m);
+	// a hand more than SIDE from it is to that side, and leaves the side only within SIDE_OUT (4 cm of hysteresis).
+	NECK_DOWN: 0.15, NECK_BACK: 0.08, SIDE: 0.12, SIDE_OUT: 0.08,
 };
 
 export const TOOLS = {
@@ -115,6 +124,24 @@ export function areaOf(yaw, centre, was = null) {
 	const h = was === 'centre' ? ZONES.HYST : 0;
 	if (l > h) return 'left';
 	if (r < -h) return 'right';
+	return 'centre';
+}
+
+/**
+ * Inside: how far point p is to the left of the body's centre line (m;
+ * negative: to its right), the body facing yaw, its neck NECK_DOWN below and
+ * NECK_BACK behind the eyes at head. Only the horizontal offset counts.
+ */
+export function sideOf(head, yaw, p) {
+	const fx = -Math.sin(yaw), fz = -Math.cos(yaw); // (forward; left is (fz, -fx))
+	const nx = head.x - fx * ZONES.NECK_BACK, nz = head.z - fz * ZONES.NECK_BACK;
+	return (p.x - nx) * fz - (p.z - nz) * fx;
+}
+
+/** Inside: the area of a hand `side` metres left of the body's centre line (sideOf); `was` its area last frame. */
+export function bodyAreaOf(side, was = null) {
+	if (side > ZONES.SIDE || (was === 'left' && side > ZONES.SIDE_OUT)) return 'left';
+	if (side < -ZONES.SIDE || (was === 'right' && side < -ZONES.SIDE_OUT)) return 'right';
 	return 'centre';
 }
 

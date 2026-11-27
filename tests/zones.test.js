@@ -2,7 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
-import { ZONES, TOOLS, scaleCentre, walkCentre, followBody, areaOf, edgeSpot, keepFromEyes, dampTowards, yawTo, angleDiff } from '../js/zones.js';
+import { ZONES, TOOLS, scaleCentre, walkCentre, followBody, areaOf, bodyAreaOf, sideOf, edgeSpot, keepFromEyes, dampTowards, yawTo, angleDiff } from '../js/zones.js';
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 const deg = THREE.MathUtils.radToDeg;
@@ -74,4 +74,29 @@ test('the orb never hides a live key: covers when nearer and within the radii pl
 	const toKey = key.clone().sub(eye).normalize(), axis = toKey.clone().cross(V(0, 1, 0)).normalize();
 	const dir = toKey.clone().applyAxisAngle(axis, edge), at = eye.clone().addScaledVector(dir, dO);
 	assert.ok(!orbCovers(eye, at, SIGHT.ORB_R, key, 0.17, false) && orbCovers(eye, at, SIGHT.ORB_R, key, 0.17, true), 'between +1° and +3°: it keeps what it was');
+});
+
+test('inside, the areas are by the body, in metres (build 215, C7): more than 12 cm left or right of its centre line, from the base of the neck; a side is left only within 8 cm', () => {
+	assert.deepEqual([ZONES.NECK_DOWN, ZONES.NECK_BACK, ZONES.SIDE, ZONES.SIDE_OUT], [0.15, 0.08, 0.12, 0.08]);
+	const head = V(0, 1.6, 0), r = THREE.MathUtils.degToRad;
+	// By the hip, out to the side at arm's length, at the shoulder, held ahead: one area each side, whatever the angle from the eyes.
+	const spots = { hip: [0.22, 0.95, 0.05], arm: [0.6, 1.35, -0.1], shoulder: [0.2, 1.45, -0.15], ahead: [0.15, 1.2, -0.5] };
+	for (const yaw of [0, r(90), r(-150)]) {
+		const turn = (x, y, z) => V(x * Math.cos(yaw) + z * Math.sin(yaw), y, -x * Math.sin(yaw) + z * Math.cos(yaw)); // (the body turned: its left stays its left)
+		for (const [name, [x, y, z]] of Object.entries(spots)) {
+			assert.equal(bodyAreaOf(sideOf(head, yaw, turn(-x, y, z))), 'left', `${name}, left (yaw ${yaw.toFixed(2)})`);
+			assert.equal(bodyAreaOf(sideOf(head, yaw, turn(x, y, z))), 'right', `${name}, right`);
+		}
+		assert.equal(bodyAreaOf(sideOf(head, yaw, turn(-0.05, 1.3, -0.4))), 'centre', 'in front of you');
+		assert.equal(bodyAreaOf(sideOf(head, yaw, turn(0.05, 1.3, -0.4))), 'centre');
+	}
+	// The hysteresis: into the left past 12 cm, out of it only within 8 cm; the same on the right.
+	assert.equal(bodyAreaOf(0.10, 'centre'), 'centre');
+	assert.equal(bodyAreaOf(0.13, 'centre'), 'left');
+	assert.equal(bodyAreaOf(0.09, 'left'), 'left', 'within 12 cm but beyond 8: still left');
+	assert.equal(bodyAreaOf(0.07, 'left'), 'centre');
+	assert.equal(bodyAreaOf(-0.09, 'right'), 'right');
+	assert.equal(bodyAreaOf(-0.13, null), 'right');
+	// The line starts 8 cm behind the eyes, so a hand right at the eyes' side counts as beside the body.
+	assert.ok(Math.abs(sideOf(head, 0, V(-0.2, 1.6, 0.08)) - 0.2) < 1e-9, 'level with the neck, 20 cm left');
 });

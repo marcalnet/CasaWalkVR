@@ -53,7 +53,7 @@ import { Pause } from './pause.js';
 import { ToolDial } from './tool-dial.js';
 import { SessionStore } from './session-store.js';
 import { aimOwner } from './hand-owner.js';
-import { scaleCentre, walkCentre, followBody, areaOf, yawTo } from './zones.js';
+import { scaleCentre, walkCentre, followBody, areaOf, bodyAreaOf, sideOf, yawTo } from './zones.js';
 import { takePhoto, photoName, saveFile, INTERFACE_LAYER } from './photo.js';
 import { readSetting } from './settings.js';
 import { buildShowroom, buildStage, fitPlinth, placePlate, buildWalkSky, recolourSphere, PLINTH_HEIGHT } from './xr-scene.js';
@@ -390,8 +390,9 @@ export class XRExperience {
 	 * The areas (js/zones.js), once a frame: the centre (at the scale model the
 	 * model, the plinth and its keys as seen; inside, ±20° about the body's
 	 * direction, which follows the head slowly) and which area each hand is in,
-	 * by its wrist (or grip) seen from the eyes. this.areas = { centre, hands:
-	 * [area per input entry] }.
+	 * by its wrist (or grip): at the scale model by its angle from the eyes,
+	 * inside by its distance from the body's centre line (build 215's C7).
+	 * this.areas = { centre, hands: [area per input entry] }.
 	 */
 	updateAreas(dt) {
 		const head = this.headWorld(), prev = this.areas?.hands ?? [];
@@ -406,7 +407,8 @@ export class XRExperience {
 		const w = this._aw ??= new THREE.Vector3();
 		const hands = this.input.controllers.map((c, i) => {
 			if (!centre || !(c.isHand ? c.touch.tracked : c.isController && !c.resting)) return null;
-			return areaOf(yawTo(head, this.input.wristOf(c).getWorldPosition(w)), centre, prev[i]);
+			const p = this.input.wristOf(c).getWorldPosition(w);
+			return this.mode === 'walk' ? bodyAreaOf(sideOf(head, this.body.yaw, p), prev[i]) : areaOf(yawTo(head, p), centre, prev[i]);
 		});
 		this.areas = { centre, hands };
 	}

@@ -1313,6 +1313,23 @@ check(`right stick snap-turns ${s.snap}°`, Math.abs(turned - s.snap) < 0.5 && M
 		&& plate.back === 'Scale model' && plate.round && plate.hold === 1, JSON.stringify({ ids: cs.ids, plate }));
 	await shot('walk-hand-keys');
 }
+// Build 215's C7: inside, a hand's area is by the body, in metres: by the hip, out at arm's length, at the shoulder, each on its side;
+// 14 cm left of the middle, held ahead, is already the left (by the angle from the eyes it was the centre).
+{
+	const saved = await page.evaluate(() => { const d = window.__device; return ['left', 'right'].map((h) => [d.controllers[h].position.toArray?.() ?? [d.controllers[h].position.x, d.controllers[h].position.y, d.controllers[h].position.z], [d.controllers[h].quaternion.x, d.controllers[h].quaternion.y, d.controllers[h].quaternion.z, d.controllers[h].quaternion.w]]); });
+	const place = (l, r) => page.evaluate(([l, r]) => { const d = window.__device, q = d.quaternion, yaw = Math.atan2(2 * (q.w * q.y + q.x * q.z), 1 - 2 * (q.y * q.y + q.x * q.x)), h = d.position;
+		const put = (c, [x, y, z]) => c.position.set(h.x + x * Math.cos(yaw) + z * Math.sin(yaw), h.y - 1.6 + y, h.z - x * Math.sin(yaw) + z * Math.cos(yaw));
+		put(d.controllers.left, l); put(d.controllers.right, r); }, [l, r]);
+	const areas = () => page.evaluate(() => { const x = window.__casawalk.xr, i = x.input.controllers; return [x.areas.hands[i.indexOf(x.input.hands.left)], x.areas.hands[i.indexOf(x.input.hands.right)]]; });
+	const got = {};
+	for (const [name, [sx, sy, sz]] of Object.entries({ hip: [0.22, 0.95, 0.05], arm: [0.6, 1.35, -0.1], shoulder: [0.2, 1.45, -0.15], ahead14: [0.14, 1.25, -0.4] })) {
+		await place([-sx, sy, sz], [sx, sy, sz]); await frames(8);
+		got[name] = (await areas()).join('/');
+	}
+	check('inside, the areas by the body (build 215, C7): by the hip, at arm\'s length, at the shoulder and 14 cm out ahead, each hand on its own side', Object.values(got).every((v) => v === 'left/right'), JSON.stringify(got));
+	await page.evaluate((saved) => { const d = window.__device; ['left', 'right'].forEach((h, i) => { d.controllers[h].position.set(...saved[i][0]); d.controllers[h].quaternion.set(...saved[i][1]); }); }, saved);
+	await frames(8);
+}
 await pressWrist('settings');
 s = await state();
 check('Settings opens the inside board', s.menu === 'walk' && await page.evaluate(() => window.__casawalk.xr.menu === window.__casawalk.xr.menus.walk && window.__casawalk.xr.menu.title === 'Settings'));

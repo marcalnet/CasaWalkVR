@@ -2124,3 +2124,33 @@ test('bringing a tool home with the fan hand\'s tip close by: no options row, th
 	toolTo(place().add(new THREE.Vector3(0, 0, 0.06)));
 	assert.ok(!x.tools.held && !dial.open, 'it goes home, no row in the way');
 });
+
+test('inside, the areas by the body (build 215, C7): a hand by the hip, out at arm\'s length or at the shoulder is on its side; in front of you, the centre; the scale model keeps its view-based areas', async () => {
+	const { x, frame, go, hands } = await setup();
+	hands.left.grip.visible = hands.right.grip.visible = true;
+	go('in');
+	for (let i = 0; i < 10; i++) frame();
+	const L = x.input.controllers.indexOf(hands.left), R = x.input.controllers.indexOf(hands.right);
+	const spots = { hip: [0.22, 0.95, 0.05], 'arm\'s length': [0.6, 1.35, -0.1], shoulder: [0.2, 1.45, -0.15] }, seen = [];
+	for (const [name, [sx, sy, sz]] of Object.entries(spots)) {
+		hands.left.grip.position.set(-sx, sy, sz); hands.right.grip.position.set(sx, sy, sz);
+		for (let i = 0; i < 6; i++) frame();
+		seen.push(`${name}: ${x.areas.hands[L]} / ${x.areas.hands[R]}`);
+		assert.deepEqual([x.areas.hands[L], x.areas.hands[R]], ['left', 'right'], `${name} (the eyes' angle to it differs: ${seen.at(-1)})`);
+	}
+	// Both hands in front of you, near the middle: the centre; the left one back out 10 cm: still the centre (it enters past 12).
+	hands.left.grip.position.set(-0.04, 1.25, -0.4); hands.right.grip.position.set(0.04, 1.25, -0.4);
+	for (let i = 0; i < 6; i++) frame();
+	assert.deepEqual([x.areas.hands[L], x.areas.hands[R]], ['centre', 'centre'], 'in front of you');
+	hands.left.grip.position.set(-0.10, 1.25, -0.4); for (let i = 0; i < 6; i++) frame();
+	assert.equal(x.areas.hands[L], 'centre', '10 cm left: not yet');
+	hands.left.grip.position.set(-0.14, 1.25, -0.4); for (let i = 0; i < 6; i++) frame();
+	assert.equal(x.areas.hands[L], 'left', '14 cm left: the left area');
+	hands.left.grip.position.set(-0.10, 1.25, -0.4); for (let i = 0; i < 6; i++) frame();
+	assert.equal(x.areas.hands[L], 'left', 'back to 10 cm: still left (it leaves within 8)');
+	// The scale model: by the angle from the eyes, as before (a hand 14 cm left at 0.4 m is in its centre there).
+	go('back');
+	for (let i = 0; i < 10; i++) frame();
+	assert.equal(x.mode, 'dollhouse');
+	assert.equal(x.areas.hands[L], 'centre', 'at the scale model: the view-based centre');
+});
