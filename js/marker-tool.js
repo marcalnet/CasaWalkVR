@@ -1,10 +1,9 @@
 // The marker (SPEC.md phase 17, milestone F): a thick felt-tip. Hold the
 // trigger to draw a stroke in the air from its nib; the stroke is a tube
 // about 8 mm thick (to the eye, as drawn), one draw call per stroke, grown in
-// place as you draw (a preallocated buffer: nothing rebuilt). Colours: black
-// (the default), blue, green, red, all free; press the stick of the hand
-// holding it to change colour (its cap shows the colour). A = undo the last
-// stroke; hold A = clear all (Y when mirrored).
+// place as you draw (a preallocated buffer: nothing rebuilt). One ink, dark
+// grey (the user's simpler tools, 27 Nov 2026: no colour to choose). A = undo
+// the last stroke; hold A = clear all (Y when mirrored). Bare hands: no undo.
 // Bare hands: not yet (the marker held like a pen, drawing where its nib
 // touches, comes with item 11 of the Quest 2 fixes).
 //
@@ -13,10 +12,8 @@
 
 import * as THREE from 'three';
 import { HOLD } from './hold.js';
-import { buildMarker, MARKER_INKS } from './tool-models.js';
-import { readSetting, writeSetting } from './settings.js';
+import { buildMarker, MARKER_INK } from './tool-models.js';
 
-export const INKS = ['black', 'blue', 'green', 'red'];
 const RADIUS = 0.004; // metres, to the eye when drawn
 const STEP = 0.004; // metres, to the eye: a new point every this much movement
 const SIDES = 6; // the tube's sides
@@ -31,17 +28,15 @@ export class MarkerTool {
 		this.xr = xr;
 		this.name = 'marker';
 		this.live = true;
-		this.controls = ['stickPress']; // the stick press of its hand steps its one option: the colour (js/tool-dial.js)
-		this.ink = Math.max(0, INKS.indexOf(readSetting('markerColour')));
-		this.option = { part: 'cap', stops: INKS.map((k) => ({ value: k, label: k[0].toUpperCase() + k.slice(1), fill: MARKER_INKS[k] })), get: () => INKS[this.ink], set: (k) => this.setInk(k) }; // (its keys filled with the ink: js/tool-dial.js)
-		this.object = buildMarker({ ink: INKS[this.ink] });
+		this.controlPart = 'cap'; // (its quiet ring: js/control-cue.js)
+		this.object = buildMarker();
 		this.tip = this.object.getObjectByName('tip');
 		this.strokes = [];
 		this.drawing = null; // the stroke being drawn
 		this.held = null;
-		this.materials = INKS.map((k) => new THREE.MeshLambertMaterial({ color: MARKER_INKS[k], name: `ink-${k}` }));
+		this.material = new THREE.MeshLambertMaterial({ color: MARKER_INK, name: 'ink' });
 		this._p = new THREE.Vector3(); this._q = new THREE.Vector3(); this._d = new THREE.Vector3(); this._u = new THREE.Vector3(); this._v = new THREE.Vector3(); this._up = new THREE.Vector3();
-		this.merged = INKS.map(() => null); // the finished strokes, one mesh per colour
+		this.merged = null; // the finished strokes, one mesh
 	}
 
 	take(c) { this.held = c; }
@@ -52,9 +47,6 @@ export class MarkerTool {
 		if (phase === 'down') this.startStroke();
 		else this.endStroke();
 	}
-
-	/** The options row's Undo (js/tool-dial.js): as a short press of A. */
-	undo() { this.secondary(this.held, 'press'); }
 
 	/** A: undo the last stroke; hold A: clear all. */
 	secondary(c, phase) {
@@ -68,30 +60,17 @@ export class MarkerTool {
 		if (e.type === 'lost') this.endStroke();
 	}
 
-	/** The stick press of the holding controller: the next colour, the dial shown (js/tool-dial.js). */
-	control(c, name) { if (name === 'stickPress') this.xr.dial?.step(this); }
-
-	/** The ink: a colour of INKS, remembered; the cap shows it. */
-	setInk(k) {
-		const i = INKS.indexOf(k);
-		if (i < 0) return;
-		this.ink = i;
-		this.object.userData.setInk(k);
-		writeSetting('markerColour', k);
-	}
-
-
 	/** Model-space radius for a stroke drawn now (8 mm thick to the eye). */
 	radius() { return RADIUS / Math.max(1e-6, this.xr.anchor.scale.x); }
 
 	startStroke() {
 		this.endStroke();
 		const geo = new THREE.BufferGeometry();
-		const mesh = new THREE.Mesh(geo, this.materials[this.ink]);
+		const mesh = new THREE.Mesh(geo, this.material);
 		mesh.name = 'stroke';
 		mesh.frustumCulled = false;
 		this.xr.tools.annotations.add(mesh);
-		this.drawing = { mesh, geo, ink: this.ink, n: 0, cap: 0, last: null, r: this.radius(), age: 0 };
+		this.drawing = { mesh, geo, n: 0, cap: 0, last: null, r: this.radius(), age: 0 };
 		this.grow(this.drawing, START_POINTS);
 		if (this.xr.soundLevel !== 'off') this.xr.sound.play('squeak', 0.6);
 	}
@@ -111,7 +90,7 @@ export class MarkerTool {
 		s.cap = cap;
 	}
 
-	/** The stroke being drawn is finished: it joins its colour's one mesh (a dot too small to see is dropped). */
+	/** The stroke being drawn is finished: it joins the one mesh of finished strokes (a dot too small to see is dropped). */
 	endStroke() {
 		const s = this.drawing;
 		this.drawing = null;
@@ -119,17 +98,17 @@ export class MarkerTool {
 		s.mesh.removeFromParent();
 		if (s.n >= 2) {
 			const n = s.n * SIDES * 3;
-			this.strokes.push({ ink: s.ink, n: s.n, pos: s.geo.attributes.position.array.slice(0, n), nor: s.geo.attributes.normal.array.slice(0, n) });
-			this.rebuild(s.ink);
+			this.strokes.push({ n: s.n, pos: s.geo.attributes.position.array.slice(0, n), nor: s.geo.attributes.normal.array.slice(0, n) });
+			this.rebuild();
 		}
 		s.geo.dispose();
 	}
 
-	/** Rebuilds one colour's mesh from its finished strokes: one draw call per colour. */
-	rebuild(ink) {
-		const mine = this.strokes.filter((t) => t.ink === ink);
-		let old = this.merged[ink];
-		if (old) { old.removeFromParent(); old.geometry.dispose(); this.merged[ink] = null; }
+	/** Rebuilds the mesh of finished strokes: one draw call for them all. */
+	rebuild() {
+		const mine = this.strokes;
+		const old = this.merged;
+		if (old) { old.removeFromParent(); old.geometry.dispose(); this.merged = null; }
 		if (!mine.length) return;
 		const points = mine.reduce((a, t) => a + t.n, 0);
 		const pos = new Float32Array(points * SIDES * 3), nor = new Float32Array(points * SIDES * 3);
@@ -149,15 +128,15 @@ export class MarkerTool {
 		geo.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
 		geo.setIndex(points * SIDES > 65535 ? new THREE.Uint32BufferAttribute(idx, 1) : new THREE.Uint16BufferAttribute(idx, 1));
 		geo.computeBoundingSphere();
-		const mesh = new THREE.Mesh(geo, this.materials[ink]);
-		mesh.name = `strokes-${INKS[ink]}`;
+		const mesh = new THREE.Mesh(geo, this.material);
+		mesh.name = 'strokes';
 		this.xr.tools.annotations.add(mesh);
-		this.merged[ink] = mesh;
+		this.merged = mesh;
 	}
 
 	/** Adds a ring of the tube at model point p (reused vectors: nothing allocated). */
 	addPoint(s, p) {
-		if (s.n >= MAX_POINTS) { const ink = this.ink; this.endStroke(); this.ink = ink; this.startStroke(); return; }
+		if (s.n >= MAX_POINTS) { this.endStroke(); this.startStroke(); return; }
 		if (s.n >= s.cap) this.grow(s, Math.min(MAX_POINTS, s.cap * 2));
 		const dir = this._d.copy(p).sub(s.last).normalize();
 		if (s.n === 1) this.ring(s, 0, s.last, dir); // (the first ring, now its direction is known)
@@ -187,7 +166,7 @@ export class MarkerTool {
 		if (this.drawing) { const s = this.drawing; this.drawing = null; s.mesh.removeFromParent(); s.geo.dispose(); return true; }
 		const t = this.strokes.pop();
 		if (!t) return false;
-		this.rebuild(t.ink);
+		this.rebuild();
 		return true;
 	}
 
@@ -195,7 +174,7 @@ export class MarkerTool {
 		if (this.drawing) { this.drawing.mesh.removeFromParent(); this.drawing.geo.dispose(); this.drawing = null; }
 		const had = this.strokes.length > 0;
 		this.strokes.length = 0;
-		for (let i = 0; i < INKS.length; i++) this.rebuild(i);
+		this.rebuild();
 		return had;
 	}
 

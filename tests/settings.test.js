@@ -10,7 +10,7 @@ test('the storage keys never change', () => {
 	const keys = Object.fromEntries(Object.entries(SETTINGS).map(([name, s]) => [name, s.key]));
 	assert.deepEqual(keys, {
 		light: 'casawalk.light', shadows: 'casawalk.shadows', depth: 'casawalk.depth', view: 'casawalk.view',
-		height: 'casawalk.height', seeThrough: 'casawalk.seeThrough', mainHand: 'casawalk.mainHand', sound: 'casawalk.sound', cameraLens: 'casawalk.cameraLens', markerColour: 'casawalk.markerColour', meterUnits: 'casawalk.meterUnits',
+		height: 'casawalk.height', seeThrough: 'casawalk.seeThrough', mainHand: 'casawalk.mainHand', sound: 'casawalk.sound', meterUnits: 'casawalk.meterUnits',
 	});
 });
 
@@ -84,4 +84,16 @@ test('Recent keeps the newest five within 150 MB, and never a model over 50 MB (
 	assert.ok(plan.keep);
 	assert.deepEqual(plan.drop.sort(), ['c', 'f'], 'the 150 MB total drops c; five at most drops f');
 	assert.ok(RECENT_MAX_FILE < RECENT_MAX_TOTAL);
+});
+
+test('the lens and the marker\'s colour went (the simpler tools): their stored values are cleared', async () => {
+	const { RETIRED, forgetRetired } = await import('../js/settings.js');
+	const store = new Map([['casawalk.cameraLens', '50'], ['casawalk.markerColour', 'red'], ['casawalk.sound', 'off']]);
+	const was = globalThis.localStorage;
+	globalThis.localStorage = { getItem: (k) => store.get(k) ?? null, setItem: (k, v) => store.set(k, v), removeItem: (k) => store.delete(k) };
+	try {
+		forgetRetired();
+		assert.deepEqual([...store.keys()], ['casawalk.sound'], 'only the retired keys cleared');
+		assert.ok(RETIRED.every((k) => !Object.values(SETTINGS).some((s) => s.key === k)), 'no setting uses a retired key');
+	} finally { globalThis.localStorage = was; }
 });

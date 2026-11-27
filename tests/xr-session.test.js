@@ -126,7 +126,7 @@ test('the pause with no tip left (§1, revised): a steady place is the plain fad
 	while (x.layerFx) frame();
 });
 
-test('leaving VR leaves nothing stuck: mid walk-in the gallery\'s scale, an open dial, a Shadows switch still switching on (the audit\'s S5, C1, C2)', async () => {
+test('leaving VR leaves nothing stuck: mid walk-in the gallery\'s scale, a Shadows switch still switching on (the audit\'s S5, C2)', async () => {
 	const { x, frame, hands } = await setup();
 	frame();
 	// Mid walk-in: the tunnel zoom scales the gallery up; the session ends.
@@ -135,17 +135,13 @@ test('leaving VR leaves nothing stuck: mid walk-in the gallery\'s scale, an open
 	assert.ok(x.stage.scale.x > 1.05, `the tunnel scales the gallery (${x.stage.scale.x.toFixed(2)})`);
 	x.handleEnd();
 	assert.equal(x.stage.scale.x, 1, 'back to its size');
-	// A dial open (and its label), Shadows switching on: the session ends.
+	// Shadows switching on: the session ends.
 	const { x: y, frame: f2 } = await setup();
 	f2();
-	y.tools.take(y.fan.camera, y.input.hands.right);
-	y.dial.step(y.fan.camera);
-	assert.ok(y.dial.group.visible && y.dial.label.mesh.visible, 'the dial and its label shown');
 	y.lighting ??= { shadows: false, time: 'morning', setShadows(v) { this.shadows = v; }, refresh() {}, setTime() {}, nextTime() {} }; // (no lighting in these tests: a stand-in)
 	y.menuAction('shadows');
 	assert.equal(y.shadowsBusy, true, 'Shadows switching on');
 	y.handleEnd();
-	assert.ok(!y.dial.open && !y.dial.group.visible && !y.dial.label.mesh.visible, 'the dial is gone from the 2D page');
 	assert.equal(y.shadowsBusy, false, 'the switch is free again');
 });
 
@@ -160,7 +156,7 @@ test('the settings wing: the same three tabs at both layers (How to move, View, 
 			'depth:switch:Depth shading', 'view:switch:Passthrough', 'seethrough:switch:Transparent walls']);
 		assert.deepEqual(shape(p.tabs[2].rows), ['height:choice:Height:Yours:1.4 m:1.7 m:2.0 m', 'mainHand:choice:Main hand:Right:Left',
 			'sound:switch:Sound'], 'General: Height, Main hand, Sound (New visitor went: build 215, B4)');
-		assert.ok(!p.get('lens'), 'the camera\'s lens is on its dial, not on the wing');
+		assert.ok(!p.get('lens'), 'no lens to choose: the camera has one, 28 mm');
 		assert.ok(p.size.h / p.size.w * p.mesh.geometry.parameters.width <= 0.34 + 1e-6, `34 cm tall at most (harmony conflict 13): ${(p.size.h / p.size.w * p.mesh.geometry.parameters.width * 100).toFixed(1)} cm`);
 		assert.equal(p.actions, undefined, 'no action rows on the board: the doors are on the wrist');
 		assert.ok(!p.rects().some((r) => /close/i.test(r.id)) && /outside: close$/.test(p.hint), 'no Close key: the close line says how (build 120, M1)');
@@ -444,196 +440,35 @@ test('the pause: practising the teleport (hold the trigger, an arc onto the floo
 	for (let i = 0; i < 200 && P.fx; i++) frame();
 	assert.ok(!P.fx && x.veil.amount('layer') === 0, 'the room fades in');
 });
-test('the options row (build 215, C3): reaching near the held tool shows it, keys 7 cm round, three a row; the current option filled; a choice, then it goes; Undo; away 18 cm, it goes; the stick still steps; a quiet ring on each control part, pulsing on the first take', async () => {
+test('the simpler tools (the user\'s decision, 27 Nov 2026): no options row and no stick stepping; one 28 mm lens, one dark grey ink; a quiet ring on each control part, pulsing on the first take, full in use mode', async () => {
 	const { x, frame, press, hands } = await setup();
-	const { DIAL, rowSpot } = await import('../js/tool-dial.js');
-	const w3 = rowSpot(2, 3).x - rowSpot(0, 3).x + DIAL.KEY, w5 = [rowSpot(0, 5), rowSpot(3, 5)];
-	assert.ok(DIAL.KEY === 0.07 && DIAL.GAP === 0.012 && Math.abs(w3 - 0.234) < 1e-9, `7 cm keys, 1.2 cm apart: a row of three 23.4 cm (${w3})`);
-	assert.ok(Math.abs(w5[0].y - w5[1].y - (DIAL.KEY + DIAL.GAP)) < 1e-9 && Math.abs(rowSpot(3, 5).x + rowSpot(4, 5).x) < 1e-9, 'five keys: three, then two below, centred');
-	const cam = x.fan.camera, meter = x.fan.meter, marker = x.fan.marker, dial = x.dial;
+	const cam = x.fan.camera;
 	hands.right.grip.visible = hands.left.grip.visible = true;
 	hands.left.grip.position.set(-0.45, 0.9, 0.05); // (the other hand away)
 	hands.right.ray.position.set(0.25, 1.15, -0.35); hands.right.grip.position.copy(hands.right.ray.position);
 	frame();
 	x.tools.take(cam, hands.right);
 	frame();
-	const cue = dial.cues.get(cam);
-	assert.ok(cue && cue.pulse > 0, 'the lens carries its quiet ring, pulsing on the first take');
+	const cue = x.cues.cues.get(cam);
+	assert.ok(cue && cue.pulse > 0, 'the camera carries its quiet ring, pulsing on the first take');
 	for (let i = 0; i < 3; i++) frame();
 	const { CONTROL_CUE } = await import('../js/theme.js');
-	const cues = Object.fromEntries([...dial.cues].map(([t, c]) => [t.name, c]));
-	assert.ok(CONTROL_CUE.width === 0.0025 && Object.values(cues).every((c) => c.mesh.material.depthTest), '2.5 mm, depth-tested');
-	assert.ok(!dial.open, 'nothing near: no row');
-	// The keys: words, the current option filled orange; the marker's inks filled with their colour and Undo last.
-	assert.deepEqual(dial.keysOf(cam).map((k) => [k.label, k.look]), [['Wide', 'current'], ['Medium', 'plain'], ['Zoom', 'plain']]);
-	assert.deepEqual(dial.keysOf(meter).map((k) => k.label), [meter.m.units === 'cm' ? 'cm' : 'cm', 'ft in', 'Undo']);
-	const mk = dial.keysOf(marker);
-	assert.ok(mk.length === 5 && mk.slice(0, 4).every((k) => k.fill && k.label === '') && mk[4].label === 'Undo', 'the marker: four inks (filled, no word), then Undo');
-	// The stick: the next lens, the row shown 1.5 s with its name.
-	const { LENSES } = await import('../js/street-camera.js');
+	assert.ok(CONTROL_CUE.width === 0.0025 && [...x.cues.cues.values()].every((c) => c.mesh.material.depthTest), '2.5 mm, depth-tested');
+	// No options: no row, no stick stepping, no lens or colour to choose.
+	const { LENS, lensFov } = await import('../js/street-camera.js');
+	assert.ok(LENS === 28 && Math.abs(cam.view.fov - lensFov(28)) < 1e-9, 'one lens, 28 mm');
+	assert.ok(!x.dial && !cam.option && !x.fan.meter.option && !x.fan.marker.option && x.tools.tools.every((t) => !t.controls && !t.control), 'no tool offers options, nor a stick press');
+	assert.deepEqual(x.tools.buttons(), ['trigger', 'a'], 'the held tool\'s buttons: the trigger and A');
 	press('right', 'stick'); frame(); press('right', 'stick', false); frame();
-	assert.ok(x.cameraLens === 50 && dial.open?.stepped && dial.label.text === LENSES[1].name, 'the stick: the next lens (Medium lens), the row and the name');
-	for (let i = 0; i < 120; i++) frame();
-	assert.ok(!dial.open, 'stepped: it shows 1.5 s');
-	// Reaching: the left controller's tip within 12 cm of the camera: the row shows; while it shows it owns that hand, the ring full.
-	const tipTo = (p) => { for (let i = 0; i < 3; i++) { hands.left.grip.position.add(x.rig.worldToLocal(p.clone()).sub(x.rig.worldToLocal(hands.left.touch.tip.clone()))); frame(); } };
-	const near = cam.object.getWorldPosition(new THREE.Vector3()).add(new THREE.Vector3(-0.08, 0.02, 0));
-	tipTo(near);
-	assert.ok(dial.open && !dial.open.stepped, 'reaching near the tool: the row shows');
-	frame();
-	assert.equal(dial.cues.get(cam).mesh.material.opacity, 1, 'while the row shows, the ring shows full');
-	assert.equal(x.aimBlock(hands.left, near), 'dial', 'while it shows it owns the other hand');
-	// A choice: Zoom; the key fills, the name shows; the row stays 1 s, then fades and goes; near still, it does not come back.
-	dial.choose(cam, 75);
-	assert.ok(x.cameraLens === 75 && dial.keysOf(cam)[2].look === 'current' && dial.label.text === 'Zoom lens');
-	for (let i = 0; i < 60; i++) frame();
-	assert.ok(dial.open, 'it stays a second');
-	for (let i = 0; i < 40; i++) frame();
-	assert.ok(!dial.open, 'then fades and goes');
-	for (let i = 0; i < 10; i++) frame();
-	assert.ok(!dial.open, 'the hand still near: not again until it has been away');
-	// Away (18 cm and more), back: it shows again; away: it goes.
-	hands.left.grip.position.set(-0.45, 0.9, 0.05); frame();
-	tipTo(near);
-	assert.ok(dial.open, 'back near: it shows again');
-	hands.left.grip.position.set(-0.45, 0.9, 0.05); frame(); frame();
-	assert.ok(!dial.open, 'the hand 18 cm away or more: it goes');
+	assert.ok(Math.abs(cam.view.fov - lensFov(28)) < 1e-9, 'the stick press changes nothing');
+	// Reaching near the held tool: nothing shows, and the other hand stays free (no rung owns it).
+	const tip = cam.object.getWorldPosition(new THREE.Vector3()).add(new THREE.Vector3(-0.3, 0.02, 0));
+	assert.notEqual(x.aimBlock(hands.left, tip), 'dial');
+	// In use mode, the ring full.
+	x.tools.held.mode = 'use'; frame();
+	assert.equal(cue.mesh.material.opacity, 1, 'in use mode: the ring full');
 	x.tools.putBack();
-	// Undo (the meter): one press, one undo.
-	x.tools.take(meter, hands.right); frame();
-	let undone = 0;
-	const undo = meter.undo.bind(meter);
-	meter.undo = () => { undone++; undo(); };
-	tipTo(meter.object.getWorldPosition(new THREE.Vector3()).add(new THREE.Vector3(-0.08, 0.02, 0)));
-	assert.ok(dial.open, 'the meter\'s row');
-	const ui = dial.pad.list.findIndex((k) => k.spec?.id === 'undo');
-	assert.ok(ui === 2, 'Undo last');
-	const real = dial.pad.update.bind(dial.pad);
-	dial.pad.update = (...a) => { const r = real(...a); dial.pad.update = real; return { ...r, action: { id: 'undo' } }; }; // (a press on Undo, this frame)
-	frame();
-	assert.ok(undone === 1 && dial.open, 'one press, one undo; the row stays while the hand is near');
-	meter.undo = undo;
-	hands.left.grip.position.set(-0.45, 0.9, 0.05);
-	x.tools.putBack();
-	frame();
-	assert.ok(!dial.open);
-	x.menuAction({ id: 'lens', value: 24 });
 	x.store.start();
-});
-
-test('the options row, the hand\'s keys and the holding hand (the audit\'s S8; the Designer, §5.8; build 215, C3 and C8): it floats 3 cm towards the eyes, 10 cm up and 14 cm in, never within 0.30 m of them; never over the hand\'s keys as seen (rising 6 cm at most); nothing of the holding controller within 2 cm behind a key (Quest 2, 3, Pro); a bare holding hand 4 cm or more from every key; while it shows, the hand\'s keys make room and its keys are live keys', async () => {
-	const { x, frame, hands } = await setup();
-	const { DIAL } = await import('../js/tool-dial.js');
-	const { sceneOf } = await import('./glb-scene.js');
-	const { mergeGeometries } = await import('three/addons/utils/BufferGeometryUtils.js');
-	const { HAND_POSES } = await import('../js/hand-poses.js'), { mirrorPose } = await import('../js/hand-model.js');
-	// The grip in the target-ray space, as iwer gives it for the Quest 2, 3 and Pro (the same matrix, to 1e-7, for all three).
-	const GRIP_OFFSET = {
-		left: new THREE.Matrix4().fromArray([0.9925461411476135, 2.0823669899527886e-8, -0.12186937034130096, 0, 0.08617465198040009, 0.7071067094802856, 0.701836109161377, 0, 0.08617466688156128, -0.7071067690849304, 0.7018360495567322, 0, -0.003979838453233242, -0.015857907012104988, 0.04964181408286095, 1]),
-		right: new THREE.Matrix4().fromArray([0.9925461411476135, -8.329467959811154e-8, 0.12186941504478455, 0, -0.08617465943098068, 0.7071066498756409, 0.7018361687660217, 0, -0.08617471158504486, -0.7071068286895752, 0.7018359303474426, 0, 0.003979798872023821, -0.015857888385653496, 0.049641866236925125, 1]),
-	};
-	const controller = (profile, hand) => { // (a real controller's surface, in its grip space)
-		const scene = sceneOf(path.resolve(import.meta.dirname, `../vendor/controllers/${profile}/${hand}.glb`)), geos = [];
-		scene.updateMatrixWorld(true);
-		scene.traverse((o) => { if (o.isMesh) geos.push(o.geometry.clone().applyMatrix4(o.matrixWorld).toNonIndexed()); });
-		for (const g of geos) for (const k of Object.keys(g.attributes)) if (k !== 'position') g.deleteAttribute(k);
-		return new THREE.Mesh(mergeGeometries(geos), new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }));
-	};
-	const stops = () => [...x.dial.pad.keys.values()].filter((k) => k.group.visible);
-	const R = DIAL.KEY / 2, ray = new THREE.Raycaster(), rows = [];
-	const OPEN = new Set(); // (names a case logged but not asserted; none: every check passes)
-	hands.left.grip.visible = hands.right.grip.visible = true;
-	for (const main of ['right', 'left']) {
-		x.menuAction({ id: 'mainHand', value: main });
-		const c = hands[main], side = main === 'right' ? 1 : -1;
-		hands[main === 'right' ? 'left' : 'right'].grip.position.set(-0.45 * side, 0.9, 0.05);
-		// Controllers: held in front at the chest, pointing a little down. The tool rides the target ray; the grip is the ray
-		// times the device's grip offset, so the controller sits where it really does.
-		c.ray.position.set(0.2 * side, 1.15, -0.35); c.ray.rotation.set(-0.3, 0, 0); c.ray.updateMatrix();
-		c.grip.matrix.copy(c.ray.matrix).multiply(GRIP_OFFSET[main]); c.grip.matrix.decompose(c.grip.position, c.grip.quaternion, c.grip.scale);
-		const ctls = Object.fromEntries(['oculus-touch-v3', 'meta-quest-touch-plus', 'meta-quest-touch-pro'].map((p) => [p, controller(p, main)]));
-		for (const tool of [x.fan.camera, x.fan.meter, x.fan.marker]) {
-			x.tools.take(tool, c);
-			for (let i = 0; i < 40; i++) frame(); // (the hand's keys settle where they wait: two frames in they were still gliding, and the row rose for that)
-			x.dial.show(tool, { stepped: true }); // (as the stick shows it: it stays 1.5 s whatever the other hand does)
-			x.scene.updateMatrixWorld(true);
-			// The main hand's keys (build 215's C8): the row never overlaps them as seen (it rises at most 6 cm to clear them).
-			const mine = Object.values(x.ui.wrist.keys).map((k) => k.group.getWorldPosition(new THREE.Vector3()));
-			const least = Math.min(...stops().flatMap((k) => mine.map((o) => k.group.getWorldPosition(new THREE.Vector3()).distanceTo(o))));
-			const eye = x.headWorld();
-			assert.ok(!x.dial.overlapsKeys(x.dial.group.position, eye) && x.dial.rose <= DIAL.RISE + 1e-9, `${main} hand, ${tool.name}: the row clear of the hand's keys as seen (rose ${(x.dial.rose * 100).toFixed(0)} cm; nearest ${(least * 100).toFixed(1)} cm)`);
-			// Behind each stop's face, along its normal: the 8 mm press plus 12 mm. Five lines (the middle and four edge points) per stop.
-			const behind = {};
-			for (const [profile, ctl] of Object.entries(ctls)) {
-				ctl.matrix.copy(c.grip.matrixWorld); ctl.matrixAutoUpdate = false; ctl.matrixWorldNeedsUpdate = true; ctl.updateMatrixWorld(true);
-				let worst = Infinity;
-				for (const k of stops()) {
-					const p = k.face.getWorldPosition(new THREE.Vector3()), n = new THREE.Vector3(0, 0, -1).transformDirection(k.face.matrixWorld);
-					for (const [dx, dy] of [[0, 0], [R, 0], [-R, 0], [0, R], [0, -R]]) {
-						ray.set(k.face.localToWorld(new THREE.Vector3(dx, dy, 0)), n); ray.far = 0.02;
-						const h = ray.intersectObject(ctl, false)[0];
-						if (h) worst = Math.min(worst, h.distance);
-					}
-					void p;
-				}
-				behind[profile] = worst;
-				if (!OPEN.has(`${main} ${tool.name}`)) assert.ok(worst === Infinity, `${main} hand, ${tool.name}, ${profile}: the controller ${(worst * 100).toFixed(1)} cm behind a stop's face (none within 2 cm)`);
-			}
-			// While open: the hand's keys make room and take no touches (C8), and the row's keys are live keys.
-			frame();
-			assert.ok(x.ui.wrist.rowYield && x.ui.wrist.yielded && x.liveKeys().length >= tool.option.stops.length, 'the hand\'s keys make room; the row\'s keys are live keys');
-			const stop = stops()[0].group.getWorldPosition(new THREE.Vector3());
-			assert.ok(x.nearKey(stop.clone().add(new THREE.Vector3(0, 0, 0.05)), 0.15), 'a fingertip near a stop is near a live key');
-			rows.push(`${main} ${tool.name}: ${(least * 100).toFixed(1)} cm from the hand's keys (rose ${(x.dial.rose * 100).toFixed(0)} cm); behind a stop: ${Object.entries(behind).map(([k, v]) => `${k.replace('meta-quest-touch-', '').replace('oculus-touch-v3', 'quest2')} ${v === Infinity ? 'clear' : (v * 100).toFixed(1) + ' cm'}`).join(', ')}`);
-			x.dial.close();
-			x.tools.putBack();
-		}
-		// Bare hands (build 215's sticky tools): the hand open (iwer's open preset, as the hand is when it uses a tool), the tool in
-		// its hold frame as js/hold.js places it. Every key 4 cm or more from the hand's surface (each joint's sphere).
-		const { holdFrame, toolPose } = await import('../js/hold.js'), { handShape } = await import('../js/gestures.js');
-		const pose = main === 'left' ? HAND_POSES.open : mirrorPose(HAND_POSES.open);
-		const wristM = new THREE.Matrix4().fromArray(pose.wrist.m), handSpace = new THREE.Matrix4();
-		Object.assign(c, { isHand: true, isController: false });
-		c.wrist.position.set(0.2 * side, 1.1, -0.3); c.wrist.rotation.set(-0.3, 0, 0); c.wrist.updateMatrixWorld(true);
-		handSpace.copy(c.wrist.matrixWorld).multiply(wristM.clone().invert());
-		// (Turned as a hand that uses a tool is: pointing ahead, a little down, its palm turned in towards the body's middle.)
-		const raw = Object.fromEntries(Object.entries(pose).map(([n, j]) => [n, new THREE.Vector3().setFromMatrixPosition(new THREE.Matrix4().fromArray(j.m))]));
-		const s0 = handShape(raw, main), a0 = s0.along.clone(), n0 = s0.normal.clone().addScaledVector(a0, -s0.normal.dot(a0)).normalize();
-		const basis = (a, n) => { const xv = new THREE.Vector3().crossVectors(n, a).normalize(), nn = new THREE.Vector3().crossVectors(a, xv); return new THREE.Matrix4().makeBasis(xv, nn, a); };
-		const along = new THREE.Vector3(0, -0.3, -1).normalize(), inward = new THREE.Vector3(-side, 0, 0);
-		const turn = basis(along, inward.clone().addScaledVector(along, -inward.dot(along)).normalize()).multiply(basis(a0, n0).invert());
-		const wristAt = new THREE.Vector3(0.2 * side, 1.1, -0.3);
-		const named = Object.fromEntries(Object.entries(raw).map(([n, v]) => [n, v.clone().sub(raw.wrist).applyMatrix4(turn).add(wristAt)]));
-		const joints = Object.entries(pose).map(([n, j]) => ({ p: named[n], r: j.r }));
-		const shape = handShape(named, main);
-		void handSpace;
-		for (const tool of [x.fan.camera, x.fan.meter, x.fan.marker]) {
-			x.tools.take(tool, c);
-			const f = holdFrame(named.wrist, named['middle-finger-phalanx-proximal'], shape.normal, shape.along, { position: new THREE.Vector3(), quaternion: new THREE.Quaternion() }, toolPose(tool.name, main));
-			c.hold.position.copy(x.rig.worldToLocal(f.position.clone())); c.hold.quaternion.copy(f.quaternion); // (the rig is not turned here)
-			x.dial.show(tool, { stepped: true });
-			x.scene.updateMatrixWorld(true);
-			x.dial.place(0, true); x.scene.updateMatrixWorld(true);
-			const gap = Math.min(...stops().flatMap((k) => { const p = k.group.getWorldPosition(new THREE.Vector3()); return joints.map((j) => p.distanceTo(j.p) - j.r - R); }));
-			rows.push(`${main} ${tool.name}, bare hand: ${(gap * 100).toFixed(1)} cm from the hand`);
-			if (!OPEN.has('bare hands')) assert.ok(gap >= 0.04, `${main} hand, ${tool.name}, bare hand: the nearest key ${(gap * 100).toFixed(1)} cm from the holding hand (4 cm or more)`);
-			x.dial.close();
-			x.tools.putBack();
-		}
-		Object.assign(c, { isHand: false, isController: true });
-	}
-	console.log(`# the options row: ${rows.join('; ')}`);
-	// Brought to the face: never nearer the eyes than 0.30 m, pushed out along the line from them.
-	const c = hands.right, eye = x.headWorld().clone();
-	x.menuAction({ id: 'mainHand', value: 'right' });
-	c.ray.position.copy(x.rig.worldToLocal(eye.clone().add(new THREE.Vector3(0.02, -0.12, -0.12)))); c.ray.rotation.set(-0.3, 0, 0); c.ray.updateMatrix();
-	x.tools.take(x.fan.meter, c);
-	frame(); frame();
-	x.dial.show(x.fan.meter, { stepped: true });
-	x.scene.updateMatrixWorld(true);
-	const near = x.dial.group.getWorldPosition(new THREE.Vector3()).distanceTo(x.headWorld());
-	assert.ok(near >= 0.30 - 1e-6, `never nearer the eyes than 0.30 m (${near.toFixed(3)} m)`);
-	x.dial.close(); x.tools.putBack();
 });
 
 test('the framing guide: while the camera is held, a red frame where the photo\'s edges fall (its depth 0.3-8 m), 3:2 for the lens; hidden while the shutter fires; never in photos', async () => {
@@ -650,7 +485,7 @@ test('the framing guide: while the camera is held, a red frame where the photo\'
 	assert.ok(g.dist >= GUIDE.NEAR && g.dist <= GUIDE.FAR, `its depth ${g.dist.toFixed(2)} m`);
 	const pos = g.outline.geometry.attributes.position.array, xs = [], ys = [];
 	for (let i = 0; i < pos.length; i += 3) { xs.push(pos[i]); ys.push(pos[i + 1]); }
-	const { hw, hh } = frameAt(g.dist, lensFov(cam.mm));
+	const { hw, hh } = frameAt(g.dist, lensFov(28));
 	assert.ok(Math.abs(Math.max(...xs) - hw) < 1e-6 && Math.abs(Math.max(...ys) - hh) < 1e-6 && Math.abs(hw / hh - 1.5) < 1e-9, 'the photo\'s 3:2 frame at that depth');
 	assert.ok(x.photoHidden.has(g.group), 'never in a photo');
 	assert.ok(GUIDE.WIDTH === 0.003 && g.group.children.length === 1 && !g.lines, 'the outline alone, 3 mm at 1 m: no lines from the lens (the UX review\'s C5)');
@@ -934,12 +769,12 @@ test('mirrored: a tool in the left hand has Y as its second button', async () =>
 	const got = [];
 	// (Y already held down when the tool is taken: that press is not the tool's.)
 	press('left', 'b'); frame();
-	x.tools.take({ secondary: (c, e) => got.push(e), controls: ['stickPress', 'nonsense'] }, hands.left);
+	x.tools.take({ secondary: (c, e) => got.push(e) }, hands.left);
 	frame(); press('left', 'b', false); frame();
 	assert.deepEqual(got, [], 'a press already under way when taking a tool does nothing');
 	press('left', 'b'); frame(); press('left', 'b', false); frame();
 	assert.deepEqual(got, ['press']);
-	assert.equal(hands.left.claim.stickPress, 'tool', 'the marker owns its stick press');
+	assert.equal(hands.left.claim.stickPress, null, 'no tool owns a stick press (the simpler tools)');
 	go('in');
 	x.ui.openMenu();
 	frame();
@@ -977,7 +812,7 @@ test('How to move: the first tab, for the input in hand, here, with the build at
 	const { GUIDES, GUIDE_MAX_LINES } = await import('../js/xr-menus.js'), { LINES } = await import('../js/guide.js');
 	for (const [kind, g] of Object.entries(GUIDES)) {
 		assert.ok(g.lines.length <= GUIDE_MAX_LINES, `${kind}: ${g.lines.length} lines`);
-		assert.ok(!g.lines.some((l) => /close/i.test(l)), `${kind}: no close line (the wing's header says it)`);
+		assert.ok(!g.lines.some((l) => /: close\b|\bclose (it|the wing|the board)\b/i.test(l)), `${kind}: no close line (the wing's header says it)`); // ("Close your hand on a tool" is not one)
 	}
 	// Four lines fit: 128 px frames (the 548 px inner width / 4, less the gaps), 84 px to the first line, 34 px apart, the foot below.
 	const size = Math.min((x.menu.size.w - 2 * 16 - 3 * 12) / 4, cell.h * 0.42);
@@ -1295,11 +1130,11 @@ test('the tool fan: floats over the tracked left hand, wherever it is; the right
 	press('right', 'trigger'); frame(); press('right', 'trigger', false); frame(); // (in dock mode the trigger does nothing)
 	hands.right.grip.position.set(0.35, 1.25, -0.25); hands.right.ray.position.copy(hands.right.grip.position); frame(); frame(); // (away from the fan: use mode)
 	assert.equal(x.tools.held.mode, 'use', 'away from the fan: use mode');
-	x.capturePhoto = (o) => { shots++; assert.ok(o.width / o.height === 1.5 && Math.abs(o.fov - 53.1) < 0.1, '3:2, 24 mm (wide angle, the default)'); };
+	x.capturePhoto = (o) => { shots++; assert.ok(o.width / o.height === 1.5 && Math.abs(o.fov - 46.4) < 0.1, '3:2, the 28 mm lens'); };
 	press('right', 'trigger'); frame(); press('right', 'trigger', false); frame();
 	assert.equal(shots, 1, 'the trigger is the shutter');
 	x.menuAction({ id: 'lens', value: 50 });
-	assert.ok(Math.abs(x.fan.camera.view.fov - 27) < 0.1, 'the lens setting: 50 mm');
+	assert.ok(Math.abs(x.fan.camera.view.fov - 46.4) < 0.1, 'no lens setting: always 28 mm');
 	// A squeeze away from the fan puts the held tool back.
 	hands.right.grip.position.set(0.3, 0.8, 0); frame(); frame();
 	press('right', 'grip'); frame(); press('right', 'grip', false); frame();
@@ -1487,7 +1322,7 @@ test('the laser meter: two triggers measure a line in model space; A undoes, hol
 	x.tools.putBack();
 });
 
-test('the marker: hold the trigger and move to draw; the stick press changes colour; A undoes', async () => {
+test('the marker: hold the trigger and move to draw, in its one ink; the stick press does nothing; A undoes', async () => {
 	const { x, press, frame, hands } = await setup();
 	const marker = x.fan.marker, c = hands.right;
 	c.grip.position.set(0.2, 1.2, -0.4); c.ray.position.copy(c.grip.position);
@@ -1500,7 +1335,7 @@ test('the marker: hold the trigger and move to draw; the stick press changes col
 	assert.equal(marker.strokes.length, 1, 'one stroke');
 	assert.ok(marker.strokes[0].n > 5, `drawn along the way: ${marker.strokes[0].n} points`);
 	press('right', 'stick'); frame(); press('right', 'stick', false); frame();
-	assert.equal(marker.ink, 1, 'the stick press: blue');
+	assert.equal(marker.strokes.length, 1, 'the stick press: nothing');
 	press('right', 'a'); frame(); press('right', 'a', false); frame();
 	assert.equal(marker.strokes.length, 0, 'A: undo');
 	x.tools.putBack();
@@ -1538,7 +1373,6 @@ test('20 measurements and 20 strokes cost a handful of draw calls', async () => 
 	for (let i = 0; i < 20; i++) { meter.hit = at(0, i * 0.1); meter.trigger(c, 'down'); meter.hit = at(1 + i * 0.05, i * 0.1 + 0.3); meter.trigger(c, 'down'); }
 	x.tools.take(marker, c);
 	for (let k = 0; k < 20; k++) {
-		if (k % 5 === 0) marker.option.set(marker.option.stops[(marker.ink + 1) % marker.option.stops.length].value);
 		marker.trigger(c, 'down');
 		for (let i = 0; i <= 8; i++) { marker.object.position.set(i * 0.01, k * 0.02, 0); marker.object.updateMatrixWorld(true); marker.update(1 / 72); }
 		marker.trigger(c, 'up');
@@ -1549,7 +1383,7 @@ test('20 measurements and 20 strokes cost a handful of draw calls', async () => 
 	x.tools.annotations.traverse((o) => { if (o.isMesh && o.visible) meshes++; });
 	assert.equal(meter.m.lines.length, 20);
 	assert.equal(marker.strokes.length, 20);
-	assert.ok(meshes <= 6, `all of it in ${meshes} meshes (lines, labels, one per ink)`);
+	assert.ok(meshes <= 3, `all of it in ${meshes} meshes (the lines, the labels, the strokes)`);
 });
 
 test('round scales only, one per visit: the plate and the model rest on 1:5, 1:10, 1:15 ... never 1:23 or 1:8; the stick turns, never zooms', async () => {
@@ -1726,10 +1560,6 @@ test('the main hand\'s keys never hide a live key (the orb\'s rule, build 215, C
 	assert.ok(w.sightYield, 'not back at once');
 	for (let i = 0; i < 30; i++) w.sightYield = w.sightYieldNow(eye, 1 / 72);
 	assert.ok(!w.sightYield, 'back after 0.4 s clear');
-	// Making room by sight never stops a touch (only the options row does).
-	w.sightYield = true;
-	frame();
-	assert.ok(!w.rowYield, 'touches still count while they make room by sight');
 });
 
 test('the fan: over the left controller however it is turned', async () => {
@@ -2027,7 +1857,7 @@ test('sticky tools (build 215, C1 and C2), controllers: a take starts in dock mo
 	// Away from the fan: use mode; the trigger measures; the quiet ring at full.
 	moveTo(fan.dockAt().add(new THREE.Vector3(0.45, 0, 0)));
 	assert.equal(x.tools.held.mode, 'use', 'more than 25 cm away: use mode');
-	assert.equal(x.dial.cues.get(meter)?.mesh.material.opacity, 1, 'its quiet ring lights to full');
+	assert.equal(x.cues.cues.get(meter)?.mesh.material.opacity, 1, 'its quiet ring lights to full');
 	meter.hit = new THREE.Vector3(0, 1, -1); meter.trigger(c, 'down'); // (a point, as the trigger gives it where the dot is)
 	assert.ok(meter.m.pending, 'in use mode the trigger measures');
 	// The held tool itself at another tool's place (the marker's, 23 cm from its own): nothing; within 10 cm of its own: it glides home.
@@ -2111,9 +1941,9 @@ test('the meter (build 215, C4): its screen almost covers the top (3.2 x 6.0 cm)
 	meter.clear();
 });
 
-test('bringing a tool home with the fan hand\'s tip close by: no options row, the magnet takes it (the Tester\'s finding on C3)', async () => {
+test('bringing a tool home with the fan hand\'s tip close by: the magnet takes it (the Tester\'s finding on C3)', async () => {
 	const { x, frame, hands } = await setup();
-	const fan = x.fan, meter = fan.meter, c = hands.right, dial = x.dial;
+	const fan = x.fan, meter = fan.meter, c = hands.right;
 	hands.left.grip.visible = c.grip.visible = true;
 	hands.left.grip.position.set(-0.45, 1.2, -0.3);
 	c.ray.position.set(0.3, 1.2, -0.35); c.grip.position.copy(c.ray.position);
@@ -2126,9 +1956,8 @@ test('bringing a tool home with the fan hand\'s tip close by: no options row, th
 	toolTo(place().add(new THREE.Vector3(0.18, 0, 0.05))); // (on its way: 19 cm from its place)
 	hands.left.grip.position.copy(x.rig.worldToLocal(meter.object.getWorldPosition(new THREE.Vector3()).add(new THREE.Vector3(-0.06, -0.02, 0.06))));
 	frame();
-	assert.ok(!dial.open, 'within 30 cm of its own place, reaching shows no row');
 	toolTo(place().add(new THREE.Vector3(0, 0, 0.06)));
-	assert.ok(!x.tools.held && !dial.open, 'it goes home, no row in the way');
+	assert.ok(!x.tools.held, 'it goes home, the other tip close by');
 });
 
 test('the plinth\'s distance (build 215, C6): its front edge 45 cm from where you stand, a model at most 1.2 m across, all of it below the eyes, 45° down and 45° across at most, the same standing or seated; the doors and levels 3 cm or more in front of the plinth', async () => {
@@ -2281,17 +2110,16 @@ test('a session ended in the middle of everything leaves nothing: each part puts
 	const { x, frame } = await setup();
 	frame();
 	assert.ok(x.endingParts().filter(Boolean).every((p) => typeof p.end === 'function'), 'every part in the list has its own end()');
-	// Everything at once: the wing open, a tool held with its options row, a photo note, a measurement, a move between places in its tunnel.
+	// Everything at once: the wing open, a tool held, a photo note, a measurement, a move between places in its tunnel.
 	x.menuAction('settings');
 	const c = x.input.hands.right;
 	x.tools.take(x.fan.meter, c);
-	x.dial.step(x.fan.meter);
 	x.fan.meter.hit = x.centerer.localToWorld(new THREE.Vector3(0.5, 1, 0.5)); x.fan.meter.trigger(c, 'down');
 	x.ui.showPhotoResult(null, { dropped: false }); x.ui.runPhotoFx(0.01);
 	x.haptics.play(c, 'tick');
 	x.menuAction('in');
 	for (let i = 0; i < 30; i++) frame();
-	assert.ok(x.layerFx && x.dial.open && x.tools.held && x.ui.photoNote.mesh.visible, 'all of it going on');
+	assert.ok(x.layerFx && x.tools.held && x.ui.photoNote.mesh.visible, 'all of it going on');
 	x.handleEnd();
 	const left = [];
 	const want = (n, ok) => ok || left.push(n);
@@ -2300,7 +2128,6 @@ test('a session ended in the middle of everything leaves nothing: each part puts
 	want('layers', !x.layerFx && !(x.veil.amount('layer') > 0) && !x.pause.group.visible && !x.pause.floor.visible);
 	want('photo', !x.photoPending && !x.ui.photoFx && !x.ui.photoNote.mesh.visible);
 	want('tools', !x.tools.held && x.fan.meter.m.lines.length === 0 && !x.fan.meter.m.pending);
-	want('dial', !x.dial.open && !x.dial.group.visible && !x.dial.label.mesh.visible);
 	want('keys', !x.ui.wrist.group.visible && !x.ui.wrist.holder);
 	want('hands', x.handViews.every((v) => !v.group.visible));
 	want('controllers', x.input.controllers.every((k) => !k.ray.visible && !k.grip.visible));

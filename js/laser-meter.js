@@ -7,8 +7,8 @@
 // towards you; lines within 3° of vertical or level snap straight
 // (js/measure.js), with a small mark at the end. Several at once. Between the
 // two, a dashed line runs from the first point to the dot. Undo: the second
-// button (A, or Y mirrored), or the options row's Undo; hold the button a
-// second: clear all.
+// button (A, or Y mirrored); hold it a second: clear all. Bare hands: no
+// undo (the user's simpler tools, 27 Nov 2026).
 //
 // Build 215's C4 (the user's decisions): the labels about 5x bigger (20 cm at
 // 1:1), each 10 cm over its line's middle; the screen almost covers the top,
@@ -57,8 +57,7 @@ export class LaserMeter {
 		this.screenPoint = this.object.getObjectByName('screen');
 		this.m = new Measurements();
 		this.m.units = readSetting('meterUnits') ?? defaultUnits(globalThis.navigator?.languages?.[0] ?? ''); // (remembered; at first from the browser's region)
-		this.controls = ['stickPress']; // the stick press of its hand steps its one option: the units (js/tool-dial.js)
-		this.option = { part: 'hook', stops: [{ value: 'cm', label: 'cm' }, { value: 'ftin', label: 'ft in' }], get: () => this.m.units, set: (u) => this.setUnits(u) };
+		this.controlPart = 'hook'; // (its quiet ring: js/control-cue.js)
 		this.held = null;
 		this.hitDistance = null;
 		this.marks = []; // per line: { a, b, text, snap } (model space)
@@ -126,9 +125,6 @@ export class LaserMeter {
 		return (best ?? h[h.length - 1])?.hit ?? this.hit;
 	}
 
-	/** The options row's Undo (js/tool-dial.js): as a short press of the second button. */
-	undo() { this.secondary(this.held, 'press'); }
-
 	/** Second button: press = undo, hold = clear all. */
 	secondary(c, phase) {
 		const xr = this.xr;
@@ -137,9 +133,6 @@ export class LaserMeter {
 		if (went === 'point') this.pendingMark.visible = false;
 		if (xr.soundLevel !== 'off') xr.sound.play(went ? 'release' : 'deny');
 	}
-
-	/** The stick press of the holding controller: the next units (cm, ft in), the dial shown (js/tool-dial.js). */
-	control(c, name) { if (name === 'stickPress') this.xr.dial?.step(this); }
 
 	/** The meter's units ('cm' | 'ftin'): remembered; every line's label and the live reading in them. */
 	setUnits(units) {

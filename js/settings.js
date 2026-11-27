@@ -34,13 +34,21 @@ export const SETTINGS = {
 	mainHand: { key: 'casawalk.mainHand', options: ['right', 'left'], fallback: 'right' }, // the hand that wears the wrist menu and takes tools from the fan (the fan floats over the other)
 	sound: { key: 'casawalk.sound', options: ['off', 'effects', 'all'], fallback: 'all' }, // all: effects and the ambience (milestone H)
 	// (The guide's 'casawalk.walkGuide' setting went in Nov 2026: nothing read it. A stored value is simply never read.)
-	cameraLens: { key: 'casawalk.cameraLens', options: [24, 50, 75], fallback: 24 }, // the street camera's lens, mm (milestone D; three since build 215's B3: a stored 28 or 35 reads as the fallback)
-	markerColour: { key: 'casawalk.markerColour', options: ['black', 'blue', 'green', 'red'], fallback: 'black' }, // the marker's ink (its cap's dial)
+	// (The camera's lens and the marker's colour, 'casawalk.cameraLens' and 'casawalk.markerColour', went on 27 Nov 2026: one lens,
+	// 28 mm, and one ink, the user's simpler tools. A stored value is cleared: RETIRED.)
 	meterUnits: { key: 'casawalk.meterUnits', options: ['cm', 'ftin'], fallback: null }, // the laser meter's units (null: from the browser's region, js/measure.js defaultUnits)
 	// (The first-time lessons' and the pinch hand's 'casawalk.welcome.*' keys went on 26 Nov 2026: tips are per VR
 	// session and nothing about them is stored, js/pause.js. A stored value is simply never read.)
 	// (The tools' first-time show and its 'casawalk.toolsIntro' went on 26 Nov 2026: the tools always float over the left hand.)
 };
+
+/** Keys of settings that went and whose stored values are cleared (build-215 asks C10: the lens, the marker's colour). */
+export const RETIRED = ['casawalk.cameraLens', 'casawalk.markerColour'];
+
+/** Clears the RETIRED keys from storage (once, when the headset part starts: js/xr.js). */
+export function forgetRetired() {
+	for (const key of RETIRED) try { globalThis.localStorage?.removeItem(key); } catch { /* private mode */ }
+}
 
 /** The value a stored string stands for (null or undefined: nothing stored). */
 export function decode(spec, raw) {

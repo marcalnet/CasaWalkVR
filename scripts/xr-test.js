@@ -1540,36 +1540,34 @@ check('back from walking: eyes at 1.89 m again, gallery shown, lasers on', Math.
 		const m1 = await page.evaluate(() => { const m = window.__casawalk.xr.fan.meter; return { lines: m.m.lines.length, label: m.m.lines[0]?.label ?? null, marks: m.marks.length }; });
 		check('the laser meter: a beam and dot on the model; two triggers measure a line with its label', m0.beam && m0.dot && m0.hit && m1.lines === 1 && m1.marks === 1 && /\d/.test(m1.label ?? ''), JSON.stringify({ m0, m1 }));
 		await shot('meter-line');
-		// Build 215's C3: the left controller's tip brought near the held meter shows its options row (cm · ft in · Undo), over it.
+		// The simpler tools (27 Nov 2026): the left controller's tip brought near the held meter shows nothing (no options row), and its trigger stays its own.
 		await page.evaluate(() => { const x = window.__casawalk.xr, d = window.__device.controllers.left, V = x.rig.position.constructor;
 			const at = x.fan.meter.object.getWorldPosition(new V()).add(new V(-0.09, 0.02, 0.02)), have = x.rig.localToWorld(new V(d.position.x, d.position.y, d.position.z));
 			const off = x.input.hands.left.touch.tip.clone().sub(have), to = x.rig.worldToLocal(at.sub(off)); d.position.set(to.x, to.y, to.z); });
 		await frames(8);
-		const row = await page.evaluate(() => { const x = window.__casawalk.xr, dl = x.dial, V = x.rig.position.constructor;
-			return { open: !!dl.open && !dl.open.stepped, keys: dl.pad.list.filter((k) => k.group.visible).map((k) => k.spec.label), up: dl.open ? +(dl.group.getWorldPosition(new V()).y - dl.partAt(x.fan.meter).y).toFixed(2) : null }; });
-		await shot('options-row');
-		check('reaching near the held meter shows its options row: cm, ft in, Undo, over it (build 215, C3)', row.open && row.keys.join() === 'cm,ft in,Undo' && row.up > 0.05, JSON.stringify(row));
+		const row = await page.evaluate(() => { const x = window.__casawalk.xr; return { dial: !!x.dial, options: x.tools.tools.some((t) => t.option), leftTrigger: x.input.hands.left.claim.trigger }; });
+		check('reaching near the held meter shows nothing: no options row (the user\'s simpler tools)', !row.dial && !row.options && row.leftTrigger !== 'dial', JSON.stringify(row));
 		// Build 215's C5: the words as drawn on real canvases (Kalam loaded): each key's at least its pad's smallest size, the long level names aside.
 		const type = await page.evaluate(async () => { const x = window.__casawalk.xr, { labelRange } = await import('./js/keys.js');
 			const of = (pad) => pad.list.filter((k) => k.group.visible && k.spec?.label).map((k) => ({ word: k.spec.label, px: k.labelPx, min: labelRange(k).min, max: labelRange(k).max }));
-			return { fonts: document.fonts.check('700 40px Kalam'), row: of(x.dial.pad), hand: of(x.ui.wrist.pad), doors: of(x.modes.dollhouse.doors), tags: x.fan.slots.map((s) => s.label.px) }; });
-		const keysOk = [...type.row, ...type.hand, ...type.doors].every((k) => k.px >= k.min && k.px <= k.max);
-		check('the keys\' words, drawn: Kalam, each between its smallest and largest size (1.4-1.8° on the hand\'s keys and the options row; the doors and levels up to 1.5°, a name past a 14 cm key never under 1.2°) (build 215, C5)', type.fonts && keysOk && type.row.length === 3 && type.hand.length === 2, JSON.stringify(type));
+			return { fonts: document.fonts.check('700 40px Kalam'), hand: of(x.ui.wrist.pad), doors: of(x.modes.dollhouse.doors), tags: x.fan.slots.map((s) => s.label.px) }; });
+		const keysOk = [...type.hand, ...type.doors].every((k) => k.px >= k.min && k.px <= k.max);
+		check('the keys\' words, drawn: Kalam, each between its smallest and largest size (1.4-1.8° on the hand\'s keys; the doors and levels up to 1.5°, a name past a 14 cm key never under 1.2°) (build 215, C5)', type.fonts && keysOk && type.hand.length === 2, JSON.stringify(type));
 		await restLeft(); await frames(6);
 		await page.evaluate(() => window.__casawalk.xr.fan.meter.clear());
-		// Brought home with the left controller held up beside it (its tip within reach of the meter): no options row, the
-		// magnet takes it (the Tester's finding on C3: the row would have held off the magnet).
+		// Brought home with the left controller held up beside it (its tip within reach of the meter): the magnet takes it (the
+		// Tester's finding on C3).
 		await aim('left', [-0.25, 1.05, -0.25], [-0.25, 2.0, -0.3]); await frames(20); // (held up, pointing up: its tip rises towards the tools)
 		const home = async () => { for (let i = 0; i < 4; i++) { await page.evaluate(() => { const x = window.__casawalk.xr, V = x.rig.position.constructor, f = x.fan, m = f.meter, d = window.__device.controllers.right;
 			if (!x.tools.held) return; const to = f.restWorld(f.slots.findIndex((s) => s.name === 'meter')).add(new V(0, 0, 0.05)), delta = x.rig.worldToLocal(to).sub(x.rig.worldToLocal(m.object.getWorldPosition(new V())));
 			d.position.set(d.position.x + delta.x, d.position.y + delta.y, d.position.z + delta.z); }); await frames(4); } };
 		await home();
-		const back = await page.evaluate(() => ({ held: window.__casawalk.xr.tools.held?.tool.name ?? null, row: !!window.__casawalk.xr.dial.open }));
-		check('the meter brought home with the other controller held up beside it: no options row, it goes home (the Tester\'s finding on C3)', !back.held && !back.row, JSON.stringify(back));
+		const back = await page.evaluate(() => ({ held: window.__casawalk.xr.tools.held?.tool.name ?? null }));
+		check('the meter brought home with the other controller held up beside it: it goes home (the Tester\'s finding on C3)', !back.held, JSON.stringify(back));
 		if (back.held) { await click('right', 'squeeze'); await frames(6); }
 		await restLeft(); await frames(4);
 	}
-	// The marker (milestone F): take it, hold the trigger and move: a stroke; the stick press: the next colour.
+	// The marker (milestone F): take it, hold the trigger and move: a stroke, in its one ink; the stick press does nothing.
 	{
 		await tipOn('marker');
 		await click('right', 'squeeze'); await frames(6);
@@ -1579,8 +1577,8 @@ check('back from walking: eyes at 1.89 m again, gallery shown, lasers on', Math.
 		for (let i = 0; i < 12; i++) { await page.evaluate(() => { window.__device.controllers.right.position.x -= 0.02; }); await frames(2); }
 		await button('right', 'trigger', 0); await frames(4);
 		await click('right', 'thumbstick'); await frames(4);
-		const mk = await page.evaluate(() => { const m = window.__casawalk.xr.fan.marker; return { strokes: m.strokes.length, points: m.strokes[0]?.n ?? 0, ink: m.ink }; });
-		check('the marker: holding the trigger draws a stroke; the stick press changes colour', held === 'marker' && mk.strokes === 1 && mk.points > 5 && mk.ink === 1, JSON.stringify({ held, ...mk, open: await page.evaluate(() => [!!window.__casawalk.xr.ui.menu, !!window.__casawalk.xr.ui.guide, window.__casawalk.xr.ui.wrist.open, window.__casawalk.xr.tools.held?.tool.name, window.__casawalk.xr.fan.group.visible]) }));
+		const mk = await page.evaluate(() => { const m = window.__casawalk.xr.fan.marker; return { strokes: m.strokes.length, points: m.strokes[0]?.n ?? 0, ink: '#' + m.material.color.getHexString() }; });
+		check('the marker: holding the trigger draws a stroke in its one dark grey ink; the stick press changes nothing', held === 'marker' && mk.strokes === 1 && mk.points > 5 && mk.ink === '#3a3f45', JSON.stringify({ held, ...mk, open: await page.evaluate(() => [!!window.__casawalk.xr.ui.menu, !!window.__casawalk.xr.ui.guide, window.__casawalk.xr.ui.wrist.open, window.__casawalk.xr.tools.held?.tool.name, window.__casawalk.xr.fan.group.visible]) }));
 		await shot('marker-stroke');
 		await page.evaluate(() => window.__casawalk.xr.fan.marker.clear());
 	}
@@ -1588,8 +1586,8 @@ check('back from walking: eyes at 1.89 m again, gallery shown, lasers on', Math.
 	await tipOn('camera');
 	await click('right', 'squeeze'); await frames(6);
 	await page.evaluate(() => { const d = window.__device.controllers.right; d.position.set(0.05, 1.35, -0.3); d.quaternion.set(0, 0, 0, 1); }); await frames(30);
-	const cam = await page.evaluate(() => { const x = window.__casawalk.xr, c = x.fan.camera; return { tool: x.tools.held?.tool.name, meterBack: !x.fan.slots[1].held, frames: c.frames ?? 0, lens: c.mm }; });
-	check('the street camera is taken (the meter goes back); its viewfinder shows the view through the lens', cam.tool === 'camera' && cam.meterBack && cam.frames > 0 && cam.lens === 24, JSON.stringify(cam));
+	const cam = await page.evaluate(() => { const x = window.__casawalk.xr, c = x.fan.camera; return { tool: x.tools.held?.tool.name, meterBack: !x.fan.slots[1].held, frames: c.frames ?? 0, fov: +c.view.fov.toFixed(1) }; });
+	check('the street camera is taken (the meter goes back); its viewfinder shows the view through the lens', cam.tool === 'camera' && cam.meterBack && cam.frames > 0 && cam.fov === 46.4, JSON.stringify(cam));
 	await shot('camera-held');
 	// The shutter: a 3:2 photo from the lens, kept for the page. (Called directly: from inside the
 	// emulator's XR frame, saving to IndexedDB stalls in headless Chromium.)

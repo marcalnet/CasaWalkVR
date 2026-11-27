@@ -8,7 +8,6 @@
 //
 //   tool        a hand holding a tool never aims; nor does a point within
 //               reach of the held tool (the other hand working with it)
-//   dial        a tool's dial is open: the other hand's pinch and trigger are its
 //   board       a wing is open: its hands are its
 //   hand keys   the point at the main hand's keys, ← Back and Settings (the
 //               other hand's: they float over their own hand; build 215's C8,
@@ -28,19 +27,18 @@ export const OWNER = {
 };
 
 /** The ladder, in order: the first that claims a hand owns it. */
-export const LADDER = ['tool', 'dial', 'board', 'hand keys', 'key', 'fan', 'model'];
+export const LADDER = ['tool', 'board', 'hand keys', 'key', 'fan', 'model'];
 
 /**
  * Why hand c's pinch (or pull) at point p may not aim, or null: the first
  * owner in LADDER that claims it. s: the frame's snapshot
- * ({ held: { c, at } | null, dial (a tool's options row shows), board, keys: { near(p, m), wearer } | null,
+ * ({ held: { c, at } | null, board, keys: { near(p, m), wearer } | null,
  * doors: { near(p, m) } | null, tools: [points], model: Box3 | null });
  * touching: c's fingertip is on a key (its touch ring shows).
  */
 export function aimOwner(c, p, s, touching = false) {
 	const NEAR = OWNER.NEAR;
 	if (s.held?.c === c) return 'tool';
-	if (s.dial) return 'dial';
 	if (s.board) return 'board';
 	if (!p) return null;
 	if (s.held?.at && s.held.at.distanceTo(p) < NEAR + OWNER.HELD_SPREAD) return 'tool';

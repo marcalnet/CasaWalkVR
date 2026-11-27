@@ -24,9 +24,7 @@
 //            held BACK_HOLD (a ring fills), as are B and Y (js/xr-ui.js).
 //   Look     60% at rest, full while a tip is within reach. Over a live key (the
 //            doors and levels, an open wing: the orb's old line-of-sight rule)
-//            they make room: half size, 30%, touches unchanged. While the held
-//            tool's options row shows (js/tool-dial.js) they make room the same
-//            way and ignore touches. Each key shrinks about its own middle, and
+//            they make room: half size, 30%, touches unchanged. Each key shrinks about its own middle, and
 //            never starts or stops making room while a tip is within reach: a
 //            key never slides from under a finger. Tracking lost: they stay 1
 //            s, then fade.
@@ -46,7 +44,7 @@ export const KEYS = {
 	YIELD: { scale: 0.5, opacity: 0.3 }, // making room
 	LOST_HOLD: 1, LOST_FADE: 0.2, // tracking lost: they stay, then fade (s)
 	TAKE: { hand: 0.07, controller: 0.05 },
-	TYPE: { readAt: 0.45, label: [1.4, 1.8], fit: 0.8 }, // the words, as the options row's (build 215's C5; js/tool-dial.js DIAL.TYPE) // a tip this near a tool in the fan is on it (the fan's take distance)
+	TYPE: { readAt: 0.45, label: [1.4, 1.8], fit: 0.8 }, // the words: Kalam, 1.4° at least, up to 1.8° where the word fits 80% of the key (build 215's C5: 11-14 mm capitals at 0.45 m) // a tip this near a tool in the fan is on it (the fan's take distance)
 };
 
 /**
@@ -96,8 +94,8 @@ export class WristMenu {
 	/** The input entry the keys float over (a tracked bare hand or a controller in use), or null. */
 	get wearer() { return this.holder; }
 
-	/** True while they make room (over a live key, or the held tool's options row showing). */
-	get yielded() { return this.sightYield || this.rowYield; }
+	/** True while they make room (over a live key). */
+	get yielded() { return this.sightYield; }
 
 	/** The keys' content for this layer. */
 	redraw() {
@@ -144,8 +142,7 @@ export class WristMenu {
 		if (!this.group.visible) { this.pad.update(dt, { active: false }); this.keysHot = false; return { action: null }; }
 		this.group.position.copy(this.pos);
 		this.group.lookAt(head);
-		// The look: making room over a live key or for the options row; full strength while a tip is within reach.
-		this.rowYield = !!xr.dial?.open && xr.tools?.held?.c === this.holder;
+		// The look: making room over a live key; full strength while a tip is within reach.
 		this.sightYield = this.sightYieldNow(head, dt);
 		if (!this.reach) this.yieldTo = this.yielded ? 1 : 0; // (held while a tip is within reach: a key never shrinks from under a finger)
 		this.yieldK += (this.yieldTo - this.yieldK) * (1 - Math.exp(-dt / 0.15));
@@ -156,8 +153,8 @@ export class WristMenu {
 			if (!k.base.material.transparent) { k.base.material.transparent = true; k.base.material.depthWrite = false; }
 			k.base.material.opacity = strength;
 		}
-		// Touches and lasers (never their own hand; never a tip on a tool; not while the options row shows).
-		const { action, hot } = this.pad.update(dt, { active: !this.rowYield, exclude: this.holder, skip: (c) => this.onTool(c), progress: { back: this.backProgress } });
+		// Touches and lasers (never their own hand; never a tip on a tool).
+		const { action, hot } = this.pad.update(dt, { active: true, exclude: this.holder, skip: (c) => this.onTool(c), progress: { back: this.backProgress } });
 		this.keysHot = hot.size > 0;
 		return { action };
 	}

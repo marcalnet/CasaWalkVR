@@ -34,8 +34,8 @@
 // showroom gallery pedestal walkSky), input and raycaster, shared state
 // (session sessionMode model mode menu menus view vrView lift maxStorey
 // baseScale plinthSize plinthDistance and the settings snapAngle personHeight
-// seeThroughAmount toolFan cameraLens), its services (lighting depth seeThrough
-// ui modes pause tools fan dial tweens haptics sound) and its methods. Each part owns what it
+// seeThroughAmount toolFan), its services (lighting depth seeThrough ui modes
+// pause tools fan cues tweens haptics sound) and its methods. Each part owns what it
 // creates and reads shared values when it needs them, never keeping copies.
 
 import * as THREE from 'three';
@@ -50,12 +50,12 @@ import { attachTransientPointer } from './transient-pointer.js';
 import { SeeThrough, SEE_THROUGH_MAX } from './walls.js';
 import { Portals } from './portal.js';
 import { Pause } from './pause.js';
-import { ToolDial } from './tool-dial.js';
+import { ControlCues } from './control-cue.js';
 import { SessionStore } from './session-store.js';
 import { aimOwner } from './hand-owner.js';
 import { scaleCentre, walkCentre, followBody, areaOf, bodyAreaOf, sideOf, yawTo } from './zones.js';
 import { takePhoto, photoName, saveFile, INTERFACE_LAYER } from './photo.js';
-import { readSetting } from './settings.js';
+import { readSetting, forgetRetired } from './settings.js';
 import { buildShowroom, buildStage, fitPlinth, placePlate, buildWalkSky, recolourSphere, PLINTH_HEIGHT } from './xr-scene.js';
 import { ScalePlate } from './panel.js';
 import { roomAt } from './rooms.js';
@@ -90,6 +90,7 @@ export class XRExperience {
 		this.model = null; // { group, layers, bounds, observer, skyColor }
 		this.session = null;
 		this.sessionMode = null; // 'vr' | 'ar' (the session type)
+		forgetRetired(); // (settings that went: their stored values cleared)
 		this.view = readSetting('view'); // what is shown (AR sessions only)
 		this.mode = null; // 'dollhouse' | 'walk': which of this.modes runs
 		this.lift = 0; // the rig's height above the floor the user stands on
@@ -102,7 +103,6 @@ export class XRExperience {
 		this.portals = new Portals(); // the wall portal (js/portal.js)
 		this.soundLevel = readSetting('sound'); // off | effects | all (effects and ambience)
 		this.toolFan = readSetting('mainHand') === 'left' ? 'right' : 'left'; // the hand the tool fan floats over: the one that is not the main hand (the main hand wears the wrist menu and takes tools)
-		this.cameraLens = readSetting('cameraLens'); // the street camera's lens, mm (milestone D)
 		this.frameDt = 1 / 72;
 		this.body = null; // inside: the body's direction ({ yaw, following }), following the head slowly (js/zones.js)
 		this.areas = null; // { centre, hands }: updateAreas()
@@ -148,7 +148,7 @@ export class XRExperience {
 		this.ui = new XRUI(this);
 		this.tools = new ToolSystem(this);
 		this.fan = new ToolFan(this); // the tool fan over the left hand (milestone C)
-		this.dial = new ToolDial(this); // each tool's one option, on its control part (js/tool-dial.js)
+		this.cues = new ControlCues(this); // the quiet ring on each tool's control part (js/control-cue.js)
 		this.tweens = new Tweens();
 		this.pause = new Pause(this); // every move between places, and the tips on the way (js/pause.js)
 		this.haptics = new Haptics();
@@ -362,12 +362,12 @@ export class XRExperience {
 	 * in this order, each with end(): depth shading, the wing and notes (and
 	 * the main hand's keys), the pause, the veil, the drawn hands, the ?hands
 	 * and ?stats readouts, the tools (back in the fan, measurements and
-	 * drawings cleared), the fan, the options row, the tweens, vibration,
+	 * drawings cleared), the fan, the tweens, vibration,
 	 * sound, the lasers and controllers. (Each "stuck after leaving VR" bug
 	 * was one more line here by hand: the audits' S5, C1, C2.)
 	 */
 	endingParts() {
-		return [this.depth, this.ui, this.pause, this.veil, ...this.handViews, this.readout, this.frameStats, this.tools, this.fan, this.dial, this.tweens, this.haptics, this.sound, this.input];
+		return [this.depth, this.ui, this.pause, this.veil, ...this.handViews, this.readout, this.frameStats, this.tools, this.fan, this.tweens, this.haptics, this.sound, this.input];
 	}
 
 	/**
@@ -565,13 +565,12 @@ export class XRExperience {
 	/**
 	 * The keys that take presses now, as pads (one source for liveKeys and
 	 * nearKey: the next-build asks 5.8, the code audit's S8): the plinth's
-	 * doors and levels while they are live, and an open tool dial's stops.
+	 * doors and levels while they are live.
 	 */
 	livePads() {
 		const out = this._livePads ??= [];
 		out.length = 0;
 		if (this.mode === 'dollhouse' && this.modes.dollhouse.doorsLive) out.push(this.modes.dollhouse.doors);
-		if (this.dial?.open) out.push(this.dial.pad);
 		return out;
 	}
 
@@ -616,7 +615,7 @@ export class XRExperience {
 	aimBlock(c, p) {
 		const s = this.claims ?? this.claimSnapshot();
 		// (What can change within the frame is read now: a tool taken, a wing opened.)
-		return aimOwner(c, p, { ...s, held: this.heldNow(), dial: !!this.dial?.open, board: this.boardOpen }, !!this.handViews[c.index]?.near);
+		return aimOwner(c, p, { ...s, held: this.heldNow(), board: this.boardOpen }, !!this.handViews[c.index]?.near);
 	}
 
 	/** The held tool's hand and where it is (world), or null. */
@@ -719,7 +718,6 @@ export class XRExperience {
 		this.ui.showHandsNote(); // bare hands: "Pick up your controllers" (their pinches are never read)
 		this.tools.claim(); // a held tool's buttons are its own, before the menu and the mode
 		this.fan.claim(); // (a squeeze on a tool in the fan takes it: never the model)
-		this.dial.claim(); // (an open dial owns the other controllers' triggers: never also a teleport or a walk-in)
 		if (this.pendingRecentre && this.mode === 'dollhouse') {
 			const head = this.viewerMatrix();
 			if (head) {
@@ -739,8 +737,8 @@ export class XRExperience {
 		this.updateAreas(dt); // left, centre, right: where each hand is (js/zones.js)
 		this.fan.update(dt); // the tool fan: home or waiting at the edge, touch, take, swap, put back (milestone C)
 		this.tools.update(dt);
-		this.dial.update(dt); // (after the tools: a stick step is already counted)
-		this.input.updateModels(dt, this.tools.held?.c ?? null, !!this.dial.open, this.tools.buttons()); // the real controllers: buttons moving, faded while holding a tool
+		this.cues.update(dt); // (after the tools: the ring of a tool held in use mode is full)
+		this.input.updateModels(dt, this.tools.held?.c ?? null, this.tools.buttons()); // the real controllers: buttons moving, faded while holding a tool
 		this.tweens.update(dt);
 		this.haptics.update(dt);
 		this.sound.update(dt);

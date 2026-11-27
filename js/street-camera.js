@@ -9,9 +9,8 @@
 // about 192 x 128, refreshed a few times a second (fewer on Quest 2), and not
 // at all when it faces away from you; nothing is written on the back (build 215's C5).
 // After a shot a small print pops out of the camera, floats a moment and
-// drifts back into the camera. Lens: wide angle 24 mm (default), medium lens 50 mm or zoom lens 75 mm (the user's
-// three, build 215's B3), set in
-// on the camera's dial (js/tool-dial.js; remembered: js/settings.js cameraLens).
+// drifts back into the camera. One lens, 28 mm, fixed: no choice to make (the
+// user's simpler tools, 27 Nov 2026; three lenses and a dial before).
 
 import * as THREE from 'three';
 import { DEVICE } from './device.js';
@@ -30,10 +29,10 @@ const LEVEL = THREE.MathUtils.degToRad(4); // held within this of level: the pho
 const PHOTO = [1920, 1280]; // 3:2
 const FILM_H = 24; // 35 mm film height (mm): vertical field of view from the focal length
 
-/** Vertical field of view (degrees) of a focal length on 35 mm film (36 x 24). */
-/** The three lenses: their focal length (mm) and name (the dial's stops and its label; the viewfinder shows the mm). */
-export const LENSES = [{ mm: 24, name: 'Wide angle', key: 'Wide' }, { mm: 50, name: 'Medium lens', key: 'Medium' }, { mm: 75, name: 'Zoom lens', key: 'Zoom' }]; // (key: the word on its key in the options row, js/tool-dial.js)
+/** The lens: its focal length (mm, 35 mm film). */
+export const LENS = 28;
 
+/** Vertical field of view (degrees) of a focal length on 35 mm film (36 x 24). */
 export const lensFov = (mm) => THREE.MathUtils.radToDeg(2 * Math.atan(FILM_H / 2 / mm));
 
 export class StreetCamera {
@@ -47,35 +46,23 @@ export class StreetCamera {
 		this.screenPoint = this.object.getObjectByName('screen');
 		// The viewfinder: a render target on a plane over the back screen.
 		this.target = typeof document !== 'undefined' ? new THREE.WebGLRenderTarget(...SCREEN) : null;
-		this.view = new THREE.PerspectiveCamera(lensFov(xr.cameraLens ?? LENSES[0].mm), SCREEN[0] / SCREEN[1], 0.05, VIEW_FAR);
+		this.view = new THREE.PerspectiveCamera(lensFov(LENS), SCREEN[0] / SCREEN[1], 0.05, VIEW_FAR);
 		this.screen = new THREE.Mesh(new THREE.PlaneGeometry(0.048, 0.032),
 			new THREE.MeshBasicMaterial({ map: this.target?.texture ?? null, color: this.target ? 0xffffff : 0x5d6873, toneMapped: false }));
 		this.screen.position.copy(this.screenPoint.position).z += 0.0006;
 		this.screen.name = 'viewfinder';
 		this.object.add(this.screen);
-		// (Nothing written on its back: the viewfinder alone. How to move and the use-mode ring say how to use it; the options row
-		// names the lens, and a change of lens shows its name for 1 s: build 215's C5, the Designer.)
+		// (Nothing written on its back: the viewfinder alone. How to move and the use-mode ring say how to use it: build 215's C5.)
 		this.held = null; // the hand holding it
 		this.t = 0;
 		this.prints = [];
-		this.controls = ['stickPress']; // the stick press of its hand steps its one option: the lens (js/tool-dial.js)
-		this.option = { part: 'control', stops: LENSES.map((l) => ({ value: l.mm, label: l.name, key: l.key })), get: () => this.mm, set: (mm) => this.xr.menuAction({ id: 'lens', value: mm }) };
+		this.controlPart = 'control'; // (its quiet ring: js/control-cue.js)
 		this.guide = new FramingGuide(xr); // the red frame where the photo's edges fall (js/framing-guide.js)
 		this._lens = new THREE.Matrix4(); this._turn = new THREE.Matrix4().makeRotationY(Math.PI);
-		this.setLens(xr.cameraLens ?? LENSES[0].mm);
-	}
-
-	setLens(mm) {
-		this.mm = mm;
-		this.view.fov = lensFov(mm);
-		this.view.updateProjectionMatrix();
 	}
 
 	take(c) { this.held = c; } // (bare hands: the holding hand's pinch is the shutter, in use mode: build 215's C2, js/xr-tools.js)
 	putBack() { this.held = null; this.guide.reset(); }
-
-	/** The stick press of the holding controller: the next lens, the dial shown (js/tool-dial.js). */
-	control(c, name) { if (name === 'stickPress') this.xr.dial?.step(this); } // (put back: the frame goes at once; only a held tool is updated, so it can't fade out)
 
 	/** The shutter. */
 	trigger(c, phase) {
@@ -94,7 +81,7 @@ export class StreetCamera {
 		// From the same smoothed pose the red frame is drawn from, so the photo matches it (the UX review's C5);
 		// before the frame's first pose, the lens (its empty's +Z looks out: turned round, as a photo camera looks along -Z).
 		const eye = this.guide.poseMatrix() ?? this.lensPoint.matrixWorld.clone().multiply(new THREE.Matrix4().makeRotationY(Math.PI));
-		xr.capturePhoto({ eye, width: PHOTO[0], height: PHOTO[1], fov: lensFov(this.mm), level: LEVEL, onBlob: (blob) => this.print(blob) });
+		xr.capturePhoto({ eye, width: PHOTO[0], height: PHOTO[1], fov: lensFov(LENS), level: LEVEL, onBlob: (blob) => this.print(blob) });
 	}
 
 	/** A small print pops out of the camera's top, floats a moment, then drifts back in. */
@@ -119,7 +106,7 @@ export class StreetCamera {
 		// The framing guide: only while held (the lens empty's +Z looks out: turned round, as a camera).
 		if (this.held || this.guide.group.visible) {
 			this.object.updateMatrixWorld(true);
-			this.guide.update(dt, !!this.held, this._lens.copy(this.lensPoint.matrixWorld).multiply(this._turn), lensFov(this.mm));
+			this.guide.update(dt, !!this.held, this._lens.copy(this.lensPoint.matrixWorld).multiply(this._turn), lensFov(LENS));
 		}
 		// The viewfinder: only while held and facing you, a few times a second.
 		// (After a slow frame, wait one more frame; never more than once in a row, or a slow device would never see it.)

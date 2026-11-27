@@ -59,7 +59,7 @@ const CELLS = {
 /**
  * The board's tabs (the same at both layers), each with rows of cell ids.
  * How to move first (it opens there the first time at each place in a
- * session: js/xr-ui.js). The camera's lens is on the camera's dial (js/tool-dial.js).
+ * session: js/xr-ui.js).
  */
 export const TABS = [
 	{ id: 'move', label: 'How to move', rows: [['guide']] },
@@ -92,10 +92,10 @@ export const GUIDES = {
 		lines: ['Right stick left or right: turn', 'Left stick: walk', 'Hold B or Y: back to the scale model', 'The Meta button leaves VR at any moment'] },
 	'dollhouse-hands': { row: 2,
 		frames: ['Close your hand on it: hold', 'Let go: it floats, then goes home', 'Pinch and hold, point at a room', 'Let go: walk in'],
-		lines: ['Turn it: it stays level', 'Palm towards you: cancel', 'Tools: pinch to use, bring back to put away', 'Hold \u2190 Back: leave VR'] },
+		lines: ['Turn it: it stays level', 'Close your hand on a tool: it sticks', 'Pinch, away from the others: use it', 'Hold \u2190 Back: leave VR'] }, // (the simpler tools, build-215 asks C10 §3)
 	'dollhouse-controllers': { row: 3,
 		frames: ['Grip: hold it', 'Stick: turn', 'Point at a room', 'Pull the trigger: walk in'],
-		lines: ['Turn it: it stays level', 'Let go: it floats home', 'Holding a tool, stick: its options', 'Hold B or Y: leave VR'] },
+		lines: ['Turn it: it stays level', 'Grip a tool: take it. Grip again: back', 'Trigger: use it. A: undo', 'Hold B or Y: leave VR'] }, // (C10 §3)
 };
 
 /**
@@ -234,12 +234,6 @@ export function menuAction(xr, target) {
 				xr.lighting.setShadows(true);
 				xr.tweens.start({ duration: 0.1, step: () => {}, done: () => { xr.shadowsBusy = false; updateLabels(xr); } });
 			} });
-			break;
-		case 'lens':
-			xr.cameraLens = SETTINGS.cameraLens.options.includes(value) ? value : SETTINGS.cameraLens.fallback;
-			writeSetting('cameraLens', xr.cameraLens);
-			xr.fan?.camera?.setLens(xr.cameraLens);
-			updateLabels(xr);
 			break;
 		case 'sound': // a switch: on is the effects (an old 'off' / 'effects' value still works)
 			xr.soundLevel = value === true || value === 'effects' ? 'effects' : value === false || value === 'off' ? 'off' : xr.soundLevel === 'off' ? 'effects' : 'off';

@@ -25,6 +25,6 @@ export class SessionStore {
 		this.target = false;
 		this.cycle = 0;
 		this.tabs = {};
-		this.cued = new Set(); // the tools whose control part's ring has pulsed this session (js/tool-dial.js)
+		this.cued = new Set(); // the tools whose control part's ring has pulsed this session (js/control-cue.js)
 	}
 }

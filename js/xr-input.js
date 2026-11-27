@@ -369,11 +369,10 @@ export class XRInput {
 	/**
 	 * Once a frame, after the tools: the real controllers' buttons move, and
 	 * their look follows what they do (next-build asks §6). holder: the entry
-	 * holding a tool (or null); dialOpen: its dial is open (full again);
-	 * buttons: the held tool's buttons, which glow. A controller put down
+	 * holding a tool (or null); buttons: the held tool's buttons, which glow. A controller put down
 	 * (updateResting) fades out, the bare hand drawn instead.
 	 */
-	updateModels(dt, holder = null, dialOpen = false, buttons = []) {
+	updateModels(dt, holder = null, buttons = []) {
 		for (const c of this.controllers) {
 			const m = c.model;
 			if (!m) continue;
@@ -388,7 +387,7 @@ export class XRInput {
 			}
 			c.nubEnd.visible = !c.resting; // (put down: the bare hand is drawn instead)
 			const held = holder === c;
-			m.setLook(c.resting ? 0 : held && !dialOpen ? LOOK.FADED : 1, held ? buttons : []);
+			m.setLook(c.resting ? 0 : held ? LOOK.FADED : 1, held ? buttons : []);
 			m.update(dt);
 		}
 	}

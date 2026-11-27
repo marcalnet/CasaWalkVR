@@ -13,8 +13,8 @@
 // makes you jump.
 //
 // A tool is an object with:
-//   name, object (its Object3D, never in photos), controls? (more buttons it
-//   owns while held: only 'stickPress', for the marker's colours),
+//   name, object (its Object3D, never in photos), controlPart (the empty in
+//   its model that carries the quiet ring: js/control-cue.js),
 //   take(c), putBack(), update(dt, c),
 //   trigger(c, 'down' | 'up'),
 //   secondary(c, 'press' | 'hold')  ('hold': kept down for HOLD seconds, e.g.
@@ -34,7 +34,6 @@ export const HOLD = 1; // seconds: "hold A for a second"
 // tool's trigger (the pinch's start, as a controller's trigger goes down; its
 // end, as it comes up). A hand holding a tool never aims a teleport nor closes
 // the wing (XRExperience.emptyHand), in either mode.
-const EXTRA = ['stickPress']; // buttons a tool may also own (besides trigger, grip and its second button)
 const NONE = [];
 
 export class ToolSystem {
@@ -60,9 +59,9 @@ export class ToolSystem {
 	 */
 	take(tool, c) {
 		if (this.held) this.putBack();
-		this.held = { tool, c, hold: 0, fired: true, controls: (tool.controls ?? NONE).filter((k) => EXTRA.includes(k)),
+		this.held = { tool, c, hold: 0, fired: true,
 			mode: 'dock', magnet: { armed: false }, pressed: false, lostT: 0 }; // (every take starts in dock mode: js/hold.js)
-		this.held.buttons = ['trigger', ToolSystem.secondKey(c), ...this.held.controls]; // (the controller model lights these: js/controller-model.js)
+		this.held.buttons = ['trigger', ToolSystem.secondKey(c)]; // (the controller model lights these: js/controller-model.js)
 		tool.take?.(c);
 	}
 
@@ -74,7 +73,7 @@ export class ToolSystem {
 		h.tool.putBack?.();
 	}
 
-	/** The held tool's buttons (xr-input names): its trigger, its second button and any extra (the stick press). Empty if none. */
+	/** The held tool's buttons (xr-input names): its trigger and its second button. Empty if none. */
 	buttons() {
 		return this.held?.buttons ?? NONE;
 	}
@@ -99,7 +98,6 @@ export class ToolSystem {
 		const k = h.c.claim;
 		k.trigger = k.grip = 'tool';
 		k[ToolSystem.secondKey(h.c)] = 'tool';
-		for (const name of h.controls) k[name] = 'tool';
 		this.xr.input.setLaser(h.c, false);
 	}
 
@@ -119,7 +117,7 @@ export class ToolSystem {
 		const was = h.mode;
 		if (tool.object) h.mode = dock ? nextMode(h.mode, tool.object.getWorldPosition(this._at ??= new THREE.Vector3()).distanceTo(dock)) : 'use'; // (no fan shown: no dock)
 		if (h.mode !== was) {
-			if (h.mode === 'use' && this.xr.soundLevel !== 'off') this.xr.sound.play('tick', 0.35); // (one soft tick: the ring lights, js/tool-dial.js)
+			if (h.mode === 'use' && this.xr.soundLevel !== 'off') this.xr.sound.play('tick', 0.35); // (one soft tick: the ring lights, js/control-cue.js)
 			if (h.mode === 'dock' && h.pressed) { h.pressed = false; tool.trigger?.(c, 'up'); } // (back near the fan: a stroke ends)
 		}
 		const use = h.mode === 'use';
@@ -140,7 +138,6 @@ export class ToolSystem {
 			if (h.hold >= HOLD) { h.fired = true; tool.secondary?.(c, 'hold'); }
 		}
 		if (s.up[key] && !h.fired) tool.secondary?.(c, 'press');
-		for (const name of h.controls) if (s.down[name]) tool.control?.(c, name); // (the marker's stick press: colour)
 		tool.update?.(dt, c);
 	}
 

@@ -12,7 +12,7 @@
 //
 // The look (setLook): faded to 35% while it holds a tool (the tool reads as the
 // thing in your hand), the tool's buttons lit with a faint orange glow;
-// full while a dial is open; gone (in 0.2 s) when it is put down and a bare
+// gone (in 0.2 s) when it is put down and a bare
 // hand takes over. A device with none of the three profiles keeps the plain
 // bars (js/xr-input.js): only those three are vendored.
 //

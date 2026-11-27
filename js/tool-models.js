@@ -10,7 +10,7 @@
 
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { COLOURS, KEY, HAND, BADGE } from './theme.js';
+import { COLOURS, KEY, HAND, BADGE, MARKER } from './theme.js';
 
 export const TOOL_COLOURS = {
 	graphite: COLOURS.text, // bodies
@@ -20,13 +20,8 @@ export const TOOL_COLOURS = {
 	accent: BADGE.orb.fill, // the thing to press
 };
 
-// The marker's four inks (content colours, not interface colours).
-export const MARKER_INKS = {
-	black: '#1d2329',
-	blue: '#2f5fd0',
-	green: '#2f9e6a',
-	red: '#d6423a',
-};
+// The marker's one ink (the theme's: MARKER.ink; the user's simpler tools, 27 Nov 2026: no colour to choose).
+export const MARKER_INK = MARKER.ink;
 
 /** A Lambert material; `map` optional. One per look, shared by every part that wears it. */
 export function lambert(colour, extra = {}) {
@@ -52,15 +47,14 @@ export function partList() {
 		/**
 		 * The parts as meshes. The plain colours merge into ONE mesh with the colours
 		 * per vertex, on a material all the tools share (the tester's finding: the
-		 * fan cost 14 draw calls); a material with a texture, or one that must change
-		 * on its own (keep: the marker's ink), stays a mesh of its own.
+		 * fan cost 14 draw calls); a material with a texture stays a mesh of its own.
 		 */
-		build(name, { keep = [] } = {}) {
+		build(name) {
 			const group = new THREE.Group();
 			group.name = name;
 			const plain = [];
 			for (const [mat, geos] of byMat) {
-				if (mat.map || mat.transparent || keep.includes(mat.name)) {
+				if (mat.map || mat.transparent) {
 					const mesh = new THREE.Mesh(mergeGeometries(geos, false), mat);
 					mesh.name = `${name}:${mat.name || mat.color.getHexString()}`;
 					group.add(mesh);
@@ -221,7 +215,7 @@ export function buildCamera({ inactive = false } = {}) {
 
 	point(g, 'grip', 0.044, -0.008, 0);
 	point(g, 'lens', lx, ly, zFront - 0.035, [0, 0, -1]);
-	// The control part (its dial: the lens) and its quiet ring (js/tool-dial.js): on the top of the body at its back edge, on the
+	// The control part and its quiet ring (js/control-cue.js): on the top of the body at its back edge, on the
 	// grip's side, where a real camera's dial sits, a flat ring facing up, seen from above while held. (On the lens it was
 	// hidden by the body in the hold: the Tester's xr-39; the Designer, next-build asks 3.6.)
 	point(g, 'control', 0.022, yTop, d / 2 - 0.011);
@@ -298,15 +292,14 @@ export function buildMeter({ blade = 0.03 } = {}) {
 export const MARKER_LENGTH = 0.145;
 export const MARKER_FAN_SCALE = 0.11 / MARKER_LENGTH; // a little longer than the others in the fan: it is thin
 
-/** @param {{ ink?: keyof MARKER_INKS | string }} [o] */
-export function buildMarker({ ink = 'blue' } = {}) {
+export function buildMarker() {
 	const M = {
 		barrel: lambert(C.paper, { name: 'barrel' }),
-		ink: lambert(MARKER_INKS[ink] || ink, { name: 'ink' }),
+		ink: lambert(MARKER_INK, { name: 'ink' }),
 	};
 	const P = partList();
 	const R = 0.0105; // barrel radius: thick, about 2.1 cm across
-	// One lathe profile per colour; distance d along the axis sits at world z = 0.051 - d (nib at -Z).
+	// One lathe profile per material; distance d along the axis sits at world z = 0.051 - d (nib at -Z).
 	const lathe = (pts, mat) => P.add(mat, new THREE.LatheGeometry(pts.map(([r, z]) => new THREE.Vector2(r, z)), 18), at(0, 0, 0.051, -Math.PI / 2));
 
 	// Barrel, from its back end (z 0.051) to the collar (z -0.040), softly rounded at both ends.
@@ -317,13 +310,12 @@ export function buildMarker({ ink = 'blue' } = {}) {
 	const cap = (pts) => P.add(M.ink, new THREE.LatheGeometry(pts.map(([r, z]) => new THREE.Vector2(r, z)), 18), at(0, 0, 0.051, Math.PI / 2));
 	cap([[0.0119, 0.0], [0.0122, 0.001], [0.0122, 0.026], [0.0105, 0.0295], [0.0060, 0.0313], [0, 0.0318]]);
 
-	const g = P.build('marker', { keep: ['ink'] });
+	const g = P.build('marker');
 	point(g, 'grip', 0, 0, (-0.0695 + 0.0823) / 2); // (held by its middle, between the nib and the cap's end: build 215's B2; before, 2.5 cm towards the nib)
 	point(g, 'tip', 0, 0, -0.0695, [0, 0, -1]);
-	point(g, 'cap', 0, 0, 0.067); // (the posted cap's middle: the marker's control part, its colour dial)
+	point(g, 'cap', 0, 0, 0.067); // (the posted cap's middle: the marker's control part)
 	// Its quiet ring: round the cap's domed end, facing along the axis, 0.5 mm proud of the surface (the UX review's S5).
 	g.userData.cue = { shape: 'ring', at: [0, 0, 0.0823 + 0.0005], radius: 0.0085 };
 	g.userData.fanScale = MARKER_FAN_SCALE;
-	g.userData.setInk = (c) => M.ink.color.set(MARKER_INKS[c] || c);
 	return g;
 }

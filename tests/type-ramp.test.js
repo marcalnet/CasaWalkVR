@@ -12,7 +12,6 @@ import assert from 'node:assert/strict';
 import { RAMP, CAP, capDeg, pxFor, kalamEm } from '../js/type-ramp.js';
 import { PX_H, labelRange } from '../js/keys.js';
 import { KEYS } from '../js/wrist-menu.js';
-import { DIAL } from '../js/tool-dial.js';
 import { TAG } from '../js/tool-fan.js';
 import { DOOR_TYPE, DOOR_IN, LEVEL_KEY, LEVEL_KEY_MANY, LEVEL_W, levelKeyWidth } from '../js/xr-dollhouse.js';
 import { NOTE_W, LABEL_H as LABEL_CANVAS_H, PANEL_TYPE } from '../js/panel.js';
@@ -24,7 +23,7 @@ import { SCREEN, LABEL_H as METER_LABEL_H, SLOT, LABEL_DEG, labelScale } from '.
 import { PLATE, WRIST } from '../js/theme.js';
 
 // Widths in em (Chromium, 27 Nov 2026).
-const KALAM = { '← Back': 3.5, Settings: 3.7, Wide: 2.07, Medium: 3.35, Zoom: 2.38, cm: 1.31, 'ft in': 2.08, Undo: 2.14, Camera: 3.31, Meter: 2.54, Marker: 2.97, 'Walk in →': 4.64, 'Level 0': 3.11, 'Level 12': 3.48, Second: 3.08, Attic: 2.28, 'First floor': 4.26, Basement: 4.4, 'Upper floor': 4.69, 'Ground floor': 5.17, 'Nice shot!': 4.67, "The photo didn't work": 9.8 };
+const KALAM = { '← Back': 3.5, Settings: 3.7, Camera: 3.31, Meter: 2.54, Marker: 2.97, 'Walk in →': 4.64, 'Level 0': 3.11, 'Level 12': 3.48, Second: 3.08, Attic: 2.28, 'First floor': 4.26, Basement: 4.4, 'Upper floor': 4.69, 'Ground floor': 5.17, 'Nice shot!': 4.67, "The photo didn't work": 9.8 };
 const UI = { '87': 1.11, '2.45': 1.95, "12' 4½\"": 3.49, cm: 1.45, m: 0.86, 'ft in': 1.83, [PHOTO_TEXT.kept.line]: 15.7, [PHOTO_TEXT.full.line]: 10.84, [PHOTO_TEXT.failed.line]: 20.33 };
 
 /** A key's word fitted as js/keys.js fits it: from max down in steps of 2 while wider than maxW, never under min. */
@@ -39,13 +38,12 @@ const DIST = { plate: 1.0, roomName: 1.2, walkSpot: 3, meterNear: 2, meterFar: 5
 /** Every drawn word: { what, family, px, mPerPx, dist, line (degrees), open (a known shortfall, for the Designer) }. */
 function texts() {
 	const t = [], add = (what, family, px, mPerPx, dist, line, open = null) => t.push({ what, family, px, mPerPx, dist, line, open });
-	// The main hand's keys and the options row: 7 cm round keys, read at 0.45 m; words fit 80% of the key's width.
-	for (const [pad, type, words] of [['hand key', KEYS.TYPE, ['← Back', 'Settings']], ['options row', DIAL.TYPE, ['Wide', 'Medium', 'Zoom', 'cm', 'ft in', 'Undo']]]) {
+	// The main hand's keys: 7 cm round keys, read at 0.45 m; words fit 80% of the key's width.
+	for (const [pad, type, words] of [['hand key', KEYS.TYPE, ['← Back', 'Settings']]]) {
 		const k = { h: WRIST.key, type }, r = labelRange(k);
 		for (const w of words) add(`${pad} "${w}"`, 'kalam', fitKey(w, r.max, r.min, WRIST.key / k.h * PX_H * type.fit), k.h / PX_H, type.readAt, RAMP.kalam);
 	}
 	add('hand key captions ("Leave VR", "Scale model", "and help")', 'ui', 26, WRIST.key / PX_H, KEYS.TYPE.readAt, RAMP.label);
-	add('options row: the chosen option\'s name ("Wide angle")', 'ui', 58, 0.03 / LABEL_CANVAS_H, DIAL.TYPE.readAt, RAMP.label);
 	// The tools' name tags.
 	for (const w of ['Camera', 'Meter', 'Marker']) add(`tool tag "${w}"`, 'kalam', TAG.px, TAG.height / LABEL_CANVAS_H, TAG.readAt, RAMP.kalam);
 	// The doors and the levels, from about 0.72 m. A wide key's word fits beside its icon (x0) with 30 px to spare.
