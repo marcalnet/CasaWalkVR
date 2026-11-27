@@ -1575,6 +1575,34 @@ test('the areas: the tools home over the left hand in the left area; the hand ov
 	assert.ok(!fan.reach && fan.mode === 'home' && fan.group.position.distanceTo(fan._anchor) < 0.02, 'the hand gone: home again');
 });
 
+test('a tool touched and held still ticks once, not like an alarm; touched again after a second, once more (build 215, A7)', async () => {
+	const { x, frame, hands } = await setup();
+	const fan = x.fan, ticks = [];
+	const play = x.sound.play.bind(x.sound);
+	x.sound.play = (name, ...a) => { if (name === 'tick') ticks.push(fan.t); return play(name, ...a); };
+	if (x.soundLevel === 'off') x.menuAction({ id: 'sound', value: true });
+	hands.left.grip.visible = hands.right.grip.visible = true;
+	hands.right.grip.position.set(0.4, 0.8, 0.1);
+	hands.left.grip.position.set(-0.45, 1.2, -0.3);
+	for (let i = 0; i < 40; i++) frame();
+	// The right tip held still 3 cm from where the meter (the middle) rests, under it (the lift goes up, away from the tip).
+	const meter = fan.slots.findIndex((s) => s.name === 'meter');
+	const at = fan.restWorld(meter).add(new THREE.Vector3(0, -0.03, 0));
+	for (let i = 0; i < 3; i++) { hands.right.grip.position.add(x.rig.worldToLocal(at.clone()).sub(x.rig.worldToLocal(hands.right.touch.tip.clone()))); frame(); }
+	for (let i = 0; i < 72 * 3; i++) frame(); // (3 s, the tools bobbing)
+	assert.equal(ticks.length, 1, `one tick in 3 s (${ticks.length})`);
+	assert.equal(fan.hot?.name, 'meter', 'the meter stays touched');
+	// Away and back: one more tick; away and back again at once (within a second of it): none.
+	const back = () => { for (let i = 0; i < 3; i++) { hands.right.grip.position.add(x.rig.worldToLocal(fan.restWorld(meter).add(new THREE.Vector3(0, -0.03, 0))).sub(x.rig.worldToLocal(hands.right.touch.tip.clone()))); frame(); } };
+	hands.right.grip.position.set(0.4, 0.8, 0.1); for (let i = 0; i < 10; i++) frame();
+	back();
+	assert.equal(ticks.length, 2, 'a new approach: one more');
+	hands.right.grip.position.set(0.4, 0.8, 0.1); for (let i = 0; i < 10; i++) frame();
+	back();
+	assert.equal(ticks.length, 2, 'back again within a second of it: none');
+	x.sound.play = play;
+});
+
 test('the orb never hides a live key: resting over the Walk in door it goes small and faint (touch unchanged); clear again it grows back after 0.4 s; near the eyes it still yields; touched while yielded it opens', async () => {
 	const { x, frame, hands } = await setup();
 	const w = x.ui.wrist;

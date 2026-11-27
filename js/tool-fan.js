@@ -47,6 +47,10 @@ const MEMORY = 0.6; // seconds a touched tool stays the one a closing hand takes
 const OUT = 0.08; // the open fan sits this far to the fan hand's outer side, beside its ABOVE
 const RETURN = 0.08; // a bare hand bringing its tool this close to its place puts it back
 const FADE = 0.2; // seconds: the fan appears and goes (tracking found or lost)
+// A touched tool (build 215's A7: the tick and the lift repeated like an alarm, faster or slower with the distance:
+// the lift carried the tool out of reach, it dropped back, and was touched again): touched within the reach of where
+// it rests (its lift and bob left out), let go only HOT_CLEAR further, and each tool ticks at most once a TICK_GAP.
+const HOT_CLEAR = 0.02, TICK_GAP = 1;
 
 export class ToolFan {
 	/** xr: the XRExperience (its ToolSystem gets the tools). */
@@ -140,19 +144,23 @@ export class ToolFan {
 		this.alpha = THREE.MathUtils.clamp(this.alpha + (open ? dt : -dt) / (open ? FADE : TOOLS.LOST_FADE), 0, 1);
 		this.group.visible = this.alpha > 0;
 		if (this.group.visible) this.place(head);
-		// Touching a tool with the taking hand's tip.
+		// Touching a tool with the taking hand's tip (where it rests: see HOT_CLEAR).
 		let hot = null;
 		if (this.alpha > 0.5 && take?.touch.tracked) {
-			let best = take.isHand ? REACH_HAND : REACH;
-			for (const s of this.slots) {
-				if (s.held) continue;
-				const d = s.home.getWorldPosition(at).distanceTo(take.touch.tip);
-				if (d < best) { best = d; hot = s; }
-			}
+			const reach = take.isHand ? REACH_HAND : REACH;
+			let best = Infinity;
+			this.slots.forEach((s, i) => {
+				if (s.held) return;
+				const d = this.restWorld(i, at).distanceTo(take.touch.tip);
+				if (d < (s === this.hot ? reach + HOT_CLEAR : reach) && d < best) { best = d; hot = s; }
+			});
 		}
 		if (hot !== this.hot) {
-			if (hot && hot.live) this.feel(take, 'tick', 'tick');
-			if (hot && !hot.live) this.refuse(hot, take);
+			if (hot && (hot.tickAt ?? -Infinity) <= this.t - TICK_GAP) {
+				hot.tickAt = this.t;
+				if (hot.live) this.feel(take, 'tick', 'tick');
+				else this.refuse(hot, take);
+			}
 			this.hot = hot;
 		}
 		this.fanBusy = this.alpha > 0.5 && this.reach; // (within reach of the tools, 0.25 m in, 0.35 m out: the orb ignores touches; the next-build asks 5.4)
@@ -223,6 +231,12 @@ export class ToolFan {
 			dampTowards(this.pos, this.vel, target, dt);
 			if (this.mode === 'home' && this.pos.distanceTo(target) < 0.01) this.gliding = false;
 		} else { this.pos.copy(target); this.vel.set(0, 0, 0); }
+	}
+
+	/** Where slot i rests in the fan (world): its place in the arc, without the touched lift or the bob. */
+	restWorld(i, out = new THREE.Vector3()) {
+		this.group.updateWorldMatrix(true, false);
+		return this.group.localToWorld(out.set((i - 1) * SPACING, Math.cos((i - 1) * 0.5) * 0.02 - 0.02, 0));
 	}
 
 	/** The fan where aim() put it, turned to face you; tools bob gently (not the inactive camera). */
