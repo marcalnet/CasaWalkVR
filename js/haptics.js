@@ -69,10 +69,10 @@ export class Haptics {
 		}
 	}
 
-	/** Silence (leaving VR). */
 	/** The session ends (js/xr.js handleEnd): no vibration left running. */
 	end() { this.stop(); }
 
+	/** Silence (leaving VR). */
 	stop() {
 		this.queue.length = 0;
 		this.buzzing.length = 0;

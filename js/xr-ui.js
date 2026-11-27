@@ -481,10 +481,10 @@ export class XRUI {
 		return false;
 	}
 
-	/** Leaving VR: everything closed and put away. */
 	/** The session ends (js/xr.js handleEnd): the wing, the notes and the main hand's keys put away. */
 	end() { this.reset(); }
 
+	/** Leaving VR: everything closed and put away. */
 	reset() {
 		this.spent.clear();
 		this.closeMenu();

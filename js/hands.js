@@ -136,10 +136,10 @@ export class HandView {
 		if (thumb?.visible) this.thumbTip.position.copy(thumb.position);
 	}
 
-	/** Leaving VR. */
 	/** The session ends (js/xr.js handleEnd): the hand no longer drawn. */
 	end() { this.hide(); }
 
+	/** Leaving VR. */
 	hide() { this.alpha = 0; this.group.visible = false; this.near = false; }
 }
 

@@ -94,10 +94,10 @@ export class Tweens {
 		if (!this.updating) this.compact();
 	}
 
-	/** Drops every tween (leaving VR). */
 	/** The session ends (js/xr.js handleEnd): every tween dropped. */
 	end() { this.clear(); }
 
+	/** Drops every tween (leaving VR). */
 	clear() {
 		for (const tw of this.list) tw.dead = true;
 		if (!this.updating) this.compact();

@@ -233,10 +233,10 @@ export class Pause {
 		if (p?.tip?.id === event && p.t >= PAUSE.LEARN_AFTER && !p.ending) this.endTip(true);
 	}
 
-	/** Leaving VR: everything put away. */
 	/** The session ends (js/xr.js handleEnd): any move between places, its tip and rings put away. */
 	end() { this.stop(); }
 
+	/** Leaving VR: everything put away. */
 	stop() {
 		this.fx = null;
 		this.group.visible = this.floor.visible = this.arc.visible = this.target.visible = false;

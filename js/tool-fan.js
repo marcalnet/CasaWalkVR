@@ -363,10 +363,10 @@ export class ToolFan {
 		if (haptic && c?.isController) xr.haptics.play(c, haptic);
 	}
 
-	/** Leaving VR: closed, nothing touched. */
 	/** The session ends (js/xr.js handleEnd): the fan put away (the tools themselves: js/xr-tools.js end). */
 	end() { this.reset(); }
 
+	/** Leaving VR: closed, nothing touched. */
 	reset() {
 		this.alpha = 0;
 		this.group.visible = false;

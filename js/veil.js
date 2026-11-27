@@ -89,10 +89,10 @@ export class Veil {
 	/** How much who is covering the view now (0 when it asks for nothing). */
 	amount(who) { return this.requests.get(who)?.opacity ?? 0; }
 
-	/** Withdraws every request (the session ended). */
 	/** The session ends (js/xr.js handleEnd): nothing round the eyes. */
 	end() { this.clear(); }
 
+	/** Withdraws every request (the session ended). */
 	clear() { this.requests.clear(); this.setVignette(0); this.setTunnel(0); this.apply(); }
 
 	apply() {
