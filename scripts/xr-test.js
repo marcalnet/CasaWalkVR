@@ -1006,6 +1006,7 @@ check('B closes the board', (await state()).menu === null);
 		return top.toArray();
 	});
 	await frames(4);
+	const plinthYaw = await page.evaluate(() => window.__casawalk.xr.modes.dollhouse.doll.yaw);
 	await gesture('right', { type: 'fist' }); await frames(4);
 	const held = await page.evaluate(() => window.__casawalk.xr.modes.dollhouse.grab?.kind ?? null);
 	await page.evaluate(() => { window.__device.hands.right.position.y += 0.6; }); await frames(20); // (well above the plinth: a bare hand's drop within 30 cm of it settles)
@@ -1013,13 +1014,15 @@ check('B closes the board', (await state()).menu === null);
 	const floating = await page.evaluate(() => { const d = window.__casawalk.xr.modes.dollhouse; return { floating: !!d.floating, line: d.dropLine.visible, lifted: d.doll.pos.y > 0.7 }; });
 	check('bare hands: a closed hand on the model holds it; let go in the air it floats', held === 'hand' && floating.floating && floating.line && floating.lifted, JSON.stringify({ held, ...floating, at: grabAt.map((v) => +v.toFixed(2)) }));
 	await shot('hands-floating');
+	await page.evaluate(() => { const d = window.__casawalk.xr.modes.dollhouse; d.doll.yaw += Math.PI / 2; d.apply(); }); // (turned a quarter in the air: build 215's A6)
 	await page.evaluate(() => { window.__device.hands.right.position.set(0.5, 1.0, 0.3); window.__device.hands.left.position.set(-0.5, 1.0, 0.3); });
 	// (4 s of the app's own time, then the glide: a heavy home runs the emulator slowly, so allow plenty of real time.)
 	await page.waitForFunction(() => !window.__casawalk.xr.modes.dollhouse.floating, null, { timeout: 30000, polling: 'raf' }).catch(() => {});
 	const homeAgain = await page.evaluate(() => { const x = window.__casawalk.xr, d = x.modes.dollhouse, V = x.rig.position.constructor, b = d.modelBox();
-		return { floating: !!d.floating, wait: d.floating?.wait, going: !!d.floating?.going, grab: !!d.grab, level: d.level(), y: +d.doll.pos.y.toFixed(3),
+		return { floating: !!d.floating, wait: d.floating?.wait, going: !!d.floating?.going, grab: !!d.grab, level: d.level(), y: +d.doll.pos.y.toFixed(3), yaw: d.doll.yaw,
 			near: x.input.controllers.map((c) => { const p = d.holdPoint(c, new V()); return [c.handedness, c.isHand, c.isController, c.touch.tracked, p ? +b.distanceToPoint(p).toFixed(2) : null]; }) }; });
 	check('with hands away, the floating model goes home by itself and settles, level', !homeAgain.floating && homeAgain.level && Math.abs(homeAgain.y - (await page.evaluate(() => window.__casawalk.xr.plinthH)) - 0.004) < 0.002, JSON.stringify(homeAgain));
+	check('turned a quarter in the air, it goes home to its own heading on the plinth (build 215, A6)', Math.abs(Math.cos(homeAgain.yaw - plinthYaw) - 1) < 1e-4, JSON.stringify({ plinthYaw, yaw: homeAgain.yaw }));
 	// The pause's looping hand (js/tip-demo.js), frozen here at its steady-blue moment to look at it.
 	const pd = await page.evaluate(async () => {
 		const x = window.__casawalk.xr, d = x.pause.demo, V = x.rig.position.constructor, h = x.headWorld(), f = new V(0, 0, -1).transformDirection(x.camera.matrixWorld).setY(0).normalize();

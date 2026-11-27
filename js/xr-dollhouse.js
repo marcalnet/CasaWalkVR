@@ -49,8 +49,12 @@ const ABOVE_REAL_FLOOR = 0.05; // passthrough: the model never sinks below the r
 // fits the plinth, and keeps it for the visit.
 export const ROUND_SCALES = [5, 10, 15, 20, 25, 30, 40, 50, 75, 100, 150, 200, 300, 500, 1000];
 
-/** A yaw (radians) turned to the nearest quarter turn: square to the plinth (0°, 90°, 180°, 270°). */
-export function squareYaw(yaw) { return Math.round(yaw / (Math.PI / 2)) * (Math.PI / 2); }
+/**
+ * The heading a floating model glides home to, from `yaw` (where it floats): the one it had on the plinth when it
+ * was picked up (`home`), reached the short way round (build 215's A6, the user's decision: it always comes back
+ * to its own heading, about the vertical only; before, it kept the turn given in the air, rounded to a quarter turn).
+ */
+export function homeYaw(yaw, home) { return yaw + Math.atan2(Math.sin(home - yaw), Math.cos(home - yaw)); }
 
 /** The round scale (the 50 of 1:50) nearest a ratio (by proportion, not by difference). */
 export function roundScale(ratio) {
@@ -253,6 +257,7 @@ export class Dollhouse {
 		this.doll.pos.set(0, this.xr.plinthH + 0.004, -this.xr.plinthDistance);
 		this.doll.yaw = 0;
 		this.doll.zoom = 1;
+		this.plinthYaw = 0; // (the heading a floating model goes home to: its own on the plinth)
 	}
 
 	/** measure: take the head height now (false at session start, when there is no pose yet). */
@@ -497,7 +502,7 @@ export class Dollhouse {
 		// Thumbsticks: left/right turns the model (either controller); up and down do nothing.
 		let sx = 0;
 		for (const c of input.active()) sx += c.state.stick.x;
-		if (sx) { this.doll.yaw -= sx * ROTATE_SPEED * dt; if (this.floating) this.stickTurned = true; } // (a turn you made with the stick is kept when it goes home)
+		if (sx) this.doll.yaw -= sx * ROTATE_SPEED * dt;
 		this.apply();
 	}
 
@@ -569,6 +574,7 @@ export class Dollhouse {
 		const xr = this.xr, p = this.holdPoint(c), q = this.holdTurn(c);
 		if (!p || !q) return;
 		xr.pause?.note('grab'); // (the grab tip is learnt: js/pause.js)
+		if (!this.floating) this.plinthYaw = this.doll.yaw; // (taken from the plinth: the heading it goes home to)
 		if (this.settling) { xr.tweens.stop(this.settling); this.settling = null; }
 		this.stopFloating();
 		this.cancelHandAim();
@@ -661,7 +667,6 @@ export class Dollhouse {
 
 	/** No longer floating: the ring and the drop line go. */
 	stopFloating() {
-		this.stickTurned = false;
 		if (this.floating?.going) this.xr.tweens.stop(this.floating.going);
 		this.floating = null;
 		this.dropLine.visible = this.homeRing.visible = this.homeOutline.visible = false;
@@ -724,14 +729,13 @@ export class Dollhouse {
 
 	/**
 	 * The glide home: 1.6 s (smooth ease: no jolt as it starts or stops) along a gentle arc rising 20 cm at its
-	 * middle, turning to the nearest quarter turn square to the plinth (unless
-	 * you turned it with the stick: then it lands on that turn), then it
+	 * middle, turning back to the heading it had on the plinth when it was picked up (homeYaw), then it
 	 * settles (sound settle).
 	 */
 	goHome() {
 		const xr = this.xr, f = this.floating;
 		const from = this.doll.pos.clone(), to = new THREE.Vector3(0, xr.plinthH + 0.004, -xr.plinthDistance);
-		const yaw0 = this.doll.yaw, yaw1 = this.stickTurned ? yaw0 : squareYaw(yaw0);
+		const yaw0 = this.doll.yaw, yaw1 = homeYaw(yaw0, this.plinthYaw ?? 0);
 		this.dropLine.visible = false;
 		f.going = xr.tweens.start({
 			duration: RETURN_GLIDE, ease: ease.smooth, long: true, // (long: tweens are capped at 0.3 s otherwise; build 120's glide ran 0.3 s)

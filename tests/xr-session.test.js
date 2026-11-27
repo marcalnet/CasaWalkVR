@@ -1645,10 +1645,24 @@ test('the plinth: one height, 1.24 m, for controllers and bare hands, 30 cm of t
 	x.input.updateTouch = realTouch;
 });
 
-test('going home turns the model square to the plinth (unless you turned it with the stick)', async () => {
-	const { squareYaw } = await import('../js/xr-dollhouse.js');
-	const q = Math.PI / 2;
-	assert.ok(Math.abs(squareYaw(0.3) - 0) < 1e-9 && Math.abs(squareYaw(1.3) - q) < 1e-9 && Math.abs(squareYaw(-2.8) + Math.PI) < 1e-9);
+test('going home turns the model back to its heading on the plinth, the short way (build 215, A6)', async () => {
+	const { homeYaw } = await import('../js/xr-dollhouse.js');
+	const q = Math.PI / 2, near = (a, b) => Math.abs(a - b) < 1e-9;
+	assert.ok(near(homeYaw(q, 0), 0) && near(Math.cos(homeYaw(Math.PI, 0)), 1), 'a quarter or half turn in the air: undone');
+	assert.ok(near(homeYaw(0.3, 0), 0) && near(homeYaw(-0.3, 0), 0), 'a small turn: undone too');
+	assert.ok(near(homeYaw(2 * Math.PI + 0.2, 0), 2 * Math.PI), 'never the long way round: a whole turn more is the same heading');
+	assert.ok(near(homeYaw(1.0, 0.4), 0.4), 'turned on the plinth first (the stick): back to that heading');
+	// In a session: taken from the plinth turned 0.4, turned a quarter in the air, let go: it glides home at 0.4.
+	const { x, frame } = await setup();
+	frame();
+	const d = x.modes.dollhouse;
+	d.doll.yaw = 0.4;
+	const c = x.input.hands.right;
+	d.startGrab(c);
+	d.doll.yaw = 0.4 + q; d.grab = null; d.floating = { wait: 0, going: null };
+	d.goHome();
+	for (let i = 0; i < 200; i++) frame();
+	assert.ok(near(((d.doll.yaw % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI), 0.4), `home at its plinth heading (${d.doll.yaw.toFixed(3)})`);
 });
 
 test('a laser on a wing hovers its cell', async () => {
