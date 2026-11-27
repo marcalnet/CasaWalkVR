@@ -63,10 +63,15 @@ await page.addInitScript((name) => {
 	window.__frozen = false; // (true: the hands hold perfectly still, as when the headset freezes a hand it has lost)
 	let sign = 1; // (alternating, so every frame moves by at least 0.1 mm: a random step could be smaller than the app's 0.01 mm)
 	const tremble = () => { if (window.__frozen) return; sign = -sign; for (const side of ['left', 'right']) { const n = sign * (0.5 + 0.5 * Math.random()) * 1e-4; d.hands[side].position.x += n - was[side]; was[side] = n; } };
+	// A trigger held exactly one frame (window.__pulse(hand)): pressed at one frame's start, let go at the next. (From
+	// outside, a press and its release are round trips that span several slow frames under load.)
+	let pulsing = null;
+	window.__pulse = (hand) => new Promise((done) => { pulsing = { hand, step: 0, done }; });
+	const pulse = () => { if (!pulsing) return; const c = d.controllers[pulsing.hand]; if (pulsing.step === 0) { c.updateButtonValue('trigger', 1); pulsing.step = 1; } else { c.updateButtonValue('trigger', 0); const p = pulsing; pulsing = null; setTimeout(p.done, 0); } };
 	const request = navigator.xr.requestSession.bind(navigator.xr);
 	navigator.xr.requestSession = async (...args) => {
 		const session = await request(...args), raf = session.requestAnimationFrame.bind(session);
-		session.requestAnimationFrame = (cb) => raf((t, frame) => { tremble(); cb(t, frame); });
+		session.requestAnimationFrame = (cb) => raf((t, frame) => { tremble(); pulse(); cb(t, frame); });
 		return session;
 	};
 }, DEVICE);
@@ -764,7 +769,7 @@ check('B closes the board', (await state()).menu === null);
 	await page.evaluate(() => { window.__device.hands.right.connected = false; }); await frames(8);
 	const tl = right(await touch()), lostState = await state();
 	check('touch: losing a hand mid-pinch ends it safely (no click, nothing moves)', !tl.tracked && !tl.held && tl.lost && lostState.mode === 'dollhouse' && !lostState.menu, JSON.stringify({ tracked: tl.tracked, held: tl.held, lost: tl.lost, mode: lostState.mode }));
-	await page.evaluate(() => { window.__device.hands.right.updatePinchValue(0); window.__device.hands.right.connected = true; }); await frames(8);
+	await page.evaluate(() => { window.__device.hands.right.updatePinchValue(0); window.__device.hands.right.connected = true; }); await frames(8); await page.waitForFunction(() => window.__casawalk.xr.input.controllers.find((c) => c.handedness === 'right')?.touch.tracked, null, { timeout: 3000, polling: 'raf' }).catch(() => {}); // (a hand found again counts once seen moving: build 215's A1)
 	const back2 = right(await touch());
 	check('touch: the hand comes back, tracked and not pinching', back2.kind === 'hand' && back2.tracked && !back2.held, JSON.stringify(back2));
 	// Build 215's A1 and A2: the Quest went on reporting hands it no longer saw, frozen where they were; they were drawn in
@@ -781,7 +786,7 @@ check('B closes the board', (await state()).menu === null);
 	// Lost while pinching, found again still pinching: not a new press, until the pinch has been seen open.
 	await page.evaluate(() => window.__device.hands.right.updatePinchValue(1)); await frames(6);
 	await page.evaluate(() => { window.__device.hands.right.connected = false; }); await frames(8);
-	await page.evaluate(() => { window.__device.hands.right.connected = true; }); await frames(8);
+	await page.evaluate(() => { window.__device.hands.right.connected = true; }); await frames(8); await page.waitForFunction(() => window.__casawalk.xr.input.controllers.find((c) => c.handedness === 'right')?.touch.tracked, null, { timeout: 3000, polling: 'raf' }).catch(() => {}); // (a hand found again counts once seen moving: build 215's A1)
 	const stillPinched = right(await touch());
 	await page.evaluate(() => window.__device.hands.right.updatePinchValue(0)); await frames(6);
 	await page.evaluate(() => window.__device.hands.right.updatePinchValue(1)); await frames(6);
@@ -1581,11 +1586,10 @@ check('back from walking: eyes at 1.89 m again, gallery shown, lasers on', Math.
 	check('every pause tip fits one line at full size, 60 cm at most, no full stop (the UX review\'s S7)', wide.length === 0, JSON.stringify(wide));
 	// (A pull of one frame: a trigger held 0.3 s with an arc on the floor ring is the practice jump, by design, and the slower
 	// emulated Quest 2 made one of a click (any aim lands within 2 s). Released as soon as the app has seen it pressed.)
-	// (Pointed up at nothing, so the pull can only be a skip however long the emulator takes to see it let go: under load a
-	// one-frame pull was sometimes seen held 0.3 s, the practice jump. Build 215's runs.)
-	await aim('right', [0.25, 1.1, -0.25], [0.3, 3, -0.6]); await frames(2);
-	await button('right', 'trigger', 1); await appSees('right', 'trigger', true); await button('right', 'trigger', 0); await appSees('right', 'trigger', false);
-	await restRight(); await settled(); await frames(4);
+	// (Held exactly one frame, in the session's own frame loop: from outside, under the load of two emulated headsets, a
+	// press and its release spanned several slow frames and read as the 0.3 s practice jump. Build 215's runs.)
+	await page.evaluate(() => window.__pulse('right'));
+	await settled(); await frames(4);
 	const after = await page.evaluate(() => { const x = window.__casawalk.xr; return { fx: !!x.layerFx, dark: x.veil.amount('layer'), learnt: x.pause.record.tips.learnt.has('teleport:controllers'), seen: x.pause.record.tips.seen.has('teleport:controllers'), target: x.pause.target.visible }; });
 	check('a pull skips it (seen, not learnt); the room fades in, the first-target ring ahead', !after.fx && after.dark === 0 && !after.learnt && after.seen && after.target, JSON.stringify(after));
 	await page.evaluate(() => { const x = window.__casawalk.xr; x.pause.tipsOn = false; x.menuAction('back'); }); await settled(); await frames(6);
