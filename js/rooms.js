@@ -63,6 +63,29 @@ export function roomAt(plan, x, y, z) {
 }
 
 /**
+ * The room to walk into when the file has no Sweet Home 3D visitor (build
+ * 215's D: the home's raw middle could fall in a wall or outside): on the
+ * lowest floor, the named room containing (x, z), else the named room
+ * nearest it (its nearest edge). Unnamed rooms (floors or ceilings drawn as
+ * rooms) only if there is no named one. Null without rooms.
+ */
+export function nearestRoom(plan, x, z) {
+	const all = plan?.rooms ?? [];
+	if (!all.length) return null;
+	const named = all.filter((r) => r.name);
+	const pool = named.length ? named : all;
+	const lowest = Math.min(...pool.map((r) => r.floorY));
+	let best = null, bestD = Infinity;
+	for (const room of pool) {
+		if (room.floorY - lowest > LEVEL_TOLERANCE) continue;
+		room.area ??= area(room.points);
+		const d = inside(x, z, room.points) ? -1 / room.area : edgeDistance(x, z, room.points); // (inside: the smallest that holds it)
+		if (d < bestD) { bestD = d; best = room; }
+	}
+	return best;
+}
+
+/**
  * Spots to stand in a room, best first: points on a STEP grid inside it, at
  * least MIN_CLEAR from its edges, sorted by distance from the edges (the
  * farthest first). If the room is too small for that, its single most open

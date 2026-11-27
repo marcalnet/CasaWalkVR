@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { unzipSync } from 'fflate';
 import { parseHome, buildHome } from '../js/sh3d.js';
-import { inside, edgeDistance, area, roomAt, roomSpots, longAxis, alongAxis, headingOf, roomLanding, clearOfWalls } from '../js/rooms.js';
+import { inside, edgeDistance, area, roomAt, roomSpots, longAxis, alongAxis, headingOf, roomLanding, clearOfWalls, nearestRoom } from '../js/rooms.js';
 
 const rect = (x0, z0, x1, z1) => [[x0, z0], [x1, z0], [x1, z1], [x0, z1]];
 // An L-shaped room: a 6 x 2 m leg along x, and a 2 x 4 m leg going up z from its left end.
@@ -90,4 +90,22 @@ test('the example home: every room gives a clear spot inside it, on its own stor
 		assert.ok(inside(l.x, l.z, room.points) && edgeDistance(l.x, l.z, room.points) >= 0.35, room.name);
 		assert.equal(roomAt(built.plan, l.x, room.floorY, l.z), room);
 	}
+});
+
+// Build 215's D: a file without a Sweet Home 3D visitor walked in at the home's raw middle, which can fall in a wall
+// or outside (an L-shaped home: its middle is in the garden). Now: the nearest room's clear middle, on the lowest floor.
+test('without a visitor: the room at the home\'s middle, else the nearest one, on the lowest floor; named rooms first', () => {
+	const hall = { name: 'Hall', points: rect(0, 0, 2, 6), floorY: 0 };
+	const living = { name: 'Living', points: rect(2, 0, 8, 2), floorY: 0 };
+	const upstairs = { name: 'Bedroom', points: rect(0, 0, 8, 6), floorY: 2.6 };
+	const terrace = { name: '', points: rect(-5, -5, 13, 11), floorY: 0 }; // (an unnamed floor under everything)
+	const plan = { rooms: [terrace, upstairs, hall, living], walls: [] };
+	// The L-shaped home's middle, (4, 3), is outside both ground-floor rooms: the nearer is the living room (1 m away).
+	assert.equal(nearestRoom(plan, 4, 3), living);
+	assert.equal(nearestRoom(plan, 1, 3), hall, 'inside a room: that one');
+	assert.equal(nearestRoom({ rooms: [terrace], walls: [] }, 4, 3), terrace, 'only an unnamed room: it will do');
+	assert.equal(nearestRoom({ rooms: [], walls: [] }, 4, 3), null, 'no rooms (OBJ, GLB): none');
+	assert.equal(nearestRoom(null, 4, 3), null);
+	const l = roomLanding(nearestRoom(plan, 4, 3));
+	assert.ok(inside(l.x, l.z, living.points) && edgeDistance(l.x, l.z, living.points) > 0.9, 'its clear middle, well inside');
 });

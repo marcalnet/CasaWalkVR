@@ -27,6 +27,7 @@ import { EYE_BELOW_TOP } from './xr-scene.js';
 import { handAimRay, momentBefore } from './gestures.js';
 import { hotspots, snapTo, HOTSPOT } from './hotspots.js';
 import { Label } from './panel.js';
+import { nearestRoom, roomLanding, alongAxis } from './rooms.js';
 
 const WALK_SPEED = 0.75; // m/s at full stick
 const WALL_TOO_NEAR = 0.6; // a wall the arc meets this close to you (m, horizontally): red, nothing happens
@@ -73,7 +74,13 @@ export class Walk {
 		this.xr.setMode('walk', modelPt, yaw);
 	}
 
-	/** Where Walk in → lands: the Sweet Home 3D camera's place (model space), or the middle of the home. */
+	/**
+	 * Where Walk in → lands: the Sweet Home 3D camera's place (model space).
+	 * A file without one: the clear middle of the room nearest the home's
+	 * middle on its lowest floor, facing along the room (build 215's D: the
+	 * raw middle could fall in a wall or outside); a file without rooms (OBJ,
+	 * GLB): the floor under the home's middle.
+	 */
 	walkInPoint() {
 		const xr = this.xr;
 		const obs = xr.model.observer;
@@ -85,12 +92,27 @@ export class Walk {
 			modelPt = xr.centerer.worldToLocal(floor.clone());
 			yaw = Math.PI - obs.yaw; // Sweet Home 3D yaw -> three.js heading
 		} else {
-			const c = xr.model.bounds.getCenter(new THREE.Vector3());
-			const eye = xr.centerer.localToWorld(c.setY(xr.model.bounds.max.y));
-			const floor = xr.findFloor(eye, 0.01) || eye.setY(0);
-			modelPt = xr.centerer.worldToLocal(floor.clone());
+			const room = this.roomLandingPoint();
+			if (room) ({ modelPt, yaw } = room);
+			else {
+				const c = xr.model.bounds.getCenter(new THREE.Vector3());
+				const eye = xr.centerer.localToWorld(c.setY(xr.model.bounds.max.y));
+				const floor = xr.findFloor(eye, 0.01) || eye.setY(0);
+				modelPt = xr.centerer.worldToLocal(floor.clone());
+			}
 		}
 		return { modelPt, yaw };
+	}
+
+	/** The nearest room's clear middle (see walkInPoint), or null without rooms. Worked out once per room. */
+	roomLandingPoint() {
+		const xr = this.xr, plan = xr.model.plan, doll = xr.modes.dollhouse;
+		const mid = xr.model.bounds.getCenter(new THREE.Vector3());
+		const room = nearestRoom(plan, mid.x, mid.z);
+		if (!room) return null;
+		room.landing ??= roomLanding(room, (x, z) => doll.isClear(x, room.floorY, z));
+		const l = room.landing;
+		return l ? { modelPt: new THREE.Vector3(l.x, room.floorY, l.z), yaw: alongAxis(l.axis, doll.modelHeading()) } : null;
 	}
 
 	setWalkTransform() {

@@ -1887,3 +1887,17 @@ test('ladder rule 5: the tools guard the empty-space close only within 15 cm of 
 	const d = x.modes.dollhouse, house = d.houseBox(), all = d.modelBox();
 	assert.ok(all.containsBox(house.expandByScalar(-1e-6)), 'the house is inside the model');
 });
+
+test('a home without a Sweet Home 3D visitor walks in at the clear middle of the room nearest its middle (build 215, D)', async () => {
+	const { roomAt, edgeDistance } = await import('../js/rooms.js');
+	const { x, frame } = await setup();
+	frame();
+	const plan = x.model.plan;
+	assert.ok(plan?.rooms?.length, 'the example home has rooms');
+	x.model.observer = null;
+	const { modelPt, yaw } = x.modes.walk.walkInPoint();
+	const room = roomAt(plan, modelPt.x, modelPt.y, modelPt.z);
+	assert.ok(room?.name, `in a named room (${room?.name ?? 'none'})`);
+	assert.ok(edgeDistance(modelPt.x, modelPt.z, room.points) >= 0.35, 'clear of its walls');
+	assert.ok(Number.isFinite(yaw), 'facing along it');
+});
