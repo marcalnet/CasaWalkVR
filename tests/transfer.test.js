@@ -98,6 +98,13 @@ test('the security policy allows the pairing server in config.js, and nothing el
 	const connect = csp.match(/connect-src ([^;]+)/)[1].trim().split(/\s+/);
 	assert.deepEqual(connect, ["'self'", 'https:', `wss://${CONFIG.pairing.host}`, 'data:', 'blob:']);
 	assert.equal(CONFIG.pairing.secure, true);
+	// The WebRTC connection servers (not governed by connect-src) are named, not
+	// left to PeerJS's defaults, and each one is named in the README's privacy list.
+	const ice = CONFIG.pairing.config?.iceServers ?? [];
+	const hosts = ice.flatMap((s) => [].concat(s.urls)).map((u) => u.replace(/^(stun|turn)s?:/, '').replace(/:\d+.*$/, ''));
+	assert.deepEqual(hosts, ['stun.l.google.com', 'eu-0.turn.peerjs.com', 'us-0.turn.peerjs.com']);
+	const readme = fs.readFileSync(path.join(ROOT, 'README.md'), 'utf8');
+	for (const h of hosts) assert.ok(readme.includes(h), `README names ${h}`);
 	// The pairing library is vendored with its licence and loaded from this site.
 	assert.ok(fs.existsSync(path.join(ROOT, 'vendor/peerjs/peerjs.min.js')));
 	assert.ok(fs.existsSync(path.join(ROOT, 'vendor/peerjs/LICENSE')));

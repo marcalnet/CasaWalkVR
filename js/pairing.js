@@ -10,10 +10,12 @@
 //
 // The two devices find each other through a small public service (PeerJS's
 // free server, set in config.js): only connection details pass through it.
-// The model itself goes directly from one device to the other, encrypted by
-// WebRTC; if a direct path is impossible, PeerJS's relay passes the encrypted
-// bytes along without being able to read them. The pairing service is only
-// contacted when this feature is used: the PeerJS library is loaded then too.
+// The model itself goes from one device to the other, encrypted by WebRTC;
+// if a direct path is impossible, PeerJS's TURN relay passes the encrypted
+// bytes along. The connection servers (Google's STUN, PeerJS's TURN) are named
+// in config.js (CONFIG.pairing.config.iceServers) and handed to PeerJS with
+// the rest of CONFIG.pairing. The pairing service is only contacted when this
+// feature is used: the PeerJS library is loaded then too.
 //
 // The protocol (what is sent, and the checks on what arrives) is in transfer.js.
 

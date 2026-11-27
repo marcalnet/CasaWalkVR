@@ -35,10 +35,27 @@ export const CONFIG = {
 	// Send to my Quest, for a model opened from a file on this computer: the
 	// service that introduces the computer and the headset to each other
 	// (js/pairing.js). Only connection details pass through it; the model goes
-	// directly between the two devices, encrypted. The default is PeerJS's free
-	// public server (https://peerjs.com/server/cloud). To use your own
-	// PeerServer, change it here and in connect-src in index.html.
-	pairing: { host: '0.peerjs.com', port: 443, path: '/', secure: true, key: 'peerjs' },
+	// between the two devices, encrypted. The default is PeerJS's free public
+	// server (https://peerjs.com/server/cloud). To use your own PeerServer,
+	// change it here and in connect-src in index.html.
+	//
+	// `config.iceServers`: the connection servers the two browsers use to find a
+	// path to each other. Google's STUN server tells each device its own public
+	// address; when no direct path exists, PeerJS's TURN relay passes the
+	// encrypted bytes along. Together with the pairing server above, these are
+	// the only outside servers sending a file contacts (the browser's WebRTC
+	// connections are not limited by connect-src, so this list is the whole of
+	// it). They are PeerJS's own defaults, named here so nothing is implicit;
+	// the TURN login is PeerJS's public one.
+	pairing: {
+		host: '0.peerjs.com', port: 443, path: '/', secure: true, key: 'peerjs',
+		config: {
+			iceServers: [
+				{ urls: 'stun:stun.l.google.com:19302' },
+				{ urls: ['turn:eu-0.turn.peerjs.com:3478', 'turn:us-0.turn.peerjs.com:3478'], username: 'peerjs', credential: 'peerjsp' },
+			],
+		},
+	},
 
 	// Default unit for OBJ files without a unit override ('auto' | 'cm' | 'm' | 'mm' | 'in').
 	defaultObjUnits: 'auto',
