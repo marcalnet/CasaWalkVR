@@ -592,6 +592,30 @@ await click('left', 'trigger');
 s = await state();
 check('the left laser on the orb opens the wrist menu, pinned', s.wrist && await page.evaluate(() => window.__casawalk.xr.ui.wrist.pinned));
 await shot('wrist-menu-laser');
+// Build 215's A4 and A5 (the user's decision: clicking is touching): a second pull on the orb closes the keys, a third
+// opens them; ← Back held by the laser from the resting left hand (it meets the key from below its plane) fills its ring.
+{
+	/** Turns the left controller until the app's own laser passes through world point p (the emulator's ray is not the device's -Z). */
+	const rayAt = async (p) => { for (let i = 0; i < 4; i++) { await page.evaluate(async (p) => { const THREE = await import('three'); const x = window.__casawalk.xr, c = x.input.hands.left, d = window.__device.controllers.left;
+		c.ray.updateMatrixWorld(true); const o = new THREE.Vector3().setFromMatrixPosition(c.ray.matrixWorld), dir = new THREE.Vector3(0, 0, -1).transformDirection(c.ray.matrixWorld);
+		const q = new THREE.Quaternion().setFromUnitVectors(dir, new THREE.Vector3(...p).sub(o).normalize()), dq = new THREE.Quaternion(d.quaternion.x, d.quaternion.y, d.quaternion.z, d.quaternion.w).premultiply(q);
+		d.quaternion.set(dq.x, dq.y, dq.z, dq.w); }, p); await frames(3); } };
+	await click('left', 'trigger');
+	const closed = !(await state()).wrist;
+	await click('left', 'trigger');
+	const reopened = (await state()).wrist;
+	check('a second pull on the orb closes its keys, a third opens them (build 215, A4)', closed && reopened, JSON.stringify({ closed, reopened }));
+	const back = await keyPoint('left');
+	await aimW('left', [-0.2, 1.05, -0.25], back); await frames(3); await rayAt(back);
+	await button('left', 'trigger', 1); await appSees('left', 'trigger', true);
+	await page.waitForFunction(() => (window.__casawalk.xr.ui.wrist.keys.left.progress ?? 0) > 0.2, null, { timeout: 3000, polling: 'raf' }).catch(() => {});
+	const filling = await page.evaluate(() => { const x = window.__casawalk.xr; return { progress: +(x.ui.wrist.keys.left.progress ?? 0).toFixed(2), ring: x.ui.wrist.keys.left.ring?.group?.visible ?? null, mode: x.mode }; });
+	await button('left', 'trigger', 0); await appSees('left', 'trigger', false); await frames(3); // (let go before 0.6 s: nothing happens)
+	const after = await state();
+	check('← Back held by the laser from the resting hand: its ring fills; let go early, nothing (build 215, A5)', filling.progress > 0.2 && filling.progress < 1 && after.mode === 'dollhouse' && after.presenting, JSON.stringify({ filling, mode: after.mode }));
+	await aimW('left', L, await orbPoint()); await frames(3);
+	if (!(await state()).wrist) await click('left', 'trigger'); // (pressWrist below expects the keys open, as before)
+}
 // Settings by laser; then the board's own settings.
 await pressWrist('right');
 s = await state();

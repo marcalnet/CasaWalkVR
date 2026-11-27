@@ -289,10 +289,25 @@ function makeKey(name, w, h, round = false) {
 	const face = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: texture, transparent: true, toneMapped: false }));
 	face.position.z = WRIST.raise;
 	face.renderOrder = 40;
+	face.raycast = raycastBothSides; // (a laser from the resting hand meets a wrist key from below its plane: build 215's A5)
 	group.add(base, face);
 	const k = { group, base, face, canvas, texture, w, h, round, spec: null, sig: '', hot: false, flash: 0, out: true };
 	face.userData.key = k;
 	return k;
+}
+
+/**
+ * A key face takes a laser from either side. The keys face the eyes, so a
+ * laser from the resting hand often meets them edge-on or from just behind
+ * their plane (the wrist keys over the other wrist: build 215's A5, ← Back
+ * by laser did nothing). Drawn one-sided as before; only the hit test is
+ * two-sided.
+ */
+function raycastBothSides(raycaster, out) {
+	const m = this.material, side = m.side;
+	m.side = THREE.DoubleSide;
+	THREE.Mesh.prototype.raycast.call(this, raycaster, out);
+	m.side = side;
 }
 
 /**
