@@ -13,7 +13,9 @@
 //            with Main hand: Left: js/zones.js); in the centre they wait,
 //            grouped, at that edge, gliding on the tools' spring. While the
 //            other hand's tip is within reach of a key (0.25 m, out at 0.35 m),
-//            only their own hand moves them.
+//            only their own hand moves them: once they have settled where they
+//            go, never on the way there (passing near the fan hand mid-glide,
+//            they froze in the middle of the view: the Tester's C8 finding).
 //   Touch    every front touch of the other fingertip or controller tip (the
 //            touch.js rules) presses a key, whatever the tools' reach, unless
 //            that tip is itself on a tool (holding one, or within the fan's take
@@ -24,7 +26,10 @@
 //            doors and levels, an open wing: the orb's old line-of-sight rule)
 //            they make room: half size, 30%, touches unchanged. While the held
 //            tool's options row shows (js/tool-dial.js) they make room the same
-//            way and ignore touches. Tracking lost: they stay 1 s, then fade.
+//            way and ignore touches. Each key shrinks about its own middle, and
+//            never starts or stops making room while a tip is within reach: a
+//            key never slides from under a finger. Tracking lost: they stay 1
+//            s, then fade.
 //
 // (The module keeps its name: xr.ui.wrist is these keys.)
 
@@ -70,7 +75,7 @@ export class WristMenu {
 		this.alpha = 0; // shown 0..1 (tracking found or lost)
 		this.lost = 0;
 		this.reach = false; // the other tip within reach of a key
-		this.sightYield = false; this.sightClear = 0; this.yieldK = 0;
+		this.sightYield = false; this.sightClear = 0; this.yieldK = 0; this.yieldTo = 0; this.settled = false;
 		this.keysHot = false;
 		this.backProgress = 0; // B or Y held (xr-ui.js), 0..1
 		xr.scene.add(this.group);
@@ -142,10 +147,11 @@ export class WristMenu {
 		// The look: making room over a live key or for the options row; full strength while a tip is within reach.
 		this.rowYield = !!xr.dial?.open && xr.tools?.held?.c === this.holder;
 		this.sightYield = this.sightYieldNow(head, dt);
-		this.yieldK += ((this.yielded ? 1 : 0) - this.yieldK) * (1 - Math.exp(-dt / 0.15));
+		if (!this.reach) this.yieldTo = this.yielded ? 1 : 0; // (held while a tip is within reach: a key never shrinks from under a finger)
+		this.yieldK += (this.yieldTo - this.yieldK) * (1 - Math.exp(-dt / 0.15));
 		const y = this.yieldK, strength = (this.reach ? 1 : KEYS.REST) * (1 - (1 - KEYS.YIELD.opacity) * y) * this.alpha;
-		this.group.scale.setScalar(1 - (1 - KEYS.YIELD.scale) * y);
 		for (const k of Object.values(this.keys)) {
+			k.group.scale.setScalar(1 - (1 - KEYS.YIELD.scale) * y); // (each about its own middle: Settings stays beside ← Back)
 			k.face.material.opacity = strength;
 			if (!k.base.material.transparent) { k.base.material.transparent = true; k.base.material.depthWrite = false; }
 			k.base.material.opacity = strength;
@@ -167,7 +173,8 @@ export class WristMenu {
 		const area = areas?.hands[xr.input.controllers.indexOf(holder)] ?? null;
 		let near = Infinity;
 		for (const c of xr.input.touches()) if (c !== holder) for (const k of Object.values(this.keys)) near = Math.min(near, k.group.getWorldPosition(this._t).distanceTo(c.touch.tip));
-		this.reach = near < (this.reach ? TOOLS.REACH_CLEAR : TOOLS.REACH);
+		// Within reach only once settled where they go (then until the tip is 0.35 m away): never frozen mid-glide.
+		this.reach = near < TOOLS.REACH_CLEAR && (this.reach || (this.settled && near < TOOLS.REACH));
 		const home = !areas?.centre || area === null || area === this.side;
 		if (!this.reach) this.mode = home ? 'home' : 'edge';
 		this.mode ??= 'home';
@@ -181,6 +188,7 @@ export class WristMenu {
 			dampTowards(this.pos, this.vel, target, dt);
 			if (this.mode === 'home' && this.pos.distanceTo(target) < 0.01) this.gliding = false;
 		} else { this.pos.copy(target); this.vel.set(0, 0, 0); }
+		this.settled = !this.gliding || this.pos.distanceTo(target) < 0.01; // (home: over the hand; at the edge: arrived)
 	}
 
 	/**
@@ -209,7 +217,8 @@ export class WristMenu {
 		this.pad.reset();
 		this.holder = null;
 		this.alpha = 0; this.lost = 0; this.reach = false; this.backProgress = 0;
-		this.pos = this.vel = null; this.mode = this.was = null; this.gliding = false;
+		this.pos = this.vel = null; this.mode = this.was = null; this.gliding = false; this.settled = false; this.yieldTo = 0; this.yieldK = 0;
+		for (const k of Object.values(this.keys)) k.group.scale.setScalar(1);
 		this.group.visible = false;
 	}
 }

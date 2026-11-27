@@ -2188,3 +2188,44 @@ test('inside, the areas by the body (build 215, C7): a hand by the hip, out at a
 	assert.equal(x.mode, 'dollhouse');
 	assert.equal(x.areas.hands[L], 'centre', 'at the scale model: the view-based centre');
 });
+
+test('the main hand\'s keys never freeze on the way (the Tester\'s C8 finding): the right controller back on its side, they are over it within 0.5 s, the left one near where they passed; making room, each key shrinks about its own middle and never while a tip is near', async () => {
+	const { x, frame, hands } = await setup();
+	const keys = x.ui.wrist, V = THREE.Vector3;
+	hands.left.grip.visible = hands.right.grip.visible = true;
+	hands.left.grip.position.set(-0.45, 1.2, -0.3); hands.right.grip.position.set(0.35, 1.2, -0.3);
+	for (let i = 0; i < 40; i++) frame();
+	const over = () => keys.pos.distanceTo(keys.anchorOf(hands.right, new V()));
+	assert.ok(keys.mode === 'home' && over() < 0.01, 'over the right hand');
+	// The right controller crosses to the left (as to take from the fan): the keys glide to the edge of the centre.
+	hands.right.grip.position.set(-0.3, 1.25, -0.35);
+	for (let i = 0; i < 12; i++) frame();
+	// Back on its side, and the left controller's tip right where the keys are passing.
+	const passing = keys.pos.clone();
+	hands.right.grip.position.set(0.35, 1.2, -0.3);
+	const tipOff = hands.left.touch.tip.clone().sub(hands.left.grip.getWorldPosition(new V()));
+	hands.left.grip.position.copy(x.rig.worldToLocal(passing.clone().sub(tipOff).add(new V(0, -0.05, 0.05))));
+	let n = 0;
+	for (; n < 36 && !(keys.mode === 'home' && over() < 0.03); n++) frame();
+	assert.ok(keys.mode === 'home' && over() < 0.03, `over the right hand again within 0.5 s (${n} frames; ${over().toFixed(3)} m away, mode ${keys.mode}, reach ${keys.reach})`);
+	// Settled, a tip within reach holds them; making room, Settings stays 8.2 cm beside ← Back.
+	for (let i = 0; i < 30; i++) frame();
+	const apart = () => keys.keys.settings.group.getWorldPosition(new V()).distanceTo(keys.keys.back.group.getWorldPosition(new V()));
+	const before = apart();
+	keys.sightYieldNow = () => true; // (as if over a live key)
+	hands.left.grip.position.set(-0.45, 1.2, -0.3);
+	for (let i = 0; i < 40; i++) frame();
+	assert.ok(keys.yieldK > 0.95 && Math.abs(apart() - before) < 1e-6 && keys.keys.back.group.scale.x < 0.55, `made room: half size, the keys as far apart (${(apart() * 100).toFixed(1)} cm)`);
+	// A tip comes within reach of the keys while they are small: they stay small until it leaves, though the reason to make room has gone.
+	const tip = keys.keys.back.group.getWorldPosition(new V()).add(new V(0, 0, 0.12));
+	hands.left.grip.position.copy(x.rig.worldToLocal(tip.clone().sub(hands.left.touch.tip.clone().sub(hands.left.grip.getWorldPosition(new V())))));
+	for (let i = 0; i < 6; i++) frame();
+	assert.ok(keys.reach, 'the tip within reach');
+	keys.sightYieldNow = () => false;
+	for (let i = 0; i < 30; i++) frame();
+	assert.ok(keys.yieldK > 0.95, 'still small while the tip is near');
+	hands.left.grip.position.set(-0.45, 1.2, -0.3);
+	for (let i = 0; i < 40; i++) frame();
+	assert.ok(keys.yieldK < 0.05 && keys.keys.back.group.scale.x > 0.98, `the tip gone: full size again (${JSON.stringify({ k: keys.yieldK, to: keys.yieldTo, reach: keys.reach, s: keys.keys.back.group.scale.x, row: keys.rowYield, sight: keys.sightYield })})`);
+});
+

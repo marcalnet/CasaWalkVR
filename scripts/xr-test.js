@@ -1521,7 +1521,11 @@ check('back from walking: eyes at 1.89 m again, gallery shown, lasers on', Math.
 			d.quaternion.set(q.x, q.y, q.z, q.w);
 		}, to);
 		// (Away from the fan first: near it, in dock mode, the trigger does nothing: build 215's C1.)
-		await page.evaluate(() => { window.__device.controllers.right.position.set(0.2, 1.3, -0.35); }); await frames(6);
+		await page.evaluate(() => { window.__device.controllers.right.position.set(0.2, 1.3, -0.35); }); await frames(30);
+		// The Tester's C8 finding: the right controller back on its side after taking from the fan, its keys are over it within 0.5 s
+		// (they froze mid-glide beside the left controller, in the middle of the view).
+		const keysBack = await page.evaluate(() => { const x = window.__casawalk.xr, k = x.ui.wrist, V = k.pos.constructor; return { mode: k.mode, area: x.areas.hands[x.input.controllers.indexOf(k.holder)], settled: k.settled, off: +k.pos.distanceTo(k.anchorOf(k.holder, new V())).toFixed(3), reach: k.reach }; });
+		check('the main hand\'s keys follow the right controller back from the fan: within 0.5 s where they belong (over it in its own area, else waiting at the edge), never left mid-glide (the Tester\'s C8 finding)', keysBack.settled && !keysBack.reach && (keysBack.area === 'right') === (keysBack.mode === 'home'), JSON.stringify(keysBack));
 		const box = await page.evaluate(() => { const b = window.__casawalk.xr.modes.dollhouse.modelBox(); return [b.min.toArray(), b.max.toArray()]; });
 		const mid = (fx, fz) => [box[0][0] + (box[1][0] - box[0][0]) * fx, box[1][1], box[0][2] + (box[1][2] - box[0][2]) * fz];
 		await aimMeter(mid(0.3, 0.5)); await frames(8);
