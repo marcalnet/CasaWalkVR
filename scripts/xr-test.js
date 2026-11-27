@@ -1053,6 +1053,8 @@ check('B closes the board', (await state()).menu === null);
 		await pinch();
 		const inUse = await page.evaluate(() => window.__shots);
 		await shot('camera-held-hand');
+		const handTag = await page.evaluate(() => ({ lines: window.__casawalk.xr.fan.camera.tag.lines.join(' '), shown: window.__casawalk.xr.fan.camera.tag.mesh.visible }));
+		check('held in a bare hand, the camera\'s tag says "Pinch: photo" (build-215 asks C10 §6)', handTag.shown && handTag.lines === 'Pinch: photo', JSON.stringify(handTag));
 		check('bare hands: a closed hand takes the camera (dock mode: a pinch takes no photo); away from the fan, the pinch is the shutter (build 215, C1 and C2)', took === 'camera/dock' && inDock === 0 && mode === 'use' && inUse === 1, JSON.stringify({ took, inDock, mode, inUse }));
 		await page.evaluate(() => { window.__device.hands.right.connected = false; }); await page.waitForTimeout(3000); await frames(4);
 		const lost = await page.evaluate(() => window.__casawalk.xr.tools.held?.tool.name ?? null);
@@ -1589,6 +1591,8 @@ check('back from walking: eyes at 1.89 m again, gallery shown, lasers on', Math.
 	const cam = await page.evaluate(() => { const x = window.__casawalk.xr, c = x.fan.camera; return { tool: x.tools.held?.tool.name, meterBack: !x.fan.slots[1].held, frames: c.frames ?? 0, fov: +c.view.fov.toFixed(1) }; });
 	check('the street camera is taken (the meter goes back); its viewfinder shows the view through the lens', cam.tool === 'camera' && cam.meterBack && cam.frames > 0 && cam.fov === 46.4, JSON.stringify(cam));
 	await shot('camera-held');
+	const ctlTag = await page.evaluate(() => { const t = window.__casawalk.xr.fan.camera.tag; return { lines: t.lines.join(' '), shown: t.mesh.visible }; });
+	check('held with a controller, the camera\'s tag says "Trigger: photo", under its left end (build-215 asks C10 §6)', ctlTag.shown && ctlTag.lines === 'Trigger: photo', JSON.stringify(ctlTag));
 	// Build-215 asks C10 §5: held in use mode the camera switches on and glows: a rim (one mesh, no children: one draw call an eye), never in photos.
 	{
 		const glow = await page.evaluate(() => { const x = window.__casawalk.xr, g = x.glow.glows.get(x.fan.camera); return { mode: x.tools.held?.mode, shown: !!g?.mesh?.visible, k: +(g?.mesh?.material.uniforms.strength.value ?? 0).toFixed(2), photo: x.photoHidden.has(g?.mesh), one: g?.mesh?.isMesh && g.mesh.children.length === 0, screen: x.fan.camera.screen.material.color.getHex() === 0xffffff && !!x.fan.camera.screen.material.map }; });

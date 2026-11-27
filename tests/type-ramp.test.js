@@ -21,6 +21,7 @@ import { BOARD_PX_PER_M } from '../js/xr-menus.js';
 import { LINES } from '../js/guide.js';
 import { SCREEN, LABEL_H as METER_LABEL_H, SLOT, LABEL_DEG, labelScale } from '../js/laser-meter.js';
 import { PLATE, WRIST } from '../js/theme.js';
+import { TAG as CAMERA_TAG } from '../js/street-camera.js';
 
 // Widths in em (Chromium, 27 Nov 2026).
 const KALAM = { '← Back': 3.5, Settings: 3.7, Camera: 3.31, Meter: 2.54, Marker: 2.97, 'Walk in →': 4.64, 'Level 0': 3.11, 'Level 12': 3.48, Second: 3.08, Attic: 2.28, 'First floor': 4.26, Basement: 4.4, 'Upper floor': 4.69, 'Ground floor': 5.17, 'Nice shot!': 4.67, "The photo didn't work": 9.8 };
@@ -44,6 +45,8 @@ function texts() {
 		for (const w of words) add(`${pad} "${w}"`, 'kalam', fitKey(w, r.max, r.min, WRIST.key / k.h * PX_H * type.fit), k.h / PX_H, type.readAt, RAMP.kalam);
 	}
 	add('hand key captions ("Leave VR", "Scale model", "and help")', 'ui', 26, WRIST.key / PX_H, KEYS.TYPE.readAt, RAMP.label);
+	// The camera's instruction tag (build-215 asks C10 §6): two lines, Kalam bold, 11 mm capitals at 0.45 m.
+	for (const w of ['Trigger:', 'Pinch:', 'photo']) add(`camera tag "${w}"`, 'kalam', CAMERA_TAG.px, CAMERA_TAG.size[1] / CAMERA_TAG.canvas[1], CAMERA_TAG.readAt, RAMP.kalam);
 	// The tools' name tags.
 	for (const w of ['Camera', 'Meter', 'Marker']) add(`tool tag "${w}"`, 'kalam', TAG.px, TAG.height / LABEL_CANVAS_H, TAG.readAt, RAMP.kalam);
 	// The doors and the levels, from about 0.72 m. A wide key's word fits beside its icon (x0) with 30 px to spare.

@@ -12,13 +12,21 @@
 // is dark and there is no red frame; away from the other tools the screen
 // shows the view and the frame is out. A camera whose screen is dark plainly
 // won't shoot.
+// Its instruction hangs on a paper tag under its left (strap) end, always
+// there, docked or held (build-215 asks C10 §6): "Trigger:" / "photo", or
+// "Pinch:" / "photo" with bare hands, following the input in hand, Kalam bold
+// at 11 mm capitals (1.4° at 0.45 m: the type ramp). (The user's "Trigger:
+// take a photo" holds no readable size on a 12 cm camera; "photo" keeps the
+// meaning. Its back holds the screen alone.)
 // After a shot a small print pops out of the camera, floats a moment and
 // drifts back into the camera. One lens, 28 mm, fixed: no choice to make (the
 // user's simpler tools, 27 Nov 2026; three lenses and a dial before).
 
 import * as THREE from 'three';
 import { DEVICE } from './device.js';
-import { COLOURS } from './theme.js';
+import { COLOURS, WRIST } from './theme.js';
+import { canvasTexture } from './canvas-card.js';
+import { RAMP, pxFor } from './type-ramp.js';
 import { buildCamera } from './tool-models.js';
 import { FramingGuide } from './framing-guide.js';
 
@@ -34,6 +42,13 @@ const PRINT_PX = [240, 160]; // the print's picture (a 6 x 4 cm card needs no mo
 const LEVEL = THREE.MathUtils.degToRad(4); // held within this of level: the photo is levelled
 const PHOTO = [1920, 1280]; // 3:2
 const FILM_H = 24; // 35 mm film height (mm): vertical field of view from the focal length
+
+/** The instruction's tag (C10 §6): its size (m), 1 cm under the camera's body at its left end; its words read from 0.45 m at 1.4°. */
+export const TAG = { size: [0.07, 0.04], at: [-0.054, -0.063, 0], canvas: [560, 320], readAt: 0.45, lineSpacing: 1.3 };
+TAG.px = pxFor(RAMP.kalam, 'kalam', TAG.size[1] / TAG.canvas[1], TAG.readAt);
+
+/** The tag's two lines for the input in hand: a controller's trigger, or a bare hand's pinch. */
+export const tagWords = (hands) => [hands ? 'Pinch:' : 'Trigger:', 'photo'];
 
 /** The lens: its focal length (mm, 35 mm film). */
 export const LENS = 28;
@@ -58,7 +73,11 @@ export class StreetCamera {
 		this.screen.position.copy(this.screenPoint.position).z += 0.0006;
 		this.screen.name = 'viewfinder';
 		this.object.add(this.screen);
-		// (Nothing written on its back: the viewfinder alone. How to move and the use-mode ring say how to use it: build 215's C5.)
+		// (Nothing written on its back: the viewfinder alone. Its instruction is on a tag: C10 §6.)
+		this.tag = makeTag();
+		this.tag.mesh.position.fromArray(TAG.at);
+		this.object.add(this.tag.mesh);
+		this.tag.set(tagWords(false));
 		this.held = null; // the hand holding it
 		this.t = 0;
 		this.prints = [];
@@ -104,6 +123,15 @@ export class StreetCamera {
 		}).catch(() => {});
 	}
 
+	/** The input in hand: the holding hand's, else whichever is in use (bare hands when no controller is). */
+	get bareHands() { return this.held ? !!this.held.isHand : !(this.xr.input?.active?.().length > 0); }
+
+	/** The tag, once a frame (held, or resting in the fan: js/tool-fan.js): its words for the input in hand, turned to you (no roll). */
+	updateTag() {
+		this.tag.set(tagWords(this.bareHands));
+		if (this.xr.headWorld) this.tag.mesh.lookAt(this.xr.headWorld());
+	}
+
 	/** True while held in use mode (away from the other tools: js/hold.js): the camera is on. */
 	get on() { const h = this.xr.tools?.held; return !!this.held && h?.tool === this && h.mode === 'use'; }
 
@@ -111,6 +139,7 @@ export class StreetCamera {
 	update(dt) {
 		const xr = this.xr, on = this.on;
 		this.t += dt;
+		this.updateTag();
 		// The screen: the view while on, dark (graphite) while off.
 		if (on !== this.wasOn) {
 			this.wasOn = on;
@@ -198,3 +227,34 @@ export class StreetCamera {
 }
 
 /** The camera's instruction: one short hand-lettered line in the orange of the thing to press. */
+
+/** The instruction's tag (C10 §6): white paper, graphite words, two lines, drawn when its words change. */
+function makeTag() {
+	const [W, H] = TAG.canvas;
+	const { canvas, texture } = canvasTexture(W, H);
+	const mesh = new THREE.Mesh(new THREE.PlaneGeometry(...TAG.size), new THREE.MeshBasicMaterial({ map: texture, color: texture ? 0xffffff : COLOURS.cell, toneMapped: false, side: THREE.DoubleSide }));
+	mesh.name = 'camera-tag';
+	mesh.raycast = () => {};
+	let last = '';
+	const tag = {
+		mesh,
+		lines: [],
+		set(lines) {
+			const key = lines.join('|');
+			if (key === last) return;
+			last = key; this.lines = lines;
+			if (!canvas) return;
+			const ctx = canvas.getContext('2d');
+			ctx.clearRect(0, 0, W, H);
+			ctx.fillStyle = COLOURS.cell;
+			ctx.beginPath(); ctx.roundRect ? ctx.roundRect(4, 4, W - 8, H - 8, 24) : ctx.rect(4, 4, W - 8, H - 8); ctx.fill();
+			ctx.strokeStyle = COLOURS.edge; ctx.lineWidth = 4; ctx.stroke();
+			ctx.fillStyle = COLOURS.text; ctx.font = `700 ${TAG.px}px ${WRIST.labelFont}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+			const step = TAG.px * TAG.lineSpacing;
+			lines.forEach((l, i) => ctx.fillText(l, W / 2, H / 2 + (i - (lines.length - 1) / 2) * step));
+			texture.needsUpdate = true;
+		},
+	};
+	globalThis.document?.fonts?.load?.(`700 40px ${WRIST.labelFont}`).then(() => { const l = tag.lines; last = ''; if (l.length) tag.set(l); }).catch(() => {}); // (drawn again in Kalam once it has loaded)
+	return tag;
+}

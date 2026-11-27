@@ -2202,3 +2202,29 @@ test('the glow over time (build-215 asks C10 §5): up to 100% in 0.15 s, settlin
 	const n = (o) => { let k = 0; o.traverse((m) => { if (m.isMesh && m.name.startsWith(`${o.name}:`)) k += m.geometry.attributes.position.count; }); return k; };
 	assert.ok(shellOf(meter, GLOW.WIDTH.meter).geometry.attributes.position.count <= n(meter), 'the body only: the screen is a mesh of its own, left out');
 });
+
+test('the camera\'s instruction is back, on a tag (build-215 asks C10 §6): "Trigger:" / "photo", or "Pinch:" / "photo" with bare hands; 7 x 4 cm, under its left end, facing you, always there', async () => {
+	const { TAG, tagWords } = await import('../js/street-camera.js');
+	const { x, frame, hands } = await setup();
+	const cam = x.fan.camera, tag = cam.tag;
+	hands.right.grip.visible = hands.left.grip.visible = true;
+	hands.right.grip.position.set(0.3, 1.2, -0.3); hands.left.grip.position.set(-0.45, 1.2, -0.3);
+	for (let i = 0; i < 10; i++) frame();
+	assert.ok(tag.mesh.parent === cam.object && tag.mesh.visible, 'on the camera, in the fan too');
+	assert.deepEqual(tag.lines, ['Trigger:', 'photo'], 'with controllers: the trigger');
+	const g = tag.mesh.geometry.parameters;
+	assert.ok(g.width === 0.07 && g.height === 0.04, '7 x 4 cm');
+	assert.ok(TAG.at[0] < -0.04 && Math.abs(TAG.at[1] + TAG.size[1] / 2 - (-0.033 - 0.01)) < 1e-9, 'under its left end, its top 1 cm below the body');
+	x.tools.take(cam, hands.right); frame();
+	assert.deepEqual(tag.lines, ['Trigger:', 'photo'], 'held with a controller');
+	x.tools.putBack();
+	const hand = x.input.controllers[1];
+	hand.isHand = true;
+	assert.deepEqual(tagWords(true), ['Pinch:', 'photo']);
+	x.tools.take(cam, hand); cam.update(0.01);
+	assert.deepEqual(tag.lines, ['Pinch:', 'photo'], 'held in a bare hand: the pinch');
+	const to = x.headWorld().sub(tag.mesh.getWorldPosition(new THREE.Vector3())).normalize(), n = new THREE.Vector3(0, 0, 1).transformDirection(tag.mesh.matrixWorld);
+	assert.ok(n.dot(to) > 0.99, 'facing you');
+	hand.isHand = false;
+	x.tools.putBack();
+});

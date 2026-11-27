@@ -288,6 +288,7 @@ export class ToolFan {
 			if (!s.held) s.object.visible = shown;
 		});
 		for (const s of this.slots) s.label.mesh.visible = !s.held && shown; // (the name tags go while the tool is in your hand)
+		if (shown) for (const s of this.slots) if (!s.held) s.tool.updateTag?.(); // (the camera's instruction tag, resting in the fan too: js/street-camera.js)
 	}
 
 	/**
