@@ -1525,8 +1525,17 @@ check('back from walking: eyes at 1.89 m again, gallery shown, lasers on', Math.
 		check('reaching near the held meter shows its options row: cm, ft in, Undo, over it (build 215, C3)', row.open && row.keys.join() === 'cm,ft in,Undo' && row.up > 0.05, JSON.stringify(row));
 		await restLeft(); await frames(6);
 		await page.evaluate(() => window.__casawalk.xr.fan.meter.clear());
-		// (Put back with a squeeze away from the fan: in use mode a tool is not swapped for another, build 215's C1.)
-		await click('right', 'squeeze'); await frames(6);
+		// Brought home with the left controller held up beside it (its tip within reach of the meter): no options row, the
+		// magnet takes it (the Tester's finding on C3: the row would have held off the magnet).
+		await aim('left', [-0.25, 1.05, -0.25], [-0.25, 2.0, -0.3]); await frames(20); // (held up, pointing up: its tip rises towards the tools)
+		const home = async () => { for (let i = 0; i < 4; i++) { await page.evaluate(() => { const x = window.__casawalk.xr, V = x.rig.position.constructor, f = x.fan, m = f.meter, d = window.__device.controllers.right;
+			if (!x.tools.held) return; const to = f.restWorld(f.slots.findIndex((s) => s.name === 'meter')).add(new V(0, 0, 0.05)), delta = x.rig.worldToLocal(to).sub(x.rig.worldToLocal(m.object.getWorldPosition(new V())));
+			d.position.set(d.position.x + delta.x, d.position.y + delta.y, d.position.z + delta.z); }); await frames(4); } };
+		await home();
+		const back = await page.evaluate(() => ({ held: window.__casawalk.xr.tools.held?.tool.name ?? null, row: !!window.__casawalk.xr.dial.open }));
+		check('the meter brought home with the other controller held up beside it: no options row, it goes home (the Tester\'s finding on C3)', !back.held && !back.row, JSON.stringify(back));
+		if (back.held) { await click('right', 'squeeze'); await frames(6); }
+		await restLeft(); await frames(4);
 	}
 	// The marker (milestone F): take it, hold the trigger and move: a stroke; the stick press: the next colour.
 	{

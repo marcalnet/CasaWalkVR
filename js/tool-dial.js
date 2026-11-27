@@ -35,6 +35,7 @@ import { KeyPad } from './keys.js';
 import { Label } from './panel.js';
 import { CONTROL_CUE } from './theme.js';
 import { keepFromEyes } from './zones.js';
+import { HOLD } from './hold.js';
 
 export const DIAL = {
 	KEY: 0.07, GAP: 0.012, PER_ROW: 3, // round keys 7 cm across (as the orb's ← Back), 1.2 cm apart, three a row (m)
@@ -197,7 +198,7 @@ export class ToolDial {
 		const other = xr.input.controllers.find((c) => c !== held.c && c.touch?.tracked);
 		const d = other ? this.distanceTo(held.tool, other.touch.tip) : Infinity;
 		if (d > DIAL.FAR) this.armed = true;
-		if (!o && this.armed && d < DIAL.NEAR) this.show(held.tool);
+		if (!o && this.armed && d < DIAL.NEAR && this.mayReveal(held)) this.show(held.tool);
 		if (!this.open) return;
 		this.place(dt);
 		const { action, hot } = this.pad.update(dt, { active: !this.open.chosen, exclude: held.c, own: 'dial' }); // (the triggers claim() took for it)
@@ -233,6 +234,18 @@ export class ToolDial {
 			}
 		}
 		return false;
+	}
+
+	/**
+	 * Whether reaching may show the held tool's row: only in use mode, and not
+	 * within HOLD.OUTLINE of its own place: bringing a tool home, the fan hand's
+	 * tip is often within reach of it, and the row would hold off the magnet
+	 * (the Tester's finding on C3). The stick still shows it anywhere.
+	 */
+	mayReveal(held) {
+		if (held.mode !== 'use') return false;
+		const fan = this.xr.fan, i = fan?.slots.findIndex((s) => s.tool === held.tool) ?? -1;
+		return i < 0 || !fan.alpha || held.tool.object.getWorldPosition(this._e).distanceTo(fan.restWorld(i, this._r ??= new THREE.Vector3())) >= HOLD.OUTLINE;
 	}
 
 	/** How far a point is from a held tool: from its origin or its control part, whichever is nearer (m). */

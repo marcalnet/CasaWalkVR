@@ -541,7 +541,7 @@ test('the options row, the hand\'s keys and the holding hand (the audit\'s S8; t
 		const ctls = Object.fromEntries(['oculus-touch-v3', 'meta-quest-touch-plus', 'meta-quest-touch-pro'].map((p) => [p, controller(p, main)]));
 		for (const tool of [x.fan.camera, x.fan.meter, x.fan.marker]) {
 			x.tools.take(tool, c);
-			frame(); frame();
+			for (let i = 0; i < 40; i++) frame(); // (the hand's keys settle where they wait: two frames in they were still gliding, and the row rose for that)
 			x.dial.show(tool, { stepped: true }); // (as the stick shows it: it stays 1.5 s whatever the other hand does)
 			x.scene.updateMatrixWorld(true);
 			// The main hand's keys (build 215's C8): the row never overlaps them as seen (it rises at most 6 cm to clear them).
@@ -2060,4 +2060,24 @@ test('sticky tools, bare hands (build 215, C1 and C2): the pinch is the trigger 
 	assert.equal(cam.object.visible, false, 'faded');
 	x.tools.putBack();
 	Object.assign(c, { isHand: false, isController: true });
+});
+
+test('bringing a tool home with the fan hand\'s tip close by: no options row, the magnet takes it (the Tester\'s finding on C3)', async () => {
+	const { x, frame, hands } = await setup();
+	const fan = x.fan, meter = fan.meter, c = hands.right, dial = x.dial;
+	hands.left.grip.visible = c.grip.visible = true;
+	hands.left.grip.position.set(-0.45, 1.2, -0.3);
+	c.ray.position.set(0.3, 1.2, -0.35); c.grip.position.copy(c.ray.position);
+	for (let i = 0; i < 30; i++) frame();
+	x.tools.take(meter, c); frame(); frame();
+	assert.equal(x.tools.held.mode, 'use', 'away from the fan: in use');
+	// Home: the meter brought to 6 cm from its own place, the left controller's tip raised beside it (within 12 cm of the meter).
+	const place = () => fan.restWorld(fan.slots.findIndex((s) => s.name === 'meter'));
+	const toolTo = (p) => { for (let i = 0; i < 3; i++) { c.ray.position.add(x.rig.worldToLocal(p.clone()).sub(x.rig.worldToLocal(meter.object.getWorldPosition(new THREE.Vector3())))); c.grip.position.copy(c.ray.position); frame(); } };
+	toolTo(place().add(new THREE.Vector3(0.18, 0, 0.05))); // (on its way: 19 cm from its place)
+	hands.left.grip.position.copy(x.rig.worldToLocal(meter.object.getWorldPosition(new THREE.Vector3()).add(new THREE.Vector3(-0.06, -0.02, 0.06))));
+	frame();
+	assert.ok(!dial.open, 'within 30 cm of its own place, reaching shows no row');
+	toolTo(place().add(new THREE.Vector3(0, 0, 0.06)));
+	assert.ok(!x.tools.held && !dial.open, 'it goes home, no row in the way');
 });
